@@ -628,9 +628,9 @@ class HatchPetCardVisit extends HatchPetCardLooks {
   // these methods only hand them the card's facts. The glass classes are all `dir-`.
 
   // What the director asks the card, read fresh each time: the "screen effects here" switch, the OS
-  // reduced-motion setting, and whether the server clock has been read.
+  // reduced-motion setting, whether the server clock has been read, and the server's now (the moon).
   _dirEnv() {
-    return { lcdOn: lcdOn(), calm: calm(), clockKnown: serverClockKnown() };
+    return { lcdOn: lcdOn(), calm: calm(), clockKnown: serverClockKnown(), now: serverNow() };
   }
 
   // On show: the selected slide, the card on screen, the tab visible, the power-on screen gone.

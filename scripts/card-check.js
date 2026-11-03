@@ -9918,7 +9918,9 @@ async function main() {
   // snapshot.device_fx_recent, a live {"fx": entry}). It names the adapter (_dirLive, _dirView, _dirSync, _dirSwitch,
   // _dirPause, _dirShown), _channel, _toggleStatus, _go and _onHidden so scripts/pick-sections picks it when one
   // of them changes (a client-only follow-up would otherwise pick nothing, pick-sections:118-134). It names the
-  // part's constants too: HATCH_DEVICE_FX, HATCH_DIRECTOR, RECIPES, CLASSES, KINDS, COLLAPSE, RAIN, serverClockKnown.
+  // part's constants too: HATCH_DEVICE_FX, HATCH_DIRECTOR, RECIPES, CLASSES, CLASSES_BY_LAYER, KINDS, WEATHER, KEY_LIST,
+  // MOON, moonOf, weatherRecipe, serverClockKnown, and the glass's lease clock (dir-glass-life). Slice 4B added the
+  // per-key block at the end of the section (snow, fog, storm, wind on the real CSS, the moon).
   await setLcd(true); // the harness runs with the effects off; the glass needs the switch on
   await card.evaluate((el) => el._dirSwitch());
   const fxWait = (ms) => page.waitForTimeout(ms);
@@ -9940,10 +9942,11 @@ async function main() {
   const fx = (body) => card.evaluate(new Function("el", `const F = window.__fx; const s = el._slides[el._index]; const me = F.me;
     const glass = s.glass; const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const iso = (ago) => new Date(Date.now() - ago).toISOString();
-    const cls = () => [...glass.classList].filter((c) => c.startsWith("dir-")).sort().join();
+    const cls = () => [...glass.classList].filter((c) => c.startsWith("dir-") && !/^dir-(moon|newmoon)$/.test(c)).sort().join(); // the moon is the date's, not the test's
+    const weatherHouse = (current) => ({ ...F.kept.house, device_fx: { version: 1, current } });
     const rainHouse = (rain) => ({ ...F.kept.house, device_fx: { version: 1, current: { rain } } });
     const ent = (kind, ago, id) => ({ id, kind, scope: "house", occurred_at: iso(ago), expires_at: iso(ago - 90000) });
-    const quiet = async () => { for (let i = 0; i < 60 && /dir-(drop|clear)/.test(cls()); i++) await wait(100); return cls(); };
+    const quiet = async () => { for (let i = 0; i < 60 && /dir-(drop|clear|frost-form|thaw|fog-in|fog-out|storm-in|storm-out|wind-gust|wind-die)/.test(cls()); i++) await wait(100); return cls(); };
     return (async () => { ${body} })();`));
   const setup = await fxSetup();
   check("devicefx: the pet on show has been heard, for the section", setup.subscribed === true, JSON.stringify(setup));
@@ -10095,6 +10098,86 @@ async function main() {
   const first = await io(false);
   check("devicefx 13: the first time a slide comes into view, the IntersectionObserver plays its echo",
     first.away.visible === false && first.back.viewed === true && /dir-echo/.test(first.back.cls), JSON.stringify(first));
+
+  // 4B: the other weather keys on the real CSS (docs/plan section 13, the 4B row). Per key: the house says it, the glass
+  // takes its still class; a live onset puts the onset class on, the glass's own `dir-glass-life` (a real animation, a real
+  // animationend) ends it by itself and leaves the ambience; the glass has the lease clock and the layer a finite one-shot
+  // (a storm's never repeats); reduced motion keeps the still class and plays nothing; the switch off draws nothing.
+  const KEYS4 = { snow: ["dir-frost", "dir-frost-form", "dir-thaw", 2400], fog: ["dir-fog", "dir-fog-in", "dir-fog-out", 2400],
+    storm: ["dir-storm", "dir-storm-in", "dir-storm-out", 3000], wind: ["dir-wind", "dir-wind-gust", "dir-wind-die", 2000] };
+  for (const [key, [amb, start, end, ms]] of Object.entries(KEYS4)) {
+    const k = await fx(`
+      el._channel(s, { house: weatherHouse({ ${key}: true }) }, me);
+      const rest = cls();
+      s.dirViewed = true;
+      const said = F.spoken.length;
+      el._channel(s, { fx: ent("${key}_started", 0, "cc-${key}-1") }, me);
+      const onset = cls();
+      await wait(300);
+      const layer = glass.querySelector("b:nth-child(${{ snow: 1, fog: 2, storm: 3, wind: 4 }[key]})");
+      const life = getComputedStyle(glass).animationName, lcount = getComputedStyle(glass).animationIterationCount;
+      const inner = getComputedStyle(layer).animationName, icount = getComputedStyle(layer).animationIterationCount;
+      const mid = { running: s.dirEffect > 0, cls: cls() };
+      const t0 = Date.now();
+      const after = await quiet();
+      const took = Date.now() - t0 + 300;
+      el._channel(s, { house: weatherHouse({ ${key}: false }) }, me);
+      el._channel(s, { fx: ent("${key}_stopped", 0, "cc-${key}-2") }, me);
+      const ending = cls();
+      const afterEnd = await quiet();
+      return { rest, onset, mid, life, lcount, inner, icount, after, took, effectEnd: s.dirEffect, ending, afterEnd, said: F.spoken.length - said, vib: F.vib };`);
+    check(`devicefx 4B ${key}: the house's ${key} paints ${amb}; a live onset is one ${start}, no speech, no haptic`,
+      k.rest === amb && k.onset === [start, amb].sort().join() && k.said === 0 && k.vib === 0, JSON.stringify(k));
+    check(`devicefx 4B ${key}: the glass's own dir-glass-life is the clock (the layer a finite one-shot) and it ends by itself on the ambience`,
+      k.life === "dir-glass-life" && k.lcount === "1" && /^dir-/.test(k.inner) && k.icount === "1" && k.mid.running && k.after === amb
+        && k.effectEnd === 0 && k.took >= ms * 0.7 && k.took < ms + 1500, JSON.stringify(k));
+    check(`devicefx 4B ${key}: the end plays ${end} and leaves the glass dry`, k.ending === end && k.afterEnd === "", JSON.stringify(k));
+    const calm4 = await (async () => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const r = await fx(`
+        el._channel(s, { house: weatherHouse({ ${key}: true }) }, me);
+        el._channel(s, { fx: ent("${key}_started", 0, "cc-${key}-3") }, me);
+        const live = cls();
+        s.dirViewed = false; s.dirRecent = [ent("${key}_started", 5000, "cc-${key}-4")];
+        el._dirView(s);
+        return { live, view: cls(), vib: F.vib };`);
+      await page.emulateMedia({ reducedMotion: null });
+      return r;
+    })();
+    check(`devicefx 4B ${key}: reduced motion keeps the still ${amb} and plays no onset or echo`, calm4.live === amb && calm4.view === amb && calm4.vib === 0, JSON.stringify(calm4));
+    await setLcd(false);
+    const off4 = await fx(`
+      el._channel(s, { house: weatherHouse({ ${key}: true }) }, me);
+      el._dirSwitch();
+      const quietGlass = cls();
+      el._channel(s, { fx: ent("${key}_started", 0, "cc-${key}-5") }, me);
+      return { quietGlass, live: cls(), shown: getComputedStyle(glass).display };`);
+    await setLcd(true);
+    await card.evaluate((el) => el._dirSwitch());
+    check(`devicefx 4B ${key}: the switch off draws nothing`, off4.quietGlass === "" && off4.live === "" && off4.shown === "none", JSON.stringify(off4));
+    await fx(`await quiet(); el._director.cancel(s, "check"); el._channel(s, { house: F.kept.house }, me); return 0;`);
+  }
+  // The storm and the rain together (lightning-rainy is both keys), and the storm layer is not a flash: its onset keyframes
+  // are one finite run (checked above), so here only that both still looks stack.
+  const both = await fx(`el._channel(s, { house: weatherHouse({ rain: true, storm: true }) }, me); const r = cls(); el._channel(s, { house: F.kept.house }, me); return r;`);
+  check("devicefx 4B: lightning-rainy is both looks at once (dir-storm and dir-wet)", both === "dir-storm,dir-wet", both);
+  // A missing key is nothing to paint, and a key the card does not know is ignored.
+  const none = await fx(`el._channel(s, { house: weatherHouse({ hail: true }) }, me); const r = cls();
+    el._channel(s, { fx: ent("hail_started", 0, "cc-hail") }, me); const live = cls(); el._channel(s, { house: F.kept.house }, me); return { r, live };`);
+  check("devicefx 4B: a key the card has no recipe for paints nothing and plays nothing", none.r === "" && none.live === "", JSON.stringify(none));
+  // The moon: from the server's clock alone (the card's _dirEnv), with no device_fx on the house; static; off with the switch.
+  const moon = await fx(`
+    const real = el._dirEnv;
+    const at = (iso) => { el._dirEnv = () => ({ ...real.call(el), now: Date.parse(iso) }); el._channel(s, { house: { ...F.kept.house, device_fx: undefined } }, me); return [...glass.classList].filter((c) => /moon/.test(c)).join(); };
+    const full = at("2026-11-24T12:00:00Z"), nw = at("2026-11-09T12:00:00Z"), none = at("2026-11-17T12:00:00Z");
+    const layer = getComputedStyle(glass.querySelector("b:nth-child(5)"));
+    el._dirEnv = () => ({ ...real.call(el), now: Date.parse("2026-11-24T12:00:00Z") });
+    el._channel(s, { house: { ...F.kept.house, device_fx: undefined } }, me);
+    const lit = { opacity: layer.opacity, animation: layer.animationName };
+    el._dirEnv = real; delete el._dirEnv;
+    el._channel(s, { house: F.kept.house }, me);
+    return { full, nw, none, lit };`);
+  check("devicefx 4B: the moon is a still halo on the full and the new day, from the clock, with no device_fx", moon.full === "dir-moon" && moon.nw === "dir-newmoon" && moon.none === "" && moon.lit.animation === "none", JSON.stringify(moon));
 
   // Put everything back.
   await fx(`await quiet();

@@ -153,7 +153,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
             <div class="breeze"><span></span><span></span><span></span></div>
             <div class="lcd"></div>
             <div class="glow"></div>
-            <i class="hw glass" aria-hidden="true"></i>
+            <i class="hw glass" aria-hidden="true"><b></b><b></b><b></b><b></b><b></b></i>
             <img class="attention" alt="wants attention">
             <div class="bubble"></div>
             <div class="sr" role="status"></div>
@@ -189,10 +189,12 @@ class HatchPetCardBuild extends HatchPetCardBase {
       propEl: q(".gprop"), live: q(".sr[role=status]"), seasonBox: q(".season"),
       basket: q(".basket"), glass: q(".glass"), rim: q(".rim"),
     };
-    // The glass effect ends with its animation (the director's watchdog is the backstop): the
-    // token is the one the recipe's start left on the slide, so a stale end does nothing.
-    s.glass.addEventListener("animationend", () => {
-      if (s.dirEffect) this._director?.release(s, s.dirEffect);
+    // The glass effect ends with its own clock, the glass's `dir-glass-life` (the director's watchdog is
+    // the backstop). The listener filters (F11): `animationend` bubbles, and the layers inside the glass
+    // (frost, fog, a drop) and any ambience animation end on their own, so only the glass's own life
+    // releases. The token is the one the recipe's start left on the slide, so a stale end does nothing.
+    s.glass.addEventListener("animationend", (e) => {
+      if (e.target === s.glass && e.animationName === "dir-glass-life" && s.dirEffect) this._director?.release(s, s.dirEffect);
     });
     // The rim cue (3C) ends the same way, on its own layer's clock: the rim's `dir-rim-life` runs as long
     // as the lease, and the lamps inside it are shorter, so their ends (which bubble) do not release it.
@@ -775,7 +777,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     s.dirViewed = false;
     s.dirRecent = null;
     s.dirEffect = 0;
-    s.glass?.classList.remove("dir-wet", ...HATCH_DEVICE_FX.CLASSES);
+    s.glass?.classList.remove(...HATCH_DEVICE_FX.CLASSES_BY_LAYER.ambient, ...HATCH_DEVICE_FX.CLASSES);
     s.rim?.classList.remove(...HATCH_DEVICE_FX.RIM_CLASSES);
     this._layDrop(s); // a lay waited for belongs to the last pet
     this._clearNameTimers(s);

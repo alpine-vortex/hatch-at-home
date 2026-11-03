@@ -225,12 +225,16 @@
   // _dirView), the clock is read (noteServerTime) as a snapshot's `now` would.
   function deviceFxShot(card, s, shot) {
     const fx = shot.deviceFx;
+    const key = fx.key || "rain"; // the weather key the onset and the echo are about (device-alive 4B)
     noteServerTime(new Date(shot.time).toISOString());
-    const entry = (kind, agoMs, n) => ({ id: `bench-${n}`, kind: kind === "start" ? "rain_started" : "rain_stopped", scope: "house",
+    const entry = (kind, agoMs, n) => ({ id: `bench-${n}`, kind: `${key}_${kind === "start" ? "started" : "stopped"}`, scope: "house",
       occurred_at: new Date(Date.parse(shot.time) - agoMs).toISOString(), expires_at: new Date(Date.parse(shot.time) - agoMs + 90000).toISOString() });
     s.subscribed = true;
     s.house = { ...(s.house || {}) };
-    if (fx.rain !== undefined) s.house.device_fx = { version: 1, current: { rain: fx.rain } };
+    // `current` is the house's device_fx.current as the server sends it ({snow: true, wind: false}); `rain` is the
+    // 3B shorthand. Neither: no device_fx at all (nothing to paint, the moon aside).
+    const current = { ...(fx.rain !== undefined ? { rain: fx.rain } : {}), ...(fx.current || {}) };
+    if (Object.keys(current).length) s.house.device_fx = { version: 1, current };
     card._dirSync(s);
     if (fx.echo) {
       s.dirViewed = false;
@@ -797,6 +801,12 @@
     card.setConfig({ seasonal: shot.season === "auto" ? undefined : shot.season,
       ...(shot.hop || shot.view === "board" ? { experimental_hop: true } : {}), ...(shot.config || {}) });
     card.hass = buildHass(shot, WORLDS);
+    // The moon (device-alive 4B) follows the card's server clock, and the default pinned day is a real new
+    // moon, so every shot would carry the halo. The bench holds it off unless a shot asks: `moon: "full"` or
+    // `"new"` pins a full or a new day for the card's own `_dirEnv` (the part and the CSS are the card's).
+    const moonAt = { full: "2026-11-24T12:00:00Z", new: "2026-11-09T12:00:00Z" }[shot.moon];
+    const dirEnv = card._dirEnv.bind(card);
+    card._dirEnv = () => ({ ...dirEnv(), now: moonAt ? Date.parse(moonAt) : NaN });
     stage.append(card);
     await settled(card);
     await document.fonts.ready;
@@ -898,9 +908,10 @@
     // A seasonal costume put on through the card's own _costume: {season, art, frame}.
     // The seat it used is kept in bench.info (bench.js writes it beside the shot).
     window.bench.info = null;
-    // `deviceFx` (device-alive 3B): the rain on the glass, through the card's own adapter and channel.
-    // {rain: bool, onset: "start"|"end", echo: "start"|"end", at: ms}. `rain` is the house's
-    // device_fx.current (missing: none); `onset` a live {"fx"} entry with the slide already viewed;
+    // `deviceFx` (device-alive 3B, 4B): the weather on the glass, through the card's own adapter and channel.
+    // {rain: bool, current: {snow: bool, ...}, key: "snow", onset: "start"|"end", echo: "start"|"end", at: ms}.
+    // `rain` and `current` are the house's device_fx.current (missing: none; `key` names the weather the
+    // onset and the echo are about, rain by default). The moon follows the shot's `time`; `onset` a live {"fx"} entry with the slide already viewed;
     // `echo` a ring entry from 20 s before, played at the slide's first view. `at` pauses the
     // glass's animation that many ms in (default 600), so a frame is the same every run.
     if (shot.deviceFx) deviceFxShot(card, cur, shot);
