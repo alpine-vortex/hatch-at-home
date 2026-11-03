@@ -8335,6 +8335,8 @@ async function main() {
   const naming = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const realTimeout = window.setTimeout; // the expiry check swaps setTimeout for a while: waits keep the real one
     const wait = (ms) => new Promise((r) => realTimeout(r, ms));
+    // Poll for a state with a ceiling, not a fixed sleep: it passes the moment it holds, however loaded the runner.
+    const until = async (f, ms = 8000) => { const t0 = Date.now(); while (!f() && Date.now() - t0 < ms) await wait(50); };
     const s = el._slides[el._index];
     const realHass = el._hass;
     const lifeId = s.ids["sensor.life_stage"];
@@ -8444,7 +8446,7 @@ async function main() {
       type("Moss");
       await save();
       out.retryWaits = sent.length === 1 && isOpen();
-      await wait(2300);
+      await until(() => sent.length === 2 && closed()); // the retry (NAME_RETRY_MS, 2 s), polled with a ceiling
       out.retryOnce = sent.length === 2 && closed() && s.bubble.textContent === "Moss! i like it ♥";
       await reopen();
       calls = 0;
@@ -8452,7 +8454,7 @@ async function main() {
       answer = () => { calls++; throw { code: "not_ready" }; };
       type("Moss");
       await save();
-      await wait(2300);
+      await until(() => sent.length === 2 && isOpen() && err()?.textContent === "hm, that name didn't stick ♪");
       out.retryThenFails = sent.length === 2 && isOpen() && err().textContent === "hm, that name didn't stick ♪";
       // The exits: keep (no call), Escape in the field, the status chip, a swipe, the shared-screen switch,
       // the pet leaving the baby stage, and another generation.
@@ -11646,25 +11648,47 @@ async function main() {
   // virtual_pet/greeted (any screen); a counted-off start, a guest and a seasonal cross-over don't.
   {
     await vprep(V0);
-    const r = await card.evaluate(async (el, v) => {
+    // The card's timers (the look at inMs, the greet) run on the page's fake clock: skip() moves
+    // it on, so no real-time wait can let a hass update put the pet to sleep or the look lapse
+    // between the start and the sample (the CI flake: ltr [false,false], _visitorLive false).
+    const r = { ltr: null, rtl: null };
+    const inMs = V0.in || 1400;
+    await card.evaluate((el, id) => {
+      el.__f2plan = el._visitPlan;
+      el._visitPlan = () => ({ id });
+    }, V0.id);
+    try {
+      for (const ltr of [true, false]) {
+        // Pin every _visitorLive condition right at the start; the skips below add no real time.
+        await card.evaluate((el, [v, ltr]) => {
+          const s = el._slides[el._index];
+          Object.assign(s, { asleep: false, away: false, game: null, scene: null, linking: false, power: null, calling: false });
+          s.screen.classList.remove("show-status");
+          el._visitorEnd(s);
+          s.pet.classList.remove("look");
+          el._visitorStart(s, v, { ltr, count: false });
+        }, [V0, ltr]);
+        await skip(page, inMs + 400);
+        const arriving = await card.evaluate((el) => el._slides[el._index].pet.classList.contains("look"));
+        await skip(page, 1500); // past the greet (in + 1000)
+        const held = await card.evaluate((el) => {
+          const s = el._slides[el._index];
+          const h = s.pet.classList.contains("look");
+          el._visitorEnd(s);
+          s.pet.classList.remove("look");
+          return h;
+        });
+        r[ltr ? "ltr" : "rtl"] = [arriving, held];
+      }
+    } finally {
+      await card.evaluate((el) => { el._visitPlan = el.__f2plan; });
+    }
+    Object.assign(r, await card.evaluate(async (el, v) => {
       const s = el._slides[el._index];
-      const wait = (ms) => new Promise((res) => setTimeout(res, ms));
       const out = {};
       const realPlan = el._visitPlan;
       el._visitPlan = () => ({ id: v.id });
       try {
-        for (const ltr of [true, false]) {
-          el._visitorEnd(s);
-          s.pet.classList.remove("look");
-          el._visitorStart(s, v, { ltr, count: false });
-          const inMs = v.in || 1400;
-          await wait(inMs + 400);
-          const arriving = s.pet.classList.contains("look");
-          await wait(1500); // past the greet (in + 1000)
-          out[ltr ? "ltr" : "rtl"] = [arriving, s.pet.classList.contains("look")];
-          el._visitorEnd(s);
-          s.pet.classList.remove("look");
-        }
         const sent = [];
         const real = el._hass.callWS;
         el._hass.callWS = (m) => (m.type === "virtual_pet/greeted" ? (sent.push(m), Promise.resolve(null)) : real.call(el._hass, m));
@@ -11685,7 +11709,7 @@ async function main() {
         Object.assign(s, { sayUntil: 0, flairUntil: 0, poseUntil: 0, visitUntil: 0, queue: [] });
       }
       return out;
-    }, V0);
+    }, V0));
     check("UX8 F2: the pet faces a visitor from the left through the greet, and never turns from one on the right",
       r.ltr?.[0] === true && r.ltr?.[1] === true && r.rtl?.[0] === false && r.rtl?.[1] === false, JSON.stringify(r));
     check("UX8 F4: a played day visitor reports greeted for this pet; an uncounted start, a guest and a cross-over don't",
