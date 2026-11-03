@@ -801,7 +801,7 @@ folded in. Line numbers below are on `origin/main` `6d82439a`; names win over nu
 | hamster | 60 | livelier after dark · snug in a warm spot · fills its cheeks |
 | ferret | 56 | livelier at dusk · snug in a warm spot · hides treasures |
 | otter | 49 | up with the day · perks up in rain · grooms often |
-| octopus | **61** | livelier after dark · goes quiet in fog · squeezes into nooks |
+| octopus | 58 | livelier after dark · goes quiet in fog · slips into nooks |
 | seal | 53 | up with the day · warms up in sun · hauls out to bask |
 | hermitcrab | 54 | livelier after dark · perks up in rain · keeps a stash |
 | puffin | 51 | up with the day · stirs in the wind · digs a burrow |
@@ -817,11 +817,8 @@ folded in. Line numbers below are on `origin/main` `6d82439a`; names win over nu
 | opossum | 58 | livelier after dark · snug in a warm spot · makes a hollow |
 
   Checked 2026-11-03 (s2796): all 30 are distinct; none has a digit, `?`, `!`, a NAG word
-  or a banned word; **29 are 60 characters or fewer, and the octopus note is 61**.
-  **Open (one line, the first mate's):** the octopus third clause "squeezes into nooks" is one
-  character over the hard ceiling. The decided clause was not reworded here. The builder does
-  not start the data until the first mate gives either a shorter clause or a ceiling of 61;
-  the data test fails on it as written. Hamster is exactly 60. Several are over what two
+  or a banned word; all 30 are 60 characters or fewer. **Settled (first mate, 2026-11-03):**
+  the octopus clause is "slips into nooks" (58; "squeezes into nooks" was 61). Hamster is exactly 60. Several are over what two
   lines hold at 330 (next bullet); the bench cap (Q4) is a ceiling, not a target, and the
   longest note decides it.
 - **Wording rule.** The notes say what the body does, never a liking: "perks up in rain",
@@ -1568,7 +1565,7 @@ finding's fate). All recommendations were taken.
   "snug in a warm spot", and these third clauses: kitten "kneads a blanket"; bunny "grooms its
   ears"; gecko "licks its eyes"; hamster "fills its cheeks"; ferret "hides treasures"; seal
   "hauls out to bask"; axolotl "drifts and waits"; corgi "herds things about"; duckling
-  "paddles about"; octopus "squeezes into nooks". Others as drafted. Final copy.
+  "paddles about"; octopus "slips into nooks" (FM, was "squeezes into nooks", 61). Others as drafted. Final copy.
 - **Q2.** Three-clause frame, each note distinct; a test fails duplicates.
 - **Q3.** The nature row shows at every hatched stage, never on the egg.
 - **Q4.** The cap is set by a bench measurement of the longest note at 330/300/big text; the
@@ -1583,6 +1580,5 @@ finding's fate). All recommendations were taken.
   `test_assist.py`'s `endswith` untouched, stale server lines fixed).
 
 **Copy check, 2026-11-03 (s2796):** all 30 distinct; no digit, `?`, `!`, NAG word or banned
-word (word-boundary); 29 are 60 characters or fewer. **The octopus note is 61**
-("livelier after dark · goes quiet in fog · squeezes into nooks"); it was not reworded. The
-first mate gives a shorter clause or a ceiling of 61 before N3 is built.
+word (word-boundary); all 30 are 60 characters or fewer after the first mate set the octopus
+clause to "slips into nooks" (58).
