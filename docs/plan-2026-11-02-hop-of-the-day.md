@@ -961,7 +961,7 @@ Acceptance:
   ship 5's hint: ship 5 shares the restart slot or takes the cell the close button leaves. The
   keys are sized from the overlay's height (24-44 px) and the grid takes the rest.
 - **Cell sizes are 19 / 22 / 28 px at card widths 300 / 330 / 420 (6×4 board)**, not the
-  35-49 px this plan expected: the LCD is about 198×148 px at 330 and the keys take a column of
+  35-49 px this plan expected: the LCD is 198×148 px at 300 (228×171 at 330, 272×204 at 420) and the keys take a column of
   it. Every adult board is therefore tap-then-confirm; one tap commits only where the drawn
   cell is 44 px or more (the code reads the size it drew, so a wider card gets it).
 - The row is a `.ghop` button outside `.gpick` (strip at the foot where the games fit on one
