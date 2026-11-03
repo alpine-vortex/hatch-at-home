@@ -26,6 +26,8 @@ delays care, navigation, dialogue, questions or games.
 | FM2 | Rare glass (slice 6) comes before morphs and depends on slice 3's glass layer. |
 | FM3 | No labels: matrix rows stay letterless glyphs; any wording goes to the first mate as a DRAFT question. |
 | FM4 | `_houseFx`/`_robotFx` stay as they are through slice 3. The director leases only the new glass/rim classes (named `dir-*`, never `fx-*`) so it cannot clear a `fx-*` class. Whether `_houseFx` moves under a lease is a slice-4 decision; decide it there with the matrix rows (heat/cool/chime overlap rows). (First mate, 2026-11-03, from the slice-1 review F4; reversible.) |
+| FM5 | **Slice 2 is CSS only, on the cap.** No director, no `canRender`, no adapter, no TDZ card-check case, no `pick-sections` entry. The per-action rim cues wait for slice 3; section 7's table has no rim-cue column (first mate, 2026-11-03, from the slice-2 review; reversible). |
+| FM6 | **Press feel details** (first mate, 2026-11-03, reversible): no minimum pending time (a fast reply may never show it, fine); a refusal gets no cap cue (the care scenes already push away); the nav arrows are out of scope; snack, scold and praise get the default rebound. |
 
 Consequences: the first four slices need no art. The plan has no new player copy; any
 wording a slice finds it needs goes to the first mate as a DRAFT question, not into the
@@ -415,30 +417,53 @@ the bridge on equals main (no save field); 17. the card-check TDZ-order case for
 ## 7. Press feel: the gaps only (F2, LD section 7)
 
 The cap goes down on press and holds (`style.js:1288-1291`); the care scene owns the
-body. What is missing, all CSS custom properties and classes, no new `.pet` class:
+body. What is missing is CSS on the cap only: custom properties and the existing state
+classes, no new `.pet` class, no director (FM5). A "cap" here is a `.toy` button's `.cap`
+(the care caps, play, and the lights toy, which is the tuck). The nav arrows (`.prev`,
+`.next`, which have `.tap-feedback.pressed` and no `.cap`), `.statusbtn` and the
+backlight are out of scope (FM6).
+
+`.toy.pending` and `.toy.failed` **already exist** (`style.js:1293-1296`; `_call`,
+`card-actions.js:54-71`, adds `pending` before `callService`, adds `failed` for 400 ms on a
+rejection, removes `pending` in `finally`). Slice 2 restyles them; it adds no field and no
+second pair. "Settles" means the `callService` promise, not the care result that arrives
+later in the sensor. `button.press` returns in tens of ms, so pending is often never seen;
+there is no minimum pending time (FM6).
 
 | Gap | Treatment |
 |---|---|
-| Release | 90-140 ms spring rebound; the hit target does not move. |
-| Pending | a restrained cap state until the service settles. |
-| Failed or refused | the cap returns muted and never suggests success; the existing refusal stays as it is. |
-| Cleanup | check first whether `:active` already covers `pointercancel`, lost capture and blur; fix only what it misses. A swipe that starts on a cap must not leave it down. |
-| Character | the same small vocabulary per action (travel, rebound curve, one shell cue), not a long animation per click: |
+| Release | 90-140 ms rebound, an overshoot `cubic-bezier` on the cap's existing transition (a transition cannot collide with another animation, and the `:active` end and the `.pressed` removal both start it); the hit target (`.toy`) does not move. |
+| Pending | `.toy.pending .cap`: a restrained, dim, static-plus-slow-pulse tone (no transform); a static tone remains under reduced motion. |
+| Failed | `.toy.failed .cap`: a muted, desaturated return (a `filter` transition, no `transform`, so it cannot fight the pressed offset). Never suggests success. The old horizontal shake goes, because it read as a refusal and overrode the pressed offset. |
+| Refused | no cap cue (FM6): a refusal is not a rejected call (`button.press` resolves, the server says no later through the scene or the bubble). The existing refusal stays as it is. |
+| Cleanup | `:active` clears natively on cancel and drag-off, `.pressed` and `.tapped` are timer-bounded, `.pending` clears in `finally`, `.failed` on a timer: nothing sticks. Fix only what a test finds missing. A source test guards that every state class has a removal. |
+| Character | per-action rebound only: one `--rebound` curve and duration per `.toy[data-action]`; snack, scold and praise take the default. |
 
-| Action | Rebound | Shell cue |
-|---|---|---|
-| Feed | soft, rounded | a short delivery-path glow on the rim |
-| Play | springy | a brief two-point rim pulse |
-| Clean | crisp, two-part release | one clearing sweep, not a wipe on every step |
-| Medicine | firm, minimal bounce | stable, quiet |
-| Sleep / tuck | settles, no bounce | rim lamps dim in sequence once confirmed |
-| Navigation | light, quick | none |
+| Action | Rebound |
+|---|---|
+| Feed | soft, rounded |
+| Play | springy |
+| Clean | crisp, two-part release |
+| Medicine | firm, minimal bounce |
+| Sleep / tuck (the lights toy) | settles, no bounce |
+| Others (snack, scold, praise) | the default |
 
-The press means "I got your input", not "the server accepted it". Praise/scold rows
-apply only where those actions exist in this configuration. **Must not touch the tuck
-beats** (the `s.wasAsleep` rule, care-reactions §4.9). Tests: pointer cancel, swipe off a
-cap, fast double tap, Space/Enter, a refusal, repeated status navigation, reduced
-motion.
+The per-action **shell cues** (a delivery-path glow, a two-point pulse, one clearing
+sweep, the lamps dimming in sequence once the tuck is confirmed) are `shellImpulse` rim
+effects and so move to slice 3 with the other rim cues (FM5).
+
+Motion rule: the cap's animations are not `.pet.<cls>` rules, so `motion_rule.test.js`'s
+`ALLOWED` list needs no entry (a stale entry would fail its own test). Reduced motion
+(`style.js:7-9`) removes every animation and transition, so the cap keeps its static
+`:active`/`.pressed` down state and static pending and failed tones. Any class a button
+wears for a moment goes on `PASSING_CLASSES` (`shell-data.js:258`), `failed` included.
+
+The press means "I got your input", not "the server accepted it". **Must not touch the
+tuck beats** (the `s.wasAsleep` rule, care-reactions §4.9). Tests: a structural check (no
+state class without a removal; no `animation` on the cap that touches `transform`), the
+bench `alive` preset with `.pressed`/`.pending`/`.failed` pinned by class (the bench
+cannot hold `:active`), a card-check fast double tap (one `button.press`, `.pending`
+clears). Device rows are in the slice 2 device queue (section 13).
 
 ## 8. Idle: a delta over N1-N4 (F8)
 
@@ -508,7 +533,7 @@ art. **Do not run two workers on the card chain or `manifest.txt` at once.**
 |---|---|---|---|---|---|
 | 0 | This rewrite | 0 | M | docs only | none |
 | 1 | **Director core**: pure `interaction-director.js`, track leases, generation tokens, `BUSY_OWNERS`, injected `schedule`, `node --test`; a manifest line, one AGENTS.md table row. No adapter, no card-check case, no `pick-sections` entry. **No visual change.** Acceptance below. | 1 | S-M | `scripts/gate --auto` (picks no card-check section; the JS tests are the guard) | none (nothing to see) |
-| 2 | **Press release feel**: section 7 only. Rebound, pending, failed, cleanup, per-action character, as classes and custom properties on the cap. Bench `alive` preset. The cap states are CSS only and must not go through the director's `canRender` (`lcdOn() && !calm()`): a press with screen effects off still feels like a press. The per-action rim cues are `shellImpulse` effects, so they use the director; slice 2 is then the first slice with an adapter and takes slice 3's TDZ card-check case and `pick-sections` entry from section 5.2, or the rim cues wait for slice 3 (first mate's call; slice 1 leaves it open). | 1 | S-M | `gate --auto` | Press the four care caps and a nav cap; swipe off a cap; Space on a focused cap; one refusal. |
+| 2 | **Press release feel**: section 7 only, CSS on the cap (FM5, FM6). Rebound, restyled `.pending`/`.failed`, cleanup, per-action rebound curves via `data-action` and `--rebound`; `failed` joins `PASSING_CLASSES`; bench `alive` preset. No director, no `canRender`, no adapter, no TDZ card-check case, no `pick-sections` entry; the rim cues wait for slice 3. | 1 | S | `gate --auto` | Press feed, play, clean and meds caps and the lights toy; hold a cap and drag off it (touch and mouse); Space on a focused cap (does it pop up, then down?); a quick double tap; iOS `:active`; the feel of the 90-140 ms rebound; one refusal (the cap does nothing special). |
 | 3 | **Signal bridge, rain**: `device_fx.py` (current, ring, hysteresis), `current` in `_house_view`, the live message, the client `ambient`/`echo`, one glass-drop pulse on the `.hw` family. The 14 cases for the rain row, plus 15-17. No new copy. The adapter owns the wire-to-cue mapping (`occurred_at`/`expires_at` ISO to `occurredAt`/`ttlMs` on `serverNow`, `rain_started` to a recipe kind and a `direction`), passes `deviceNow` (`Date.now`) and `trusted` (`serverClockKnown()`), sets `s.statusOpen` in `_toggleStatus`, and calls `release` from `animationend`. | 1 (server) | L | `scripts/ci-gate` (pick-sections picks `all`) | Rain on a wall tablet (shared) and a phone; open at 20 s and at 3 min; HA restarted in rain. |
 | 4 | **Expand the matrix**: snow, fog, storm, wind, lights, fireplace, heating/cooling, media, TV, vacuum, appliance, moon, `DEVICE_SIGNAL_MAP` machine-checked. Two PRs. | 1 | M | `ci-gate` for the server half, `gate --auto` for the rest | Each row once on the phone: lights, fireplace, heating, doorbell, a storm with reduced motion on. |
 | 5 | **Idle delta**: section 8's three rows, only if N4 leaves them open. | 1 | S-M | `gate --auto` | A ten-minute idle watch on the phone; a game then idle. |
