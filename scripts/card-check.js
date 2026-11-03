@@ -9943,6 +9943,9 @@ async function main() {
     const glass = s.glass; const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const iso = (ago) => new Date(Date.now() - ago).toISOString();
     const cls = () => [...glass.classList].filter((c) => c.startsWith("dir-") && !/^dir-(moon|newmoon)$/.test(c)).sort().join(); // the moon is the date's, not the test's
+    // A kind's cooldown (20 s, slice 4B) outlasts the checks' quick succession; production's onset after an onset is
+    // a held reverse 45 s on. cool() drops the slide's director state (cooldowns, seen ids) and paints the ambience again.
+    const cool = () => { el._director.detach(s); el._dirSync(s); };
     const weatherHouse = (current) => ({ ...F.kept.house, device_fx: { version: 1, current } });
     const rainHouse = (rain) => ({ ...F.kept.house, device_fx: { version: 1, current: { rain } } });
     const ent = (kind, ago, id) => ({ id, kind, scope: "house", occurred_at: iso(ago), expires_at: iso(ago - 90000) });
@@ -9977,6 +9980,7 @@ async function main() {
 
   // 2 and 3: a first view 20 s on gives one shortened echo; 3 min on, ambience only.
   const echo = await fx(`
+    cool();
     s.dirViewed = false; s.dirRecent = [ent("rain_started", 20000, "cc-2")];
     el._dirView(s);
     const at20 = cls();
@@ -9990,6 +9994,7 @@ async function main() {
 
   // 7 and M7: a snapshot then the live copy (same id) is one pulse; a reconnect snapshot on a viewed slide never echoes.
   const dedup = await fx(`
+    cool();
     s.dirViewed = false;
     const snap = (ring) => ({ moments: [], mine: s.mine, house: rainHouse(true), device_fx_recent: ring, now: new Date().toISOString() });
     el._channel(s, snap([ent("rain_started", 15000, "cc-4")]), me);
@@ -10005,6 +10010,7 @@ async function main() {
   // 8: two slides, the same rain on both: the one on show plays, the other holds it (and plays nothing).
   if (slides >= 2) {
     const two = await fx(`
+      cool();
       const o = el._slides.find((x) => x !== s);
       const keptO = o.house;
       el._channel(o, { house: { ...(keptO || {}), device_fx: { version: 1, current: { rain: true } } } }, me);
@@ -10084,7 +10090,7 @@ async function main() {
   // 13: a real IntersectionObserver: leaving and coming back is not a replay; the first sight of a slide that
   // loaded below the fold is its first view (and plays its echo).
   const io = async (viewed) => {
-    await fx(`s.dirViewed = ${viewed}; s.dirRecent = ${viewed ? "[ent('rain_started', 10000, 'cc-io-" + viewed + "')]" : "[ent('rain_started', 10000, 'cc-io-" + viewed + "')]"};
+    await fx(`cool(); s.dirViewed = ${viewed}; s.dirRecent = ${viewed ? "[ent('rain_started', 10000, 'cc-io-" + viewed + "')]" : "[ent('rain_started', 10000, 'cc-io-" + viewed + "')]"};
       el.style.transform = "translateY(-200000px)";`);
     await fxWait(500);
     const away = await card.evaluate((el) => ({ visible: el._visible, off: el._card.classList.contains("offscreen") }));
@@ -10121,6 +10127,7 @@ async function main() {
       const t0 = Date.now();
       const after = await quiet();
       const took = Date.now() - t0 + 300;
+      cool(); // the held reverse comes 45 s on, past the cooldown
       el._channel(s, { house: weatherHouse({ ${key}: false }) }, me);
       el._channel(s, { fx: ent("${key}_stopped", 0, "cc-${key}-2") }, me);
       const ending = cls();
