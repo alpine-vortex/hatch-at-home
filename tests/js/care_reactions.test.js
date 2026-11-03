@@ -593,3 +593,24 @@ test("feed's per-bite dip: a no-rim bowl squashes at each chomp and is whole aga
   assert.match(feed.refuse.toString(), /sc\.bowl\.style\.scale = ""/);
   assert.match(feed.exit.toString(), /sc\.bowl\.style\.scale = ""/);
 });
+
+// B1 validation findings (first mate), fixed in B2.
+test("feed's refuseAt: a full that came after a hold is refused at the gate, before bite 1", () => {
+  const feed = feedEntry();
+  const f = feedSlide();
+  f.s.pinVariant = { feed: "A" };
+  const sc = f.setup(feed);
+  sc.answerAt = 1400; // held at the gate, the reply came 750 ms late
+  assert.strictEqual(feed.refuseAt(f.s, sc, sc.gate), sc.gate);
+  const pre = { style: { translate: "0px 0px" }, classList: { toggle() {} } };
+  sc.refuseAt = sc.gate;
+  sc.bowl = { style: {} };
+  sc.crumbs = [];
+  f.s.pet = pre;
+  f.s.perch = { style: {} };
+  const frames = feed.refuse.call(f.self, f.s, sc, 100, { sw: 330, ramp: () => 0, ease: () => 0 });
+  assert.deepStrictEqual(plain(frames), plain(sc.hungry), "it sniffs from its waiting frame, as before the gate");
+  // A full after the first bite began is still the bite in progress's.
+  sc.answerAt = 700;
+  assert.strictEqual(feed.refuseAt(f.s, sc, sc.gate + 10), sc.bites[0].at + sc.bites[0].len);
+});

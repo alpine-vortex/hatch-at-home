@@ -358,12 +358,13 @@ const SCENES = {
     // bite in progress is finished first (refuseAt), and it steps back from what is left. The
     // bowl slides out with it. "i'm full!" is said as it starts (_sceneRender).
     refuseAt(s, sc, te) {
-      if (te < sc.gate) return Math.max(te, sc.landAt);
+      // A reply that came after a hold (answerAt at or past the gate) is still before the first bite.
+      if (te < sc.gate || (te === sc.gate && sc.answerAt >= sc.gate)) return Math.max(te, sc.landAt);
       const b = sc.bites.find((x) => te >= x.at && te < x.at + x.len);
       return b ? b.at + b.len : te;
     },
     refuse(s, sc, u, { sw, ramp, ease }) {
-      const pre = sc.refuseAt < sc.gate;
+      const pre = sc.refuseAt <= sc.gate; // no bite was made (a reply after a hold is refused at the gate)
       const stood = Number.parseFloat(s.pet.style.translate) || 0; // where render(refuseAt) left it
       const step = stood * (1 - ease(pre ? 250 : 0, pre ? 550 : 300));
       s.pet.style.translate = `${step}px 0`;
