@@ -546,9 +546,11 @@ async def test_the_big_days_evening_beat_is_its_how_did_it_go(
     }
     assert people.open_event(ada.id) is None and people._texts == {}
     assert await follow(client) == {}
-    for kept_on_the_card in ("great", "ok"):
+    # "ok" stays on the card; "great" reaches the server only for memory (M1b), and
+    # with memory off the handler refuses it and leaves the slot open.
+    for kept_on_the_card, code in (("great", "not_asked"), ("ok", "invalid_answer")):
         msg = await answer(client, "big_how", kept_on_the_card)
-        assert msg["error"]["code"] == "invalid_answer"
+        assert msg["error"]["code"] == code
     assert (await answer(client, "big_how", "tough"))["success"]
     assert people._moods == {ada.id: {"kind": "soft", "day": "2026-11-04"}}
     # Its softer morning from the morning hour too (L1).
@@ -653,11 +655,12 @@ async def test_a_tough_day_is_a_softer_morning_and_nothing_else(
     config = await setup(hass)
     people = config.runtime_data.people
     client = await hass_ws_client(hass, token)
-    # Without today's how_day: refused. "great" and "ok" never reach the server.
+    # Without today's how_day: refused. "ok" never reaches the server; "great" only
+    # for memory (M1b), refused by the handler with memory off.
     assert (await answer(client, "how_day", "tough"))["error"]["code"] == "not_asked"
-    for kept_on_the_card in ("great", "ok"):
+    for kept_on_the_card, code in (("great", "not_asked"), ("ok", "invalid_answer")):
         msg = await answer(client, "how_day", kept_on_the_card)
-        assert msg["error"]["code"] == "invalid_answer"
+        assert msg["error"]["code"] == code
     P.mark_asked(people.person(ada.id), "2026-11-01", 19, "how_day")
     assert (await answer(client, "how_day", "tough"))["success"]
     assert people._moods == {ada.id: {"kind": "soft", "day": "2026-11-01"}}

@@ -305,6 +305,32 @@ const TRICK_ASK = {
   later: ["ok! another time ♪"],
   shown: ["i learned it! look ♪", "you said i should! ta-da ♪"],
 };
+// Memory (docs/plan-2026-11-02-memory.md M1b; copy APPROVED by the first mate 2026-11-02,
+// Q2). The one-time ask at bond level 4, its two buttons and their replies.
+const MEMORY_ASK = {
+  q: "can i remember what you tell me?",
+  yes: "yes",
+  notNow: "not now",
+  yesReply: "ok! i'll keep it safe ♥",
+  notNowReply: "ok, no rush ♥",
+};
+// The doors (plan section 6), on the person's own screen only, while memory is on: door 2
+// the morning after a "great" day; 4, 5 and 12 a repeated pick ({pick}: its label).
+const MEMORY_DOORS = {
+  door2: "yesterday was a great one! ♥",
+  door4: (pick) => `dreaming of ${pick} lately, hehe`,
+  door5: (pick) => `you like to say ${pick}! ♥`,
+  door12: (pick) => `${pick} is your pick, i'm ready!`,
+};
+// Door 6 (FM Q-B): the first time a favourite told while memory was on comes back, once
+// per favourite, in place of that day's fav-weather or season line.
+const MEMORY_TOLD = {
+  sun: "sunshine! you said it's the best ♥",
+  rain: "rain! you said it's cozy ♥",
+  snow: "snow! you said it's the best ♥",
+  storms: "a storm! you said you love them",
+  season: (season) => `${season}! you told me it's the best`,
+};
 // HOUSE_LINES (ha-signals H3, owner-approved set D, 2026-11-01): the house answered the
 // pet's request, not a person. heating = the blanket ask, cooling = the fan ask; bits are
 // the evening's "today" and the away note's phrases. robot_out / robot_home: a robot

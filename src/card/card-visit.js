@@ -446,6 +446,10 @@ class HatchPetCardVisit extends HatchPetCardLooks {
       // Follow-ups (F1, E13): a tough day goes to the server (memory only, a softer
       // morning tomorrow); a big day's "yes" asks what it is first. Never stashed.
       if (howLike && answer === "tough") this._sendFollow(s, entity, kind, "tough");
+      // A great day reaches the server only while their memory is on and this pet allows it
+      // (memory plan M1b, door 2); else it stays on the card, as ever. The server checks too.
+      if (howLike && answer === "great" && this._mineSwitch(s, "memory_on", this._memoryOn) &&
+        this._mineSwitch(s, "memory_allowed", s.memoryAllowed)) this._sendFollow(s, entity, kind, "great");
       if (kind === "big_day_day") this._askTextStart(s, entity, "big_day", answer);
       if (kind === "weekend" && answer === "yes") this._askTextStart(s, entity, kind);
       if (kind === "game") this._sendFollow(s, entity, "game", answer); // F6: the choice
@@ -465,19 +469,31 @@ class HatchPetCardVisit extends HatchPetCardLooks {
       this._hass.callWS({ type: "virtual_pet/answer", entity_id: entity, question: "phone", answer: "shown" })
         .catch(() => {}); // an older server, or a lost reply: it may ask again, once
     }
+    // The memory ask too (memory plan M1b, M1 S3), from their own screen only (R3).
+    if (kind === "memory" && !sharedScreen()) {
+      this._hass.callWS({ type: "virtual_pet/answer", entity_id: entity, question: "memory", answer: "shown", shared: false })
+        .catch(() => {}); // a lost reply: it may be asked again
+    }
   }
 
   // A websocket command, not a service call: answers stay off the event bus.
   // A failure is retried once, quietly. If that fails too, the pet says so and a
   // once-question is kept on this device for later. The bubble is written only
   // while the slide still shows the pet that was asked.
+  // shared: false (memory plan R3, M1 B1): the server may add a pick to their memory only
+  // from a screen that says it is their own; a shared one keeps the answer, and no memory.
   _keepAnswer(s, kind, answer, entity) {
     const user = this._hass.user?.id;
-    const send = () => this._hass.callWS({ type: "virtual_pet/answer", entity_id: entity, question: kind, answer });
+    const send = () => this._hass.callWS({ type: "virtual_pet/answer", entity_id: entity, question: kind, answer,
+      shared: sharedScreen() });
     const kept = () => {
       if (kind === "birthday") {
         this._birthdayKept = answer !== "skip";
         this._setMine("birthday_kept", answer !== "skip"); // the channel's push confirms it
+      }
+      if (kind === "memory" && answer === "yes") {
+        this._memoryOn = true; // one switch per person, for every pet
+        this._setMine("memory_on", true); // the channel's push confirms it
       }
     };
     send().then(kept).catch(() => {

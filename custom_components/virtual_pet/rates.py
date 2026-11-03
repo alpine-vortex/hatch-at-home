@@ -440,6 +440,18 @@ ASK_LIKES_TRIES = 2  # an unanswered one-time question: asked once more...
 ASK_LIKES_AGAIN_DAYS = 14  # ...this many days later, then never
 ASK_ONCE_GAP_DAYS = 3  # days between one person's one-time questions
 BIRTHDAY_ASK_LEVEL = 4  # "when's your birthday?"
+# The memory ask (memory plan M1b): "can i remember what you tell me?", after the
+# birthday, once. Chosen on at most MEMORY_ASK_CHOSEN days in any ASK_LIKES_AGAIN_DAYS
+# with no "shown" from the card (an old card never sends one, M1 S3; FM Q5), so it
+# can't hold the later slot every day; then tried again.
+MEMORY_ASK_LEVEL = 4
+MEMORY_ASK_CHOSEN = 3
+MEMORY_CHOSEN_KEPT = 7  # memory_chosen_days' length on disk (the loader's bound)
+# The memory doors (plan section 6, "Door timing"): door 2 the morning after a great
+# day, before noon; doors 4, 5 and 12 in this window, each at most once a week.
+MEMORY_DOOR2_UNTIL = 12
+MEMORY_DOORS_FROM, MEMORY_DOORS_UNTIL = 11, 20
+MEMORY_DOOR_GAP_DAYS = 7
 CATCHPHRASE_LEVEL = 7  # "what should I say at the end of things?"
 BIRTHDAY_QUIET_BELOW = 30.0  # happiness: below it, a quiet "happy birthday ♥"
 ASK_DAY_FROM = 16  # "how was your day?" on its rotation day

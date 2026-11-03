@@ -920,6 +920,11 @@ GUIDE_STRINGS = (
     "and memory",
     "removing a pet",
     '"remember me" in settings',
+    # M1b: the ask, the doors, "great".
+    '"can i remember what you tell me?"',
+    "**What the pets say from memory.**",
+    "the card's own check",
+    '"great" is kept only while memory is on',
 )
 
 
@@ -934,3 +939,478 @@ def test_the_guide_says_what_memory_keeps_and_where() -> None:
     for text in GUIDE_STRINGS:
         assert text in section, text
     assert "isn't on the card yet" not in section  # the row shipped
+
+
+# --- M1b: the ask, "great", the doors (plan sections 5, 6, 8, 10) ---------------------
+
+# Asked everything that comes before it: the favourites (this world's visitor too) and
+# the birthday (skipped), so the memory ask is next in once_due.
+READY = {
+    "likes": {"fav_weather": "snow", "fav_season": "winter", "visitor_woodland": "x"},
+    "birthday_skipped": True,
+}
+ASK_DAY = "2026-11-02"  # a Monday: its day 4 is a plain Thursday
+
+
+def ask_pure(person: dict[str, Any], today: str = ASK_DAY, **kw: Any) -> str | None:
+    args = {
+        "level": 4,
+        "to_bed_minutes": 400,
+        "has_forecast": True,
+        "came_home": "home",
+        "rested": False,
+        "world": "woodland",
+        "memory_ask": True,
+    } | kw
+    return P.choose_question(person, today, kw.pop("hour", 14), **args)
+
+
+def test_the_memory_ask_comes_after_the_birthday_where_allowed_and_held() -> None:
+    """Level 4, after the birthday; only where the pet allows it; never once
+    answered, while memory is on, or while baby talk is on (FM Q-D)."""
+    assert ask_pure(copy.deepcopy(READY)) == "memory"
+    assert ask_pure({"likes": READY["likes"]}) == "birthday"  # the birthday first
+    assert ask_pure(copy.deepcopy(READY), memory_ask=False) == "big_day"  # Monday's
+    assert ask_pure(copy.deepcopy(READY), level=3) == "big_day"
+    for held in ({"memory_asked": True}, {"baby_talk": True}, {"memory": {"on": True}}):
+        assert ask_pure({**copy.deepcopy(READY), **held}) == "big_day", held
+    assert "memory" not in P.ONCE_KINDS and "memory" not in dict(P.ONCE)
+
+
+def test_an_unshown_ask_is_chosen_three_days_in_fourteen_then_again() -> None:
+    """Stale card (M1 S3, FM Q5): chosen with no "shown" on 3 days, then the later
+    slot is how_day's on day 4; within the 14 days it rests, then it is tried again.
+    The list is cut to the loader's 7, so a restart never resets the bound."""
+    person = copy.deepcopy(READY)
+    first = date.fromisoformat(ASK_DAY)
+    for n in range(3):
+        day = (first + timedelta(days=n)).isoformat()
+        assert ask_pure(person, day) == "memory", day
+        P.mark_asked(person, day, 14, "memory")
+        P.memory_chosen(person, day)
+    assert ask_pure(person, (first + timedelta(days=3)).isoformat()) == "how_day"
+    for n in range(
+        4, 14
+    ):  # resting (a Friday's is the weekend ask, a Sunday's big day)
+        assert ask_pure(person, (first + timedelta(days=n)).isoformat()) != "memory"
+    assert ask_pure(person, (first + timedelta(days=14)).isoformat()) == "memory"
+    # Never more than 7 days kept, the newest, and the loader keeps them.
+    for n in range(20):
+        P.memory_chosen(person, (first + timedelta(days=30 + n)).isoformat())
+    days = person["memory_chosen_days"]
+    assert len(days) == 7 and days[-1] == (first + timedelta(days=49)).isoformat()
+    assert P._person(person)["memory_chosen_days"] == days
+    P.memory_chosen(person, days[-1])  # twice on one day counts once
+    assert person["memory_chosen_days"] == days
+
+
+def test_a_saved_memory_ask_survives_a_reload() -> None:
+    asked = {"day": ASK_DAY, "later": True, "later_kind": "memory"}
+    assert P._person({"asked": asked})["asked"] == asked
+
+
+async def ready_pet(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: Any,
+    user: str,
+    record: dict[str, Any] | None = None,
+    **options: Any,
+) -> Any:
+    """Pip, `user` at bond level 4 and asked all before memory. The test freezes the
+    time first (before a_user: a token made earlier would have run out)."""
+    pet = await start(
+        hass, hass_storage, {user: record or copy.deepcopy(READY)}, **options
+    )
+    pet.state.bonds.setdefault(user, {})["points"] = 25
+    assert pet.bond_for(user)[0] == 4
+    return pet
+
+
+async def test_the_ask_counts_only_once_the_card_says_it_showed_it(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    """The ask (M1 S3): chosen, it writes no likes_asked and no once_last, only the
+    day; "shown" from their own screen counts it and clears the days; a stray one,
+    or one from a shared screen, counts for nothing."""
+    freezer.move_to("2026-11-02 14:00:00+00:00")
+    ada, token = await a_user(hass)
+    pet = await ready_pet(hass, hass_storage, freezer, ada.id)
+    client = await hass_ws_client(hass, token)
+    person = pet.people.data["people"][ada.id]
+    # A stray "shown", nothing asked today.
+    assert not (await answer(client, "memory", "shown", shared=False))["success"]
+    assert pet._question(ada.id, pet._now(), "home", []) == "memory"
+    assert "likes_asked" not in person and "once_last" not in person
+    assert person["memory_chosen_days"] == [ASK_DAY]
+    for extra in ({}, {"shared": True}):
+        msg = await answer(client, "memory", "shown", **extra)
+        assert msg["error"]["code"] == "not_asked", extra
+    assert "likes_asked" not in person and person["memory_chosen_days"] == [ASK_DAY]
+    assert (await answer(client, "memory", "shown", shared=False))["success"]
+    assert person["likes_asked"] == {"memory": [ASK_DAY]}
+    assert person["once_last"] == ASK_DAY
+    assert "memory_chosen_days" not in person
+    assert (await answer(client, "memory", "shown", shared=False))["success"]
+    assert person["likes_asked"] == {"memory": [ASK_DAY]}  # one try a day
+
+
+async def test_a_card_that_never_says_shown_gets_how_day_on_day_four(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer
+) -> None:
+    freezer.move_to("2026-11-02 14:00:00+00:00")
+    ada, _ = await a_user(hass)
+    pet = await ready_pet(hass, hass_storage, freezer, ada.id)
+    got = []
+    for n in range(4):
+        freezer.move_to(f"2026-11-{2 + n:02d} 14:00:00+00:00")
+        got.append(pet._question(ada.id, pet._now(), "home", []))
+    assert got == ["memory", "memory", "memory", "how_day"]
+    freezer.move_to("2026-11-16 14:00:00+00:00")  # 14 days after the first
+    assert pet._question(ada.id, pet._now(), "home", []) == "memory"
+
+
+async def ask_memory(pet: Any, user: str) -> None:
+    assert pet._question(user, pet._now(), "home", []) == "memory"
+
+
+async def test_yes_turns_memory_on_and_not_now_ends_the_ask(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    """Both set memory_asked, close the slot and are not asked again; yes is the
+    switch's effect. Refused: no ask today, shared true or absent."""
+    freezer.move_to("2026-11-02 14:00:00+00:00")
+    ada, token = await a_user(hass)
+    pet = await ready_pet(hass, hass_storage, freezer, ada.id)
+    client = await hass_ws_client(hass, token)
+    assert not (await answer(client, "memory", "yes", shared=False))["success"]
+    await ask_memory(pet, ada.id)
+    for extra in ({}, {"shared": True}):
+        msg = await answer(client, "memory", "yes", **extra)
+        assert msg["error"] == {"code": "not_asked", "message": "It didn't ask that"}
+    assert not pet.people.memory_on(ada.id)
+    assert (await answer(client, "memory", "yes", shared=False))["success"]
+    assert pet.people.memory(ada.id) == {"on": True, "since": ASK_DAY}
+    person = pet.people.data["people"][ada.id]
+    assert person["memory_asked"] is True
+    assert "later_kind" not in person["asked"]
+    assert not (await answer(client, "memory", "not_now", shared=False))["success"]
+    # Yes, then off: never asked again (the settings row is the way back).
+    assert (await switch(client, False, shared=False))["success"]
+    assert ask_pure(person, "2026-12-20") != "memory"
+    # Not now.
+    bob, bob_token = await a_user(hass)
+    pet.people.data["people"][bob.id] = copy.deepcopy(READY)
+    pet.state.bonds.setdefault(bob.id, {})["points"] = 25
+    await ask_memory(pet, bob.id)
+    bob_client = await hass_ws_client(hass, bob_token)
+    assert (await answer(bob_client, "memory", "not_now", shared=False))["success"]
+    bob_person = pet.people.data["people"][bob.id]
+    assert bob_person["memory_asked"] is True and not pet.people.memory_on(bob.id)
+    assert ask_pure(bob_person, "2026-12-20") != "memory"
+    # Forget me keeps the refusal: still not asked.
+    assert (await ws(bob_client, "forget_me"))["success"]
+    assert pet.people.data["people"][bob.id]["memory_asked"] is True
+
+
+async def test_yes_is_refused_where_the_pet_does_not_allow_memory(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    freezer.move_to("2026-11-02 14:00:00+00:00")
+    ada, token = await a_user(hass)
+    pet = await ready_pet(hass, hass_storage, freezer, ada.id, **{CONF_MEMORY: False})
+    assert pet._question(ada.id, pet._now(), "home", []) == "big_day"  # not asked
+    person = pet.people.data["people"][ada.id]
+    person["asked"] = {"day": ASK_DAY, "later": True, "later_kind": "memory"}
+    client = await hass_ws_client(hass, token)
+    assert not (await answer(client, "memory", "yes", shared=False))["success"]
+    assert not pet.people.memory_on(ada.id) and "memory_asked" not in person
+
+
+# --- "great" (M1 B2, FM Q-A) -----------------------------------------------------------
+
+
+async def test_great_is_kept_only_with_memory_on_and_never_sets_a_soft_morning(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    ada, token = await a_user(hass)
+    pet = await start(hass, hass_storage, {ada.id: {}})
+    client = await hass_ws_client(hass, token)
+    person = pet.people.data["people"][ada.id]
+
+    def asked(kind: str = "how_day") -> None:
+        person["asked"] = {"day": today(), "later": True, "later_kind": kind}
+
+    # Memory off: the fixed refusal, no mood, the slot left for "tough".
+    asked()
+    msg = await answer(client, "how_day", "great", shared=False)
+    assert msg["error"] == {"code": "not_asked", "message": "It didn't ask that"}
+    assert pet.people._moods == {} and person["asked"]["later_kind"] == "how_day"
+    assert (await switch(client, True, shared=False))["success"]
+    for extra in ({}, {"shared": True}):  # not their own screen
+        assert not (await answer(client, "how_day", "great", **extra))["success"]
+    assert pet.people._moods == {} and "picks" not in pet.people.memory(ada.id)
+    assert (await answer(client, "how_day", "great", shared=False))["success"]
+    assert pet.people._moods == {}
+    assert pet.people.memory(ada.id)["picks"]["great"] == [
+        {"day": today(), "ask": "how_day"}
+    ]
+    assert "later_kind" not in person["asked"]
+    assert not (await answer(client, "how_day", "great", shared=False))["success"]
+    # big_how's evening too; "tough" as ever: the mood, nothing kept.
+    asked("big_how")
+    assert (await answer(client, "big_how", "tough", shared=False))["success"]
+    assert ada.id in pet.people._moods
+    assert pet.people.memory(ada.id)["picks"]["great"] == [
+        {"day": today(), "ask": "how_day"}
+    ]
+
+
+async def test_great_is_refused_where_the_pet_does_not_allow_memory(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    ada, token = await a_user(hass)
+    record = {
+        "memory": {"on": True},
+        "asked": {"day": today(), "later_kind": "how_day"},
+    }
+    pet = await start(hass, hass_storage, {ada.id: record}, **{CONF_MEMORY: False})
+    client = await hass_ws_client(hass, token)
+    assert not (await answer(client, "how_day", "great", shared=False))["success"]
+    assert pet.people._moods == {} and pet.people.memory(ada.id) == {"on": True}
+
+
+# --- The doors (section 6, "Door timing") ----------------------------------------------
+
+
+def picks(kind: str, values: list[str], start: str = "2026-10-20") -> list[dict]:
+    first = date.fromisoformat(start)
+    field = P.MEMORY_PICKS[kind][0]
+    return [
+        {"day": (first + timedelta(days=i)).isoformat(), field: v}
+        for i, v in enumerate(values)
+    ]
+
+
+def door_memory() -> dict[str, Any]:
+    """Every pick door due on 2026-11-03, and door 2 (a great day on the 2nd)."""
+    return {
+        "on": True,
+        "since": "2026-10-01",
+        "picks": {
+            "great": [{"day": "2026-11-02", "ask": "how_day"}],
+            "dream": picks("dream", ["snacks", "sea", "snacks", "stars", "snacks"]),
+            "guess": picks("guess", ["sun"] * 5),
+            "game": picks("game", ["dig", "dig", "left_right", "dig", "dig"]),
+        },
+    }
+
+
+def test_the_doors_by_their_timing() -> None:
+    mem = door_memory()
+    day = "2026-11-03"
+    assert P.memory_door(mem, day, 9) == ("door2", {"kind": "door2"})
+    assert P.memory_door(mem, day, 12) == ("door4", {"kind": "door4", "pick": "snacks"})
+    assert P.memory_door(mem, day, 10) == ("door2", {"kind": "door2"})
+    mem["said"] = {"door2": day}
+    assert P.memory_door(mem, day, 9) is None  # once for one great day
+    assert P.memory_door(mem, day, 10) is None  # door 4 waits for 11
+    mem["said"]["door4"] = day
+    assert P.memory_door(mem, day, 12) == ("door5", {"kind": "door5", "pick": "sun"})
+    mem["said"]["door5"] = day
+    assert P.memory_door(mem, day, 12) == ("door12", {"kind": "door12", "pick": "dig"})
+    mem["said"]["door12"] = day
+    assert P.memory_door(mem, day, 12) is None
+    assert P.memory_door(mem, day, 20) is None
+    # Door 5 not the next day (7 days apart), nor a week on with no new guess.
+    assert P.memory_door(mem, "2026-11-04", 12) is None
+    assert P.memory_door(mem, "2026-11-10", 12) is None
+    mem["picks"]["guess"] = picks("guess", ["sun"] * 5, start="2026-11-05")
+    assert P.memory_door(mem, "2026-11-10", 12) == (
+        "door5",
+        {"kind": "door5", "pick": "sun"},
+    )
+    # Two of five the same is no door; four suns and a rain is no door 5.
+    mem = door_memory()
+    mem["picks"]["dream"] = picks("dream", ["snacks", "sea", "snacks", "stars", "you"])
+    mem["picks"]["guess"] = picks("guess", ["sun"] * 4 + ["rain"])
+    mem["picks"]["game"] = []
+    assert P.memory_door(mem, day, 12) is None
+
+
+async def door_visit(pet: Any, user: str, **kw: Any) -> dict[str, Any]:
+    pet._visits.clear()
+    return await pet.async_visit(user, **kw)
+
+
+def door_notes(reply: dict[str, Any]) -> list[dict[str, Any]]:
+    return [n for n in reply["notes"] if n["kind"].startswith("door")]
+
+
+@pytest.mark.parametrize(
+    ("record", "options"),
+    [
+        ({}, {}),  # memory off, never on
+        ({"memory": door_memory()}, {CONF_MEMORY: False}),  # this pet's option off
+    ],
+)
+async def test_no_door_without_memory_on_here(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer,
+    record: dict[str, Any],
+    options: dict[str, Any],
+) -> None:
+    freezer.move_to("2026-11-03 12:00:00+00:00")
+    ada, _ = await a_user(hass)
+    pet = await ready_pet(
+        hass,
+        hass_storage,
+        freezer,
+        ada.id,
+        record=record,
+        **options,
+    )
+    with patch.object(pet.people, "mark_memory_said", side_effect=AssertionError):
+        reply = await door_visit(pet, ada.id)
+    assert door_notes(reply) == []
+    assert "said" not in (pet.people.data["people"][ada.id].get("memory") or {})
+
+
+async def test_one_door_a_look_in_order_and_a_door_with_no_room_waits(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer
+) -> None:
+    """Doors 4 and 5 due: the lower goes and the other is not marked; no room, none
+    is marked; the next look brings door 5. A note holds its kind and at most one
+    fixed-list pick, nothing dated (FM Q1)."""
+    freezer.move_to("2026-11-03 12:00:00+00:00")
+    ada, _ = await a_user(hass)
+    pet = await ready_pet(
+        hass,
+        hass_storage,
+        freezer,
+        ada.id,
+        record={"memory": door_memory()},
+    )
+    reply = await door_visit(pet, ada.id, queued=3)  # a full look
+    assert door_notes(reply) == [] and pet.people.memory_said(ada.id, "door4") is None
+    reply = await door_visit(pet, ada.id)
+    assert door_notes(reply) == [{"kind": "door4", "pick": "snacks"}]
+    assert pet.people.memory_said(ada.id, "door4") == "2026-11-03"
+    assert pet.people.memory_said(ada.id, "door5") is None
+    reply = await door_visit(pet, ada.id)
+    assert door_notes(reply) == [{"kind": "door5", "pick": "sun"}]
+    for note in door_notes(reply):
+        assert set(note) <= {"kind", "pick"}
+    noted = pet.people.data["people"][ada.id].get("noted") or {}
+    assert not any(k.startswith("door") for k in noted)
+
+
+@pytest.mark.parametrize(
+    ("kind", "carrier"), [("fav_weather", "fav_weather"), ("fav_season", "season")]
+)
+async def test_door_six_rides_the_favourites_note_once_and_marks_both(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer, kind: str, carrier: str
+) -> None:
+    """Door 6 (FM Q-B, problem 4): the note gains only `told`; when it goes out it is
+    marked once a day as ever (`noted`) and its one-shot in memory; with no room
+    neither; the next time, no `told`."""
+    freezer.move_to("2026-11-03 10:00:00+00:00")
+    ada, _ = await a_user(hass)
+    memory = {"on": True, "since": "2026-10-01", "since_told": {kind: "2026-11-01"}}
+    record = {**copy.deepcopy(READY), "memory": memory}
+    pet = await ready_pet(
+        hass,
+        hass_storage,
+        freezer,
+        ada.id,
+        at="2026-11-03 10:00:00+00:00",
+        record=record,
+    )
+    pet._weather_now = {"snow"}
+
+    def ours(reply: dict[str, Any]) -> list[dict[str, Any]]:
+        return [n for n in reply["notes"] if n["kind"] == carrier]
+
+    with (
+        patch.object(P, "season_key", return_value="winter-2026"),
+        patch("custom_components.virtual_pet.notify.holiday", return_value=None),
+    ):
+        assert ours(await door_visit(pet, ada.id, queued=3)) == []
+        assert pet.people.memory_said(ada.id, f"door6_{kind}") is None
+        got = ours(await door_visit(pet, ada.id))
+        value = (
+            {"weather": "snow"} if carrier == "fav_weather" else {"season": "winter"}
+        )
+        assert got == [{"kind": carrier, **value, "told": True}]
+        assert pet.people.memory_said(ada.id, f"door6_{kind}") == "2026-11-03"
+        noted = pet.people.data["people"][ada.id]["noted"]
+        assert carrier in noted
+        # The next time the favourite comes back: its plain note, no told.
+        freezer.move_to("2026-11-04 10:00:00+00:00")
+        pet.people.data["people"][ada.id]["noted"] = {}
+        assert ours(await door_visit(pet, ada.id)) == [{"kind": carrier, **value}]
+
+
+async def test_door_six_waits_for_a_later_day_than_the_telling(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer
+) -> None:
+    freezer.move_to("2026-11-03 10:00:00+00:00")
+    ada, _ = await a_user(hass)
+    memory = {
+        "on": True,
+        "since": "2026-10-01",
+        "since_told": {"fav_weather": "2026-11-03"},
+    }
+    record = {**copy.deepcopy(READY), "memory": memory}
+    pet = await ready_pet(
+        hass,
+        hass_storage,
+        freezer,
+        ada.id,
+        at="2026-11-03 10:00:00+00:00",
+        record=record,
+    )
+    pet._weather_now = {"snow"}
+    notes = (await door_visit(pet, ada.id))["notes"]
+    assert {"kind": "fav_weather", "weather": "snow"} in notes
+
+
+# --- since_told (section 4; problem 5) -------------------------------------------------
+
+
+async def test_since_told_is_written_only_from_their_screen_for_weather_and_season(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    ada, token = await a_user(hass)
+    pet = await start(hass, hass_storage, {ada.id: {}})
+    client = await hass_ws_client(hass, token)
+    assert (await switch(client, True, shared=False))["success"]
+    assert (await answer(client, "fav_weather", "rain", shared=False))["success"]
+    assert (await answer(client, "fav_season", "spring", shared=False))["success"]
+    told = pet.people.memory(ada.id)["since_told"]
+    assert told == {"fav_weather": today(), "fav_season": today()}
+    # Told again the same: its day stays. Told from a shared screen: the day goes.
+    told["fav_weather"] = "2026-01-01"
+    assert (await answer(client, "fav_weather", "rain", shared=False))["success"]
+    assert told["fav_weather"] == "2026-01-01"
+    assert (await answer(client, "fav_weather", "sun", shared=True))["success"]
+    assert pet.people.data["people"][ada.id]["likes"]["fav_weather"] == "sun"
+    assert "fav_weather" not in pet.people.memory(ada.id)["since_told"]
+    # No visitor door (FM Q-B): a visitor's favourite has no since_told.
+    visitor = pet.visitors[0]["id"]
+    assert (await answer(client, "fav_visitor", visitor, shared=False))["success"]
+    assert set(pet.people.memory(ada.id)["since_told"]) == {"fav_season"}
+
+
+async def test_since_told_goes_where_the_pet_does_not_allow_memory(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    ada, token = await a_user(hass)
+    memory = {"on": True, "since_told": {"fav_season": "2026-01-01"}}
+    pet = await start(
+        hass, hass_storage, {ada.id: {"memory": memory}}, **{CONF_MEMORY: False}
+    )
+    client = await hass_ws_client(hass, token)
+    assert (await answer(client, "fav_season", "summer", shared=False))["success"]
+    assert pet.people.memory(ada.id).get("since_told", {}) == {}

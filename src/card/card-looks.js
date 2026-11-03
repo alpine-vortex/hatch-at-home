@@ -260,10 +260,11 @@ class HatchPetCardLooks extends HatchPetCardTick {
   }
 
   // A follow-up answer, fire and forget: only to a server that takes them, never on a
-  // shared screen, never stashed or retried.
+  // shared screen, never stashed or retried. shared: false, so the server may keep a game
+  // pick or a great day in their memory (memory plan R3, M1 B1).
   _sendFollow(s, entity, question, answer, text = null, day = null) {
     if (!this._followOk || sharedScreen() || !entity) return Promise.resolve(false);
-    const msg = { type: "virtual_pet/answer", entity_id: entity, question, answer };
+    const msg = { type: "virtual_pet/answer", entity_id: entity, question, answer, shared: false };
     if (text) msg.text = text;
     if (day) msg.day = day; // the big day's (opp #2)
     return this._hass.callWS(msg).then((r) => r || true, () => false);

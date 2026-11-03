@@ -181,6 +181,9 @@ MOMENTS_KEPT = 10
 HOUSE_WORDS = {"news": ("headline", "topic"), "house_moment": ("text",)}
 # The visit's celebration lines (one a look, and always a place for it).
 CELEBRATIONS = {"your_birthday", "pet_birthday", "birthday_friends", "friends_for"}
+# Door 6 (memory plan M1b, FM Q-B): the favourite's note that may carry "told", and
+# the one-shot key in memory["said"] it marks.
+DOOR6 = {"fav_weather": "door6_fav_weather", "season": "door6_fav_season"}
 # Moments a dream can be about, by the dream's kind. (Not news: it stays
 # cosmetic, and changes nothing that's saved.)
 # What the pet notices, as the card's "notices" row names it (top10 2a): a kind
@@ -1760,6 +1763,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     self.people.mark_memory_said(user, kind, key)
                 else:
                     self.people.mark(user, kind, key)
+                    if note.get("told"):
+                        # Door 6 (memory plan M1b): the favourite's note, said once a
+                        # day as ever, and its one-shot in their memory too.
+                        self.people.mark_memory_said(
+                            user, DOOR6[note["kind"]], self._today(now)[0]
+                        )
                 if kind == "guess":
                     person.pop("guess", None)  # said: used up
                 notes.append(note)
@@ -1940,6 +1949,21 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             )
             if note := wellbeing.notice(seen, level, hour):
                 out.append(("person", "day", today, note))
+        # Memory (plan M1b): doors only while it is on and this pet allows it. Read
+        # with .get (memory()), never person(), so nothing here re-creates a record.
+        mem = self.people.memory(user) if self.memory_allowed else None
+
+        def told(kind: str) -> bool:
+            """Door 6: a favourite told on an earlier day while memory was on, and
+            its one-shot not yet said (`ask_again` re-arms it)."""
+            day = ((mem or {}).get("since_told") or {}).get(f"fav_{kind}")
+            return bool(
+                mem is not None
+                and day
+                and day < today
+                and not self.people.memory_said(user, f"door6_fav_{kind}")
+            )
+
         fav = likes.get("fav_weather")
         if (
             fav
@@ -1947,14 +1971,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             in self._weather_now
             and not self.people.said(user, "fav_weather", today)
         ):
-            out.append(
-                (
-                    "person",
-                    "fav_weather",
-                    today,
-                    {"kind": "fav_weather", "weather": fav},
-                )
-            )
+            note = {"kind": "fav_weather", "weather": fav}
+            if told("weather"):
+                note["told"] = True
+            out.append(("person", "fav_weather", today, note))
         key = P.season_key(local.date(), self.hass.config.latitude)
         if likes.get("fav_season") and key and key.split("-")[0] == likes["fav_season"]:
             holiday = notify.holiday(local.date())
@@ -1972,14 +1992,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     )
                 )
             elif not self.people.said(user, "season", key):
-                out.append(
-                    (
-                        "person",
-                        "season",
-                        key,
-                        {"kind": "season", "season": likes["fav_season"]},
-                    )
-                )
+                # Door 6's season rides only this plain note, not a holiday's: told
+                # during the favourite season it comes the next day, else at the next
+                # start of that season (up to a year).
+                note = {"kind": "season", "season": likes["fav_season"]}
+                if told("season"):
+                    note["told"] = True
+                out.append(("person", "season", key, note))
         if (
             my_day
             and level >= R.ALARM_LEVEL
@@ -1989,6 +2008,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             and P.early_alarm(minute, [m for _, m in person.get("alarms", [])[:-1]])
         ):
             out.append(("person", "alarm", today, {"kind": "early_alarm"}))
+        # A memory door (plan section 6), one a look and last, so a busy look's own
+        # lines go first and the door waits (unmarked) for a later one.
+        if mem is not None and (door := P.memory_door(mem, today, hour)):
+            out.append(("memory", door[0], today, door[1]))
         return out
 
     def _tomorrows_alarm(self, user: str, local: datetime) -> int | None:
@@ -2043,12 +2066,17 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             dreamed=bool(self.state.dream and self.state.dream.get("day") == today),
             world=self.world if self.visitors else None,
             pet_kinds=self._follow_kinds(user),
+            memory_ask=self.memory_allowed,
         )
         if kind is None:
             return None
         P.mark_asked(person, today, hour, kind)
         if kind in P.ONCE_KINDS:
             P.mark_once(person, kind, today, self.world)
+        if kind == "memory":
+            # Counted only on the card's "shown" (memory plan M1 S3); until then only
+            # the day it was chosen, so an old card can't hold the later slot.
+            P.memory_chosen(person, today)
         if kind == "catchphrase":
             self._catch_ask(user)["asked"].append(today)
             self._save()
@@ -2158,7 +2186,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 person = self.people.data["people"].get(user, {})
                 if not P.asked_later(person, today, question):
                     raise ValueError("It didn't ask that")
-                if question in ("how_day", "big_how"):
+                if question in ("how_day", "big_how") and answer == "great":
+                    # Door 2's (memory plan M1b, FM Q-A): kept only while their memory
+                    # is on, this pet allows it and the screen is their own; never a
+                    # soft morning (M1 B2). Else refused, with the slot left open.
+                    if not (keep and self.people.memory_on(user)):
+                        raise ValueError("Not an answer the pet keeps")
+                    self.people.remember(user, "great", {"day": today, "ask": question})
+                elif question in ("how_day", "big_how"):
                     self.people.set_mood(user, today)  # memory only (E13)
                 elif question == "game":
                     # The choice, said back by this pet tomorrow (F6).
@@ -2219,6 +2254,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self.people.person(user)["phone_asked"] = True
             self.people.save()
             return
+        if question == "memory":
+            await self._answer_memory(user, answer, private)
+            return
         if question == "catchphrase":
             # Only from the close friend it asked, while the question is open:
             # it's the pet's, and everyone hears it.
@@ -2241,7 +2279,19 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         person = self.people.person(user)
         today = self._today(self._now())[0]
         if question in ("fav_weather", "fav_season"):
-            person.setdefault("likes", {})[question] = answer
+            likes = person.setdefault("likes", {})
+            same = likes.get(question) == answer
+            likes[question] = answer
+            # The day it was told, for door 6 (memory plan M1b): only from their own
+            # screen while memory is on here. Told any other way, an older day would be
+            # stale, so it goes. Not for a visitor (FM Q-B: no visitor door).
+            mem = self.people.memory(user)
+            told = (mem or {}).get("since_told") or {}
+            if mem is not None and keep:
+                if not (same and question in told):
+                    mem.setdefault("since_told", {})[question] = today
+            else:
+                told.pop(question, None)
         elif question == "guess":
             person["guess"] = {"day": P.tomorrow(today), "guess": answer}
             if keep:
@@ -2253,6 +2303,34 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 self.people.remember(user, "dream", {"day": today, "pick": answer})
         self.people.save()
         self._push_everywhere()  # a birthday kept
+
+    async def _answer_memory(self, user: str, answer: str, private: bool) -> None:
+        """The one-time memory ask's answer (memory plan section 5, M1b), each only
+        under today's ask and from their own screen (R3), read with .get. "shown":
+        the card showed it, so it counts (its tries, the gap) and the unshown days
+        go. "yes": memory on, where this pet allows it, as the settings row does.
+        "not_now" or "yes": answered for good (`memory_asked`), the slot closed."""
+        today = self._today(self._now())[0]
+        if not private:
+            raise ValueError("It didn't ask that")
+        async with self.people.lock(user):
+            person = self.people.data["people"].get(user)
+            if person is None or not P.asked_later(person, today, "memory"):
+                raise ValueError("It didn't ask that")
+            if answer == "shown":
+                if today not in (person.get("likes_asked") or {}).get("memory", []):
+                    P.mark_once(person, "memory", today)
+                person.pop("memory_chosen_days", None)
+                self.people.save()
+                return
+            if answer == "yes":
+                if not self.memory_allowed:
+                    raise ValueError("Not on this pet")
+                self.people.set_memory(user, True, today)
+            person["memory_asked"] = True
+            person["asked"].pop("later_kind", None)
+            self.people.save()
+        self._push_everywhere()  # their mine.memory_on
 
     async def async_follow(self, user: str, at: str = "look") -> dict[str, Any]:
         """The follow-up beat due for this person now (virtual_pet/follow), marked

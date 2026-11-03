@@ -31,7 +31,7 @@ Q1 is now decided).
 | **M0** | Four gap fixes: dated asks before a came-home "how was your day?" (M0-a), fav-weather line in the turn rotation (M0-b), "ask me again" for favourites (M0-c), forget_me clears the dream pick (M0-d) | S-M | M0-b 1; M0-a, c, d **2** |
 | **M1a** | The record and validators, the switch, the admin option and its erase, the WS command rules, the privacy test table, the guide | M | **2** |
 | **M1b** | The one-time ask (with the card's "great" send); doors 2, 4, 5, 6 (weather + season), 12 | M | **2** |
-| **M2** | Tag chips on big day and weekend; doors 1, 3, 11, then 9 and 10 each as its own commit | M | **2** |
+| **M2** | Tag chips on big day and weekend; doors 1, 3, 11, then 10 as its own commit (door 9 dropped, FM Q4) | M | **2** |
 | **M3a** | "Things you told me" page with per-item forget; the `memory_get` / `memory_forget` commands | M | **2** |
 | **M3b** | Stickers (door 8), the bench preset and the card-check section if not already in M3a | S | **2** |
 
@@ -87,6 +87,19 @@ built on it.
   options save, on stored options. Used in section 5 (the admin erase) and section 12.
 - **Q-D: hold the memory ask while `baby_talk` is on.** This **confirms the section 13 Q1
   default**; it is decided, not open. Used in R10, section 5 and section 13.
+
+### First mate, 2026-11-02, on the M1b brief (s2763)
+
+- **Q1: yes.** A door 4, 5 or 12 note may carry exactly **one fixed-list pick** (`pick`),
+  nothing dated. The section 10 row for `_mine`, `_visit_prefs` and the channel is
+  reworded to "no dates, no tags, no lists; door notes hold at most one fixed-list pick".
+- **Q2: the draft copy is approved as drafted** (the ask, its two buttons and replies,
+  doors 2, 4, 5, 12, door 6's four weathers and its season line), scanned by
+  `scripts/copy-scan.js`; a line that fails goes to the first mate as a question, unshipped.
+  No other player copy.
+- **Q3: keep door 6's season.**
+- **Q4: no to door 9** (pets compare notes): dropped from M2.
+- **Q5: yes, 3 chosen days per 14, then retry** (the stale-card bound, section 5).
 
 ### Audit tally, 2026-11-02
 
@@ -387,8 +400,12 @@ Answers `ANSWERS["memory"] = ("shown", "yes", "not_now")`.
   how_day, weekend and the rest. So `_question` records each day it chose `memory` without
   a `shown` (`memory_chosen_days`, a short list of dates in the person's record, outside
   `memory`, content-free, kept by `forget`), and **stops choosing it after 3 such days**;
-  it is tried again after the usual weeks gap (`may_ask_again`). Acceptance: a card that
-  never sends `shown` gets `how_day` on day 4.
+  it is tried again after the usual weeks gap. **As built (FM Q5):** the gap is on the
+  days list itself, not `may_ask_again` (an unshown ask has no tries, so that is always
+  true): chosen only while fewer than 3 chosen days fall in the last
+  `ASK_LIKES_AGAIN_DAYS` (14); the writer keeps the newest 7 (the loader drops a longer
+  list whole); `shown` clears the list. Acceptance: a card that never sends `shown` gets
+  `how_day` on day 4.
 - **The answers have guards** (M1 S4). "yes" and "not_now" require
   `asked_later(person, today, "memory")`: a bare "yes" with no ask today would otherwise
   be a second, unguarded route into R2's "only by a WS command from a personal screen",
@@ -485,7 +502,7 @@ skip, since the `visit` service cannot see `shared` (R3).
 | 12 | **The game you picked:** 3 of the last 5 game picks the same. **No "lapsed" clause** (FM Q-B): no "played" signal exists | "your dig again? i'm ready" | M1b |
 | 1 | **Week-later echo:** about 7 days after a tagged `big_day`, once | "i still think about your show!" | M2 |
 | 3 | **Anniversary:** a year after a tagged `big_day` (tag `trip`, `show`, ...) | "a year ago today was your big trip!" | M2 (dormant until a year passes) |
-| 9 | **Pets compare notes:** with several pets, a second pet nods to a big day another pet already cheered | "Mochi told me about your test! good luck" | **M2, its own commit, FM nod needed** (section 13) |
+| 9 | **Pets compare notes:** with several pets, a second pet nods to a big day another pet already cheered | "Mochi told me about your test! good luck" | **Dropped** (FM Q4, 2026-11-02): not built |
 | 10 | **Weekday pattern:** the same tag on the same weekday 3 times | "match tomorrow? i'll be cheering" | **M2, its own last commit** |
 | 11 | **Friendship-year recap** on the 12-month friendship day (`coordinator.py:1825-1837`); **no numbers** (review S10: section 4 forbids counts shown as a score, and the sticker rule says the same) | "a whole year! so many big days, and so many snack dreams" | M2 |
 | 7 | **"Things you told me" page** | see section 9 | M3a |
@@ -546,8 +563,8 @@ a second pet's first look finds a tagged big day of the day.
 chosen, don't start unasked*, "learning household routines" and "pets on the shelf noticing
 each other". Door 10 is a learned routine, but the owner chose it (Q1 = C); the commit
 updates that HANDOFF line to say so, as the 2026-10-28 journal decline is named above.
-Door 9 is pets noticing each other and **no owner answer names it**: it is its own commit,
-not built until the first mate says yes (section 13).
+Door 9 is pets noticing each other and **no owner answer names it**; the first mate said
+no (FM Q4, 2026-11-02), so it is not built.
 
 **Door 12 does not close** Part 1 item 6 of the scout (a game picked and never played):
 FM Q-B dropped the "lapsed" clause because no "played" signal exists, and a new one is not
@@ -842,7 +859,7 @@ false; B's data is untouched.
   of section 4. Pytest: an invalid tag is refused with one generic error and nothing
   saved; the same tag on both calls leaves one entry; a different tag on the second call
   replaces the first; forgetting that one entry leaves no twin.
-- Doors 1, 3, 10, 11 as in section 6 (door 10 last, door 9 its own commit if the first
+- Doors 1, 3, 10, 11 as in section 6 (door 10 last; door 9 dropped, FM Q4; was: its own commit if the first
   mate agrees). Door 3's lines are dormant until a year passes; tested with the freezer.
 
 ## 9. M3a and M3b: the page and the stickers (tier 2, card-heavy)
@@ -909,7 +926,7 @@ adversarial review should be able to run.
 | Concern | Rule | Test |
 |---|---|---|
 | Sensors and attributes | Never (R4) | Pytest: with memory on and full (caps hit), the JSON of every sensor's attributes, `_house_view`, and `debug` holds none of the memory strings (tags, picks, dates of tags) |
-| `_mine`, `_visit_prefs` and the channel | Only `memory_on` and `memory_allowed` booleans (R3; M1 S7) | Pytest: `_mine(user)`, `_visit_prefs(user)`, the `visit` reply and a channel snapshot grep clean for tag, pick and date values, and hold exactly those two booleans about memory; `memory_get` is the only carrier. A door-6 note holds only the boolean `told` |
+| `_mine`, `_visit_prefs` and the channel | Only `memory_on` and `memory_allowed` booleans (R3; M1 S7) | Pytest: `_mine(user)`, `_visit_prefs(user)`, the `visit` reply and a channel snapshot hold no dates, no tags, no lists (door notes hold at most one fixed-list pick, FM Q1: a door 4, 5 or 12 note is `kind` and `pick`, door 2's only `kind`), and exactly those two booleans about memory; `memory_get` is the only carrier. A door-6 note adds only the boolean `told` to its favourite's note |
 | Bus, logbook, recorder | WS commands, not services | Pytest: a `MATCH_ALL` listener across `memory`, `memory_get`, `memory_forget`, `ask_again`, and the answer with a tag sees no event holding memory or the choice |
 | Logs | No integration log with memory or answers; no schema failure echoing a value (all free-value fields typed `object`, section 5) | Pytest with `caplog` on the integration **and** `homeassistant.components.websocket_api`: a bad tag, a bad `list`, a bad `key` **with a valid day and tag of a real entry**, a wrong type leave no record containing the value; and the handler's own error carries no value. This row can pass only with `object`-typed fields (review B1): with `vol.In` HA logs `humanize_error`'s message |
 | Shared screens | The card never asks, shows, fetches or adds; the server refuses unless `shared` is `false` (fail closed, R3; a card-honesty guard, not authentication). **Every `remember` path** is covered (M1 B1) | Pytest: each memory command with `shared: true` **and with `shared` absent** is refused and saves nothing. **And an `answer` for dream / guess / game / fav / great / a favourite's `since_told` with `shared` true or absent leaves `person["memory"]` unchanged, while the ordinary answer still works** (the pick or like is stored); a `tag` or the `memory` ask's answer with `shared` not `False` is refused with the generic error. Card-check `sharedscreen`: no memory WS call, no row, no link, no page. JS test: `_keepAnswer`, `_sendFollow` and the "great" send pass `shared: false`. Doors and the ask come from `visit`, which cannot see `shared`: see "Doors" |
@@ -987,6 +1004,10 @@ tools), none of these slices needs one: no new art (section 9).
 - **`back_from` and the guess outcome lines** are fixed lines and repeat. Out of scope;
   the same turn-rotation pass would fix them.
 - **A downgrade** leaves memory on disk unread (R8); the guide says so.
+- **Stale cards burn a door.** Door notes are marked said when the visit makes them; an
+  old cached card drops a note kind it doesn't know, so that look's door is lost (door 2,
+  once per great day, is gone for that day; doors 4, 5 and 12 wait a week). Accepted, as
+  for the ask (R3); no code.
 - **The admin erase's reach.** It runs from an options save and from removing an entry
   (section 5; FM Q-C), on stored options. A pet entry *disabled* does not erase, and a
   disabled entry's stored option counts. A pet added later defaults to on, so memory is
@@ -1016,8 +1037,8 @@ no door reads it and it would put a health-adjacent dated list in every backup. 
 only if the owner wants the chip for the page's sake.
 
 **3. Door 9, pets compare notes (review S10).** No owner answer names it and HANDOFF.md:525
-lists "pets noticing each other" as not chosen. **Default: its own commit, not built until
-the first mate says yes.**
+lists "pets noticing each other" as not chosen. **Decided (FM Q4, 2026-11-02): no.** Not
+built.
 
 ## 14. Adversarial review checklist
 

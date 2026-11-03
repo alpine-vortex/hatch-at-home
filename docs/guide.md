@@ -598,7 +598,7 @@ is loaded (a disabled pet's stays in its save until that pet is loaded again and
 pick has aged out). Your bond with each pet, its photos and its nickname
 for you stay. So does whether you get notifications: turn "notify me" off for that.
 So does a "forget my birthday": the pets still won't ask for it. So does your answer to
-"may I remember?", yes or not now: the pets still won't ask whether to remember (your
+"can i remember what you tell me?", yes or not now: the pets still won't ask whether to remember (your
 memory itself goes). Messages already sent to your
 phone, and switch changes, stay in Home Assistant's history until it clears them.
 The pets start fresh with you, and they note again when you next come home. To
@@ -617,7 +617,24 @@ screen; your own screen only, and only where the pet's option allows it, or whil
 on, so you can always turn it off). Turning it off
 (two taps), or "forget my data", erases it at once. "Forget my data" keeps the pets'
 record that they asked whether to remember (a yes-or-no and up to seven dates the question
-was offered, nothing you told them), so they don't ask again. Things to know:
+was offered, nothing you told them), so they don't ask again.
+
+Once you and a pet are close (bond level 4), it asks once, on your own screen and only
+where its option allows it: "can i remember what you tell me?". "yes" turns memory on,
+as the settings row does; "not now" is kept as your answer. Either way no pet asks
+again, and the settings row still works. It isn't asked while baby talk is on.
+
+**What the pets say from memory.** Only on your own screen, only while memory is on and
+that pet allows it, one a look and after the pet's other news: the morning after you
+told it your day was great ("yesterday was a great one! ♥"); a dream, guess or game you
+keep picking (at most once a week each, and only after a new pick); and, once, the first
+time a favourite weather or season you told it with memory on comes back. A shared
+screen never gets these: they come with the pet's private news, which the card asks
+for only on a screen that isn't shared. That is the card's own check, since the server
+can't see the shared-screen switch. "great" is kept only while memory is on (and never
+makes the next morning softer); with memory off it never leaves the card.
+
+Things to know:
 
 - It is in Home Assistant's backups, like the rest of the people store. Turning it off
   can't reach a backup made before, and restoring one brings it back.
@@ -643,7 +660,7 @@ was offered, nothing you told them), so they don't ask again. Things to know:
 
 **Follow-ups.** Answer "tough" to "how was your day?" and the pet keeps only the
 date, in memory, to be a little softer the next morning on your own screen; a restart
-forgets it, and "great" or "ok" never leave the card. Say "yes" to "anything big this
+forgets it, and "ok" never leaves the card ("great" only while memory is on, above). Say "yes" to "anything big this
 week?" (and pick the day) or "anything fun this weekend?" and it keeps that day (the date, not what it is) for a
 week at most, to wish you luck or welcome you back. "what should we play tomorrow?" and
 "should I learn a new trick?" keep only your pick, for that pet. What you type in "what

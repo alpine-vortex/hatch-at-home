@@ -205,6 +205,11 @@ const QUESTIONS = {
   phone: { q: "can i call your phone when i need you?", answers: {
     yes: ["yay! i'll ring you ♥"], "not now": ["ok! you can say yes in settings ♥"] },
   label: (a) => (a === "yes" ? "yes ♥" : a) },
+  // The one-time memory ask (memory plan M1b), at bond level 4, once; the server decides.
+  // The card says "shown" when it is on screen (_ask). Kept, never stashed (not in
+  // STASHED_QUESTIONS): a failed send leaves nothing on this device. "yes" turns memory on.
+  memory: { q: MEMORY_ASK.q, keep: true, answers: { yes: [MEMORY_ASK.yesReply], not_now: [MEMORY_ASK.notNowReply] },
+    label: (a) => (a === "yes" ? MEMORY_ASK.yes : MEMORY_ASK.notNow) },
   dream: { q: "what should i dream about tonight?", keep: true, answers: {
     stars: ["ooh, the stars. ok! ★"], sea: ["the sea it is! ♪"], snacks: ["snacks!! yum, ok!"], you: ["you! ♥ i'd like that"] } },
   guess: { q: "rain or sun tomorrow?", keep: true, answers: {
@@ -285,14 +290,24 @@ const NOTES = {
       ? (n.guess === "rain" ? "oh, sunny after all! good guess though ♥" : "oh, it rained after all! good guess though ♥")
       : "it was cloudy all day! nobody wins ♥",
   back_from: (n) => PLACES[n.place],
-  fav_weather: (n, device) => turnPick(FAV_WEATHER_LINES[n.weather], `${device}|favweather`),
+  // Door 6 (memory plan M1b): "told", the first time a favourite told while memory was on
+  // comes back; else the turn's line, as ever.
+  fav_weather: (n, device) => (n.told && MEMORY_TOLD[n.weather]) || turnPick(FAV_WEATHER_LINES[n.weather], `${device}|favweather`),
   season: (n) => n.holiday && namedHolidays()
     ? `${n.holiday === "halloween" ? "Halloween" : "Thanksgiving"} in your favourite season! ♥`
-    : `it's ${n.season}, your favourite! ${SEASON_ICONS[n.season] || ""}`.trim(),
+    : n.told && SEASON_ICONS[n.season] ? MEMORY_TOLD.season(n.season)
+      : `it's ${n.season}, your favourite! ${SEASON_ICONS[n.season] || ""}`.trim(),
+  // Memory's doors (plan section 6), each with at most one pick, said by its label; a pick
+  // the card doesn't know says nothing.
+  door2: () => MEMORY_DOORS.door2,
+  door4: (n) => MEMORY_DREAM_LABEL[n.pick] && MEMORY_DOORS.door4(MEMORY_DREAM_LABEL[n.pick]),
+  door5: (n) => ["rain", "sun"].includes(n.pick) && MEMORY_DOORS.door5(n.pick),
+  door12: (n) => { const game = GAMES.find((g) => g.key === n.pick); return game && MEMORY_DOORS.door12(game.label); },
   early_alarm: () => "early start tomorrow! sleep well ♥",
   up_early: () => "mmh... you're up before the sun... zzz ♥",
   photo: () => "i made you something! it's in your journal ♥",
 };
+const MEMORY_DREAM_LABEL = { stars: "the stars", sea: "the sea", snacks: "snacks", you: "you" }; // door 4's {pick}
 const DREAM_FRIENDS = "I dreamed about my friends ♥"; // a "you" dream, to everyone but its asker
 const DREAM_CALLBACK_DAYS = [2, 3, 4]; // a told story's callback, days later (F2), by the pet and day
 const DREAMS = {

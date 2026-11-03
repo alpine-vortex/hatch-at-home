@@ -59,13 +59,18 @@ ANSWERS: dict[str, tuple[str, ...]] = {
     # it asked for good (a question the card dropped comes again).
     "phone": ("shown",),
     # Follow-ups (fresh-expand F1): only the answers the pet comes back to reach the
-    # server. how_day's "tough" is E13's soft morning; "great" and "ok" stay on the card.
-    "how_day": ("tough",),
+    # server. how_day's "tough" is E13's soft morning; "great" reaches it only while the
+    # person's memory is on (memory plan M1b: door 2, never a soft morning; the handler
+    # refuses it otherwise); "ok" stays on the card.
+    "how_day": ("tough", "great"),
     "big_day": ("yes", "no"),  # "anything big this week?" (owner Q3 A, opp #2)
-    "big_how": ("tough",),  # the big day's evening "how did it go?" (opp #1)
+    "big_how": ("tough", "great"),  # the big day's evening "how did it go?" (opp #1)
     "weekend": ("yes", "no"),  # F5; "no" is the card's "not really"
     "game": ("left_right", "higher_lower", "dig"),  # F6: the choice (model.GAMES)
     "trick": ("yes", "later"),  # F7; "later" is the card's "maybe later"
+    # The one-time memory ask (memory plan M1b): "shown" as the phone's, then the
+    # person's answer. Not in ONCE: it is counted only on "shown" (M1 S3).
+    "memory": ("shown", "yes", "not_now"),
 }
 # One-time questions about the person, in the order they're asked, with the bond
 # level each needs. (The pet's own one-time question, its catchphrase, comes from
@@ -79,6 +84,10 @@ ONCE = (
     ("birthday", R.BIRTHDAY_ASK_LEVEL),
 )
 ONCE_KINDS = {kind for kind, _ in ONCE} | {"catchphrase"}
+# The memory ask: once_due tries it after ONCE (so after the birthday), and only where
+# the pet allows memory (choose_question's memory_ask). Its own tuple, never in ONCE,
+# so _question's mark_once never counts it before the card says it showed it.
+MEMORY_ASK = ("memory", R.MEMORY_ASK_LEVEL)
 # The favourites a person can have the pet ask again (memory plan M0-c).
 ASK_AGAIN_KINDS = ("fav_weather", "fav_season", "fav_visitor")
 
@@ -682,7 +691,9 @@ _PERSON_KEYS: dict[str, Any] = {
     # The memory ask (memory plan M1): answered, and the days it was offered unshown.
     "memory_asked": lambda v: isinstance(v, bool),
     "memory_chosen_days": lambda v: (
-        isinstance(v, list) and len(v) <= 7 and all(_memory_day(d) for d in v)
+        isinstance(v, list)
+        and len(v) <= R.MEMORY_CHOSEN_KEPT
+        and all(_memory_day(d) for d in v)
     ),
 }
 
@@ -1005,6 +1016,7 @@ def choose_question(
     dreamed: bool = False,
     world: str | None = None,
     pet_kinds: tuple[str, ...] = (),
+    memory_ask: bool = False,
 ) -> str | None:
     """The question to ask on this visit, or None: at most one in the morning
     (before noon) and one later, per person per day, across every pet. A
@@ -1012,7 +1024,8 @@ def choose_question(
     the pet's own still open for this person. dreamed: the pet has a dream to
     tell this morning, which is its morning's say instead of "did you sleep
     well?" on alternate days (by the day), so that's still asked about half
-    the mornings."""
+    the mornings. memory_ask: the pet allows memory (its option), so the memory
+    ask may be due."""
     if level < R.ASK_LEVEL:
         return None
     asked = person.get("asked") or {}
@@ -1027,7 +1040,7 @@ def choose_question(
         return "slept"
     if "later" in asked:
         return None
-    if once := once_due(person, today, hour, level, pet_once, world):
+    if once := once_due(person, today, hour, level, pet_once, world, memory_ask):
         return once
     if came_home in DAY_ZONES or came_home == "home":
         # Back from work or school, or a friend just home. A due dated follow-up (weekend,
@@ -1077,10 +1090,12 @@ def once_due(
     level: int,
     pet_once: tuple[str, ...] = (),
     world: str | None = None,
+    memory_ask: bool = False,
 ) -> str | None:
     """A one-time question due now: each has its own tries, so one left
     unanswered never holds up the next; a few days apart per person. The
-    favourite visitor is asked per world (the pet's; none without one)."""
+    favourite visitor is asked per world (the pet's; none without one). The
+    memory ask comes after ONCE, where the pet allows it (memory_ask)."""
     if not R.ASK_LIKES_FROM <= hour < R.ASK_LIKES_UNTIL:
         return None
     last = person.get("once_last")
@@ -1103,14 +1118,97 @@ def once_due(
             and may_ask_again(tries.get(key, []), today)
         ):
             return kind
+    if memory_ask and memory_ask_due(person, today, level):
+        return MEMORY_ASK[0]
     return pet_once[0] if pet_once else None
+
+
+def memory_ask_due(person: dict[str, Any], today: str, level: int) -> bool:
+    """Whether the memory ask may be chosen (plan section 5, M1b): from its level,
+    not once answered (`memory_asked`, which survives off and forget-me), not while
+    memory is on or baby talk is (FM Q-D), within its tries (counted on "shown"),
+    and chosen unshown on fewer than MEMORY_ASK_CHOSEN of the last
+    ASK_LIKES_AGAIN_DAYS days (an old card that never says "shown", M1 S3)."""
+    if (
+        level < MEMORY_ASK[1]
+        or person.get("memory_asked")
+        or person.get("baby_talk")
+        or isinstance(person.get("memory"), dict)
+        or not may_ask_again((person.get("likes_asked") or {}).get("memory", []), today)
+    ):
+        return False
+    now = date.fromisoformat(today)
+    recent = [
+        d
+        for d in person.get("memory_chosen_days") or []
+        if 0 <= (now - date.fromisoformat(d)).days < R.ASK_LIKES_AGAIN_DAYS
+    ]
+    return len(recent) < R.MEMORY_ASK_CHOSEN
+
+
+# The pick doors (plan section 6): door, picks list, how many of its newest
+# MEMORY_PICKS_CAP must be the same pick. In door-number order.
+MEMORY_PICK_DOORS = (
+    ("door4", "dream", 3),
+    ("door5", "guess", 5),
+    ("door12", "game", 3),
+)
+
+
+def memory_door(
+    mem: dict[str, Any], today: str, hour: int
+) -> tuple[str, dict[str, Any]] | None:
+    """The memory door due on this look, the lowest-numbered first (plan section 6,
+    "Door timing"; door 6 rides the favourite's own note): (its said key, its note).
+    A note holds its kind and at most one fixed-list pick, never a day (FM Q1). Door
+    2: a great day yesterday, before noon, once for it. Doors 4, 5, 12: a repeated
+    pick, in the day's window, at most once a week and only with a pick made since
+    it was last said (so a habit long over isn't said week after week)."""
+    said = mem.get("said") or {}
+    picks = mem.get("picks") or {}
+    now = date.fromisoformat(today)
+    yesterday = (now - timedelta(days=1)).isoformat()
+    if (
+        hour < R.MEMORY_DOOR2_UNTIL
+        and said.get("door2") != today
+        and any(e.get("day") == yesterday for e in picks.get("great") or [])
+    ):
+        return "door2", {"kind": "door2"}
+    if not R.MEMORY_DOORS_FROM <= hour < R.MEMORY_DOORS_UNTIL:
+        return None
+    for door, kind, need in MEMORY_PICK_DOORS:
+        entries = sorted(picks.get(kind) or [], key=lambda e: e["day"])
+        entries = entries[-MEMORY_PICKS_CAP:]
+        last = said.get(door)
+        if last and (
+            (now - date.fromisoformat(last)).days < R.MEMORY_DOOR_GAP_DAYS
+            or not entries
+            or entries[-1]["day"] <= last
+        ):
+            continue
+        field = MEMORY_PICKS[kind][0]
+        counts: dict[str, int] = {}
+        for e in entries:
+            counts[e[field]] = counts.get(e[field], 0) + 1
+        for pick, n in counts.items():
+            if n >= need:
+                return door, {"kind": door, "pick": pick}
+    return None
+
+
+def memory_chosen(person: dict[str, Any], today: str) -> None:
+    """The memory ask was chosen today, not yet shown: its day kept (one a day, the
+    newest MEMORY_CHOSEN_KEPT, so the loader's bound never drops the list)."""
+    days = [d for d in person.get("memory_chosen_days") or [] if d != today]
+    person["memory_chosen_days"] = [*days, today][-R.MEMORY_CHOSEN_KEPT :]
 
 
 def mark_once(
     person: dict[str, Any], kind: str, today: str, world: str | None = None
 ) -> None:
-    """A one-time question was asked today (its tries; the gap to the next)."""
-    if kind in dict(ONCE):
+    """A one-time question was asked today (its tries; the gap to the next). The
+    memory ask is marked so only on the card's "shown" (async_answer)."""
+    if kind in dict(ONCE) or kind == MEMORY_ASK[0]:
         key = f"fav_visitor_{world}" if kind == "fav_visitor" else kind
         person.setdefault("likes_asked", {}).setdefault(key, []).append(today)
     person["once_last"] = today

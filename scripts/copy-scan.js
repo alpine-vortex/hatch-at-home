@@ -12,6 +12,8 @@ const FILL = {
   name: "Wwwwwwwwwwww", // 12
   it: "Wwwwwwwwwwwwwwwwwwww", // 20, the typed text's cap (FM dialogue pass)
   creature: "Mexican red-knee tarantula", // 26, the longest creature name
+  pick: "higher or lower", // 15, the longest pick label a memory door says (GAMES)
+  season: "spring", // 6, as long as every season's name
 };
 // Each table: the fill its functions take, and the keys (at any depth) that may ask.
 const COPY_TABLES = {
@@ -51,6 +53,9 @@ const COPY_TABLES = {
   WEEKEND: { fill: "it", asks: ["q"] },
   GAME_TOMORROW: { asks: ["q"] },
   TRICK_ASK: { asks: ["q"] },
+  MEMORY_ASK: { asks: ["q"] }, // memory plan M1b: the one-time ask
+  MEMORY_DOORS: { fill: "pick" }, // doors 2, 4, 5, 12
+  MEMORY_TOLD: { fill: "season" }, // door 6
   HOUSE_LINES: {},
   SEASON_START_LINES: {}, // ha-signals H7
   SEASON_START_BITS: {},

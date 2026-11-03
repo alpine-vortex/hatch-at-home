@@ -2510,7 +2510,7 @@ async def test_back_from_the_gym_then_how_was_your_day(
     coordinator.state.wish["kind"] = "bath"
     coordinator.people.person(me.id)["my_day"] = True
     coordinator.people.person(me.id).update(
-        likes=ASKED_LIKES, birthday_skipped=True
+        likes=ASKED_LIKES, birthday_skipped=True, memory_asked=True
     )  # asked before
     for place in ("not_home", "Gym", "not_home", "home"):
         hass.states.async_set("person.sam", place, {"user_id": me.id})
@@ -2812,7 +2812,7 @@ async def test_coming_home_from_anywhere_still_counts_the_visit(
     )
     config = await setup(hass)
     config.runtime_data.people.person(me.id).update(
-        likes=ASKED_LIKES, birthday_skipped=True
+        likes=ASKED_LIKES, birthday_skipped=True, memory_asked=True
     )  # asked before
     hass.states.async_set("person.sam", "not_home", {"user_id": me.id})
     await settle(hass, freezer, 60)
@@ -2912,7 +2912,7 @@ async def test_two_pets_looked_at_together_say_a_person_line_once(
         pets[-1].state.wish = None
     pets[0].people.person(me.id)["my_day"] = True
     pets[0].people.person(me.id).update(
-        likes=ASKED_LIKES, birthday_skipped=True
+        likes=ASKED_LIKES, birthday_skipped=True, memory_asked=True
     )  # asked before
     # Reading the phones' history awaits the recorder: let the other pet run then.
     from custom_components.virtual_pet import wellbeing

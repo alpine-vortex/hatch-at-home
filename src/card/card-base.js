@@ -65,7 +65,8 @@ class HatchPetCardBase extends HTMLElement {
       list = list.filter(fresh);
       for (const a of [...list]) {
         try {
-          await this._hass.callWS({ type: "virtual_pet/answer", entity_id: a.entity, question: a.question, answer: a.answer });
+          await this._hass.callWS({ type: "virtual_pet/answer", entity_id: a.entity, question: a.question, answer: a.answer,
+            shared: false }); // never on a shared screen (above): memory may keep it (plan R3)
         } catch (err) {
           if (err?.code !== "not_asked" && err?.code !== "invalid_answer") {
             this._resendAfter = Date.now() + ANSWER_RESEND_EVERY_MS;

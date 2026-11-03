@@ -15,6 +15,7 @@ const helpers = [
 const ctx = {};
 vm.runInNewContext(`${helpers}
   ${grab(/\nconst FAV_WEATHER_LINES = \{[\s\S]*?\n\};\n/)}
+  ${grab(/\nconst MEMORY_TOLD = \{[\s\S]*?\n\};\n/)}
   const NOTE = ${grab(/\n {2}fav_weather: \(n, device\) => [^\n]*\n/).trim().replace(/^fav_weather: /, "").replace(/,$/, "")};
   this.turnPick = turnPick; this.TABLE = FAV_WEATHER_LINES; this.NOTE = NOTE;`, ctx);
 const { turnPick, TABLE, NOTE } = ctx;
@@ -27,7 +28,8 @@ test("the note is a list per weather, one for each of the four", () => {
 });
 
 test("the note reads the list in turns by the device, not one fixed string", () => {
-  assert.match(src, /fav_weather: \(n, device\) => turnPick\(FAV_WEATHER_LINES\[n\.weather\], `\$\{device\}\|favweather`\)/);
+  // Door 6's line (memory plan M1b) only when the note says told; else the turn's.
+  assert.match(src, /fav_weather: \(n, device\) => \(n\.told && MEMORY_TOLD\[n\.weather\]\) \|\| turnPick\(FAV_WEATHER_LINES\[n\.weather\], `\$\{device\}\|favweather`\)/);
   assert.match(src, /NOTES\[note\.kind\]\?\.\(note, s\.ids\?\.device\)/);
   for (const w of WEATHERS) assert.ok(TABLE[w].includes(NOTE({ weather: w }, "dev1")), w);
 });
