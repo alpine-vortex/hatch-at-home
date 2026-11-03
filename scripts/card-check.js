@@ -9987,7 +9987,8 @@ async function main() {
     await quiet();
     s.dirViewed = false; s.dirRecent = [ent("rain_started", 180000, "cc-3")];
     el._dirView(s);
-    return { at20, at3min: cls(), viewed: s.dirViewed, recent: s.dirRecent };`);
+    return { at20, at3min: cls(), viewed: s.dirViewed, recent: s.dirRecent,
+      why: { env: el._dirEnv(), shown: el._dirShown(s), busy: el._director.busyOwners(s), sub: s.subscribed } };`);
   check("devicefx 2: a first view 20 s after the change plays one echo, on the wet sheen",
     echo.at20 === "dir-drop,dir-echo,dir-wet", JSON.stringify(echo));
   check("devicefx 3: a first view 3 min after the change is the sheen only", echo.at3min === "dir-wet" && echo.viewed === true && echo.recent === null, JSON.stringify(echo));
