@@ -541,30 +541,60 @@ lean and `munch` (CSS on the pet, no new art), until ship E's `child_eat` frames
 |---|---|---|
 | tap | 0 | `_tapped` as today |
 | watch | 0-300 | the pet watches the pad (a tilt toward the bottom-left, the player's side) |
-| toss | 100-550 | the snack flies from the bottom-left edge in an arc (a rAF parabola, about 1.5 turns of rotation) to the pet's mouth height |
+| toss | 100-550 | the snack flies from the bottom-left edge in an arc (a parabola, a turn and a half) to the **catch point** (below) |
 | **gate** | 650 | |
-| catch | 550-700 | a small hop up (`hop`'s .05), `eat_1` on contact, the snack **hidden** in the mouth or paws (the fox's eat art already holds the item) |
+| catch | 550-700 | a small hop up (.05 of the height), `eat_1` on contact, the snack **hidden** at 700 (in the mouth or paws, for every species; no claim that the eat art holds the item) |
 | chew | 700-1300 | `eat_2`/`eat_1` x 2 at 300 ms with the squash |
 | delight | 1300-1750 | the `cheer` act, one `greethop`, 1-2 hearts |
 | settle | 1750-1950 | back to rest |
 
-**The excited loop is spent here:** the snack's `excited` mood turns on the infinite
-`hop` for up to 10 s (item 11 above). During and after the scene the loop is replaced by
-the **one `greethop`** in "delight": `s.excitedSince` is set so the `hop` class stays off
-for a snack-excited pet. (A pet excited for another reason keeps the loop.)
+**The catch point (FM decision, s2757):** `species.json` has no mouth field; `head` is the
+crown of the head (a back, wing or shell for some). The point is `head[stage]` in the 256-px
+frame, times the drawn rect (the stage's `scale` is in it), a fixed **8%** of the pet's height
+below it; where a species gives `face` (6 do) that is the point, 3% down (the firefly's crown
+is at its tail light). It is `catchPoint(s, pet, box)`; a flipped pet (`.look`) is mirrored.
+Accepted by the 30-species bench sheet (`--preset snack`, `snack-catch`) with a pixel rule: the
+snack's centre lies inside the pet's opaque box at 600 ms (30 of 30).
 
-**Variants:** **A** catch; **B** a miss: the snack bounces once on the floor and the pet
-pounces (`hop` toward it; picked for bouncy types); **C** savour: it lands in front, three
-nibbles, each takes a round **bite mask** (`mask-image` with a radial gradient) out of the
-snack (no art; a `snack_bite` per species only if the mask reads badly on the bench);
-**D** stash: the hoarder's cheeks (the child `cheeks` and `cache` poses exist for the
-child; b/t/a use the `eat` frames and a puffed-cheek squash).
+**The one greethop:** ship A already replaced the 10 s `hop` loop with one `greethop`
+(`_layout` fires it when `excited` is first seen, and skips while `s.scene` is set). The
+delight beat's `greethop` is the snack's: the entry's `clear` sets `s.excitedSince`, so the
+layout does not add a second one when the scene ends. Count of `greethop` adds across a scene = 1.
 
-**Hooks:** `favourite_snack` day: `bighop` and the sparkle, both exist. Season candy: the
-same throw with the candy art. Heavy: a `look` at the snack (400 ms) before it eats, and
-the existing heavy line. `spoiled`: 4.4. `chore_treat` (an automation, nobody tapped): the
-snack **drops in from the top**, no throw, as the floor path (4.5). Nature: a hoarder
-stashes (variant D); `paceOf` scales the chew.
+**Variants (key `snack`, pin `s.pinVariant.snack`, the no-repeat pick of 4.7):** **A** catch;
+**B** a miss: the snack lands on the floor in front, bounces once (550-700) and the pet pounces
+(a hop toward it, 700-850; its landing x is `sc.land`); **C** savour: it lands in front, three
+nibbles, each a round **bite mask** (`mask-image`, intersected, no art) out of the snack; **D**
+stash: one chew, then the cheeks puff (`.pet.puff`) and it looks round (FM: **a hoarder's only**,
+nobody else's unless pinned). Own by habit, half the time like feed: hoarder D, performer B, watcher
+and basker C.
+
+**Refusal (a snack has no bite at the gate):** a `full` **before** the gate (the snack is flying or
+at the mouth, still shown) has it **drop and roll out** toward the pad while the pet turns away
+(`refuseAt` = max(te, 550), 900 ms, "i'm full!" at the start). After the gate the catch is
+**finished** (to 700, the snack hidden, `refuseAt` = the catch's or the chew's end), then the
+same push-away with nothing to roll out. A reply after a hold (`answerAt` at or past the gate) is
+before the gate.
+
+**Hooks:** `favourite_snack`: the server's moment (`card-moment.js`) says its own line; while a
+snack scene plays it marks `sc.fav` and drops its own perk, and the delight is a `bighop`, a
+sparkle and two hearts instead of the `greethop`. Season candy: the same throw with the candy art
+(`../ui/season_<key>_<snack>`) and the season's `snackLines`. Heavy: a 400 ms look at the snack
+before it eats, and the existing heavy line (half the time). `spoiled`: below. `chore_treat` (an
+automation, nobody tapped): the floor path, nothing to build. Nature: variants above; `paceOf`
+scales the chew (+-20%).
+
+**`spoiled` is a yes for snack, and only snack** (`isYes(entry)` in `ui-copy.js`; used by
+`_sceneAnswer` and `_sceneOffer`). `sc.result` stays `"ok"`, `sc.spoiled = true`. The smug beat
+(two `rock2`, the existing `REFUSALS.spoiled` line, no hop and no hearts) is the entry's delight
+beat; the floor's `_react` never sees the entry, so no snack prop. A `late` or owed spoiled snack
+(`playOwed`) falls to the floor path, which already eats it and is smug.
+
+**The line (FM decision):** one table `SNACK_LINES = {catch, miss}` (`lines-fresh.js`, in
+`COPY_TABLES`): "*gotcha!*" (A, C, D) and "*pounce!*" (B), said bare, once, at the delight beat,
+in place of any other line. **Precedence:** spoiled smug > season `snackLines` > heavy >
+favourite-snack moment (the scene says nothing) > `SNACK_LINES`. "*sneaky grin*" is struck.
+`SNACK_LINE_ODDS` is 0.25 (FM, same 1-in-4 as `FEED_EXTRA_ODDS`; at 1 it would replace every ordinary snack line).
 
 **Child:** as 5.1.
 
@@ -1107,7 +1137,7 @@ A: bench sheets of the floor, read by the first mate. B: the 30-species bowl she
 decision input for the half art**), feed and snack sheets. C: the touch ladder. D: the drape
 sheet through the art review. E: the 100 frames' sheets through the art review.
 
-## 14. Copy (DRAFT; the first mate approves every line)
+## 14. Copy (the first mate approves every line; the feed and snack rows are approved)
 
 All fit 40 characters, carry no digits, no "?" outside a question, no nagging words
 (`scripts/copy-scan.js`). Species `*action*` lines are said **bare** (the catchphrase is not put
@@ -1117,8 +1147,8 @@ in front, the nature plan 5.4). They go in `lines-fresh.js` tables named in `COP
 |---|---|
 | feed, satisfied (1 in 4) | "*licks its lips*", "*pats its tummy*", heavy: "*burp* ...pardon me" |
 | feed, push-away | "*pushes the bowl back*" (with the existing "i'm full!") |
-| snack, catch / miss | "*gotcha!*", "*pounce!*" |
-| snack, spoiled smug | "*sneaky grin*" (with the existing line) |
+| snack, catch / miss | "*gotcha!*", "*pounce!*" (approved, FM s2757) |
+| snack, spoiled smug | none new: "*sneaky grin*" is struck; the existing `REFUSALS.spoiled` line stays |
 | tuck, sigh | "*sighs, all snug*", "*peeks out, then dozes*" |
 | tuck, night creature | "*one more look around*" |
 | wake | "*stretches*", groggy: "*blinks, squinting*" |
@@ -1348,7 +1378,9 @@ Names win over lines.
   and `sceneKind()` are in `lines.js` with `SCENE_HOLD_MS`, `SCENE_EXIT_MS`, `SCENE_OWE_MS`.
 - A non-skippable scene ignores a second tap of its care (`_tapped(..., { perk: false })`, nothing sent)
   and swallows a screen tap, but not a tap inside the status sheet opened over it (every scene: a meal
-  plays for seconds, and the sheet's controls must not go dead under it). `sc.looked`: set it when an entry toggles `.look`; `_sceneEnd` removes it.
+  plays for seconds, and the sheet's controls must not go dead under it). **Changed in B2 (FM decision,
+  2026-11-02, plan 4.3): `sc.stop` is installed only for a skippable scene (medicine, clean); feed, snack and
+  lights leave screen taps alone, so the wanted chip, the basket and the screen tap work during a meal.** `sc.looked`: set it when an entry toggles `.look`; `_sceneEnd` removes it.
   `.screen.in-scene` hides the resting label for every scene (4.9 b); the "a care prop is up" half of
   that rule is **not** built.
 - `_careVariant` **is** ship A's `_floorVariant`, renamed (one function, `s.lastVariant`, the bench's
@@ -1392,3 +1424,54 @@ Names win over lines.
 - The season's snack prop standing in for the bowl food (5.1 "may"); the hoarder's carried-off piece.
 - Copy: `*pushes the bowl back*` (where it goes beside "i'm full!" is not stated). The three feed lines
   (`FEED_LINES`: lick, tummy with the heart, burp) shipped as DRAFT for the first mate's approval.
+
+## 21. B2 shipped: notes for D (s2757)
+
+Ship B2 (branch `crew/hatch-at-home-s2757-care-b2-snack-scene-bowl-dip-a`, on B1). Names win over lines.
+FM decisions recorded here (first mate, 2026-11-02): "*gotcha!*" and "*pounce!*" approved; "*sneaky grin*"
+struck (the smug beat keeps the existing `REFUSALS.spoiled` line); the per-bite whole-bowl dip is in B2;
+variant D (stash) is a hoarder's only; the screen-tap stop is for skippable scenes only (plan 4.3); the
+B1 validation fixes below.
+
+**What changed in the engine (D builds on it)**
+
+- `isYes(entry)` (`ui-copy.js`): ok, or spoiled for a snack. `_sceneAnswer` (`isYes({action: sc.kind, result})`)
+  and `_sceneOffer` use it; `sc.spoiled` is set, `sc.result` stays `"ok"`. A lights scene sees only `ok`.
+- `sc.stop` (the screen-tap stop) is installed **only when `entry.skippable`**. Lights is not skippable, so
+  a screen tap during the tuck opens the status as it always did; the status sheet's taps are kept either way.
+- `_animate(s, el, cls, ms)` keeps **one timer per element and class** (`ANIMATE_TIMERS`, a WeakMap): a
+  re-add clears the old timer. It fixes variant C's cut chomps (250 ms apart, 280 ms long) and card-check
+  "motion 1: settles as it falls asleep live" (a flop's `settle` timer stripped a later `settle`); the
+  check's `wait(2600)` workaround (1de79316) is removed in B2 and `--only pat,react` passes without it.
+- `feed.refuseAt`: a `full` that came after a hold (`te === gate`, `answerAt >= gate`) is **before** bite 1;
+  `refuse`'s `pre` is `refuseAt <= gate`. Snack's `refuseAt` has the same rule.
+- `_careFrames(s, sc, care)` (card-care) is the frames ladder for a meal's scenes (eat, refuse, hungry,
+  excited, content, sleepy; the child's rung 1 pose keyed by `species.reactions[care]`). D may use it.
+- `_snackRollOut` (an item left in the scene drops, rolls toward the pad and goes: the refusal's and the
+  exit's) is the model for the blanket's push-away.
+- An entry's `clear(s, sc)` runs before the end's redraw: snack sets `s.excitedSince` there when its
+  delight's `greethop` fired, so `_layout` does not add a second one. D's wake may need the same for the
+  `settle` it plays.
+- The feed bowl, for the 25 species with no `bowl_rim`, **dips** (the whole bowl squashes 8% from its base for
+  200 ms at each chomp); the 5 with `bowl_rim` clip. `--preset bowls` has the before/dip/after shots.
+
+**Snack (5.2)**
+
+- `SCENES.snack`: ms 1950 (A; B +150, C +300, D +150, heavy +400), gate 650, `skippable: false`,
+  `playOwed: true`, `refuseMs` 900, `due` as feed. Beats in `sc` (`chews`, `delightAt`, `hideAt`, `lookAt`,
+  `puffAt`); one-shots through `once()`.
+- `catchPoint(s, pet, box)`: `head` (or `face`), +8% of the height (+3% for `face`), mirrored when `.look`.
+  Bench: `--preset snack` (`snackCatch`, `dev/bench/page.js snackBox`, `bench.js` pass rule) 30 of 30.
+- Copy: `SNACK_LINES = {catch, miss}` in `lines-fresh.js`, in `COPY_TABLES`; `SNACK_LINE_ODDS = 0.25`.
+  `FEED_LINES` is approved (the DRAFT note is gone).
+- `favourite_snack` (a moment, not part of the scene): while a snack scene plays it sets `sc.fav` and the
+  moment's line drops its `perk`; the delight is a `bighop`, the sparkle and two hearts.
+
+**Not built, on purpose or open**
+
+- The hoarder's carried-off piece; the season's candy as more than the same throw; a child's `cheeks` pose for D
+  (the ladder's rung 1/3 frames are used); `snack_bite` art (the mask reads on the bench).
+- A heavy pet's look is a held pose (`excited[0]` and a lean), not a turn.
+- Reduced motion: the scene never starts (`sceneFade`). The "calm pat" follow-up needed no code: `_pat`
+  sets the pat pose before it looks at the cooldown, and ship C's rewrite keeps the wiggle for motion only
+  (`tests/js/touch.test.js`, "reduced motion: the pose and the line, no lean, no wiggle").

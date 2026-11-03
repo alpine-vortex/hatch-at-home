@@ -690,6 +690,18 @@ const PRESETS = {
         }
       }
     }
+    // Care B2: a species with no bowl_rim has each bite dip the whole bowl instead. The feed
+    // scene (variant A, bite 1 chomps at 770 ms) just before it, at the dip's lowest, and after.
+    for (const species of allSpecies().sort()) {
+      if (speciesData(species).bowl_rim !== undefined) continue;
+      const world = worldOf(species);
+      [[700, "before"], [870, "dip"], [1050, "after"]].forEach(([careAt, step]) => {
+        out.push({ name: `bowls/${world}/${species}-dip-${careAt}`, group: `bowls-${world}-dip`, label: `${species} ${step} ${careAt}`,
+          species, stage: "adult", world, width: 330, care: "feed", careAt, answer: { at: 200, result: "ok" },
+          variant: { feed: "A", "feed.extra": "none" }, pet: { hunger: 60 }, mood: "content", clip: "screen",
+          crop: [0.55, 0.45, 0.95, 0.97], dpr: 3, tile: 150, say: "" });
+      });
+    }
     return out;
   },
   // Care B1, the feed scene (plan care-reactions 5.1, 13): an adult fox's four variants every
@@ -750,6 +762,52 @@ const PRESETS = {
     shot("calm", "tap", "calm: the tap, no scene", { careAt: 1000, motion: "reduce" });
     shot("calm", "reply", "calm: the reply", { care: undefined, reactEntry: { action: "feed", result: "ok" }, motion: "reduce" });
     shot("calm", "child-reply", "calm: a child's reply", { care: undefined, stage: "child", reactEntry: { action: "feed", result: "ok" }, motion: "reduce" });
+    return out;
+  },
+  // Care B2, the snack scene (plan care-reactions 5.2, 13): an adult fox's four variants every
+  // 150 ms (the reply in at 200 ms), a spoiled reply, the push-away before and after the gate, the hold
+  // and the exit, heavy, a season's candy, the child ladder, water, the night sky, resting, a 300 px
+  // card, big text, mono, reduced motion; and the 30-species catch sheet (the snack at the catch
+  // beat: its centre must lie inside the pet's opaque box, snackCatchPass).
+  snack() {
+    const out = [];
+    const ok = { at: 200, result: "ok" };
+    const shot = (group, name, label, extra) => out.push({ name: `snack/${group}/${name}`, group: `snack-${group}`, label,
+      species: "fox", stage: "adult", world: "woodland", width: 330, care: "snack", answer: ok, clip: "screen", say: "",
+      ...extra, pet: { hunger: 60, ...extra.pet }, variant: { snack: "A", ...extra.variant } });
+    for (const v of ["A", "B", "C", "D"]) {
+      for (let at = 0; at <= 2400; at += 150) shot(`variant-${v}`, `${v}-${at}`, `${v} ${at}`, { careAt: at, variant: { snack: v } });
+    }
+    for (const at of [1500, 1800]) shot("spoiled", `spoiled-${at}`, `spoiled ${at}`, { careAt: at, answer: { at: 200, result: "spoiled" } });
+    for (let at = 300; at <= 1100; at += 200) {
+      shot("refuse", `pre-${at}`, `full at 300: ${at}`, { careAt: at, answer: { at: 300, result: "full" } });
+    }
+    for (const v of ["A", "B", "C"]) {
+      for (let at = 750; at <= 1650; at += 300) {
+        shot("refuse", `post-${v}-${at}`, `${v}: ok, full at 750: ${at}`, { careAt: at, variant: { snack: v }, answer: [ok, { at: 750, result: "full" }] });
+      }
+    }
+    shot("refuse", "late-full", "no reply, then full at 1200: 1700", { careAt: 1700, answer: { at: 1200, result: "full" } });
+    for (const at of [650, 1000, 2000, 2650, 3100]) shot("refuse", `hold-${at}`, `no reply: ${at}`, { careAt: at, answer: undefined });
+    for (const at of [550, 900, 1400]) shot("heavy", `heavy-${at}`, `heavy ${at}`, { careAt: at, pet: { weight: 90 } });
+    for (const at of [400, 1400]) shot("candy", `candy-${at}`, `season candy ${at}`, { careAt: at, time: "2026-10-30T12:00:00Z" });
+    for (const [species, stage, rung] of [["hamster", "child", 1], ["deer", "child", 1], ["fox", "child", 3], ["bird", "child", 3]]) {
+      for (const at of [500, 900, 1500]) {
+        shot("child", `${species}-${at}`, `${species} child (rung ${rung}) ${at}`, { species, stage, world: worldOf(species), careAt: at });
+      }
+    }
+    for (const at of [400, 800, 1400]) shot("worlds", `otter-${at}`, `water ${at}`, { species: "otter", world: "tidepool", careAt: at });
+    for (const at of [400, 800, 1400]) shot("worlds", `owl-${at}`, `night sky ${at}`, { species: "owl", world: "nightsky", careAt: at });
+    for (const at of [100, 600, 1500]) shot("resting", `resting-${at}`, `resting ${at}`, { careAt: at, pet: { resting: true } });
+    for (const at of [500, 1500]) shot("300", `w300-${at}`, `300 px, poops ${at}`, { width: 300, careAt: at, pet: { poop: 3 } });
+    shot("text", "big", "big text 1500", { careAt: 1500, bigText: true });
+    shot("text", "mono", "mono 1500", { careAt: 1500, mono: true });
+    shot("calm", "tap", "calm: the tap, no scene", { careAt: 1000, motion: "reduce" });
+    shot("calm", "reply", "calm: the reply", { care: undefined, reactEntry: { action: "snack", result: "ok" }, motion: "reduce" });
+    shot("calm", "pat", "calm: a pat inside the cooldown", { care: undefined, motion: "reduce", patTap: true });
+    for (const species of allSpecies().sort()) {
+      shot("catch", species, `${species} catch`, { species, world: worldOf(species), careAt: 600, snackCatch: true, crop: [0.1, 0.1, 0.9, 0.9], tile: 150 });
+    }
     return out;
   },
   // The same sheet on a shared screen: nothing personal, only this screen's rows.
@@ -1174,6 +1232,20 @@ async function main() {
     for (const l of lit) {
       const bad = l.share <= MONO_LIT_MIN;
       console.log(`mono backlight ${bad ? "FAIL" : "ok"}: ${l.label} differ on ${(l.share * 100).toFixed(1)}% of pixels (need > ${MONO_LIT_MIN * 100}%)`);
+      if (bad) process.exitCode = 1;
+    }
+    if (opts.preset === "snack") {
+      const caught = shots.filter((s) => s.snackCatch && s.file);
+      let bad = 0;
+      for (const s of caught) {
+        const info = JSON.parse(fs.readFileSync(s.file.replace(/\.png$/, ".json"), "utf8")).snack;
+        const inside = info && info.cx >= info.box[0] && info.cx <= info.box[2] && info.cy >= info.box[1] && info.cy <= info.box[3];
+        s.catchInfo = info;
+        if (!inside) bad++;
+        console.log(`  ${inside ? "pass" : "FAIL"} ${s.species.padEnd(14)} ${info ? `snack (${info.cx.toFixed(0)}, ${info.cy.toFixed(0)}) in box ${info.box.map((x) => x.toFixed(0)).join(",")}` : "no snack"}`);
+      }
+      console.log(`snack catch pass rule (the snack's centre inside the pet's opaque box at 600 ms): ${caught.length - bad} of ${caught.length} pass`);
+      fs.writeFileSync(path.join(opts.out, "snack-catch.json"), JSON.stringify(caught.map((s) => ({ species: s.species, ...s.catchInfo })), null, 1));
       if (bad) process.exitCode = 1;
     }
     if (opts.preset === "bowls") {

@@ -505,6 +505,10 @@ const REFUSAL_VARIANTS = { not_sleepy: ["yawn", "look"], too_tired: ["flop", "lo
 const REFUSAL_POOL = ["look", "shake"];
 // A fake call whined for the praise, snack or play: the care is taken as an ok, then the pet is smug.
 const SPOILED_BY = new Set(["praise", "snack", "play"]);
+// Is this care entry a yes for a scene (plan care-reactions 4.4)? An ok; and a spoiled snack, which a
+// scene eats (then is smug). A spoiled praise or play stays on the floor, and so does a spoiled
+// medicine (never: only SPOILED_BY's three are spoiled at all).
+const isYes = (entry) => entry.result === "ok" || (entry.result === "spoiled" && entry.action === "snack");
 const MINE_MATCH_MS = 10000; // a press is matched to the first new log entry within this
 const FLAVOUR_WAIT_MS = 8000;
 // Every moment type, coming (became_sick) or channel-only, has a class: card-check

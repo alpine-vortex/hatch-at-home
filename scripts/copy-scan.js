@@ -71,6 +71,7 @@ const COPY_TABLES = {
   SKY_REACT: {}, // species nature N1 (plan-2026-11-02-species-nature.md)
   CLOCK_LINES: {},
   FEED_LINES: {}, // care reactions B1 (plan-2026-11-02-care-reactions.md 14)
+  SNACK_LINES: {}, // care reactions B2
 };
 
 function lines(value, path, out) {

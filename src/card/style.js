@@ -1345,5 +1345,11 @@ const SCENE_STYLE = `
   .scene-spark { position: absolute; width: 6%; aspect-ratio: 1; opacity: 0; pointer-events: none;
     background: #fff6c8; filter: drop-shadow(0 0 2px #ffd76a);
     clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
+
+  /* --- Care B2, snack (plan 5.2): its own block --- */
+  /* Snack (plan 5.2): positioned by the scene from the screen's top left (translate, rotate). */
+  .screen img.scene-snack { left: 0; top: 0; bottom: auto; transform-origin: 50% 50%; z-index: 2; opacity: 0; }
+  .pet.puff { animation: puff .45s ease-in-out; } /* the stash: the cheeks fill */
+  @keyframes puff { 50% { transform: scale(1.06, .97); } }
 `;
 
