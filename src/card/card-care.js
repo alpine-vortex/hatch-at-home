@@ -814,10 +814,12 @@ class HatchPetCardCare extends HatchPetCardActions {
     s.pet.style.transition = t >= 100 && t < 450 ? "rotate .2s ease-out" : "none";
     s.pet.classList.toggle("look", flip);
     s.pet.style.rotate = t < 100 ? `${4 * (ease(0, 50) - ease(60, 100))}deg` : "";
-    if (sc.night && t >= 150 && once("night")) this._lightsSay(s, "night");
+    // Past the gate (a held scene's clock sits on it, so only a later beat waits for the answer): the
+    // look round is said as the pet settles, and not at all for a tap that is then refused.
+    if (sc.night && t > sc.gate && once("night")) this._lightsSay(s, "night");
     // The lie-down: a 300 ms squash, the asleep frame swapped in at its bottom. The scene owns the
     // sleep transition (4.9), so the layout's own settle does not run a second time at its end.
-    if (t >= 400 && once("lie")) this._animate(s, s.pet, "lie", 300);
+    if (t > sc.gate && once("lie")) this._animate(s, s.pet, "lie", 300);
     if (t >= 550 && once("down")) s.wasAsleep = true;
     // The blanket falls over the lower body (3 steps), two press-ins on its edge (or, for C, two
     // wiggles under it). No art, or none for this species: these beats are skipped, the rest plays.
@@ -852,11 +854,12 @@ class HatchPetCardCare extends HatchPetCardActions {
   _lightsWake(s, sc, t) {
     const once = (key) => !sc.fired.has(key) && sc.fired.add(key);
     // The light comes up in three steps, the dusk reversed: the lit art under .3, then .15, then none.
-    if (t >= 300 && once("lit")) {
+    // The first is past the gate: nothing plays while the scene holds for the answer.
+    if (t > sc.gate && once("lit")) {
       s.bg.style.transition = "none";
       this._bgApply(s, sc.lit);
     }
-    sc.dusk.style.opacity = t >= 700 ? "0" : t >= 500 ? ".15" : t >= 300 ? ".3" : "0";
+    sc.dusk.style.opacity = t >= 700 ? "0" : t >= 500 ? ".15" : t > sc.gate ? ".3" : "0";
     // The blink (asleep, sleepy, asleep, sleepy; 150 ms each); the scene owns the sleep transition (4.9).
     if (t >= 700 && once("awake")) {
       s.wasAsleep = false;

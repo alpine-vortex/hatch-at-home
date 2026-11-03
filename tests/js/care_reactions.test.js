@@ -1352,3 +1352,30 @@ test("audit P2: one failed drape load disables the blanket only if none ever loa
   assert.strictEqual(b.self._drapeInfo(b.s).size, "l");
   assert.strictEqual(b.ctx.DRAPE_ART.ok, undefined);
 });
+
+test("audit N1/N5: nothing past the gate plays while the scene holds on it: lie, lit, dusk, the night look", () => {
+  const opts = { ramp: () => 0, ease: () => 0 };
+  const tuck = lightsCard();
+  lightsTap(tuck);
+  const sc = tuck.s.scene;
+  Object.assign(sc, { dusk: tuck.s.pet, asleep: [], sleepy: [], night: true });
+  assert.strictEqual(sc.gate, 400);
+  assert.strictEqual(tuck.self._sceneClock(sc, 1000).te, 400, "held at the gate");
+  tuck.self._lightsTuck(tuck.s, sc, 400, opts);
+  assert.deepStrictEqual(plain(tuck.log.animated), [], "no squash at the gate");
+  assert.deepStrictEqual(plain(tuck.log.lines), [], "no look-round line at the gate");
+  tuck.self._lightsTuck(tuck.s, sc, 400.01, opts);
+  assert.deepStrictEqual(plain(tuck.log.animated), ["lie"]);
+  assert.strictEqual(tuck.log.lines.length, 1, "the look-round line comes after the gate");
+  const wake = lightsCard({ asleep: true, lights: true });
+  lightsTap(wake);
+  const w = wake.s.scene;
+  Object.assign(w, { dusk: wake.s.pet, asleep: [], sleepy: [], content: [], lit: "day" });
+  assert.strictEqual(w.gate, 300);
+  wake.self._lightsWake(wake.s, w, 300);
+  assert.deepStrictEqual(plain(wake.log.bg), [], "the room stays dim at the gate");
+  assert.strictEqual(w.dusk.style.opacity, "0");
+  wake.self._lightsWake(wake.s, w, 300.01);
+  assert.deepStrictEqual(plain(wake.log.bg), ["day"]);
+  assert.strictEqual(w.dusk.style.opacity, ".3");
+});
