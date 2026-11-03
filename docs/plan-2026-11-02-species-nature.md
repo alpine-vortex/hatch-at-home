@@ -971,7 +971,17 @@ assumptions that moved, one note each:
   so the adult gets **one** `pose` copy (1 in 7), a one-line change. The "1 in 4 cap" of
   section 6 counts `mumble` lines and has nothing to do with the pose move.
 - **README.** `sprites/README.md:20` says `reactions` are "Child stage only"; with (b)
-  dropped that stays true. The README gets a `signature` row and a `nature` row.
+  dropped that stays true. The README gets a `signature` row. (The `nature` row and the
+  `field_note` row are done: N1 and N3 added them, N3 also fixed the `company` text.)
+- **The field notes sit beside the poses (N3 shipped, s2797).** The adult's status page now
+  reads a one-line note, and its third clause is a habit in words ("kneads a blanket"). A
+  signature pose should not contradict it. Table below against the notes: **agree** for
+  most; the art lead should look at the three that pull apart: **kitten** (note "kneads a
+  blanket"; pose `lick_paw`, while the child already has `knead`), **seal** (note "hauls
+  out to bask"; pose `banana`) and **tarantula** (note "digs a burrow"; pose `web_mend`).
+  Either side may move: a pose swap is N4's, a note change is copy (the first mate, and the
+  data test's checks apply). Nothing is changed here. `field_note` is the line right after
+  `nature` and `signature` goes before `waves`, so the two keys are never adjacent.
 - **Copy:** none.
 
 #### Ship 4's art brief inputs
@@ -1668,3 +1678,44 @@ finding's fate). All recommendations were taken.
 **Copy check, 2026-11-03 (s2796):** all 30 distinct; no digit, `?`, `!`, NAG word or banned
 word (word-boundary); all 30 are 60 characters or fewer after the first mate set the octopus
 clause to "slips into nooks" (58).
+
+## N3 shipped (s2797): where the code differed, the pins, the shots
+
+N3 is built as section 8 (N3) says (branch `crew/hatch-at-home-s2797-species-nature-n3-field-note-a`).
+Where the code differed, the code is right and N4 reads from it.
+
+1. **Data.** `field_note` on the line right after `nature` in all 30 `species.json`, the 30
+   approved notes exactly (octopus "slips into nooks"). No `VERSION` bump: 0.45.0 is
+   released and the release prep commit (`9b796054`) is what bumps it, so the edited files
+   reach a cached browser with the next release (`species.json?v=${VERSION}`).
+2. **Card.** `card-status.js` `_renderStatus`: `fieldNote` is read only when `!isEgg`,
+   from `s.species.field_note`; the row is `row(null, "nature", ...)` with `naturerow`,
+   right after the personality line in the hatched template, no stage test. No `_lines`
+   call, no copy-scan entry.
+3. **Server.** `coordinator.species_notes` (filled in the `catalog.species` loop),
+   `species_note` in the status slots (`intent.py`), the sentence in `PROMPT` before "Care
+   for it only when asked to". `test_assist.py`'s `endswith` check is untouched.
+4. **The cap (Q4), measured.** The bench's new `lines` shot option counts a row's wrapped
+   lines (`nature/note-*` shots, plus a throwaway run over all 30). **No note fits two lines
+   at 330**: the value column holds about 19 characters there, and the shortest note (fox,
+   47) is already 3 lines. Counts by length: hamster (60) 3 / 4 / 5 / 6 lines at 420 / 330 /
+   300 / big text; the worst are octopus 3 / 5 / 8 / 9, hermitcrab 3 / 5 / 7 / 9 and seal
+   3 / 5 / 7 / 10 (they break on long words). The status page scrolls, so nothing clips, but
+   the row is tall at 300 and in big text. As the plan says, the builder does not reword
+   and the **data test's cap stays the hard ceiling, 60** (a lower cap that all 30 notes
+   meet does not exist). The full table is in the worker's `renders/note-line-counts.txt`.
+   Open for the first mate: shorten the notes, put the row last, or accept the height.
+5. **Tests.** Python: `test_species.py` (each note: valid, at most 60, no digit or `?` or
+   `!`, no NAG or banned word on word boundaries, clock and sky clauses equal to the
+   species' `nature`; all 30 distinct; firefly and lunamoth do not hum or sing) and
+   `test_assist.py` (the map equals the files and has species outside the roster, the slot
+   with a note, none and an egg, `spoken_status`'s parameters unchanged, the prompt
+   sentence before "Care for it only when asked to" and no new brace). JS:
+   `tests/js/nature_notes.test.js` (the 30 files with `NAG` now exported from
+   `scripts/copy-scan.js`; the row's source: `!isEgg`, one row, after the personality line,
+   no stage test, `naturerow`). The egg, teen, child and baby cases are bench shots.
+6. **Bench.** `--preset nature` gains 34 shots (`--only nature/note-`): the longest note of
+   each of the 6 worlds at 420, 330, 300, big text and the porthole, and hamster as teen,
+   child, baby and egg (the egg shows no row, though its `s.species` is the world's first).
+7. **Not done / not testable.** The LLM's behaviour with the new sentence (a worker cannot
+   test the model); no card-check case (the plan lists none for N3).
