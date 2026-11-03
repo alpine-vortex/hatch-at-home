@@ -10113,6 +10113,7 @@ async function main() {
     storm: ["dir-storm", "dir-storm-in", "dir-storm-out", 3000], wind: ["dir-wind", "dir-wind-gust", "dir-wind-die", 2000] };
   for (const [key, [amb, start, end, ms]] of Object.entries(KEYS4)) {
     const k = await fx(`
+      await quiet(); cool(); // the last check's echo may still be running
       el._channel(s, { house: weatherHouse({ ${key}: true }) }, me);
       const rest = cls();
       s.dirViewed = true;
