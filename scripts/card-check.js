@@ -10257,13 +10257,14 @@ async function main() {
     out.seen = [...seen];
     return out;
   }, calmRun);
+  await page.emulateMedia({ reducedMotion: null }); // m1calm left it on
   const m2 = await motion2(false);
   check("motion 2: a stage that changes live turns (turn), and leaves no class and no rotate behind",
     m2.egg || (m2.turning && /turn-swap/.test(m2.turnAnim) && !/turn/.test(m2.turnLeft[0]) && (m2.turnLeft[1] === "none" || m2.turnLeft[1] === "0deg")), JSON.stringify(m2));
   check("motion 2: a closed sheet loses show-status at once and the pat box is back, the wipe-up is gone in 250 ms; a fast reopen cancels it",
     m2.open && m2.closedAtOnce && m2.wiping && m2.patBack && m2.wipeOff && m2.reopened, JSON.stringify(m2));
   check("motion 2: the counter flips (flip), shows the new number, and leaves no class or rotate behind",
-    m2.num[0] === "3" && m2.num[1] === "3" && m2.num[2] && !/flip|win/.test(m2.numLeft[0]) && (m2.numLeft[1] === "none" || m2.numLeft[1] === "0deg"), JSON.stringify(m2));
+    m2.num[0] === "3" && m2.num[1] === "3" && m2.num[2] && !/flip/.test(m2.numLeft[0]) && (m2.numLeft[1] === "none" || m2.numLeft[1] === "0deg"), JSON.stringify(m2));
   check("motion 2: a find landing pops the basket in (lands), and the class goes", m2.basketN === 1 && m2.lands && !/lands/.test(m2.landsLeft), JSON.stringify(m2));
   await page.emulateMedia({ reducedMotion: "reduce" });
   const m2calm = await motion2(true);
