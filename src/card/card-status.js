@@ -327,7 +327,8 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       <div class="sec">shared screen</div>
       ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
       <div class="shellnote sharednote">a family tablet? give it its own login, and we'll make friends ♥</div>
-      ${this._hass.user?.is_admin && !sharedScreen() ? `<div class="shellnote sharedprivacy">${SETUP_COPY.sharedPrivacy}</div>` : ""}`;
+      ${this._hass.user?.is_admin && !sharedScreen() ? `<div class="shellnote sharedprivacy">${SETUP_COPY.sharedPrivacy}</div>` : ""}
+      <div class="shellnote buildnote">Hatch ${VERSION} · ${BUILD}</div>`;
     if (!this._setStatus(s, html)) return;
     s.status.querySelector(".sback").addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status

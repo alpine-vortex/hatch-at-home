@@ -4,6 +4,8 @@
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
 const VERSION = "0.45.0";
+// scripts/build-card.js swaps this for the short git sha ("dev" with no .git): Settings shows it.
+const BUILD = "__BUILD_SHA__";
 const BASE = "/virtual_pet/frontend";
 // The world's grid: cells across the pet's box (46.5% of the screen's width).
 // The shell (--px), the LCD and the link beam are cut on it, and the props, UI
