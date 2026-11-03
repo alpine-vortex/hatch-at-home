@@ -619,7 +619,8 @@ left behind.
    nothing on the server, and nothing about it joins an entity, bus event or log. No privacy
    table applies. (The "once a day" keys are `localStorage`, as every other card
    once-a-day.)
-10. **Status screen, calls, notifications, quiet hours: unchanged.** The axes must never look
+10. **Status screen, calls, notifications, quiet hours: unchanged** (the status page gains
+    the one "nature" row of N3, nothing else). The axes must never look
     like stats or ratings; the field note (N3) is the only place they are named, as prose.
 
 ## 7. Priority in a first look
@@ -760,7 +761,10 @@ updated; `scripts/gate --auto` for the worker, the first mate's batch gate as us
 ### N3: the field note and the Assist note (data + card + a small server change, tier 1, S-M)
 
 **Not "data + card".** N3 is server code, so `pick-sections` goes to `all` and the gate is
-`scripts/ci-gate` (AGENTS.md), not a partial card-check.
+`scripts/ci-gate` (AGENTS.md), not a partial card-check. N3 is **build-ready** once the one
+open line below (octopus) is settled: review s2795 and the first mate's decisions of
+2026-11-03 (the "N3 fold" section at the end; section 15 has each finding's fate) are
+folded in. Line numbers below are on `origin/main` `6d82439a`; names win over numbers.
 
 **Reconciled against what N2 shipped (s2794).** Nothing in N3's build changes; these are the
 assumptions that moved, one note each:
@@ -791,35 +795,131 @@ assumptions that moved, one note each:
   and `infrared`, not in anything N3 reorders.
 
 - **The notes.** **30 hand-written lines, one per species** (decided, section 1), not a
-  template. They live in `species.json` as a sibling of `nature`:
-  `"field_note": "comes alive at dusk · perks up in rain · keeps a stash"` (draft). One text,
-  two readers (below). A species with no `field_note` has none (the beetle waits). The
-  data test (section 10) checks length (60 characters or fewer, so it fits the status row
-  at 330) and the banned wording.
+  template: the three-clause frame below, with a **species-specific third clause** so no two
+  notes are equal. They live in `species.json` as a sibling of `nature`, **on the line right
+  after `nature`** (`otter/species.json:36`), away from the `acts` line the pending
+  `art-128-*` branches rewrite in all 30 files (the same hazard as N4's `signature` key):
+  `"field_note": "up with the day · warms up in sun · hums and twirls"`. One text, two
+  readers (below). A species with no `field_note` has none (the beetle has no
+  `species.json` at all, so it is not in the catalog).
+- **The frame (decided, Q2).** `<clock> · <sky> · <species clause>`. Clock: day "up with the
+  day"; dusk "livelier at dusk"; night "livelier after dark" (never "wakes" or "awake at
+  night": section 4 says night means livelier after dark, not awake all night, and a model
+  rephrases "wakes at night" into "Pip is awake all night" beside a pet that is asleep, Q5).
+  Sky: sun "warms up in sun"; rain "perks up in rain"; snow "frisky in snow"; fog "goes
+  quiet in fog"; wind "stirs in the wind"; **fire "snug in a warm spot"** (house-neutral:
+  the fire sky shows as `fireside`, `cozy` or `sunny` in a house, section 16 item 1, so
+  "by the fire" would read as untrue in a house with no fire, Q7); moon "stirs at full
+  moon". The clock and sky of every note must match that species' `nature` block (section 4
+  table); a data test checks it.
+- **The 30 notes (copy, FM-approved 2026-11-03, final).** Lengths are characters.
+
+| species | len | note |
+|---|---|---|
+| bird | 51 | up with the day · warms up in sun · hums and twirls |
+| squirrel | 51 | up with the day · stirs in the wind · keeps a stash |
+| deer | 54 | livelier at dusk · goes quiet in fog · watches closely |
+| fox | 47 | livelier at dusk · frisky in snow · pokes about |
+| bananaslug | 53 | livelier after dark · perks up in rain · slides about |
+| gecko | 58 | livelier after dark · snug in a warm spot · licks its eyes |
+| tarantula | 57 | livelier after dark · snug in a warm spot · digs a burrow |
+| tortoise | 49 | up with the day · warms up in sun · basks a while |
+| beardeddragon | 51 | up with the day · warms up in sun · basks on a rock |
+| ballpython | 55 | livelier after dark · snug in a warm spot · keeps watch |
+| kitten | 57 | livelier at dusk · snug in a warm spot · kneads a blanket |
+| bunny | 56 | livelier at dusk · snug in a warm spot · grooms its ears |
+| corgi | 53 | up with the day · frisky in snow · herds things about |
+| hamster | 60 | livelier after dark · snug in a warm spot · fills its cheeks |
+| ferret | 56 | livelier at dusk · snug in a warm spot · hides treasures |
+| otter | 49 | up with the day · perks up in rain · grooms often |
+| octopus | 58 | livelier after dark · goes quiet in fog · slips into nooks |
+| seal | 53 | up with the day · warms up in sun · hauls out to bask |
+| hermitcrab | 54 | livelier after dark · perks up in rain · keeps a stash |
+| puffin | 51 | up with the day · stirs in the wind · digs a burrow |
+| treefrog | 56 | livelier after dark · perks up in rain · hums and twirls |
+| axolotl | 58 | livelier after dark · goes quiet in fog · drifts and waits |
+| pondturtle | 50 | up with the day · warms up in sun · basks on a log |
+| duckling | 50 | up with the day · perks up in rain · paddles about |
+| beaver | 57 | livelier after dark · frisky in snow · builds with sticks |
+| bat | 55 | livelier after dark · stirs at full moon · twirls about |
+| lunamoth | 57 | livelier after dark · stirs at full moon · flickers about |
+| owl | 53 | livelier after dark · goes quiet in fog · keeps watch |
+| firefly | 55 | livelier after dark · perks up in rain · glows brighter |
+| opossum | 58 | livelier after dark · snug in a warm spot · makes a hollow |
+
+  Checked 2026-11-03 (s2796): all 30 are distinct; none has a digit, `?`, `!`, a NAG word
+  or a banned word; all 30 are 60 characters or fewer. **Settled (first mate, 2026-11-03):**
+  the octopus clause is "slips into nooks" (58; "squeezes into nooks" was 61). Hamster is exactly 60. Several are over what two
+  lines hold at 330 (next bullet); the bench cap (Q4) is a ceiling, not a target, and the
+  longest note decides it.
 - **Wording rule.** The notes say what the body does, never a liking: "perks up in rain",
-  "warms up in sun", "stirs at the full moon". Never "favourite", "fond of", "loves",
-  "best". (Review S2: "fond of rain" would be rephrased by the model as "loves rain", the
-  favourite-weather line the voices plan dropped for the pet, `plan-2026-10-28-voices-and-lines.md:108`.)
-- **The surface (card).** The **status page** (`_renderStatus`, `card-status.js`): one row
-  under "personality", "nature", showing the field note of **the pet's own species** only.
-  That pet is already hatched, so its species is never a "???" locked tile and the note
-  leaks nothing a lock hides. Fit: a row like the others, wrapped, checked at 420, 330
-  and 300 and in big text (section 10). The journal's species tiles (name only,
-  `card-journal.js:143-160`, locked species "???") and the "every world" page get **no**
-  note: the forms book that would hold four portraits is deferred
-  (`plan-2026-10-28-forms-book.md:3`) and the note joins it if that book ships.
-- **The server (Assist).** `Catalog.species` already keeps the whole dict (`species.py:58-75`),
-  but the coordinator copies only named fields into per-species maps
-  (`coordinator.py:471-490`: `species_names`, `catchphrases`, `likes`,
-  `own_food_stages`). So N3 adds:
-  1. a map `species_notes: dict[str, str]` in `coordinator.py`, filled beside
-     `species_names` from each species' `field_note`;
-  2. a slot `species_note` in the status data at `intent.py:268` (beside `species`; today it
-     reads `pet.species_names` only), `None` when the species has no note;
-  3. one sentence in the LLM `PROMPT` (`llm.py`, built by `.format(names=...)`, so no braces
-     in it, `llm.py:37-56,75`) telling the model to colour, not to quote, the note.
-  `spoken_status` stays unchanged (a golden). The note names the species, not any person.
-  Tests in Python: the map, the slot, the golden, the prompt without a new brace.
+  "warms up in sun", "stirs at full moon". Never "favourite", "fond of", "loves", "best".
+  (Review S2: "fond of rain" would be rephrased by the model as "loves rain", the
+  favourite-weather line the voices plan dropped for the pet,
+  `plan-2026-10-28-voices-and-lines.md:108`.) No note promises a frequency, names a stat or
+  ranks; firefly and lunamoth do not say hum or sing; no solo species is "alert at visitors"
+  (N2's reconcile).
+- **The surface (card).** The **status page** (`_renderStatus`, `card-status.js`; not the
+  settings sheet, whose `favRows` and `memory` rows R3 and M2 changed): one row,
+  "nature", showing the field note of **the pet's own species** (`s.species`, the object
+  `card-build.js` sets from `species.json`, `:599-602`).
+  - **Placement.** Its own line right after the personality line (`card-status.js:159`),
+    **not** inside the `teenOrAdult` test, so it sits in the same place at every stage.
+    `row(null, "nature", ...)`, with `.replace('class="row"', 'class="row naturerow"')` as
+    `friendsrow` does (`:152`), so the bench's `scroll` can name it.
+  - **Stages (Q3): every hatched stage, never the egg.** It is a species fact, not a pet
+    line, so section 6 rule 6 (lines for teen and adult only) does not apply. The egg's html
+    branch has no rows (`:131-137`) and its `s.species` is the world's `roster[0]`
+    (`card-build.js:596`): **read the note only in the non-egg branch**, and the acceptance
+    list has an egg shot that shows no nature row.
+  - **No note, no row** (`if (note)`).
+  - Leaks nothing: that pet is hatched, so its species is never a "???" locked tile. The
+    journal's species tiles (name only, `card-journal.js:143-160`; "???" at `:151` and
+    `:473`) and the "every world" page get **no** note: the forms book that would hold four
+    portraits is deferred (`plan-2026-10-28-forms-book.md:3`) and the note joins it if that
+    book ships.
+  - **Fit (Q4).** The value column is a `minmax(0,1fr)` grid cell after an 18px icon and an
+    84px label (`style.js:1039`), 60px less in the porthole (`:1040`), so 60 characters do
+    not fit one line. The status page scrolls, so nothing clips, but the row adds height.
+    The builder benches the **longest note at 420, 330, 300 and big text** (and the
+    porthole), reads the line count, and **sets the data test's cap to what the bench shows
+    fits in two lines at 330**; the hard ceiling is 60 characters, whatever the bench says.
+    The measured number goes in the report and in the data test's comment. If the longest
+    note does not fit the measured cap, the builder reports it and does not reword.
+- **The server (Assist).** `Catalog.species` already keeps the whole dict (`species.py`,
+  `load_catalog`). So N3 adds:
+  1. a map `species_notes: dict[str, str]` in `coordinator.py`, filled **in the
+     `catalog.species` loop** (`:497-515`, where `catchphrases`, `likes` and
+     `own_food_stages` are filled) and **not beside `species_names`**, which is built over
+     `self.roster` only (`:492`): a pet whose species is outside the current roster (a
+     `next_world` change, `:3335-3342`) must still get its note. Keep a note only when
+     `isinstance(data.get("field_note"), str)` and it is non-empty. The map is a derived
+     copy of `species.json`, not a second source;
+  2. a slot `species_note` in the status data at `intent.py:283` (beside `species`), from
+     `species_notes.get(state.species or "")`, so an egg (`state.species` is `None`) and a
+     species with no note give `None`. The slot carries a species fact only, so the
+     privacy mask (`current_mood` returns `asleep` for away + privacy) leaks nothing new;
+  3. **one sentence in the LLM `PROMPT`** (`llm.py:37`, built by `.format(names=...)` at
+     `:75`, so no braces in it), placed **before "Care for it only when asked to."**
+     (`test_assist.py:467` pins `PROMPT.endswith("never guilt, nag or worry the
+     person.")`, so the ending stays and the test needs no edit; the `VOICE_NOTES` loop at
+     `:463` stays satisfied). The sentence (approved as copy, Q6, 194 characters):
+     > 'species_note' is how that kind of creature is built, not a taste: let it colour what you say now and then, never quote it, and never say the pet likes, loves or prefers something because of it.
+
+     The prompt already says "fond of snacks and naps" and "loves a little song", so the
+     model is primed to talk in liking words; the sentence forbids it outright. **A test
+     can only check the string is present; the model's behaviour is not testable by a
+     worker** (section 10 says so).
+  `spoken_status` stays unchanged (a golden; it takes no note, `intent.py:146`). The note
+  names the species, not any person.
+  Tests in Python: the map (equal to the `species.json` files, including a species outside
+  the roster), the slot (note, none, egg), the golden, the prompt without a new brace and
+  with the sentence before "Care for it only when asked to", and the data tests (section 10).
+- **Docs and cache.** `sprites/README.md` (under `custom_components/virtual_pet/frontend/`):
+  add a `field_note` row, and fix the `nature` row's `company` text, "(not read yet)" is
+  stale after N2. `loadJson` fetches `species.json?v=${VERSION}` (`ui-copy.js:689`), so the
+  edited files reach a cached browser only if `VERSION` moves in the ship: the builder
+  checks the release process does it, and if not, bumps it in N3.
 - No saved state, no new entity, no new service.
 
 ### N4: the adult signature pose (art, L)
@@ -1073,8 +1173,10 @@ moments entry is all it takes and no `sun.sun` transition is needed).
     and `link.rolls` for the order of section 5.4 (`pick` of the normal hello, the persona
     coin >= 0.5, the roll < 0.25, the cell pick, then the guest's draws). Both go in
     `dev/bench/README.md`.
-- **N3:** the status page's "nature" row at 420, 330 and 300 and in big text, for one
-  species per world and the longest note; the Assist output is a test, not a shot.
+- **N3:** `view: "status"` with `scroll: ".naturerow"` at 420, 330 and 300 and in big text
+  (and the porthole): one species per world, **the longest note** (its line count sets the
+  data test's cap, section 8 N3), and a teen or adult, a child and a baby. An **egg shot
+  shows no nature row.** The Assist output is a test, not a shot.
 - **N4:** a `--preset signature`: all 30 species, adult, both frames, 330 and 420; one
   contact sheet per world; with a seasonal costume on, with a flair on, and with the pose
   mid-move (`petAt`); a night and a mono pass for the whole 60. The art review reads the
@@ -1119,13 +1221,25 @@ dev house, which no fixture provides. The test stubs the queue the builder finds
 - **Python (data test), N1:** every ready species has a valid `nature`; `voice.pace` derives
   the pace table of section 4; the exact table is the test's data (a changed row is a
   deliberate diff). A species with no `nature` is allowed (the beetle) and gives none.
-- **Python, N3:** the coordinator's `species_notes` map carries each `field_note`;
-  `intent.py`'s status data has `species_note` (None without a note); `spoken_status` is
-  byte-for-byte unchanged (a golden); the LLM prompt has no braces added; every
-  `field_note` is 60 characters or fewer and has none of the banned wording ("favourite",
-  "favorite", "fond", "love", "best").
+- **Python, N3:** the coordinator's `species_notes` map equals the `field_note` of every
+  `species.json` in `catalog.species` (including a species outside the current roster);
+  `intent.py`'s status data has `species_note` (None without a note and for an egg);
+  `spoken_status` is byte-for-byte unchanged (a golden); the LLM prompt has no braces
+  added, contains the species-note sentence before "Care for it only when asked to", and
+  `test_assist.py`'s `endswith("never guilt, nag or worry the person.")` still passes
+  untouched. **The data test over the 30 files:** each `field_note` is a non-empty string,
+  at most 60 characters (or the bench-set cap, section 8 N3, whichever is lower); all 30
+  are distinct (a duplicate fails); its clock and sky clauses match the species' `nature`
+  block (section 4 table); no digit, `?` or `!`; no NAG word; and none of the banned
+  words, matched on **word boundaries** (`\b(favou?rite|fond|loves?|best)\b`, so "glove" or
+  "clover" pass). **The model's behaviour is not testable by a worker**: the tests check
+  the sentence is present and the slot is filled, not that the model obeys it.
 - **Python, N4:** every `signature` sprite exists, its stage is in `stages` and is not
   `baby` or `child`, and the existing grid test covers the frames.
+- **JS, N3:** a test over the 30 `species.json` `field_note`s that reuses `NAG` from
+  `scripts/copy-scan.js` (**export it**: today only `scanFreshCopy`, `COPY_TABLES` and
+  `FILL` are exported, `:115`), so the card's copy rule and the data cannot drift; it also
+  checks the status page shows the row for a teen and a baby and not for an egg.
 - **JS (`node --test tests/js`):** a `nature_lines.test.js` reading the card source as
   `dream_lines.test.js` does: every sky has 2 lines, every clock 2 (per moment), every
   habit its keys (an absent cell is absent, not an empty list); none has a nagging word, a `?`, a digit,
@@ -1165,8 +1279,9 @@ dev house, which no fixture provides. The test stubs the queue the builder finds
 ## 11. Copy budget
 
 N1's and N2's lines are approved (N1 as shipped, section 16; N2 by the first mate on
-2026-11-03, with the one new line noted in section 16); N3's notes stay **DRAFT** until
-approved. The count is the plan's, not a limit on
+2026-11-03, with the one new line noted in section 16); N3's 30 notes are **approved**
+(first mate, 2026-11-03, listed in section 8 N3), except that the octopus note is one
+character over the ceiling and waits for the first mate (section 8 N3). The count is the plan's, not a limit on
 the builder's fewer.
 
 | Ship | Lines | Made of |
@@ -1366,6 +1481,35 @@ sections named.**
 | Neg. | Empty `tuck`/`pat` keys have no consumer | **Taken (Q7):** dropped; a future ship adds key, cells and caller together | 8a |
 | Neg. | Hop win lines plain; no dream; babies get none | Consumers are named or untouched; kept | 8 N2, 6 |
 
+### Review s2795 (N3): what became of each finding
+
+The adversarial review of N3 (`~/.local/state/crew/archive/hatch-at-home-s2795-20261103-0415/report.md`,
+with `renders/proposed-notes-scan.txt`) was read against `origin/main` `6d82439a` and the N2
+branch. Verdict "not build-ready" (the notes did not exist); the first mate took every
+recommendation on 2026-11-03 (the "N3 fold" section at the end). **Folded here, in the
+sections named.**
+
+| # | Finding | Fate | Where |
+|---|---|---|---|
+| B1 | The 30 notes do not exist; the one example fits no species | **Taken (Q1):** the 30 drafts are in section 8 N3, with the fire sky "snug in a warm spot" and ten species clauses chosen by the first mate. 29 pass; **the octopus note is 61 characters and waits** for the first mate | 8 N3, 11 |
+| S1 | `test_assist.py:467` pins the prompt's last words | **Folded (Q6):** the sentence goes before "Care for it only when asked to"; no test edit | 8 N3, 10 |
+| S2 | Stale line numbers (`coordinator.py`, `intent.py`) | **Folded:** names first, numbers re-checked on `6d82439a` (`:492`, `:497-515`, `intent.py:283`) | 8 N3 |
+| S3 | The map is built beside `species_names` (roster only) | **Folded:** built in the `catalog.species` loop; a test compares the map to the files, including a species outside the roster | 8 N3, 10 |
+| S4 | The 60 cap is not derived from the layout | **Taken (Q4):** the bench measures the longest note at 420/330/300/big text and sets the cap; 60 stays the hard ceiling; the row gets `.naturerow` | 8 N3, 10 |
+| S5 | "wakes at night" against section 4 | **Taken (Q5):** "livelier after dark" / "livelier at dusk" | 8 N3 |
+| S6 | The scan does not read the notes; substring banned words hit "glove" | **Taken:** Python data test with word-boundary banned words and NAG; JS test reusing `NAG`, exported from `copy-scan.js` | 10 |
+| S7 | Notes from the nature block alone are templates (kitten = bunny, owl = axolotl) | **Taken (Q2):** a species clause per note; a test fails duplicates | 8 N3, 10 |
+| S8 | The prompt already primes "fond of", "loves"; model behaviour is untestable | **Taken (Q6):** the sentence forbids liking words; section 10 says a worker cannot test the model | 8 N3, 10 |
+| N-1 | Row placement; stages; egg | **Taken (Q3):** every hatched stage, own line after the personality line, never the egg (non-egg branch, an egg shot shows no row) | 8 N3, 10 |
+| N-2 | Rule 10 says the status screen is unchanged | **Folded:** "unchanged except the one nature row" | 6 |
+| N-3 | Settings sheet vs status page | **Folded:** "status page, not the settings sheet" | 8 N3 |
+| N-4 | `sprites/README.md` stale after N2 | **Folded:** N3 fixes the `company` text and adds `field_note` | 8 N3, 14 (22) |
+| N-5 | `species.json?v=${VERSION}` cache | **Folded:** the builder checks `VERSION` moves in the ship | 8 N3 |
+| N-6 | Merge hazard with `art-128-*` | **Folded:** `field_note` on the line right after `nature` | 8 N3 |
+| N-7 | Gate | Already stated: `ci-gate`; the LLM behaviour is out of reach | 8 N3 |
+| N-8 | Privacy | Checked fine; stated in the slot bullet | 8 N3 |
+| Held | `Catalog.species` keeps the dict; 30 `nature` blocks match section 4; no lock leaked; negative claims have consumers | Kept | 8 N3 |
+
 ## 16. N1 shipped: corrections for N2-N4
 
 N1 is built (branch `crew/hatch-at-home-s2742-n1-species-nature-data-idle-ma`, worker
@@ -1497,3 +1641,30 @@ scan. If refused, the cell is deleted and corgi and duckling say the usual greet
 digits, 40 characters with `{home}` = "vivarium", and the banned words favourite, fond,
 love, best), run with the scan's own rules over the lines as written in section 8, N2. The
 builder re-runs the real scan once the table is in the card.
+
+## N3 fold: first mate decisions, 2026-11-03
+
+Recorded from the s2796 brief (the first mate's answers to review s2795; section 15 has each
+finding's fate). All recommendations were taken.
+
+- **Q1.** The 30 notes are the s2795 drafts, with "warms up by the fire" replaced by
+  "snug in a warm spot", and these third clauses: kitten "kneads a blanket"; bunny "grooms its
+  ears"; gecko "licks its eyes"; hamster "fills its cheeks"; ferret "hides treasures"; seal
+  "hauls out to bask"; axolotl "drifts and waits"; corgi "herds things about"; duckling
+  "paddles about"; octopus "slips into nooks" (FM, was "squeezes into nooks", 61). Others as drafted. Final copy.
+- **Q2.** Three-clause frame, each note distinct; a test fails duplicates.
+- **Q3.** The nature row shows at every hatched stage, never on the egg.
+- **Q4.** The cap is set by a bench measurement of the longest note at 330/300/big text; the
+  hard ceiling is 60 characters.
+- **Q5.** "livelier after dark" / "livelier at dusk", never "wakes" or "awake at night".
+- **Q6.** The Assist sentence is approved as the review wrote it, placed before "Care for it
+  only when asked to".
+- **Q7.** The fire sky reads "snug in a warm spot".
+- **S6.** A Python data test with word-boundary banned words, and a JS test reusing the copy
+  scan's `NAG` (exported).
+- Every other should-fix and nit folded as recommended (the map from `catalog.species`,
+  `test_assist.py`'s `endswith` untouched, stale server lines fixed).
+
+**Copy check, 2026-11-03 (s2796):** all 30 distinct; no digit, `?`, `!`, NAG word or banned
+word (word-boundary); all 30 are 60 characters or fewer after the first mate set the octopus
+clause to "slips into nooks" (58).
