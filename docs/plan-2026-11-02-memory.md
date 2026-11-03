@@ -140,6 +140,13 @@ in sections 4, 5, 6, 8 and 10.
   is the reason `appointment` was dropped). Door 1 reads it; door 3 does not.
 - **Door 9 is dropped** (FM Q4, above); the stale wording is removed (problem 10).
 
+### First mate, 2026-11-03, on the M2 build (s2784)
+
+- **Decided (s2784 Q2): door 10 fires only while its pattern is fresh.** The pattern's
+  most recent entry on its weekday must be within the last 8 weeks (56 days,
+  `R.MEMORY_DOOR10_STALE_DAYS`); an older pattern (a season of lessons that ended) is
+  not remarked on. Like the rest of door 10 it is re-derived from the tags, nothing kept.
+
 ### Audit tally, 2026-11-02
 
 - **M0 audit (s2739, tier 2): 0 player-impact findings, 6 nits.** (The R1 tally belongs in

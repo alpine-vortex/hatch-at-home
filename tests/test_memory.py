@@ -26,7 +26,7 @@ from pytest_homeassistant_custom_component.common import (
     async_capture_events,
 )
 
-from custom_components.virtual_pet import async_remove_entry, people as P
+from custom_components.virtual_pet import async_remove_entry, people as P, rates as R
 from custom_components.virtual_pet.const import CONF_MEMORY, DOMAIN
 from custom_components.virtual_pet.diagnostics import (
     async_get_config_entry_diagnostics,
@@ -948,6 +948,7 @@ GUIDE_STRINGS = (
     'They say "you told me", never that the day happened, and never count.',
     "maybe a match tomorrow! go you ♥",
     "one such remark a month at most across all three",
+    "the pattern has ended",
 )
 
 
@@ -2011,6 +2012,32 @@ def test_door_ten_is_re_derived_from_what_remains() -> None:
         "door10",
         {"kind": "door10", "tag": "lesson"},
     )
+
+
+def test_door_ten_only_while_the_pattern_is_eight_weeks_fresh() -> None:
+    """FM s2784 Q2: the pattern's latest entry on its weekday at most 56 days old. From a
+    Friday a Saturday is 55 or 62 days back, never 56."""
+    fresh = tag_memory(
+        *(tag(d, "lesson") for d in ("2026-08-29", "2026-09-05", "2026-09-12"))
+    )
+    assert P.memory_door(fresh, FRI, 12) == (
+        "door10",
+        {"kind": "door10", "tag": "lesson"},
+    )
+    stale = tag_memory(
+        *(tag(d, "lesson") for d in ("2026-08-22", "2026-08-29", "2026-09-05"))
+    )
+    assert P.memory_door(stale, FRI, 12) is None
+    # A newer entry on another weekday does not keep it going; one on the weekday does.
+    stale["tags"] += [tag("2026-10-26", "lesson"), tag("2026-11-02", "lesson")]
+    assert P.memory_door(stale, FRI, 12) is None
+    stale["tags"].remove(tag("2026-10-26", "lesson"))
+    stale["tags"].append(tag("2026-10-31", "lesson"))
+    assert P.memory_door(stale, FRI, 12) == (
+        "door10",
+        {"kind": "door10", "tag": "lesson"},
+    )
+    assert R.MEMORY_DOOR10_STALE_DAYS == 56
 
 
 def test_door_ten_goes_after_one_and_before_the_picks() -> None:

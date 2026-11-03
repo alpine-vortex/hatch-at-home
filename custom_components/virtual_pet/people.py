@@ -1236,14 +1236,23 @@ def _weekday_pattern(mem: dict[str, Any], now: date, last: str | None) -> str | 
     """Door 10 (plan section 6): tomorrow is the weekday on which 3 of the last 5
     big_day entries of match, show or lesson fell (by day, as they stand now), at
     most once in MEMORY_DOOR10_GAP_DAYS across every pattern. Nothing is kept for
-    it, so forgetting an entry re-derives it from what remains (M2 S11)."""
+    it, so forgetting an entry re-derives it from what remains (M2 S11). A pattern
+    whose latest entry on that weekday is over MEMORY_DOOR10_STALE_DAYS old has
+    ended (FM s2784 Q2)."""
     if last and (now - date.fromisoformat(last)).days < R.MEMORY_DOOR10_GAP_DAYS:
         return None
     tomorrow = (now + timedelta(days=1)).weekday()
     for name in MEMORY_DOOR10_TAGS:
         days = sorted(e["day"] for e in _big_day_tags(mem, (name,)))
-        weekdays = [date.fromisoformat(d).weekday() for d in days[-MEMORY_PICKS_CAP:]]
-        if weekdays.count(tomorrow) >= MEMORY_DOOR10_NEED:
+        on_day = [
+            d
+            for d in map(date.fromisoformat, days[-MEMORY_PICKS_CAP:])
+            if d.weekday() == tomorrow
+        ]
+        if (
+            len(on_day) >= MEMORY_DOOR10_NEED
+            and (now - on_day[-1]).days <= R.MEMORY_DOOR10_STALE_DAYS
+        ):
             return name
     return None
 

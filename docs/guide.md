@@ -645,7 +645,8 @@ two is tied to its one day: with no look at the pet between 11:00 and 20:00 that
 it is skipped. If three of the last five big days you tagged as a match, a show or a
 lesson fell on the same weekday, the pet may wish you well on the eve of the next one
 ("maybe a match tomorrow! go you ♥"), skipped the same way, and one such remark a month at
-most across all three. It is worked out from the tags kept and nothing else, so
+most across all three; once the latest of them is more than eight weeks old, the pattern has
+ended. It is worked out from the tags kept and nothing else, so
 forgetting a tag can end it. On the day you have been friends for a whole year, the pet's line may
 name the most recent big day you tagged in that year ("a whole year! you told me about
 a show"). They say "you told me", never that the day happened, and never count. A shared
