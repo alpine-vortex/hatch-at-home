@@ -326,7 +326,10 @@ class HatchPetCardLayout extends HatchPetCardBuild {
       // (a mark anyone could see would rank), and only with 2+ pets.
       dot.classList.toggle("open-on", this._slides.length > 1 && !sharedScreen() && this._slides[i].mine?.open_on === true);
       const name = this._hass.devices?.[this._slides[i].ids?.device];
-      dot.setAttribute("aria-label", `Show ${name?.name_by_user || name?.name || `pet ${i + 1}`}`);
+      const who = name?.name_by_user || name?.name || `pet ${i + 1}`;
+      // The pet the card opens on says so (FM copy), for a screen reader as the heart does for the eye.
+      const opens = this._slides.length > 1 && !sharedScreen() && this._slides[i].mine?.open_on === true;
+      dot.setAttribute("aria-label", `Show ${who}${opens ? ", your card opens here" : ""}`);
       this._headCrop(this._slides[i], dot, 8, 1.7); // its head, as the dot's mark (UX7 F8)
       dot.setAttribute("aria-current", i === this._index ? "true" : "false");
     });

@@ -57,6 +57,11 @@ Recorded as given in the brief; not up for review in this plan.
   5. **Entering rest refills hunger, happiness and energy to 55** (`REST_FLOOR`), health
      untouched.
 
+- **Owner (2026-11-02, R1-1 from audit s2739):** the entry refill (decision 5 above) comes
+  **at most once per 12 h** (`last_rest_refill_at`, §3.3). A rest inside the window only
+  pauses: no refill, an open call and the misses held. Every copy about resting (§4.3's
+  helper, §6's offer) must promise no refill, no "content" and no "no calls".
+
 Earlier rules this plan keeps: no ranking, no guilt or nagging, wishes credit nobody
 (decisions 2026-10-28:50-53); nothing from the people store on a state attribute or the
 bus (people.py:1-12); settings open from the gear and the pet's own settings are
@@ -274,8 +279,9 @@ pet, and a helper line. Hidden for an egg. Draft copy:
 
 - Row: "resting". A shared screen (the per-browser `SHARED_KEY` flag, prefs.js) shows the
   row's state with no switch.
-- Helper: "{name} stays content with no calls and no hungry tummy, and doesn't grow up
-  until it's back. Visit any time."
+- Helper (FM copy, 2026-11-02, audit s2748): "{name} won't get any hungrier, and doesn't
+  grow up until it's back. Visit any time." It promises no refill: inside the 12 h
+  window (§3.3) a rest only pauses, so "content" and "no calls" would be untrue.
 - Read-only on shared screens: the switch shows its state, with the helper.
 
 ### 4.4 Card label and pose
@@ -380,8 +386,14 @@ One pet per person: picking another moves it. There is no ranking word for it in
   load of the card, the `_shelfRestored` flag at card-build.js:566): at the first draw
   the person's choice **beats** the saved shelf position (`shelfRead`, world.js:464),
   which includes the "pet on show before a reload" restore (UX fix 2, F8). That is the
-  point of "opens on": every fresh load opens on it. After that swiping works as today and
-  `shelfWrite` (card-build.js:896) keeps the position **until the next load**.
+  point of "opens on". **Decided (FM, 2026-11-02, audit s2748 player-impact 2):** HA
+  re-creates the card on a view or panel switch, not only on a page load, and a player who
+  swiped to another pet would come back on the favourite. So the choice decides the opening
+  pet **only when no swipe was written in this browser session**: `_go` sets a
+  `sessionStorage` flag (`hatch-shelf-<first device>-swiped`) on a player's swipe, arrow or
+  dot (not on the late move below), and while it is set the shelf restore wins. A new
+  session (the tab or browser closed) opens on the choice again. `shelfWrite`
+  (card-build.js:896) keeps the position as before.
   The snapshots arrive after the build, so the card caches the device id in
   `localStorage` as `hatch-open-${user}` (the way `hatch-welcomed-${user}` does,
   card-status.js:468) and the next load opens on it at once. **Every snapshot refreshes
@@ -397,7 +409,10 @@ One pet per person: picking another moves it. There is no ranking word for it in
   doesn't jump on every reload [S11]. It **never shows a heart** (decided: a mark anyone
   can see would rank) and shows a pet's resting state read-only.
 - **Heart:** on the head dot (card-layout.js:312-327), a small ♥ on the person's
-  choice, personal screens only, and only when there are 2+ pets.
+  choice, personal screens only, and only when there are 2+ pets. **Spoken** (FM copy,
+  audit s2748 nit 4): that dot's `aria-label` is "Show {name}, your card opens here"; the
+  others stay "Show {name}". The settings rows' `aria-label` is `spoken()` of the copy with
+  the pet's name put in afterwards, so a `~`, `*` or emoji in a name is read as it is.
 - **Toggle:** in the settings sheet for the shown pet, shown only with 2+ pets: "♥ open
   on {name}". On sets it (and moves it from the old pet); off clears it. **Admins** on a
   personal screen get a second row: "shared screens open on {name}", the household
@@ -431,9 +446,9 @@ pet, because the previous choice's `mine` changed too.
 After a person turns their favourite (`open_on`) **on** with 2+ pets that are not eggs, the settings
 sheet shows one inline row under the toggle (no modal, nothing blocks):
 
-- "Let the others rest?" with two buttons, "rest them" and "not now". Helper: "Resting
-  pets stay content with no calls and don't grow up, for everyone at home. Wake them
-  any time."
+- "Let the others rest?" with two buttons, "rest them" and "not now". Helper (DRAFT, same
+  rule as §4.3: no refill promised): "Resting pets won't get any hungrier and don't grow
+  up, for everyone at home. Wake them any time."
 - **"rest them"** calls `virtual_pet/rest` for each other pet that is not an egg and
   not already resting. It flips switches and does nothing else: no favourite change, no
   server rule, no automation.
@@ -447,6 +462,29 @@ sheet shows one inline row under the toggle (no modal, nothing blocks):
 
 The offer is the only place the favourite and resting meet. Neither reads the other.
 
+**R3 corrections from the R2 audit (s2748)**, to build as written:
+
+1. **API.** `people[user]["rest_offer"] = true` needs a transport. Add a websocket command
+   `virtual_pet/rest_offer {entity_id, shared}` with the `shared` fail-closed guard of
+   `open_on` and `ask_again`; `mine.rest_offer: bool` in `_mine`; `"rest_offer"` in
+   `_PERSON_KEYS` (bool); the key in the forget handler's list in the card
+   (`card-status.js`, the `_setMine` list R2 extended); and `async_set_rest_offer`, which
+   takes the person lock and calls `_push_everywhere`, like `async_set_open_on`.
+2. **Helper copy.** The offer's helper promises no refill (see above). The card knows
+   nothing of `last_rest_refill_at` and must not: it is not exposed on an attribute, and
+   the copy stays neutral rather than putting a boolean on `mine` or `house`.
+3. **Trigger.** The offer fires only on the off→on edge of scope `me` in `_setOpenOn`:
+   never for `house`, never from `_openOnSync`'s late move. Count non-egg pets from
+   `sensor.life_stage`; "already resting" is the `resting` flag in the `mood_keyed` flags,
+   so a pet that stays resting is excluded.
+4. **"Rest them" is N independent `virtual_pet/rest` calls**, each with its own cooldown.
+   A pet rested within 12 h only pauses (no refill), and the offer does not override
+   this. Test: offer, "rest them", wake, "rest them" again inside 12 h: no second refill.
+5. **Forget and restart.** `forget_me` clears `rest_offer`, as it clears `open_on`: the
+   offer can return once after a forget (test it). The key must survive a restart:
+   `SAVE_DELAY` is 60 s, so the button saves at once (`async_save_now`), or a loss on a
+   crash is accepted and said.
+
 **Who sees it** [S10]. "rest them" freezes pets that other people may open on or hear
 from. Nothing is sent to them and rest events don't notify (§4.5), so a phone-only
 person simply stops getting calls from those pets and sees the "resting ☁" label only
@@ -456,14 +494,15 @@ owner (Open questions); until it is answered, none is sent.
 
 ## 7. Save impact
 
-- **Pet save:** `resting: bool = False` and `rest_since: float | None = None` on
-  `PetState`; add `"resting"` to the bool list in `from_dict` (model.py:687) and
+- **Pet save:** three new keys on `PetState` (audit s2748 nit 7): `resting: bool = False`,
+  `rest_since: float | None = None` and `last_rest_refill_at: float | None = None` (§3.3,
+  the refill cooldown; a missing, null or damaged value loads as `None`); add `"resting"` to the bool list in `from_dict` (model.py:687) and
   `rest_since` to the optional-float handling. A missing key is False and None. **No
   migration and no version bump** (`PetStore` has none, coordinator.py:215-226;
   `STORE_MINOR_VERSION` 1, const.py:17). `lay_egg` doesn't copy them. **`to_dict` is
   `asdict(self)` (model.py:659), so every pet save gets `resting: false` and
-  `rest_since: null` after upgrade** [S9]: harmless, but "byte-identical" below means
-  *identical except those two keys*, and the recorded-run test strips them before it
+  `rest_since: null` and `last_rest_refill_at: null` after upgrade** [S9]: harmless, but
+  "byte-identical" below means *identical except those three keys*, and the recorded-run test strips them before it
   compares. With no pet resting, no favourite and no house key, behaviour is today's.
 - **A resting egg can't exist, and a downgrade must not make one** [B3]. An older build
   has no `can_lay_egg` gate, so a resting adult can lay there, and `lay_egg` carries
@@ -498,8 +537,10 @@ Pytest unless noted. Names are suggestions; `tests/test_resting.py` and
 
 1. Default: a fresh pet and a loaded save without the key are not resting; a household
    advanced a day with no resting pet gives the same state as `origin/main` **except the
-   `resting` and `rest_since` keys** [S9] (a recorded run in `test_recorded.py`, keys
-   stripped before the compare).
+   `resting`, `rest_since` and `last_rest_refill_at` keys** [S9] (a recorded run in
+   `test_recorded.py`, keys stripped before the compare; the audit s2748 found this
+   compare is **not yet there**: `test_1_a_week_with_no_pet_resting_never_takes_the_rest_path`
+   covers the default path instead, and `test_resting.py` asserts the three keys).
 2. Entry floors hunger, happiness and energy to 55 and leaves health unchanged (a sick
    pet at health 30 stays 30).
 3. A day of `advance` while resting with **no visit**: needs, health, weight, discipline,
@@ -575,9 +616,10 @@ Pytest unless noted. Names are suggestions; `tests/test_resting.py` and
 27. Nothing in a state attribute, the bus event or diagnostics contains `open_on`
     (extend the existing privacy sweep in `test_public.py`).
 28. JS: with a cached choice the card opens on its device **even if the shelf holds
-    another** (the choice beats the reload restore); with none, on `shelfRead`; a swipe
-    is kept until the next load; each snapshot refreshes the cache and removes it when no
-    pet reports `mine.open_on`; a shared screen opens on the house default (cached under
+    another** (the choice beats the reload restore); with none, on `shelfRead`; **after a
+    swipe in this browser session the shelf wins over the choice, and a new session opens
+    on the choice again** (audit s2748); the late move is not a swipe; each snapshot refreshes the cache
+    and removes it when no pet reports `mine.open_on`; a shared screen opens on the house default (cached under
     `hatch-open-house`), or the shelf; no heart on a shared screen; no toggle for one
     pet.
 
@@ -586,7 +628,11 @@ Pytest unless noted. Names are suggestions; `tests/test_resting.py` and
 29. Shown once after a choice is set with 2+ non-egg pets; not shown on a shared
     screen, with one pet, or after either button; "rest them" flips exactly the others
     that are not eggs and not resting, and touches no `open_on`; "not now" flips nothing.
-30. `rest_offer` is erased by forget and survives a restart.
+30. `rest_offer` is erased by forget (the offer can then return once) and survives a
+    restart (saved at once, §6 correction 5).
+31. "Rest them", wake, "rest them" again inside 12 h: no second refill (§6 correction 4).
+    The offer fires on the off→on edge of scope `me` only: not for `house`, not from the
+    late move (§6 correction 3).
 
 ## 9. Ships, acceptance criteria, device queue
 
@@ -603,8 +649,8 @@ command; a device item is a look, never a gate.
 
 Acceptance:
 
-- With nothing switched, a recorded week matches `origin/main` **except the `resting` and
-  `rest_since` keys** (test 1).
+- With nothing switched, a recorded week matches `origin/main` **except the `resting`,
+  `rest_since` and `last_rest_refill_at` keys** (test 1).
 - Tests 2-19 pass. Switching on in HA, the card or Assist works; switching off leaves no
   debt (tests 5, 12).
 - The card shows "resting ☁" and the idle pose and never the sitter sign (test 19);
@@ -661,7 +707,8 @@ Device queue:
 
 ### R3, The offer (tier 2, small)
 
-Acceptance: tests 29-30; the offer reads as §6; it appears once per person.
+Acceptance: tests 29-31; the offer reads as §6 with its audit corrections (API,
+neutral helper, trigger, cooldown, save); it appears once per person.
 
 Device queue: pick a favourite on a phone with three pets, see the offer, tap "rest
 them": the two others rest and the favourite doesn't; pick another favourite later: no
@@ -694,6 +741,38 @@ Still to read in the build:
   (card-base.js:120-160 not read in full): R2 reads it first.
 - Whether `advance` sets `last_updated` itself (§3.2: no double shift).
 
+## R2 audit (s2748, tier 2): 2 player-impact / 7 nits
+
+Fixed by s2752 on the FM's decisions of 2026-11-02:
+
+- Player-impact 1 (the resting helper lied inside the 12 h window): the helper is now
+  "{name} won't get any hungrier, and doesn't grow up until it's back. Visit any time."
+  (§4.3, §6).
+- Player-impact 2 (a view switch snapped the card back to the favourite): the choice opens
+  the card only when no swipe was written this browser session (§5.3).
+- Nit 1: a future `last_rest_refill_at` is clamped to now when a rest is entered, so it
+  holds the refill for at most 12 h (§3.3).
+- Nit 4: the head dot says which pet the card opens on; the rows' `aria-label` keeps the
+  pet's name characters (§5.3).
+- Nit 7: three new save keys in §7, §8 test 1 and the checklist; the over-long docstring
+  at `coordinator.py` `_birthday_morning` is wrapped. The recorded-run compare of §8 test 1
+  is still not in `tests/test_recorded.py` (see the note there).
+- The report's R3 corrections are folded into §6, tests 29-31 and §9 R3.
+
+**Known remainders, not fixed (out of scope for s2752):**
+
+- Nit 2: a cache hit disables the late correction (`card-build.js` sets `_openedOn`;
+  `card-base.js` `_openOnSync`). If the favourite was changed on another device, this
+  browser opens the old pet once and the next load is right.
+- Nit 3: `admin` is fixed at subscribe time (`__init__.py`, `channel.add`). A demoted admin
+  keeps `mine.house_open_on` and the "shared screens open on" row until the card
+  reconnects. Sets still fail (`is_admin` is checked per call).
+- Nit 5: `hatch-open-<user>` stays in `localStorage` when a browser is later flagged shared.
+  It is never read there.
+- Nit 6: `websocket_forget_me` has no `shared` guard (`__init__.py`), unlike `open_on` and
+  `ask_again`. Older than R2; the card hides the row and the call only touches the
+  caller's own record.
+
 ## Open questions: decided (first mate, 2026-11-02)
 
 The five first-draft questions are decided in §1. The three the review left are decided
@@ -714,11 +793,11 @@ For the reviewer (tier 2: at least one pass before each ship merges). The first 
 
 **Behaviour changes on upgrade**
 - [ ] With no pet resting, no favourite and no house key, a recorded week and a full
-      pytest run are identical to `origin/main` **except the `resting` and `rest_since`
-      keys** on every pet save. Check `_step`, `advance`, `requests`, `can_lay_egg`,
+      pytest run are identical to `origin/main` **except the `resting`, `rest_since` and
+      `last_rest_refill_at` keys** on every pet save. Check `_step`, `advance`, `requests`, `can_lay_egg`,
       `_voice_pet` all keep the default path.
 - [ ] No new person or house key is written until something is chosen. (Pet saves gain
-      the two new keys; that is expected, §7.)
+      the three new keys; that is expected, §7.)
 
 **The freeze**
 - [ ] `_rest_step` really skips every aging path. Grep `age_hours`, `trait_hours`,

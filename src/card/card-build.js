@@ -565,8 +565,9 @@ class HatchPetCardBuild extends HatchPetCardBase {
     if (!this._shelfRestored) { // the pet that was on show before a reload (UX fix 2, F8)
       this._shelfRestored = true;
       this._openFrom = Date.now();
-      // The pet this person opens on (favourite §5.3) beats the shelf: every page load opens there.
-      const open = openOnRead(this._openKey());
+      // The pet this person opens on (favourite §5.3) beats the shelf, unless they swiped in this
+      // browser session (a view switch brings the card back where they were; FM, audit s2748).
+      const open = shelfSwiped(devices) ? null : openOnRead(this._openKey());
       let at = open ? devices.findIndex((d) => d.device === open) : -1;
       this._openedOn = at >= 0;
       if (at < 0) at = devices.findIndex((d) => d.device === shelfRead(devices));
@@ -874,7 +875,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     return held && key in held ? held[key] : this._hass.states[id];
   }
 
-  _go(index) {
+  _go(index, auto = false) { // auto: the opening pet's late move, not the player's swipe
     const n = this._slides.length;
     if (!n) return;
     this._userMoved = true; // a swipe, an arrow or a dot: the opening pet no longer moves the card
@@ -900,7 +901,10 @@ class HatchPetCardBuild extends HatchPetCardBase {
     });
     this._linkEnd(); // a swipe ends the visit at once
     this._index = to;
-    if (this._shelfRestored && this._shelfDevices) shelfWrite(this._shelfDevices, to);
+    if (this._shelfRestored && this._shelfDevices) {
+      shelfWrite(this._shelfDevices, to);
+      if (!auto) shelfMark(this._shelfDevices);
+    }
     this._renderShelf();
   }
 }

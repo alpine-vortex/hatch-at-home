@@ -149,6 +149,20 @@ def test_2_the_refill_comes_at_most_once_in_twelve_hours():
     assert pet.last_rest_refill_at == later
 
 
+def test_2_a_future_stamp_waits_at_most_twelve_hours():
+    """FM, audit s2748 nit 1: a stamp ahead of the clock (a clock set back, a
+    damaged save) is clamped to now, so it can't block the refill for good."""
+    t = at(9)
+    pet = hatched(t, hunger=10.0)
+    pet.last_rest_refill_at = t + 400 * 24 * HOUR
+    model.set_resting(pet, True, t)
+    assert pet.hunger == 10.0 and pet.last_rest_refill_at == t  # paused, and clamped
+    model.set_resting(pet, False, t + HOUR)
+    later = t + R.REST_REFILL_HOURS * HOUR
+    model.set_resting(pet, True, later)
+    assert pet.hunger == R.REST_FLOOR and pet.last_rest_refill_at == later
+
+
 @pytest.mark.parametrize("stamp", ["missing", None, "x"])
 def test_2_an_old_save_loads_and_may_refill(stamp: Any):
     saved = hatched(at(9), hunger=10.0).to_dict()

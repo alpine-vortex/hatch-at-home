@@ -457,7 +457,7 @@ const MOMENT_CLASS = {
 // shows the sitter's sign, and asleep, sick and egg poses win.
 const REST_LABEL = "resting ☁";
 const REST_DAYDREAM_ODDS = 0.25; // a resting pet's hello is "i was just daydreaming" this often
-const REST_HELP = (name) => `${name} stays content with no calls and no hungry tummy, and doesn't grow up until it's back. Visit any time.`;
+const REST_HELP = (name) => `${name} won't get any hungrier, and doesn't grow up until it's back. Visit any time.`;
 function restLabel(flags, { away = false, asleep = false, egg = false } = {}) {
   if (!Array.isArray(flags) || !flags.includes("resting") || away || asleep || egg) return "";
   return flags.includes("sick") || flags.includes("away") ? "" : REST_LABEL;
