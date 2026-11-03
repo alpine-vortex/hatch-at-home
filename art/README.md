@@ -409,3 +409,29 @@ Final art for the visitors-v2 finds (docs/plan-2026-11-01-visitors-v2.md §9): 6
 - Hearth: the button and the cookie are both round; the cookie's edge is lumpy and bitten.
 - Pond: the cattail keeps its loose white fluff specks (the cutter keeps every part in a cell and leaves 1-3 px specks unoutlined); the frogbit's notch closes at 16 cells, so it reads by size and green against the gold koi scale.
 - Night Sky: redrawn once (the paper star now hangs on a thread so its silhouette differs from the gold fallen star; the constellation card's stars made bigger).
+
+## Blanket drape (care D, 2026-11-02)
+
+`ui/drape_{s,m,l}_{1,2,3}.png`: one shared cream blanket that lies over any sleeping pet's lower
+body (care plan, ship D). Three sizes by measured asleep body width, not stage (S up to 160 px
+wide, M 161-210, L 211-252) and three frames each: 1 unfurl (a corner held up, about 55% of the
+final height), 2 settling (a wavy edge, about 85%), 3 draped and tucked (the held state frame, a
+straight hem and one fold). Drawn by Sol (`gpt-6.1-sol`), one strip of three frames per size, one
+call each; `art/drape/source/drape_{s,m,l}.png` are the strips, `art/drape/cut_drape.py` cuts them.
+
+- 256 x 256 transparent PNG, art on the 4 px grid (64 x 64 art pixels), the blanket centred with
+  its bottom edge (the ground line) on y=224, the pets' feet line, so the card needs no `y`
+  unless a species wants it lower. The three frames of a size share the ground line and the
+  left and right edge, so `steps(3)` does not jump. L is 252 px wide, so it sits at x 0-252
+  (a 256 frame cannot centre it on the 4 px grid).
+- Final frames: S 160 x 100 px, M 208 x 112, L 252 x 120. Frame 1 is about 55% of that.
+- Four colours, one shared palette for all nine: outline `#5c3a1e`, fold shade `#d1b078`, cream
+  `#efd9ab`, highlight `#f8ecce`. No pattern, no shadow.
+- The cutter keys the grey out, splits the strip into three frames, resizes each to the art
+  grid (frame 3 to the size's width and height, frames 1 and 2 to the same width and their
+  share of the height), takes the median colour per art pixel and maps to the palette.
+  `art/drape/review_sheet.py` makes the interim review sheet (sizes over matching asleep
+  sprites, day and `brightness(.8)` on the dim room); `art/drape/SHA256SUMS` lists the files.
+- Heights are fixed by size, so a squat pet (many asleep boxes are under 120 px tall) gets more
+  of the blanket than the plan's "lower half to two thirds"; that is what the per-species
+  `drape: {y, w}` data is for.
