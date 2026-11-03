@@ -1,410 +1,598 @@
-# Device Alive: Functional Design and Implementation Plan
-**Date:** 2026-11-03  
-**Status:** Proposed; specification only, no runtime changes  
-**Repository:** alpine-vortex/hatch-at-home  
-**Audience:** Implementing agents, art pipeline, test/QA, reviewer  
-**Priority:** Home Assistant signal physicalization, then input feel and Interaction Director
+# Device Alive: the canonical plan
 
-## 0. Intent, product rules, and existing foundations
+**Date:** 2026-11-03 (rewritten the same day, slice 0)
+**Status:** Canonical. Slice 0 of 7; no runtime change in this document.
+**Replaces:** `docs/plan-2026-11-03-living-device-interactions.md` (marked superseded; its
+§5 tracks, §7 press profiles and §12 authoring model are folded in below).
+**Basis:** `origin/main` `5fc36152` (card code unchanged since `ca19f71f`). Every
+"built" claim carries a file and line; recheck when a slice starts.
+**Review it answers:** the s2803 scout review, findings F1-F19 (cited as F#).
 
-Make the Hatch device appear to be a living physical object, not merely a screen displaying a pet. Ordinary actions receive immediate, tactile, coordinated feedback; real-world Home Assistant changes express themselves through the screen, casing and imagined electronics; world-exclusive morphs make each device distinctive. **Nothing delays care, navigation, dialogue, questions or minigames.** All additions are cosmetic: no new stats, consumables, challenges, currencies, failure states, punishment for absence or chores.
+The goal: the device reads as a small physical object that notices the house. The order
+of value is (1) real Home Assistant changes show on the shell and glass, (2) the
+buttons feel like buttons, (3) the pet has a little more to do between care. Nothing
+delays care, navigation, dialogue, questions or games.
 
-Required invariants:
-- **Action is authoritative, visuals are disposable.** Input dispatch, service calls, server state and existing care results proceed independently of presentation. Provisional anticipation retracts gracefully on a refusal/failure.
-- **Protect interaction.** No new effect overlays an accessible control, text input, modal, question, status view, game, focus indicator, or player response.
-- **Quiet by default.** No automatic audio; existing opt-in sound, quiet hours, sleep and lights-off constraints remain. Haptic vibration only from explicit user gestures; never from background HA events.
-- **Privacy and restraint.** Do not expose entity IDs, camera images, media titles, precise presence or names on shared screens. No unbounded subscription to HA state_changed. Respect disabled/unconfigured sources.
-- **Performance first.** No per-frame DOM rebuild, all effects cancel on hidden/offscreen state, no constant GPU-intensive shaders, no permanent fast blinking. All essential affordances remain visible with reduced motion and high contrast.
-- **Personality without disruption.** Idle beats are rare, context-aware and preemptible. No additional speech required, no re-enactment of missed gameplay events.
-- **Existing visuals win.** Avoid duplicating already-built LCD grid/ghosting/backlight/IR, existing care scene timeline, or existing idle and flair animations.
+## 1. Decided (owner, 2026-11-03)
 
-### Baseline verified from current main on 2026-11-03
+| Q | Decision |
+|---|---|
+| Q1 | **Device-alive is canonical.** Living-device is superseded; it stays in git as the source of the folded sections. |
+| Q2 | **The internals / "world inside the device" slice is dropped for now.** It is deferred, not cancelled: see section 11 (Parked). It is not a slice. |
+| Q3 | **Reuse the "screen effects here" switch** (`card-status.js:311`, the `lcdfx` button). No new label, no second row. Ambience and echo follow it. |
+| Q4 | **The server `device_fx` slice comes before any art.** |
+| Q5 | **Screen morphs come last, optional, CSS only.** |
+| FM1 | Generic rim/glass treatments are fine in every world for slices 3-4; world flavour can come later (first mate, 2026-11-03, reversible). |
+| FM2 | Rare glass (slice 6) comes before morphs and depends on slice 3's glass layer. |
+| FM3 | No labels: matrix rows stay letterless glyphs; any wording goes to the first mate as a DRAFT question. |
+| FM4 | `_houseFx`/`_robotFx` stay as they are through slice 3. The director leases only the new glass/rim classes (named `dir-*`, never `fx-*`) so it cannot clear a `fx-*` class. Whether `_houseFx` moves under a lease is a slice-4 decision; decide it there with the matrix rows (heat/cool/chime overlap rows). (First mate, 2026-11-03, from the slice-1 review F4; reversible.) |
 
-- `AGENTS.md` says **edit `src/card/*.js`**, not generated `custom_components/virtual_pet/frontend/hatch-pet-card.js`; add any new parts to `src/card/manifest.txt` in inheritance/load order. The card is an inheritance chain of `card-*` parts. `scripts/build-card.js` generates the distributable.
-- `src/card/card-build.js`: `_buildSlide` creates `.device`, `.body`, `.bezel`, `.hw.guts`, `.hw.light`, `.screen`, `.buttons`, backlight, pet/prop/game/status and LCD layers. `IntersectionObserver` and visibility handling already exist.
-- `src/card/card-layout.js`: `_mould`, `_dress`, `_renderSlide` own physical shell finishes and six shapes; the active slide and its neighbors may be present.
-- `src/card/card-actions.js`: `_tapped` already applies a pressed/tapped class, burst ring, ~12 ms gesture haptic and pet perk; `_press` starts care before a service call; `_sceneStart/_sceneRender/_sceneEnd` own care sequences. **Extend these, don't create a second care engine.**
-- `src/card/card-tick.js`: `_tick`, `_idle`, `_free`, `_freeBody`, `_firstMove`, `_ghostFrame`, `_backlight` own existing ambient behavior. Do not add uncoordinated timers.
-- `src/card/card-moment.js`: `_moment` already reacts to house changes, temperature/heating/cooling, media, doorbell, appliances and other semantic moments; `_houseFx` exists.
-- `src/card/card-base.js`: `_channel` distinguishes live `msg.moment` from the snapshot `msg.moments`. Historical snapshot moments are intentionally not re-spoken; live moments have a roughly 15-second freshness gate. `serverNow()` and `_watchServerClock()` exist. Any new first-view visual echo must use a **separate contract**, not replay old conversational moments.
-- `custom_components/virtual_pet/watcher.py`: mapped inputs plus explicitly authorized auto-detected ones, normalized readings and held unavailable values. `home.py` produces environmental flags and moments. Use semantic transitions, not raw HA writes.
-- Relevant existing design: `docs/plan-2026-10-29-device-charm.md` (LCD/ghost/backlight/link/shell picker are built); `docs/plan-2026-11-02-care-reactions.md` (care scenes, anticipated and ongoing work; reconcile before changing scenes); `docs/plan-2026-10-27-real-time-connections.md` (weather commentary already built); `docs/design-worlds.md` and `docs/HANDOFF.md`.
-- Existing animation rule from `AGENTS.md`: persistent pet position uses `translate`, orientation `rotate`, size `scale`; **only one one-shot body `transform` animation** may own the pet at a time. Tests enforce motion rules. Do not violate them with the director.
+Consequences: the first four slices need no art. The plan has no new player copy; any
+wording a slice finds it needs goes to the first mate as a DRAFT question, not into the
+code (section 12).
 
-Before implementation, confirm the latest main/working branch version of all anchors and actual emitted event categories. This is a design verified against architecture and selected modules, not a line-by-line audit of every renderer or backend publication path.
+## 2. What main already has (dropped from this plan)
 
-## 1. The common visual layering system
+These were in one or both older plans as work to do. They are built; the plan builds on
+them and does not redo them.
 
-Introduce four conceptual planes:
-1. **Shell body:** existing molded case, finish, bezel, screws, trim and button caps; no ordinary transform of the entire shell.
-2. **Under-plastic internals:** noninteractive clipped PCB/circuit traces, a small central core, one decorative world mechanism. Visible primarily in transparent finishes. Draw **behind shell highlights and outside screen cutout**.
-3. **Display world:** existing background, pet, effects, care scenes, speech, game and status. Add `.morph-fx` in a deliberately constrained visual slot, never over controls or legible text.
-4. **Inner glass:** tiny edge shadows, water beads, refractions, paw marks and very rare bounded cross-bezel illusions. `pointer-events:none; aria-hidden=true`.
-
-Add only a few elements in `_buildSlide` (example: `.internals .core/.trace/.mechanism`, `.glass-fx`, `.morph-fx`) with slide refs. Establish local stacking contexts rather than global increasing z-index numbers. Ensure `.status`, `.game`, `.bubble`, `.pat`, `.basket`, `.boot`, focus and controls keep priority. Never alter hit target geometry when animating.
-
-Design `shellInternalsOpacity(finish)` or equivalent in `shell-data.js`: opaque finishes hide or drastically attenuate internals; transparent ones use a mask for the physical shell (exclude display/bezel/labels). World changes and shell-picker previews swap internals and masks atomically. Keep pixel edges aligned with `_mould` and use crisp nearest-neighbor art, CSS stepped animations or a small atlas rather than blurred subpixel effects. CSS custom properties control material, emission, color and finish.
-
-### Internal components: visual grammar and asset brief
-
-Every device has a **core** (life indication), a **path** (input or environmental signal travels through the case) and a **world mechanism** (one recognizably different physical motion). No permanent moving particle soup. Idle core should be quiet, perhaps one weak pulse every 30–90 s while active.
-
-| World | Functional-looking internals | Idle and user reaction | HA-initiated look |
-|---|---|---|---|
-| Woodland (egg) | Amber seed capsule, branch-like conducting traces | Tiny core throb; branching pulse to active cap | Leaf shadow/rain bead; warm sunlit outline |
-| Terrarium (tank) | Tiny thermometric dial, geared sand regulator | Dial nudges; single cog shift on action | Corner condensation; dial moves toward warmer/cooler |
-| Hearth (house) | Copper filament, little bellows/chimney circuit | Ember glows; bellows sighs softly | Fireplace/on lights warms filament; chimney wisp |
-| Tidepool (porthole) | Pressure impeller, translucent channels | Bubbles in channel; short liquid transfer | Droplet travels across porthole glass; wave shimmer |
-| Pond (pad) | Lily rotor, concentric water-trace rings | Rotor shifts intermittently; ripple to cap | Ripples spread under glass; dew glints |
-| Night Sky (moon) | Orbital ring and constellation trace | A rare star aligns; one photon travels a path | Moon dial aligns and a faint celestial halo appears |
-
-Asset batches: (A) CSS-only technical pilot one shell; (B) six approved static mask/PCB/core designs; (C) one short mechanism animation and one input pulse per world; (D) optional one specialty HA effect and one exclusive morph per world. Each needs default and reduced-motion static treatment, compact and normal screenshots, transparent and opaque finish samples. Do not ship placeholder art without review.
-
-### Device state
-- `ambient`: static shell lighting/tint, low-frequency core.
-- `pressed`: cap depresses; signal path lights immediately. Does not represent server confirmation.
-- `provisional-care`: tiny machinery begins in tandem with existing scene; success completes, refusal/failure retracts.
-- `sleep`: internals dim gently, no forced waking; user backlight remains its own control.
-- `link`: circuit pulse travels to existing IR port and beam; do not replace actual link behavior.
-- `offscreen`: freeze expensive decorative animation and restore a coherent current static snapshot on return, not accrued frames.
-
-## 2. Make button presses physical
-
-Preserve existing `_tapped` behavior but move the **mechanical down state** earlier than click. Add delegated pointer and keyboard handlers that only style; the existing click / service path performs the action. Must support `pointerdown/up/cancel`, `lostpointercapture`, pointer leaving target, `blur`, keyboard Space/Enter, disabled/loading state and touchscreen scrolling. Do not cause duplicate activation or capture events that break navigation swipes. Avoid shifting actual button bounds.
-
-| Stage | Treatment | Target |
+| Dropped | Where it is | Was |
 |---|---|---|
-| Hover (fine pointer) | light rim and rare eligible pet glance | no audio/haptic |
-| Down | 1–2 px cap depression, lower highlight, deeper shadow, trace ignition | first rendered frame |
-| Hold | stays depressed; no periodic pulses | until up/cancel |
-| Release | 90–140 ms springy rebound | no activation delay |
-| Pending | quiet, restrained indicator | until service settles |
-| Succeeded | cap returns, scene carries reaction | immediate and consistent |
-| Refused / failed | machinery withdraws, brief low-energy stop | never suggests success |
-| Disabled | no false physical indication | accessibility intact |
+| Care reactions: anticipation at the tap, the commit gate, the push-away on refusal, the scene frame | `SCENES` in `card-care.js:24`; the shared frame in `card-actions.js` (`_sceneStart/_sceneRender/_sceneEnd`); `_press` passes `perk:false` into `_tapped` when a scene owns the body (`card-actions.js:83`). Notes in care-reactions §19-22. | F1: "provisional-care", "retract on refusal" |
+| Cap depress on press and hold, with the darker bevel and tones | `.toy:active .cap, .toy.pressed .cap` and the `-dn` clip and tones (`style.js:1288-1291`). `:active` fires on pointerdown and on held Space/Enter. `_tapped` adds the ring, the 12 ms haptic and the perk on click. | F2: new pointer/keyboard handlers for the down state |
+| Idle manner N1 (habit-weighted idle moves, `_idleMoves` `card-tick.js:294`) and the once-a-day sky glance `_skyReact` (`card-moment.js:488`, called at `card-tick.js:465`) | species-nature N1 | F8: "notice ambient weather" |
+| Species action-line layer N2 (`card-tick.js:240-270`); "paw/fin inspection" is the `groomer` habit | species-nature N2 | F8: "paw/fin inspection" |
+| Hardware layers `.hw.guts`, `.stripes`, `.light` (`card-build.js:127`; `style.js:825-845`). `.hw.guts` is already the board behind the screen for the clear finish. | device-charm | F3: a new under-plastic internals plane |
+| In-screen rain, storm, wind: `.screen.raining/.stormy/.windy` from the `flags` attribute (`card-layout.js:620-628`), layers at `style.js:717-719, 950-1002` | real-time connections | F14: ambient weather on the display |
+| `_houseFx` and its six screen classes (`fx-heat/cool/suds/tumble/chime/robot`, 2.5 s timer) | `card-visit.js:610`, called from `card-moment.js:191,210,220,236` | F13 |
+| `serverNow()` (`shell-data.js:293`), `_watchServerClock` (`card-base.js:88`), `_flairTick` (`card-flair.js:4`) | | F15, F16 |
 
-Functional character: food = chute trace; play = little spring; clean = dual short gear ticks; medicine = deliberate quiet slide; sleep = damped/lamp settling; navigation/status = universal crisp cap; backlight = glow without waking. Limit novel pet anticipation to `_freeBody` and never over ongoing care scene, question, game or sleeping state. If `_sceneStart` claims pet motion, do not call `_perk` concurrently. Keep current haptic limited to the actual user gesture; optional setting in future only.
+Still true and still relevant: the **bespoke tuck art set is in progress** (the older
+review called it shipped; it is not). Nothing here touches the tuck, wake or drape beats.
+The motion for them is care-reactions §22; the art is its own ship.
 
-**Tests:** pointer cancel, swipe from cap, fast double tap, keyboard accessibility, HA failure/refusal, repeated status navigation, reduced motion, screen reader and low-power hardware. Benchmark time from pointerdown to first painted visual change at 60 Hz. No timer leak when slide removed.
+## 3. Rules every slice keeps
 
-## 3. Idle micro-behaviors: identify gaps rather than duplicating idle
+- **Action is authoritative, the visual is disposable.** Input dispatch, service calls,
+  server state and care results never wait for presentation.
+- **Protect interaction.** No new effect covers a control, text input, modal, question,
+  the status view, a game or a focus ring.
+- **Quiet by default.** No automatic audio. Haptic only from the user's own gesture
+  (`_tapped` already vibrates on every click, `card-actions.js:20`); never from the house.
+- **Privacy.** A whitelisted enum payload; no entity id, media title, name, camera or
+  precise presence; shared screens get nothing a personal one would add. No unbounded HA
+  subscription.
+- **No new stats, currency, reward, failure state or save field.** `PetState` is
+  untouched; the ring is in memory. A recorded week must equal main (as in
+  favourite-resting §9).
+- **Motion rule (AGENTS.md).** Persistent state uses `translate`, `rotate`, `scale`; one
+  one-shot `.pet.<cls>` animation at a time; a new flip is a `@keyframes`; reduced
+  motion honoured in CSS and `calm()` (`prefs.js:188`). Each new `.pet.<cls>` rule with
+  an `animation` needs its line on `ALLOWED` in `tests/js/motion_rule.test.js`, checked
+  to never run with another one, with a comment next to the rule (F11). Prefer `.screen`
+  and `.hw` layers over the pet body.
+- **Ambient never overrides `.lit`.** The player's own backlight stays its own control;
+  an ambient tint is added to it, never in place of it.
+- **Offscreen and hidden stop.** No new `setInterval`; one `_tick`; freeze on
+  `document.hidden`; on return paint the current state, not accrued frames. No `filter` or
+  `blur` on the live subtree.
+- **Performance numbers are review items, not gates.** The bench renders states, not
+  frame timing. The checkable ones are structural (the two above).
 
-Use existing `_idle`, `_flairTick`, `_firstMove`, `_freeBody` and species/trait signatures as the eligibility owner. The new director may choose a visual beat **only if existing movement, scene, visitor, game, dialogue or status doesn't already claim it**. One pet body motion at a time, no ambient backlog.
+## 4. Vocabulary: state, edge, echo
 
-| Opportunity | Eligibility and visual response | Why worthwhile |
+- **Ambience (state):** what the house is now, drawn quietly. Always correct even if no
+  onset was seen.
+- **Onset (edge):** a live change while the slide is on show. A short shell/glass pulse,
+  and a pet look only if the body is free.
+- **Echo:** a first view within the window after a meaningful change plays one shortened
+  onset, only if the state still matches. It is not a speech replay and not a claim that
+  the event just happened.
+- **Catch-up** text (the existing `msg.moments`) is never re-spoken and never drives a
+  pulse (`card-base.js:303`; the live gate is 15 s, `card-base.js:333`).
+
+## 5. Tracks and the director
+
+### 5.1 Tracks (from living-device §4-5, DA §6.2)
+
+| Track | Examples | Rule |
 |---|---|---|
-| Look toward player's hovered menu | awake, available, coarse-pointer fallback after down | Device seems aware of input |
-| Paw/fin inspection | compatible species silhouette; subtle look/tilt | Tiny self-directed action |
-| Practice a known trick | trick already learned, optional partial gesture | Connects current behavior to memory |
-| Follow a leaf/bubble/star | world & scene context; no words | Creates layered attention |
-| Drowsy catch | sleepy but awake, no sleep transition | Personality without new status |
-| Glass curiosity | sprite alignment allows brief face/paw touch | Makes screen material tangible |
-| Notice ambient weather | eligible rain/snow/wind; glances toward glass | Connects HA event without a speech bubble |
-| Post-play settling | successful finished game with free body | A satisfying response rather than abrupt idle |
-| Shadow inspection | rare eligible posture, 1–2 s | Crosses screen/physical bezel illusion |
-| Link port curiosity | after a real link when body becomes free | Links existing device physics |
+| `control` | cap feedback | Never blocks activation; may coexist with a shell pulse. |
+| `shellAmbient` | static glass and rim tint from current state | Long-lived; never leased out. |
+| `shellImpulse` | one short pulse on the shell or glass | One per slide; the latest compatible event may replace. |
+| `screenFx` | a morph (slice 7 only) | Exclusive; never over status, a game or a question. |
+| `petBody` | perk, glance, idle chain, care response | Exclusive; goes through `_animate`, `_sceneStart/_End`, `_idle`, `_flair`, visitor/link. No competing CSS animation. |
+| `text`, `modal` | bubbles, questions, game prompts | The card owns them. The director reads them as busy and never cancels them. |
 
-Initial ship: 6–8 cross-world micro-behaviors (use existing frames where possible), plus one exclusive per world after art review. Suggested tune: common nonverbal chance evaluated at normal idle opportunities, 45–120 s global cooldown while viewed; glass/rare moments several minutes, not guaranteed. No new periodic wake timers; no extra server fields or persistence. Never play the same behavior back-to-back; no daily counts or rewards. Respect stage/sprite compatibility and reduced-motion fallback. A pet's glance must not be mistaken for a successful care response.
+Priority, highest first: input and open modal/question/game; care scenes and their
+result; significant pet moments (hatch, wake, visit, link); live house onset (shell only
+unless the body is free); echo and optional morph; flair and idle; ambience. Tracks are
+not one mutex: a busy pet body can sit beside a shell pulse. A modal blocks `screenFx`
+but not `shellAmbient`. On conflict the decorative request is dropped or replaces a lower
+one on its own track. **Nothing queues. A missed cue is never owed.**
 
-A beat is a tiny optional mini-sequence (notice -> approach -> react -> settle), with absolute maximum duration and cancellation at any state change. Avoid overriding pet transform on step two if `_sceneStart` has begun. For partial tricks, never grant trick progress or misleading positive feedback.
+### 5.2 Placement (F9): a pure part, like `hop-engine.js`
 
-## 4. Home Assistant signals physically present: the primary initiative
+- New `src/card/interaction-director.js`: one frozen namespace (`HATCH_DIRECTOR`), no
+  `this`, no DOM, no HA. An injected clock and `canRender`. It sits in `manifest.txt`
+  beside `hop-engine.js`, before the class chain; it is not a link in the chain.
+- Adapters live in the parts that already own the thing they touch: `card-build.js`
+  (layers, lifecycle), `card-layout.js` (`_renderSlide` applies ambient state and must
+  not restart a pulse on every redraw), `card-actions.js` (cap), `card-tick.js` (idle
+  offers), `card-moment.js` and `card-visit.js` (house cues), `card-base.js` (channel).
+  A method stays in one part. There is no `card-interaction.js` chain link.
+- A reorder of the manifest can hit a TDZ that only card-check shows. Slice 1 adds no
+  card-check case and no `scripts/pick-sections` entry: nothing uses `HATCH_DIRECTOR`
+  yet, so neither could fail, and `gate --auto` picks no section for a new part, a
+  manifest line, `tests/js` and docs (`scripts/pick-sections:96,138-141`). Slice 1's guard
+  is `tests/js/interaction_director.test.js`, copying `hop_engine.test.js:19-31`: in the
+  built card, before `class HatchPetCardBase`; one frozen namespace; the part's only
+  top-level declaration is `const HATCH_DIRECTOR`. The TDZ card-check case and any
+  pick-sections change move to the first slice with an adapter (slice 3).
+- **`_houseFx` / `_robotFx` are not adopted (FM4).** `_houseFx` (`card-visit.js:610-616`)
+  already does the `shellImpulse` job for the `fx-*` screen classes (one class, one
+  2.5 s timer, no busy test); `_robotFx` keeps a second timer (6 s). They stay as they
+  are through slice 3. The director leases only the classes it adds, named `dir-*`, never
+  `fx-*`, so it cannot clear one. The slice-3 rain pulse lands on `.hw`, not on the
+  `.screen` classes `_houseFx` toggles. Whether `_houseFx` moves under a lease is slice
+  4's call, with the heat/cool/chime overlap rows of the matrix.
+- Data stays declarative (section 5.4), with generic fallbacks so a new species, an
+  unknown kind or a future shell still works.
 
-### 4.1 Product definition
+### 5.3 API (illustrative, pure, tested with `node --test`)
 
-**Every supported and authorized meaningful HA transition gets a defined short device response, plus a coherent ongoing atmospheric state if appropriate.** Not every raw sensor update: HA can publish minute-by-minute lux/power changes, unavailable/unknown chatter and repeated values. Normalize first, apply threshold/debounce/hysteresis, then interpret. Users opening the dashboard *shortly after* the change should see one relevant abbreviated visual echo.
+```js
+HATCH_DIRECTOR.create({ now, trusted, canRender, schedule, recipes })
+  .setAmbient(slide, state)          // current normalized state; stored even when canRender is false
+  .offer(slide, cue)                 // -> { accepted, reason, effectId }
+  .enterView(slide, recent, trusted) // at most one echo
+  .cancel(slide, reason, tracks)
+  .release(slide, effectId)          // ends one effect by its token (animationend); false if stale
+  .tick(now)                         // expires TTLs; called from the card's existing _tick
+  .detach(slide)                     // timers, animations, observers
+  .reset()                           // disconnect
+HATCH_DIRECTOR.BUSY_OWNERS           // the one busy list (below); no setBusy
+```
 
-Three separate effects:
-- **Live onset:** while active card is visible, immediate 0.4–1.2 s shell/display response, plus optional pet look **only if body free**. No required text.
-- **Current ambience:** ongoing quiet shell lighting/material state derived from latest normalized HA snapshot. Always correct even if no onset was observed.
-- **First-view echo:** when a hidden tab/card/slide becomes actively viewed within **90 s** of a meaningful transition observed on server, play **one** shortened nonverbal onset (if still consistent with current state). After 90 s, ambience only. Echo is not a speech replay or a literal claim that event just occurred.
+Built in slice 1 (`src/card/interaction-director.js`), beyond the sketch: `create` also takes
+`deviceNow`; `ambient(slide)`, `isBusy(slide)`, `busyOwners(slide)` and `inspect(slide)` read
+state; `setAmbient` returns `{changed, render}` (the director paints nothing, the adapter does,
+from `ambient(slide)`); `HATCH_DIRECTOR.PRIORITY` names section 5.1's ladder for recipe authors.
 
-Settings: global `deviceMotion` following OS reduced-motion by default; `environmentEffects` default on if low-cost; optional `firstViewEcho` default on. Exact settings location must follow current settings gear conventions. No additional entity mapping for the basic feature. All existing supported sensors automatically get a visual recipe.
+Inputs are injected, so the part stays pure:
 
-### 4.2 Complete initial semantic coverage matrix
+- `now()` is the server clock the card passes in (`serverNow`, `shell-data.js:293`).
+  `trusted` (a boolean or a function) says whether that clock is trusted (see section 6.7);
+  `enterView` takes it too, and anything but `true` (including unset) is untrusted.
+- `deviceNow()` is the device clock (`Date.now`), for the busy read only. The slide's own
+  timers (`poseUntil`, `card-build.js:409`) are set from the device clock, `now()` is
+  offset from it by up to a day, so comparing them would be wrong. It defaults to `now`.
+- `schedule(ms, fn) -> cancel` is the only timer. The director never calls `setTimeout`
+  itself; tests drive it with a fake. There is no new `setInterval` (section 3): `tick(now)`
+  rides the card's existing `_tick`.
+- `canRender(slide)` is `lcdOn() && !calm()` (`prefs.js:251,188`; the Q3 switch) plus
+  on-show and visible. When it is false there is no onset, no echo and no pulse, but
+  `setAmbient` still stores the state so a later switch-on paints it.
+- `slide` is the slide object `s` itself, not a string key. Per-slide state sits in a
+  `WeakMap`, so `_forget` (`card-build.js`) is `detach` and a dropped slide is freed.
 
-| Source / semantic transition | Live shell/screen pulse | Ongoing state | Echo? |
-|---|---|---|---|
-| Rain starts / ends | drop strikes inner glass / last bead clears | glass wet sheen | Yes |
-| Snow starts / ends | little crystalline frost / thaw | faint corner frosting | Yes |
-| Rain -> sun / sunny appears | warm path fills case | brighter rim | Yes |
-| Wind rises meaningfully / stops | flecks lean across a trace | slight static directional accent | Yes |
-| Storm arrives / ends | **nonflashing** short dim shiver / release | cooler background tint | Yes, subtle |
-| Fog begins / clears | translucent rim fog and clearing | soft glass diffusion | Yes |
-| Dawn / dusk | core palette settles from cool to warm or reverse | day/night shell theme | Yes |
-| Lights on/off/dim | shell circuit brightens/dims | dimmed core, independent of manual backlight | Yes |
-| Heating / cooling engages | warm/cool filament passes through internals | miniature temperature sign | Yes |
-| Fireplace on/off | ember ignition/sunset | warm filament | Yes |
-| Media/music begins/ends | a few bars rise/fall | optional quiet media glyph | Yes |
-| TV starts/ends | brief reflected rectangle near screen edge | faint TV color reflection | Yes |
-| Arrival/occupancy change | single welcoming core pulse | none | Arrival only by default |
-| Vacuum starts/ends | tiny rotor spins once/slows | static rotor state | Yes |
-| Doorbell ring | bezel chime indicator rings visually | none | Yes (short TTL) |
-| Appliance cycle completes | miniature dial passes check mark | none | Yes |
-| Full/new moon | orbital mechanism aligns | static moon dial | Yes |
-| Season / first snow / first frost | thematic short celebration | seasonal shell palette | Yes |
-| Bad air / outdoor hot/cold (when already supported) | quiet air-filter/thermal indicator | safe static atmosphere | If meaningful transition exists |
-| Unknown/unavailable or HA reconnect | **no invented onset** | use last accepted safe state, then current | No |
+A cue carries an id, kind, origin (`user|house|pet|idle`), the server `occurredAt` (ms on
+`now()`'s clock; the adapter turns the wire's `occurred_at` ISO string into it, and
+`expires_at` into `ttlMs`), a presentation (`onset|echo|ambient|interaction`), a TTL, a
+`direction` (`start|end`, only for a transition that has an opposite) and a whitelisted
+`data`. A recipe names the `collapseKey` it shares with its opposite: an end that meets its
+own still-running start (or the reverse) ends both and plays neither, and in an `enterView`
+ring a start then an end cancel each other. A recipe may also give `echoRank` (lower plays
+first, section 6.7's order), `echoMs` (the shortened length; half of `durationMs` if unset)
+and `stillTrue(ambient, cue)` (else `data.key`/`data.value` against the ambient state).
+The wire `kind` (`rain_started`) is the adapter's to map to a recipe kind and a direction. The
+server never sends CSS, JS, HTML, selectors or asset paths; the client picks from recipes
+it declares.
 
-Inspect current `home.py`, `watcher.py`, `coordinator.py`, `card-moment.js`, `react.py` for all actual current emitted kinds. The matrix is a **coverage target, not a claim every row already has a backend event**. Build a machine-checkable `DEVICE_SIGNAL_MAP` of each supported semantic kind; support future kinds through an explicitly approved fallback only, not a generic noisy flash. Avoid media titles, image thumbnails, named occupants and raw HA entity IDs in payloads.
+Per slide, bounded in memory: active tracks, ambient state, `seenFxIds` (about 128), one
+`pendingEcho` (a house onset offered while nothing may render, kept if it is the best, for
+`enterView` to use; it is never played late by itself), `lastMicroBeat`, cooldowns. The
+generation is one counter for the director, so no two effects share a token. A cue is
+marked seen once it is decided (played, dropped or collapsed), not when nothing may
+render or the clock is untrusted: those stay eligible for an echo inside their window. **Every effect has a generation token**; a
+timer or animation callback checks it before it clears a class, so an old timeout cannot
+clear a newer press. Never rely only on `animationend` (a hidden tab may drop it): each
+effect also gets a bounded watchdog, a `schedule` call the director cancels with the
+effect.
 
-**World-specific mapping examples:** rain = Woodland leaf/bead, Terrarium condensation, Hearth roof drip, Tidepool porthole streak, Pond concentric ring, Night Sky droplet crossing a star-shaped reflection. A sunset is a warm seed in Woodland, a dial temperature shift in Terrarium, filament settle in Hearth, coral-colored light in Tidepool, circular rim warmth in Pond and orbit alignment in Night Sky. Reuse shared semantics but choose recipes by world ID, making a coherent family rather than six unrelated engines.
+**Busy owners (F12): pulled from one named list, not pushed from ~62 call sites.**
+`s.scene` is touched 46 times, `s.power` 14, `s.visitor` 9, across `card-build.js`,
+`card-visitors.js` and `card-actions.js`. A `setBusy` push API would need a hook at every
+set and clear, and one missed path leaves a stale "busy" or a stomp. So there is none.
+The director reads `HATCH_DIRECTOR.BUSY_OWNERS`, a frozen table inside the part, and asks
+`isBusy(slide)` at the moment it offers or paints. The card's adapters set nothing.
 
-### 4.3 Event delivery and replay contract
+Each entry is `{ name, busy(s) }` over plain slide fields, and `busy` is a pure read:
 
-Do **not** reinterpret historical `msg.moments` as live events; that would replay speech and privacy-sensitive events. Introduce additive **`device_fx`**, a sanitized semantic presentation snapshot independent of `mine` and conversational history:
+| Owner | Read |
+|---|---|
+| `game` | `s.game` (the Hop board's keys live in the `gameBox` overlay) |
+| `scene` | `s.scene` |
+| `power`, `powerPending` | `s.power`, `s.powerPending` |
+| `visitor` | `s.visitor` |
+| `asking` | `s.asking` (a boolean; `s.ask` is the question itself) |
+| `laySheet`, `picker` | `s.laySheet`, `s.picker` |
+| `linking`, `calling` | `s.linking`, `s.calling` |
+| `asleep` | `s.asleep` |
+| `pose` | `s.poseUntil > now` (`card-layout.js:598`) |
+| `status` | `show-status` is a class, not a field (`style.js:674` already hides `.rain`, `.breeze`, `.flash` under it); the adapter passes it in as `s.statusOpen`, set in `_toggleStatus` only (`card-layout.js:781-786`) |
+
+(The `status` row is the one owner with no field today. Slice 1 only reads
+`s.statusOpen`; the one line in `_toggleStatus` that sets it is an adapter, so it lands
+with the first slice that has adapters (slice 3). Until then the table test sets it by
+hand. No other owner needs one.)
+
+**How slice 1 checks the list is complete** (a source test, no device). The card already
+has two "can the body act" gates, `_freeBody` (`card-tick.js:122`) and `_ghosting`
+(`card-tick.js:70`). The test in `tests/js/interaction_director.test.js`:
+
+1. reads the built card text, takes the `s.<field>` names those two methods test, and
+   fails on any name that is in neither `BUSY_OWNERS` nor the test's short `NOT_BUSY` list
+   with a one-line reason each (`species`, `moodState`, `propUntil`, `flairUntil`,
+   `movingUntil`, `pet`, `screen`: traits, timers or elements, not owners);
+2. fails if a `BUSY_OWNERS` field is never assigned anywhere in `src/card/*.js` (a
+   rename leaves a dead read);
+3. runs `isBusy` over a table: each owner alone makes the slide busy, none makes it free.
+
+A new owner that appears in `_freeBody` or `_ghosting` therefore fails the test until it
+is classed. A field gated elsewhere is not caught by this; that is the stated limit, and
+a later slice that adds a gate adds its field to the table in the same PR. A bench shot
+per owner comes with the adapters (Hop board open; status sheet open), not slice 1.
+
+### 5.4 Authoring model (from living-device §12)
+
+Keep content declarative so a designer adds an effect without touching arbitration:
+
+```js
+// A sketch. Names follow shell-data.js (world keys) and the signal map (section 6.2).
+const SHELL_EFFECTS = {
+  woodland: {
+    events: { rain_started: { shell: "bead", pet: "glance" } },
+    ambience: { rain: "wet-rim", night: "amber-low" },
+  },
+};
+```
+
+Five descriptors, kept apart: **ambience** (current state to CSS classes and custom
+properties), **event** (a fresh cue to eligible track effects), **idle** (eligibility to
+a short cancellable chain), **transition** (purpose and world to a short screen effect;
+slice 7), and the **reduced-motion fallback** (the same cue as a static tint, one opacity
+change or nothing). Every recipe declares: track, priority, `durationMs`, `cooldownKey`,
+preconditions, reduced-motion fallback, cancel behaviour (`finish|fade|reset`), the
+classes and custom properties it touches, and a disposer. World data for shells lives in
+`shell-data.js`, not `world.js` (F18).
+
+## 6. The Home Assistant signal bridge (the first priority)
+
+### 6.1 Why a server module (F6)
+
+`HouseMoments._weather` emits only `rain_started`, `rain_stopped`, `rainbow`,
+`snow_started`, `sun_out`, `hot`, `cold` (`home.py:545-600`), only while the pet is
+awake, with a 20 min gap and a 90 min per-change cooldown (`rates.py:322-323`). There is
+no snow-end, storm, fog or wind moment, and lights, fireplace, TV, heating and cooling
+have no edge event. A client-only version cannot work for a sleeping pet or a throttled
+weather change. So the detector is a new `custom_components/virtual_pet/device_fx.py`
+that reads **`Readings` directly** (`home.py:49-86`: fireplace, music, tv, heating_on,
+cooling_on, room_light_level, condition and wind; the `SNOWY/FOGGY/STORMY/WINDY` sets at
+`home.py:105-113`), not the speech-gated moments. Doorbell, robot and appliance edges
+already exist (`doorbell_live`, `robot_*`, `appliance_done`, `house_*`); `device_fx`
+takes those as they are.
+
+### 6.2 Schema and the signal map
 
 ```json
 {
   "device_fx": {
     "version": 1,
-    "current": {
-      "rain": true,
-      "snow": false,
-      "night": true,
-      "room_light": "dim",
-      "fireplace": true
-    },
-    "recent": [{
-      "id": "generation-sequence-218",
-      "kind": "rain_started",
-      "occurred_at": "2026-11-03T19:30:00-08:00",
-      "expires_at": "2026-11-03T19:31:30-08:00",
-      "scope": "house"
-    }]
+    "current": { "rain": true, "snow": false, "night": true, "room_light": "dim", "fireplace": true },
+    "recent": [{ "id": "generation-sequence-218", "kind": "rain_started",
+                 "occurred_at": "2026-11-03T19:30:00-08:00",
+                 "expires_at": "2026-11-03T19:31:30-08:00", "scope": "house" }]
   }
 }
 ```
 
-This is a **proposed schema**. `current` uses normalized whitelisted booleans/enums, not arbitrary strings from HA. Never transmit dynamic CSS, arbitrary asset path or private entity information. Proposed server component `custom_components/virtual_pet/device_fx.py` owns normalization, transition detection, per-category hysteresis, time-to-live, in-process bounded recent ring (e.g. 16 total/90 s max), monotonic sequence plus generation nonce, and serialized snapshot. Coordinator/watch listeners supply normalized observations; the channel transmits snapshot and live deltas. On restart reconstruct **current** state but never fabricate recent transitions. If a server source cannot identify an exact onset time, send only ambient current. Existing old clients ignore additive fields.
+A proposed schema. `current` is whitelisted booleans and enums, never an HA string.
+`device_fx.py` owns normalization, transition detection, per-category hysteresis, TTL, a
+bounded in-process ring (about 16 events, 90 s), a monotonic sequence plus a generation
+nonce, and the serialized snapshot. On restart it rebuilds `current` and **never invents
+a recent transition**. A source without an exact onset sends only ambience. Old clients
+ignore additive fields; a version mismatch fails closed to static baseline ambience.
 
-Delivery details:
-1. Reuse only allowed mapped watcher/coordinator events, including the explicitly supported auto-detected doorbell/robot semantics. No browser-wide HA state subscription beyond the existing bounded server clock sync.
-2. Debounce or hysteresis thresholds (rain oscillation 30–60 s, light 3–5 s, temperature meaningful change threshold, music/TV only on state transition—not track metadata). Better an occasional missed flicker than constant pulsing.
-3. Publish once per normalized change, with server timestamps, duplicate-resistant ID, an expiration time; keep latest current state.
-4. Keep a semantic envelope separate from pet moments. Existing `house_live` and `_houseFx` still handle narrative; the director can add shell-only visuals to the same event without speaking twice.
-5. The same source may be represented by current and recent; **current wins** for ongoing appearance. A recent rain-start is ineligible once current is dry. Opposite transitions collapse.
-6. Private/shared channel output must be audited before deployment: no source entity ID, person, media text, camera or per-person moment may appear in `device_fx`.
-7. Old snapshots/version mismatches fail closed to static baseline ambience. No requirement to persist ephemeral ring to database.
+A machine-checked `DEVICE_SIGNAL_MAP` lists every supported kind with its recipe; a
+future kind gets an approved fallback only, never a generic flash. A test fails when a
+kind the server can send has no map row.
 
-### 4.4 Client algorithm: live, hidden, catch-up
+### 6.3 Delivery on the real channel (F5)
 
-Maintain per-slide `ambientState`, `seenFxIds` (bounded to ~128), `pendingEcho` (one slot max), `activeFx` and `renderGeneration`.
+`_channel` returns early when a message has neither `mine` nor `house`
+(`card-base.js:344`), and `_push_watchers` diffs only `(mine, house)` held in `_sent`
+(`coordinator.py:2943-2970`). So a bare `device_fx` key would be dropped. The spec:
 
-- **Snapshot received:** paint current ambient state. Collect recent eligible candidate events but **do not replay** any `msg.moments`, dialogues or pet poses.
-- **Live event, active view:** if visible, selected, not hidden/booting/animating protected scene, start one onset immediately. If pet body is busy, allow a *shell-only* pulse; never steal the body.
-- **Live event while hidden/offscreen:** record only newest best candidate by priority/TTL. No queue.
-- **First actual view:** on IntersectionObserver transition, document visibility transition, slide selection or boot end, evaluate fresh server times using existing `serverNow()`; if within 90 s and still matches current normalized state, deliver at most one abbreviated echo. Mark seen whether played or deliberately skipped for conflict, to avoid an echo repeatedly attempting to interrupt play.
-- **User action at same instant:** drop echo immediately. If a question/game/scene occupies the view, update ambient safely but don't run echo or prolong any animation. Do not resume it later unless the first view opportunity is still genuinely idle and eligible.
-- **Reconnect/reload:** dedup with generation + event ID, in-memory cache, optionally sessionStorage keyed only by sanitized IDs and pet key to prevent duplicate effects in the same tab. No cross-user personal data in cache. Snapshot and live delta may arrive in either order; both share one dedup path.
-- **Time uncertainty:** if server clock not known or skew high, do not use local browser timestamp to assert event freshness. Show current ambience only.
-- **Multiple cards:** each card may independently express the same event when watched; server events are not “consumed”. Each card dedups within its own viewport.
-- **Reduced motion:** render static state without echo motion, including storm with no flashing.
+- **Current state rides in `_house_view()`** (`coordinator.py:2884`, "what every screen
+  sees"; `_shared_house` at `:2878` covers shared screens). It diffs and resends with
+  `house` as any house change does, and the snapshot carries it. No change to the `_sent`
+  tuple shape.
+- **Onsets are a new live message type** (a sibling of `msg.moment`), handled in
+  `_channel` **before** the early return, and sent through `_to_channel`
+  (`coordinator.py:2999`). Both sides go in the same PR as a pair, with a
+  `tests/test_channel.py` case for each.
+- The `recent` ring in the snapshot feeds the first-view echo only.
 
-Echo ranking: authorized doorbell/appliance completion > meaningful weather onset > home light/fireplace/heating > media > ambient astronomy. Tie-break by recency, not queue order. Allow users to disable echo if they want only current ambience.
+### 6.4 Time (F7)
 
-### 4.5 Acceptance tests for HA integration
+State changes pass `_home_debouncer` (10 s, `rates.py:302`; `coordinator.py:359-366`)
+before the home pass, and the card's live gate for moments is 15 s. So a live onset
+arrives **10 s or more after the sensor**, not "0.4-1.2 s". The echo window is **90 s
+from the server `occurred_at`** (the sensor's own change time, not the debounce end), so
+in practice a first view sees about 80 s of it. Measure the debounce before promising a
+number to the owner. A doorbell keeps its own fast path.
 
-1. Rain starts with visible card: exactly one pulse and sustained rainy appearance, no duplicate speech.
-2. Card opened 20 s later: one brief rain echo, no previous narrative replay.
-3. Card opened 3 min later: ambient only.
-4. Rain starts and ends while card hidden: no false ongoing rain; latest coherent event only if still fresh.
-5. HA restarts in rain: ambient rain returns, **no fake rain-start**.
-6. Unavailable/unknown source, then restored: no fabricated signal, and only a true subsequent change triggers onset.
-7. Reconnect delivers same event in snapshot + delta: one physical pulse.
-8. Two cards and multiple pet slides: no neighbor animating; selected card can react independently.
-9. Player opens game when echo is pending: game takes priority without delay.
-10. Shared wall tablet: no identity/media titles/private messages leak; permission-independent.
-11. Weather thresholds flapping: coalesced/no rapid flashes; first-view echo never conflicts with current truth.
-12. Motion reduction, quiet hours and asleep pet: safe static lighting, no involuntary haptics/audio.
-13. Browser tab stays visible but IntersectionObserver briefly toggles due to scroll: event not replayed.
-14. Current ambient state updates under active dialog without covering dialogue.
+### 6.5 Hysteresis and chatter
 
-## 5. Screen morphs and world exclusivity
+Rain oscillation 30-60 s; lights 3-5 s; temperature on a meaningful step only; music and
+TV on state change, never track metadata. Unknown/unavailable and an HA reconnect invent
+no onset; the last accepted state holds. Better a missed flicker than a flicker stream.
 
-A **morph** makes the display seem to be made of a particular material—glass, water, a tiny window or constellations—without physically moving real controls. Draw in a fixed pixel-grid plane, not by reparenting or warping controls. Every world has one signature morph, one cheap accent and static reduced-motion fallback.
+### 6.6 Coverage matrix (a target, not a claim a row exists)
 
-| World | Signature | Where it fits | Exclusive accent | Technique |
-|---|---|---|---|---|
-| Woodland | **Leaf shutter**: silhouettes close in natural spiral, open to new world view | rare journal/opening memory | leaf sticks to interior glass | 2–4 transparent pixel planes, stepped masks |
-| Terrarium | **Thermal glass**: fog creeps at corners, wiping a clear crescent into scene | waking / meaningful temperature shift | falling sand veil | alpha masks/sprite frames, no text blur |
-| Hearth | **Window-lamp**: room darkens to warm ember-shaped aperture, reopens | bedtime/wake, hearth ambience | window reflection or chimney silhouette | masked vignette, no whole-device deformation |
-| Tidepool | **Liquid lens**: surface ripple briefly bends scene, settles into next view | water clean, rare scene transitions | bubble wipes porthole edge | pre-rendered displacement frames / layered highlights, no heavy real-time shader |
-| Pond | **Lily iris**: pads / concentric rings overlap then reveal scene | journal transition, pond weather | waterline shifts briefly | circular sprite masks |
-| Night Sky | **Constellation redraw**: stars trace tiny orbit or outline before returning as next view | moon/bedtime/journal | soft star veil | authored dot path/sprite atlas; no infinite particle system |
+With the internals parked, the response to each row is a **shell/glass/rim treatment on
+the `.hw` family**, plus a pet look only if the body is free. Anything a row draws with
+letters is out; glyphs only. New ambience is shell and glass only; it never draws a
+second rain on the display (F14), and `fx-*` stays (F13): `device_fx` sits **beside** the
+screen glow, shell-only.
 
-Shared fallback: LCD quick refresh (~60–100 ms) or no morph. Common nav target: total decorative timing <180 ms. Exclusive uncommon morph target ~300–550 ms, but **navigation itself completes immediately** and effect can be canceled in any frame. Do not morph on every tap or force the player to wait to open status, feed, or dismiss overlays. Avoid full-screen effects when modal/game/question active. The director uses `screenFx` exclusivity and may choose only a shell impulse during protected states.
+| Source / transition | Onset | Ambience | Echo |
+|---|---|---|---|
+| Rain starts / ends | drop on the inner glass / last bead clears | wet sheen | yes |
+| Snow starts / ends | frost forms / thaws | faint corner frost | yes |
+| Rain to sun | warm sweep along the rim | brighter rim | yes |
+| Wind rises / stops | flecks lean across the glass | slight directional accent | yes |
+| Storm arrives / ends | **non-flashing** dim shiver / release | cooler tint | yes, subtle |
+| Fog begins / clears | rim fog and clearing | soft diffusion | yes |
+| Dawn / dusk | rim palette settles cool to warm or back | day/night rim | yes |
+| Lights on / off / dim | rim brightens / dims | dimmed rim, never over `.lit` | yes |
+| Heating / cooling | warm / cool wash along the rim | faint tint | yes |
+| Fireplace on / off | ember rim lights / sets | warm rim | yes |
+| Music begins / ends | a few bars rise / fall | quiet bars glyph | yes |
+| TV starts / ends | reflected rectangle at the screen edge | faint colour reflection | yes |
+| Arrival | one welcoming rim pulse | none | arrival only |
+| Vacuum starts / ends | small rotor turns once / slows | none | yes |
+| Doorbell | rim chime mark | none | yes, short TTL |
+| Appliance cycle done | small tick mark | none | yes |
+| Full / new moon | halo aligns | static halo | yes |
+| Season, first snow, first frost | short themed pulse | seasonal rim | yes |
+| Unknown, unavailable, reconnect | **none** | last accepted state | no |
 
-Special discoveries (separate, optional rare track): paw pressed against inner glass; pet's shadow falls on inner bezel; a leaf appears caught on glass; a star or tiny gift briefly crosses into shell area. At most one per long viewing interval, no reward state or user requirement. Must fit clipping/safe area and never cover navigation/button affordances.
+World recipes differ by world id and share semantics (rain is a leaf bead in Woodland, a
+porthole streak in Tidepool, a ring in Pond, and so on), a family and not six engines.
+Recipes start generic in slice 3 and 4; a world flavour is CSS variables, not art.
 
-## 6. Detailed Interaction Director
+### 6.7 Client algorithm
 
-### 6.1 Responsibility
+Per slide: `ambientState`, `seenFxIds`, one `pendingEcho`, `activeFx`, a generation.
+Snapshot: paint ambience, collect eligible recents, replay no moment. Live onset on a
+selected, visible, unbusy slide: one pulse now; body busy means shell only. While hidden:
+keep only the newest best candidate. First view (intersection, visibility, slide
+selection, boot end; the card tracks `this._visible` and the selected slide, not a
+per-slide visibility, so slice 3 adds that hook): if within 90 s by `serverNow()` and still true, one shortened
+echo; mark it seen whether played or skipped. A user action at the same instant drops the
+echo; a game, question or scene updates ambience only. If the server clock is not
+trusted (`trusted` false), ambience only. Slice 3 adds `serverClockKnown()` to
+`shell-data.js` (true after one accepted reading; `serverNow()` has no "unknown" state
+today, `shell-data.js:288-293`) and passes it as `trusted`; slice 1's `enterView` takes
+the argument. Reconnect: snapshot and delta share one dedup path in either
+order. Each card dedups for itself. Reduced motion: static state, no echo motion, no
+flashing. Echo rank: doorbell and appliance done, weather onset, lights/fire/heating,
+media, astronomy; ties by recency.
 
-The Interaction Director is a **presentation arbiter**, not a second gameplay engine. It receives a semantic cue (user action, authoritative server pet event, normalized HA event or idle opportunity), checks whether it can render, chooses a fixed world/style recipe, acquires effect tracks, starts it, and reliably cancels/cleans up. No data persistence or gameplay decisions. The director does not own HA service calls, pet stats, dialogue queues, actual care success, screen navigation or private content.
+### 6.8 Acceptance cases (kept intact from the first plan)
 
-Suggested source parts:
-- `src/card/interaction-data.js`: pure recipe registry, priority classes, compatibility metadata, world recipes, cooldowns. Insert in `manifest.txt` before card classes.
-- `src/card/interaction-director.js`: standalone policy/state class with injected clock and visibility predicate, no DOM or HA dependency. Load before `card-base.js`.
-- `src/card/card-interactions.js`: optional new inheritance-chain part owning DOM effect adapters; if it would substantially complicate extends ordering, put adapters in the existing appropriate part and keep the pure class separate.
-- Extend `card-build.js` for layers and lifecycle, `card-layout.js` for shell finish/mask/viewport, `card-actions.js` for physical cap lifecycle, `card-tick.js` for idle arbitration, `card-moment.js` for semantic cues, `card-base.js` for channel `device_fx`.
-- Server: `custom_components/virtual_pet/device_fx.py` plus bounded changes to watcher/coordinator/channel publication. Do not mix server integration and visual asset batch into one PR.
+1. Rain starts with the card visible: one pulse and a sustained wet look, no duplicate speech.
+2. Card opened 20 s later: one brief rain echo, no narrative replay.
+3. Card opened 3 min later: ambience only.
+4. Rain starts and ends while hidden: no false rain; the latest coherent event only if fresh.
+5. HA restarts in rain: ambient rain returns, **no fake onset**.
+6. Source unavailable, then restored: no fabricated signal; only a true later change pulses.
+7. Reconnect delivers one event in snapshot and delta: one physical pulse.
+8. Two cards, many slides: no neighbour animates; the selected one reacts on its own.
+9. The player opens a game with an echo pending: the game wins with no delay.
+10. A shared wall tablet: no identity, media title or private message leaks.
+11. Flapping weather coalesces; an echo never contradicts current truth.
+12. Reduced motion, quiet hours, asleep pet: static lighting, no haptic, no audio.
+13. IntersectionObserver toggles on a scroll: the event is not replayed.
+14. Ambience updates under an open dialogue without covering it.
 
-### 6.2 Event and recipe contracts
+Added by the review: 15. a server test beside `tests/test_channel.py` and
+`tests/test_public.py` that audits a shared screen's `device_fx`; 16. a recorded week with
+the bridge on equals main (no save field); 17. the card-check TDZ-order case for the director, in the first slice with an adapter (slice 3; slice 1 has none, section 5.2).
 
-```js
-// Proposed client cue (not an existing API).
-{
-  id: "server-generation:218",
-  slideKey: "internal-device-key",
-  kind: "rain_started",
-  origin: "house",        // "user" | "house" | "pet" | "idle"
-  occurredAt: 1793763000000, // server-normalized time where available
-  presentation: "onset", // "onset" | "echo" | "ambient" | "interaction"
-  priority: "environment",
-  ttlMs: 90000,
-  data: { intensity: "normal" } // validated whitelist only
-}
-```
+## 7. Press feel: the gaps only (F2, LD section 7)
 
-Registry recipe fields: `key`, `allowedOrigins`, `worldKeys`, `trackClaims`, `durationMs`, `cooldownKey`, `preconditions`, `onConflict` (drop, replace, shorten), `reducedMotionRecipe`, `apply`, `cancel`, `cleanup`, `assetNeeds`. The server never supplies arbitrary CSS selectors, JS, HTML, asset URLs or styles. Client selects only trusted locally declared recipes.
+The cap goes down on press and holds (`style.js:1288-1291`); the care scene owns the
+body. What is missing, all CSS custom properties and classes, no new `.pet` class:
 
-Track claims:
-- `control`: independent cap feedback; cannot block activation; may coexist with shell.
-- `shellAmbient`: long-lived static styling, never leased out.
-- `shellImpulse`: max one short visual mechanism/pulse per slide; latest meaningful compatible event may replace.
-- `screenFx`: exclusive morph/crossover; never covers status/game/question.
-- `petBody`: exclusive, integrated with existing `_animate`, `_sceneStart/_End`, `_idle`, `_flair`, visitor/link; **no competing CSS animation**.
-- `text` and `modal`: existing card retains ownership. Director sees these as blocking/protected constraints, never owns or cancels them.
+| Gap | Treatment |
+|---|---|
+| Release | 90-140 ms spring rebound; the hit target does not move. |
+| Pending | a restrained cap state until the service settles. |
+| Failed or refused | the cap returns muted and never suggests success; the existing refusal stays as it is. |
+| Cleanup | check first whether `:active` already covers `pointercancel`, lost capture and blur; fix only what it misses. A swipe that starts on a cap must not leave it down. |
+| Character | the same small vocabulary per action (travel, rebound curve, one shell cue), not a long animation per click: |
 
-Priority tiers (highest first):
-1. Input handling, focus, active controls, player-opened modal, question and game.
-2. User care scenes and authoritative resulting pet/refusal response.
-3. Significant pet moments: hatch, wake, visit, link and timed scene.
-4. Live HA **shell-only** onset (petBody optional if free).
-5. User-triggered optional morph, first-view environmental echo.
-6. Existing flair/contextual micro-behavior, then generic idle.
-7. Persistent ambient state (always safe, never preempts UI).
+| Action | Rebound | Shell cue |
+|---|---|---|
+| Feed | soft, rounded | a short delivery-path glow on the rim |
+| Play | springy | a brief two-point rim pulse |
+| Clean | crisp, two-part release | one clearing sweep, not a wipe on every step |
+| Medicine | firm, minimal bounce | stable, quiet |
+| Sleep / tuck | settles, no bounce | rim lamps dim in sequence once confirmed |
+| Navigation | light, quick | none |
 
-The above tiers are not a single global mutex: a protected pet body can coexist with a nonobscuring shell impulse. A modal blocks screenFx but shellAmbient remains. If conflicts occur, reject decorative request or replace lower priority on the same track. Do not queue decorative requests.
+The press means "I got your input", not "the server accepted it". Praise/scold rows
+apply only where those actions exist in this configuration. **Must not touch the tuck
+beats** (the `s.wasAsleep` rule, care-reactions §4.9). Tests: pointer cancel, swipe off a
+cap, fast double tap, Space/Enter, a refusal, repeated status navigation, reduced
+motion.
 
-### 6.3 Pure scheduler API (illustrative)
+## 8. Idle: a delta over N1-N4 (F8)
 
-```js
-class InteractionDirector {
-  constructor({ now, canRender, recipes, adapter }) { /* pure policy + adapter */ }
-  setAmbient(slideKey, normalizedState) {}
-  offer(slideKey, cue) {}           // returns { accepted, reason, effectId }
-  enterView(slideKey, recent) {}   // considers one fresh echo
-  cancel(slideKey, reason, tracks = null) {}
-  setBusy(slideKey, owners) {}     // constraints from existing scene/game/ask
-  detach(slideKey) {}             // cancels all timers/animations/observers
-  reset() {}                      // teardown on disconnect
-}
-```
+N1 and N2 are built (section 2); N4 (60 signature-pose frames, idle only) owns the
+signature-pose space. Only these rows are new, and only if N4's poses do not already
+cover them: **glass curiosity** (a brief face/paw touch where the sprite allows),
+**post-play settle** (a finished game with a free body), **link-port curiosity** (after a
+real link, once the body is free). Rules: eligibility stays with `_idle`, `_freeBody` and
+`_firstMove`; a beat is a short cancellable chain with an absolute maximum and cancels on
+any state change; 45-120 s global cooldown while viewed, glass moments several minutes;
+never the same beat twice in a row; no counts, no reward, no trick progress, and a glance
+is never mistaken for a care response. Any new body class goes on `ALLOWED` on purpose.
+A per-world exclusive beat is a separate decision for after N4 (it would be art).
 
-Per slide: `activeTracks`, `ambient`, `seenFxIds`, `pendingEcho`, `lastMicroBeat`, `generation`, `abortHandles` (for timers/WAAPI); all bounded in memory. Avoid creating a new interval per slide. One existing `_tick` or current scheduling mechanism checks opportunity only when visible, while event-driven calls handle user and HA changes.
+## 9. Rare glass moments
 
-Lifecycle:
-```
-semantic cue -> validate origin/schema -> compute freshness and visibility
-             -> resolve world + reduced-motion recipe
-             -> check protected UI and cooldown
-             -> acquire compatible tracks (no indefinite wait)
-             -> apply effects (immediate)
-             -> authoritative change may replace/modify visual
-             -> cleanup on finish/cancel/slide switch/hidden/disconnect
-```
+A paw mark, a leaf caught on the glass, a rim shadow, at most one per long viewing
+interval, no reward, no requirement, clipped to the shell and never over a button
+affordance. CSS on the glass layer slice 3 adds. Only if slices 1-5 read well on the
+phone.
 
-Token/generation safety: each effect invocation has a unique generation ID. Timer/animation completion callbacks verify that generation is still current before removing classes or restoring DOM. This prevents an old timeout from clearing a newer press or shell impulse. Use AbortController where supported and explicit teardown otherwise. Ensure no retained DOM references after slide removal. Never set a CSS class and rely solely on animationend: hidden tabs may pause or discard callbacks; use bounded watchdog/cleanup.
+## 10. Screen morphs (last, optional, CSS only)
 
-### 6.4 Integration specifics and conflicts
+A morph makes the display feel like a material, drawn in a fixed pixel-grid plane
+without moving a control. One flagship first (Tidepool liquid lens or Woodland leaf
+shutter), then at most five more. Targets: common navigation under 180 ms, a rare morph
+300-550 ms; **navigation completes at once** and the effect cancels on any frame. Never
+on every tap, never over a modal, game or question. Shared fallback: the LCD quick
+refresh or nothing. Stepped masks and `color-mix` in the style the `FINISHES` already use;
+the Tidepool "pre-rendered displacement frames" are dropped unless CSS cannot do it. It
+may use the director's `screenFx` track; the pet is never touched. Reduced motion: none.
 
-- `_tapped` remains the semantic click feedback; pointer-down adds physical depression only. A pressed button should not cause two haptics.
-- `_press` and `_sceneStart` reserve `petBody` before action; director may light shell, but never animate pet body again. Existing care failure/refusal paths inform the director to retract provisional machinery.
-- `_moment` is the primary adaptation site for already-known semantic house moments. New `device_fx` normalizes and delivers onscreen/catch-up effects; dedup with existing `_houseFx` for same cue, using one event identity if available. Avoid duplicate glow/ring/chime.
-- `_idle` offers candidates, director approves or rejects; it doesn't start additional timers.
-- `_renderSlide` applies shell masks/ambient current state when finish/world/state changes; it must not accidentally restart one-shot pulses on every redraw.
-- `_go`, visibility lifecycle, `disconnectedCallback`, `_powerEnd`, clear/hide dialogs and `_sceneEnd` must notify or cancel conflicting tracks.
-- User-driven screen transitions must change actual view first; a morph is a nonblocking flourish, not the navigation mechanism.
-- Existing `_ghostFrame` and infrared link already have animation/render ownership; put their track reservations in the director adapter rather than reimplementing them.
+## 11. Parked: the world inside the device (Q2)
 
-### 6.5 Accessibility, performance, observability
+Deferred by the owner, not a slice. Kept so the idea is not lost.
 
-Targets, subject to bench validation: initial cap state on next animation frame, typical decorative effect <1.2 s, routine UI animation <180 ms, <1 concurrently animated visual family in each physical plane, steady-state no new heavy per-frame work. CSS transforms/opacity preferred; never apply SVG filter or blur to whole live status/game subtree. Freeze when `document.hidden` or offscreen; refresh static ambience on return. No sound on catch-up; never programmatically vibrate on house events. Maintain static mode for OS reduced motion and settings; avoid flashes and rapid >3 Hz pulses. Preserve color-independent discernibility and focus outline.
+- The idea: per-world functional-looking internals (core, path, one mechanism: a seed
+  capsule in Woodland, a dial in Terrarium, a filament in Hearth, an impeller in
+  Tidepool, a lily rotor in Pond, an orbital ring in Night Sky) behind the screen.
+- Why it waited (F3, F4): `.hw.guts` already draws the board for the clear finish, so any
+  work extends `.hw` with per-world `--art` masks and does not add a parallel plane; and
+  only `clear` (`see: .34`, `shell-data.js:175`) and `smoke` (`see: .62`,
+  `shell-data.js:222`) are see-through, so five worlds of art would reach few shells.
+  device-charm Part 4 recorded that the clear board once drew past the device edge: it
+  must clip to the shell.
+- To revive it: the owner chooses between internals on clear/smoke only (CSS, no art) and
+  a see-through default finish per world (a shell redesign and an art job). Its art
+  estimate then returns (about 20-40 image calls on top of section 14).
 
-Debug mode (dev only) should show bounded in-memory counters: offered/played/replaced/dropped, reason codes, active tracks, transition age, effect key, reduced-motion fallback, last cleanup. **No network telemetry**. Optional developer bench knobs: force world, transparent finish, emit cue, simulate visibility loss, simulate HA reconnect, freeze animation at frame/time, take snapshots.
+## 12. Copy, settings, docs
 
-## 7. Build phases, dependencies and acceptance gates
+- **No new player copy.** Matrix rows use glyphs without letters. The one switch is the
+  existing "screen effects here"; if a second is ever wanted its two-word label goes to
+  the first mate as a DRAFT.
+- Rollback is that switch, plus the version field failing closed to the static baseline.
+- Slice 1 adds one row for the new part to AGENTS.md's "Where things live" table.
+- Each slice's PR updates `docs/guide.md` ("The device") and `docs/features.md` where it
+  changes what a player sees (the device-charm convention).
 
-### Phase 0 — Inventory / collision map (S)
-- Read latest files and identify all emitted house kinds, current shell CSS/masks, pet body animations, scene owners, signal sources and art assets.
-- Record a registry of existing behavior to avoid overlaps with care reactions/device charm.
-- Define layer stack, track constraints, normalized semantic list, schema version and reduced-motion approach.
-- **Gate:** reviewed source map and tests proving event coverage baseline; no visual changes.
+## 13. Slices
 
-### Phase 1 — Interaction Director core + press feel (M)
-- Add policy class, fixed recipe registry, track leases, cancellation/generation token handling, and dev-only diagnostics.
-- Delegate pointer/keyboard cap states; preserve click semantics and existing `_tapped`, `_sceneStart`.
-- Add one shell impulse with CSS-only visuals.
-- **Gate:** no duplicate action, no overlapping pet body animations, clean pointer cancel, stable multi-slide, no layout shifts.
+Order is dependency order. Tiers: 0 docs only, 1 card or small server with no saved
+field, 2 saved field or schema. Sizes: S small, M several modules and tests, L protocol or
+art. **Do not run two workers on the card chain or `manifest.txt` at once.**
 
-### Phase 2 — HA normalized signal bridge + first-view echo (L; highest product priority)
-- Add server `device_fx` normalization/ring/current snapshot and private/shared sanitization.
-- Add additive channel snapshot + live publishing, client dedup/TTL/current precedence/visibility/first-view echo.
-- Implement **one end-to-end rain pathway** first, then expand every existing meaningful supported signal.
-- **Gate:** all 14 scenarios in §4.5, especially restart, reorder, stale sensor, reconnect, multiple cards and hidden tab; no replay of private lines.
+| # | Slice | Tier | Size | Route | Device queue (the owner reads these on a phone) |
+|---|---|---|---|---|---|
+| 0 | This rewrite | 0 | M | docs only | none |
+| 1 | **Director core**: pure `interaction-director.js`, track leases, generation tokens, `BUSY_OWNERS`, injected `schedule`, `node --test`; a manifest line, one AGENTS.md table row. No adapter, no card-check case, no `pick-sections` entry. **No visual change.** Acceptance below. | 1 | S-M | `scripts/gate --auto` (picks no card-check section; the JS tests are the guard) | none (nothing to see) |
+| 2 | **Press release feel**: section 7 only. Rebound, pending, failed, cleanup, per-action character, as classes and custom properties on the cap. Bench `alive` preset. The cap states are CSS only and must not go through the director's `canRender` (`lcdOn() && !calm()`): a press with screen effects off still feels like a press. The per-action rim cues are `shellImpulse` effects, so they use the director; slice 2 is then the first slice with an adapter and takes slice 3's TDZ card-check case and `pick-sections` entry from section 5.2, or the rim cues wait for slice 3 (first mate's call; slice 1 leaves it open). | 1 | S-M | `gate --auto` | Press the four care caps and a nav cap; swipe off a cap; Space on a focused cap; one refusal. |
+| 3 | **Signal bridge, rain**: `device_fx.py` (current, ring, hysteresis), `current` in `_house_view`, the live message, the client `ambient`/`echo`, one glass-drop pulse on the `.hw` family. The 14 cases for the rain row, plus 15-17. No new copy. The adapter owns the wire-to-cue mapping (`occurred_at`/`expires_at` ISO to `occurredAt`/`ttlMs` on `serverNow`, `rain_started` to a recipe kind and a `direction`), passes `deviceNow` (`Date.now`) and `trusted` (`serverClockKnown()`), sets `s.statusOpen` in `_toggleStatus`, and calls `release` from `animationend`. | 1 (server) | L | `scripts/ci-gate` (pick-sections picks `all`) | Rain on a wall tablet (shared) and a phone; open at 20 s and at 3 min; HA restarted in rain. |
+| 4 | **Expand the matrix**: snow, fog, storm, wind, lights, fireplace, heating/cooling, media, TV, vacuum, appliance, moon, `DEVICE_SIGNAL_MAP` machine-checked. Two PRs. | 1 | M | `ci-gate` for the server half, `gate --auto` for the rest | Each row once on the phone: lights, fireplace, heating, doorbell, a storm with reduced motion on. |
+| 5 | **Idle delta**: section 8's three rows, only if N4 leaves them open. | 1 | S-M | `gate --auto` | A ten-minute idle watch on the phone; a game then idle. |
+| 6 | **Rare glass**: section 9. | 1 | S | `gate --auto` | A long idle watch; confirm it is rare and never over a control. |
+| 7 | **Screen morphs**, last, optional: section 10. | 1 | L | `gate --auto` | The flagship morph, then navigating fast through it; the Hop board and a question open. |
 
-### Phase 3 — Transparent shell internals for one pilot world (M–L)
-- Pilot Woodland, if transparent finish available; build masked internals/core/path, no sprite pipeline changes to pet.
-- Validate shell picker, opaque fallback, resizing, mono, six shapes boundary assumptions.
-- **Gate:** zero overlay intercepts, shell is convincing at 330 px, minimal CPU when idle.
+**Slice 1 acceptance** (each checked by `node --test` or a source test; none needs a
+device, card-check or the bench):
 
-### Phase 4 — All-world hardware + HA physical language (L plus approved art)
-- Expand masks/PCB/core/mechanisms to Terrarium, Hearth, Tidepool, Pond, Night Sky.
-- Bind all supported HA events to coherent world recipes, static ambient variants.
-- **Gate:** six-world matrix snapshots at compact/normal and opaque/transparent; semantics match current sensor truth.
+a. `node --test` covers the section 5.3 methods: track exclusivity, generation tokens
+   (an old timer cannot clear a newer effect), once-only dedup by cue id, TTL expiry on
+   the injected clock via `tick`, opposite-transition collapse, `cancel`, `detach`,
+   `reset`, `enterView` with `trusted` false giving ambience only, `canRender` false
+   storing ambient state with no onset, and `isBusy` over every owner;
+b. the busy-list completeness test of section 5.3;
+c. a source test fails if the part names `document`, `window`, `this`, `Date`,
+   `setTimeout`, `setInterval` or `localStorage`;
+d. the `hop_engine.test.js:19-31` load-order guard for `HATCH_DIRECTOR` (section 5.2);
+e. "no visual change" is mechanical: the diff touches only the new part, `manifest.txt`,
+   the new test, AGENTS.md's "Where things live" (one row) and docs; no other
+   `src/card/*.js`, `style.js` or `bench` file changes, and the built card differs only by
+   the appended part;
+f. `motion_rule.test.js` passes untouched (slice 1 adds no `.pet.<cls>`).
 
-### Phase 5 — Idle micro-behaviors (M plus optional art)
-- Integrate opportunity registry with `_idle` and exclusive petBody leasing.
-- Ship 6–8 compatible nonverbal beats before adding world-exclusive ones.
-- **Gate:** zero interference with care, talk, games, hats, poses or visitors; no repetitive loop; stage compatibility.
+Anything a slice would otherwise check only by eye (the bench shot per owner, a pulse on
+screen) belongs to that slice's device queue and starts with the first slice that has an
+adapter (slice 3).
 
-### Phase 6 — Exclusive screen morphs (L plus approved art)
-- Build common cancelable screenFx adapter, one flagship morph (Tidepool liquid lens or Woodland leaf shutter).
-- Add six exclusives with sparse trigger rules; opt out on reduced motion.
-- **Gate:** all controls functional during/after cancellation; no text distortion, no nav delay.
+Whether slice 5 ships at all is the owner's call after N4. Slice 6 depends on slice 3's
+glass layer, not on slice 7. The full gate is the first mate's, once per merged batch;
+slice 3 is the only one that needs `scripts/ci-gate` at once.
 
-### Phase 7 — Discovery moments, tuning and release (M)
-- Add up to three rare, bounded cross-glass moments (paw mark, leaf/glass, rim shadow), with conservative cooldowns.
-- Measure first impression, repetition fatigue, contrast, mobile touch and battery; reduce visual noise before adding breadth.
-- **Gate:** visible immediate response on ordinary action, distinct all-world physical personality, quiet long idle, no missed command.
+**In flight:** Hop 3a/3b touch `card-board.js` and `card-games.js` (3a saves `hop_day`,
+tier 2); slice 1 may land at any time: it touches no file they touch, and a
+`manifest.txt` conflict with 3a/3b is one line. The Hop board stays a protected owner. The bespoke tuck art set is in progress and
+is not a dependency, but no slice touches its beats.
 
-**Sizing:** S small focused change; M several modules + test/bench updates; L backend/frontend protocol or significant art and integration. Parallelizable: shell atlas artwork can proceed alongside Phase 2; backend schema may be developed alongside input feel. Do **not** run multiple agents editing the same card chain or manifest concurrently.
+## 14. Art estimate (CSS-first)
 
-## 8. Test matrix and tooling
+The Luna cap is about 100 per 5 h and under about 300 a day. The card already draws
+every finish with CSS (`glitterTile`, printed tiles), so this plan is CSS-first:
 
-Use the card bench as specified by `AGENTS.md` for visuals, not a scratch Home Assistant. Add presets/shot flags for: all six worlds, every shell finish, compact and 420px, ambient rain/day/night, pending HA echo, button press/release, modal protected state, OS reduced motion, mono/LCD effects, partial shell masking. Capture image comparisons.
+| Slice | Image calls |
+|---|---|
+| 1-4 | 0 |
+| 5 idle | 0 if N4's poses cover it; a per-world exclusive pose set is about 9-12 and a separate decision |
+| 6 rare glass | 0 (CSS) |
+| 7 morphs | 0-10, only where CSS cannot do it |
 
-Use JS unit tests (alongside `tests/js`) for: registry completeness, priority/track exclusivity, exact once dedup, TTL with server clock, opposite transition coalescing, cancellation and disposal, pointer/keyboard and existing animation rule. Use Python tests for watcher normalization, debounce/hysteresis, ring age, versioned snapshot, restart behavior, privacy sanitization and event publication. Use card-check/gate for integration scenarios, multi-card and authentication; avoid assuming bench covers networking. Run `node scripts/build-card.js`, lint and relevant tests, `scripts/gate --auto` for bounded changes and `scripts/ci-gate` for complete server/channel changes as guided by `AGENTS.md`.
+So about **0-10 calls** on the plan as it stands, plus 9-12 only if the owner wants
+world-exclusive idle poses. The internals art (parked) is not counted.
 
-Explicit regressions: changed shape/finish does not display floating guts; statuses/games on top of effects; focus styles intact; care action result continues even if effect canceled; no former effect attached to a newly selected slide; screen ghosts and care transforms still compose; no accidental media title or personal presence data on shared screen.
+## 15. Tests and bench
 
-## 9. Definition of done and decisions to review
+- **JS (`node --test`, `tests/js`):** slice 1: the acceptance list in section 13
+  (`interaction_director.test.js`). Later: signal-map completeness (slice 4),
+  `motion_rule`.
+- **Python:** `tests/test_device_fx.py` for hysteresis, ring age, restart with no fake
+  onset, the sanitiser, HA-unavailable chatter, and the `_house_view` carry; `test_channel.py`
+  and `test_public.py` for the shared screen.
+- **Bench:** a new `alive` preset: rest, pressed, rain current, echo pending, a
+  protected state (Hop board open, status open), reduced motion, 420 and 330 px. The
+  bench cannot test the channel or a restart (its README Limits).
+- **card-check:** from slice 3, a section for the echo (a fake `device_fx` over the real
+  channel), the TDZ-order case, restart. Slice 1 has none. Use a real HA only for behaviour (AGENTS.md).
 
-Completion requires:
-- Immediate mechanical feedback on every normal input, independent of HA latency, with keyboard and touch parity.
-- Transparent shells convincingly reveal meaningful internals; opaque finishes remain coherent.
-- Every existing authorized, meaningful HA signal has a documented mapping to a live shell response and appropriate ambient state, with **one 90-second first-view echo**, no false onset, no backlog or dialogue replay.
-- Six visually differentiated world morph vocabularies with measured minimal navigation friction.
-- A single Interaction Director coordinating all new visual tracks and respecting existing motion ownership.
-- Written screenshot benchmarks, performance thresholds, semantic event coverage, privacy/accessibility review and gate pass.
+## 16. Risks
 
-Decisions for owner/art review (not blockers for architecture):
-1. Start with **90 s** first-view echo; consider 60–120 s after testing.
-2. Keep environment effects on by default, sound never enabled by these effects.
-3. Use one common core/trace + one mechanism per world; don't redraw entire shells at first.
-4. Choose Woodland as internals pilot and Tidepool as signature morph pilot.
-5. Keep rare glass-breaking moments sparse and cosmetic; no reward for finding them.
+| Risk | Mitigation |
+|---|---|
+| Effects collide with pet transforms, lines, scenes, games, visitors | One pet-body track, the `BUSY_OWNERS` table and its completeness test, `dir-*` classes (never `fx-*`), `ALLOWED` discipline, card-check from slice 3 |
+| A stale moment plays as if the house just changed | State/edge/echo split; server `occurred_at`; `current` wins; catch-up never pulses |
+| Sensor noise becomes toy notifications | Hysteresis, one pulse at most, quiet ambience |
+| The detector disagrees with the speech moments | It reads `Readings`, not moments; they may differ on purpose |
+| Visual clutter, fatigue | Long cooldowns, one pulse per slide, morphs last and optional |
+| A tablet runs hot | Active slide only, no new loop, CSS only, freeze when hidden |
+| A directed effect hides control or focus | `pointer-events:none`, the busy owners, a bench shot each |
 
-**Recommended first pull request:** Phase 0 inventory and pure `InteractionDirector` tests/registry (no visual change); then Phase 1 pointer feedback; then an end-to-end **rain transition -> shell pulse -> ambient state -> first-view echo** vertical slice. Only after the vertical slice survives restart/reconnect/privacy tests should the signal registry be expanded.
+## 17. Open questions for the first mate
+
+1. Rows in section 6.6 that were drawn with internals (filament, bellows, dial) are now
+   rim/glass treatments. Is a generic rim the right first look in every world, or does
+   the owner want the world flavour before slice 4?
+2. Slice order puts rare glass before morphs (the brief's order); the review had it
+   after. Slice 6 therefore rides on slice 3's glass layer. Confirm.
+3. Any wording: none is needed by this plan. If the owner wants a label on the echo or
+   the quiet-hours behaviour, it needs a DRAFT line from the first mate.

@@ -1,6 +1,7 @@
 prefs.js
 world.js
 hop-engine.js
+interaction-director.js
 lines.js
 lines-fresh.js
 ui-copy.js
