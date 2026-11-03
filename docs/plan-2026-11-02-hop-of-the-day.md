@@ -950,6 +950,41 @@ Acceptance:
 - The real-HA run owns the wiring only (the row calls `board` and the reply has the right
   shape; `done`/`tidy` are false).
 
+**Built as shipped (s2800, branch `crew/hatch-at-home-s2800-hop-ship-2b-board-mode-keys-in`).**
+- `src/card/card-board.js` (`HatchPetCardBoard`, between `HatchPetCardGames` and
+  `HatchPetCardSeason`), the Hop CSS in `style.js`, small hooks in `card-games.js`
+  (`_startGame` adds the row, `_gameView` has a `hop` view, `_fitPicker` measures the row) and
+  `card-flair.js` (`_endGame` calls `_hopEnd`). The board is `s.game = {kind: "hop"}`; no
+  `play_game` call is made and no `.pet.<cls>` animation was added.
+- **The keys are a 2×4 column at the right of the board**, in the overlay (Decided 16): ◀ ▲ ▼ ▶,
+  `✦n` (special), undo, restart, and the close button as the eighth. There is no blank for
+  ship 5's hint: ship 5 shares the restart slot or takes the cell the close button leaves. The
+  keys are sized from the overlay's height (24-44 px) and the grid takes the rest.
+- **Cell sizes are 19 / 22 / 28 px at card widths 300 / 330 / 420 (6×4 board)**, not the
+  35-49 px this plan expected: the LCD is about 198×148 px at 330 and the keys take a column of
+  it. Every adult board is therefore tap-then-confirm; one tap commits only where the drawn
+  cell is 44 px or more (the code reads the size it drew, so a wider card gets it).
+- The row is a `.ghop` button outside `.gpick` (strip at the foot where the games fit on one
+  line, else in the last line of the wrapped games, label-only at 300). The picker's game count
+  is still three.
+- The fetch is one method, `_hopFetch(id)`, the seam card-check stubs. A refusal answers
+  `REFUSALS[result]`; a reply `HATCH_HOP.valid` rejects shows nothing and logs once.
+- Park/resume: `hatch-hop|<device>|<day>|<board id>` in `localStorage`, written on every move,
+  undo and restart, dropped when the board id changes. A board that was won parks nothing.
+- Until 3a the Hop row's label never changes, and the solved view is the bubble ("solved" or
+  "tidy") with a restart key reading "try for tidy" (aria) while tidy is not set; `done` and
+  `tidy` in the reply are not read.
+- Copy: no line beyond the plan's quotes. The visible key labels are glyphs; the quoted words
+  are the aria labels. "solved" and "tidy" (the bubble) and "blocked"/"sunk" (aria) are the
+  plan's drafts, used as they stand. Open questions are in the s2800 report.
+- Proof: `tests/js/hop_board.test.js` (9), card-check section `board` (33 checks, 0 fail,
+  `scripts/gate -- --only board`), bench `--preset hop` (102 shots) with `<shot>.json` giving
+  each cell and key size and overlap.
+- At the card-check width of 300 (a 284 px card, LCD 180×135) the **three games with no Hop row
+  already** wrap to two lines that run 6 px below the LCD's foot and touch the close button; the
+  row adds nothing to that. That is the picker's and the dig's own fit at the smallest width,
+  not 2b's; it is on the device queue.
+
 ### Ship 3a: settle, pay, saved state (server, tier 2, M)
 
 `settle` in `virtual_pet.hop`, the replay in `hop.py`, `settle_hop` and the pay (section 7),
@@ -969,6 +1004,10 @@ What 2a left for it (shipped `73564bfb`; ship 2a above):
   The cache key (Decided 13) then changes only with the world or the day.
 - **`done` and `tidy`** in the `board` reply (`false` in 2a) are filled from `hop_day`.
   `twist` stays `null` until ship 4.
+- **What 2b fixed for 3a (card side).** The card sends `id` (the `board` reply's), `moves`
+  (`HATCH_HOP.encode(g.moves)`, letters a-x) and `shared`; the `board` reply's shape is
+  `{result, day, id, w, h, grid, family, specials, world, twist, done, tidy}`, which the card's
+  `valid` check reads without `done`/`tidy`/`twist`. No server change comes from 2b.
 - `board` stops being write-free at a day rollover (section 8); every other `board` call, and
   every refusal, still writes nothing and logs nothing. The "board refuses without the care
   log" test of 2a stays.
@@ -1001,6 +1040,28 @@ restart ("try for tidy"), reads `hop_day` for the row's label, shows the settle 
 card-check run "flag off builds nothing" is dropped); `strings`/guide/README/how-to-play
 lines (draft). It reads `done` and `tidy` from `hop_day`, as the sensor attribute, and from
 the `board` reply once 3a fills them (2b ignores both).
+
+**What 2b left for 3b (reconciled after 2b shipped).**
+- **Where it plugs in.** `_hopMove` in `card-board.js`: on entering the nest it sets
+  `g.done`/`g.tidy` (local `HATCH_HOP.isTidy`), clears the parked list, reacts and says
+  "solved"/"tidy". 3b adds the settle call there with the `_hopFetch` pattern (a seam of its
+  own, `_hopSettle`, for card-check). The **parked list must not be cleared at the nest any
+  more**: it is cleared when the settle answers `ok`/`found`/`already`, and kept for a
+  refused settle (the acceptance row below), so the line in `_hopMove` (`_hopStore(g.key, null)`)
+  moves into the settle's reply handler.
+- **Already built in 2b, not 3b's:** the solved view's keys (undo off once `g.done`, restart on
+  only while `!g.tidy`, aria "try for tidy"), `_hopRestart`, the bubble lines. 3b changes the
+  *source* of `tidy` (the settle reply, then `hop_day`) and the bubble's text per settle code.
+- **The row's label is one constant** (`HOP_COPY.row`; `_hopRow` in `card-board.js`); 3b adds
+  open / solved / tidy to it and the row's `aria-label`, and a reload on the same day must start
+  on the solved view: today `_hopStart` resumes a parked list only when it is legal and *not*
+  won, so a won board on reload would open fresh unless 3b passes `done` in.
+- **The flag.** Removing `experimental_hop` takes out `_hopOn()` (one line), the flag-off
+  checks in card-check's `board` section ("flag off: the picker has three games and no Hop row"
+  and "flag off again"), and the bench's `hop: true`/`experimental_hop` lines in `page.js`.
+  The card-check `board` baseline in the picker-fit check (flag off first) goes with them.
+- **Cell size.** The tap-then-confirm path is the common case (cells 19-28 px), so 3b's
+  settle must not assume a one-tap commit anywhere.
 
 Acceptance:
 - card-check on stubbed replies: the settle contract above; a plain win then a restart then a
