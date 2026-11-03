@@ -113,7 +113,27 @@ test("a shared screen sends nothing", async () => {
 
 test("the row is drawn only on a personal screen, where the pet allows it, and off confirms", () => {
   const settings = method("_renderSettings");
-  assert.match(settings, /const memory = !sharedScreen\(\) && memoryAllowed && memoryOn !== undefined/);
+  assert.match(settings, /const memory = !sharedScreen\(\) && \(memoryOn \|\| memoryAllowed\) && memoryAllowed !== undefined && memoryOn !== undefined/);
+  // the fallback is this pet's own visit reply, never a shared card-wide value
+  assert.match(settings, /_mineSwitch\(s, "memory_allowed", s\.memoryAllowed\)/);
+  assert.doesNotMatch(src, /this\._memoryAllowed/);
+  assert.match(src, /s\.memoryAllowed = reply\.memory_allowed/);
   assert.match(settings, /\$\{memory\}/);
   assert.match(settings, /if \(!enabled && !this\._confirmed\(s, "memory_off", button, redrawStatus\)\) return;/);
+});
+
+// The row's rule, run on its own: shown where the pet allows memory or where it is on (the
+// server always lets a person turn it off); hidden until this pet's own option is known.
+test("the row shows when on or allowed, and hides until this pet's option is known", () => {
+  const settings = method("_renderSettings");
+  const cond = settings.match(/const memory = ([^\n]*)\n/)[1].replace(/\s*\?$/, "");
+  const show = (memoryOn, memoryAllowed, shared = false) =>
+    vm.runInNewContext(`(${cond})`, { sharedScreen: () => shared, memoryOn, memoryAllowed });
+  assert.equal(show(false, true), true);
+  assert.equal(show(true, true), true);
+  assert.equal(show(true, false), true); // on, but this pet doesn't allow it: can only be turned off
+  assert.equal(show(false, false), false);
+  assert.equal(show(true, undefined), false); // this pet's mine hasn't arrived
+  assert.equal(show(undefined, true), false);
+  assert.equal(show(true, true, true), false); // a shared screen
 });

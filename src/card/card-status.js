@@ -194,10 +194,12 @@ class HatchPetCardStatus extends HatchPetCardMoment {
     const myDay = this._mineSwitch(s, "my_day", this._myDay);
     const birthdayKept = this._mineSwitch(s, "birthday_kept", this._birthdayKept);
     const birthdayPhone = this._mineSwitch(s, "birthday_phone", this._birthdayPhone);
-    // Memory (plan M1a): only on their own screen, and only where this pet allows it.
+    // Memory (plan M1a): only on their own screen. The row shows where this pet allows it,
+    // and wherever it is on (a pet that doesn't allow it still lets them turn it off). The
+    // fallback is this pet's own visit reply (s.memoryAllowed); until that or mine, no row.
     const memoryOn = this._mineSwitch(s, "memory_on", this._memoryOn);
-    const memoryAllowed = this._mineSwitch(s, "memory_allowed", this._memoryAllowed);
-    const memory = !sharedScreen() && memoryAllowed && memoryOn !== undefined
+    const memoryAllowed = this._mineSwitch(s, "memory_allowed", s.memoryAllowed);
+    const memory = !sharedScreen() && (memoryOn || memoryAllowed) && memoryAllowed !== undefined && memoryOn !== undefined
       ? memoryRow(memoryOn, confirmArmed(s, "memory_off")) : "";
     const row = (iconName, label, value) =>
       `<div class="row srow"><span>${label}</span>${value}</div>`;

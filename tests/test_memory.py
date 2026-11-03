@@ -225,6 +225,59 @@ def test_a_saved_record_over_its_caps_or_with_twins_is_cut_on_load() -> None:
     assert out["picks"]["dream"] == picks[-5:]
 
 
+def test_memory_days_are_canonical_iso() -> None:
+    """Audit finding 2: `fromisoformat` takes 20261101 and 2026-W44-1, which would twin a
+    day. Memory only: a bad entry goes. A day after today is kept (no clock test at load:
+    a stale clock at boot would erase real days)."""
+    for bad in ("20261101", "2026-W44-1", "2026-11-1", "9999-12-31 ", " 2026-11-01"):
+        assert not P._memory_entry_ok(
+            "tags", {"day": bad, "kind": "big_day", "tag": "show"}
+        ), bad
+        assert not P._memory_entry_ok("dream", {"day": bad, "pick": "sea"}), bad
+        assert P._person({"memory": {"on": True, "since": bad}})["memory"] == {
+            "on": True
+        }, bad
+    twin = [
+        {"day": "20261101", "kind": "big_day", "tag": "show"},
+        {"day": "2026-11-01", "kind": "big_day", "tag": "show"},
+    ]
+    out = P._person({"memory": {"on": True, "tags": twin}})["memory"]
+    assert out["tags"] == [twin[1]]
+    out = P._person(
+        {
+            "memory": {
+                "on": True,
+                "since": "20261101",
+                "since_told": {"fav_weather": "2026-W44-1"},
+                "said": {"door2": "20261101"},
+                "heard": {"day": "20261101", "pet": "pip"},
+            }
+        }
+    )["memory"]
+    assert out == {"on": True}
+    assert not P._person({"memory_chosen_days": ["20261101"]}).get("memory_chosen_days")
+    assert P._person({"memory_chosen_days": ["2026-11-01"]})["memory_chosen_days"]
+    # A day after today is kept, whatever "today" is.
+    future = {"day": "9999-12-31", "pick": "sea"}
+    today = {"day": "2026-11-02", "pick": "sea"}
+    record = {"memory": {"on": True, "picks": {"dream": [today, future]}}}
+    assert P._person(record)["memory"]["picks"]["dream"] == [today, future]
+
+
+async def test_a_stored_future_day_is_kept_on_load_even_with_a_stale_clock(
+    hass: HomeAssistant, hass_storage: dict[str, Any]
+) -> None:
+    """A box booting with a clock before NTP must not erase real days."""
+    far = {"day": "9999-12-31", "pick": "sea"}
+    old = {"day": "2011-03-03", "pick": "sea"}
+    stale = {"memory": {"on": True, "picks": {"dream": [old, far]}}}
+    with patch(
+        "custom_components.virtual_pet.people.model_today", return_value="2001-01-01"
+    ):
+        pet = await start(hass, hass_storage, {"u": stale})
+    assert pet.people.memory("u")["picks"]["dream"] == [old, far]
+
+
 async def test_remember_keeps_one_per_key_and_its_caps_at_once(
     hass: HomeAssistant, hass_storage: dict[str, Any]
 ) -> None:
@@ -603,6 +656,36 @@ async def test_two_pets_erase_only_when_the_second_goes_off(
     await turn_memory(hass, "moss", False)
     assert not pet.people.memory_on("u")
     assert "memory" not in saved_people(hass_storage)["u"]
+
+
+async def test_the_admin_erase_tells_every_loaded_pets_watchers(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    """Audit finding 5: the erase pushes to the pets that stay loaded, so a card on
+    another pet never keeps a stale memory_on (the row shows while on)."""
+    ada, token = await a_user(hass)
+    pet = await start(hass, hass_storage, {ada.id: {"memory": full_memory()}})
+    moss = a_pet(hass, "moss")
+    assert await hass.config_entries.async_setup(moss.entry_id)
+    await hass.async_block_till_done()
+    client = await hass_ws_client(hass, token)
+    await client.send_json_auto_id(
+        {"type": f"{DOMAIN}/subscribe", "entity_id": "sensor.pip_mood", "shared": False}
+    )
+    assert (await client.receive_json())["success"]
+    assert (await client.receive_json())["event"]["mine"]["memory_on"] is True
+    await turn_memory(hass, "test_pet", False)  # moss still allows it: no erase
+    assert pet.people.memory_on(ada.id)
+    await turn_memory(hass, "moss", False)  # the last one: erased, and Pip's card hears
+    assert not pet.people.memory_on(ada.id)
+    seen = []
+    while True:
+        try:
+            msg = await asyncio.wait_for(client.receive_json(), 0.2)
+        except TimeoutError:
+            break
+        seen.append(msg["event"])
+    assert any(e.get("mine", {}).get("memory_on") is False for e in seen), seen
 
 
 async def test_a_disabled_pet_that_allows_memory_blocks_the_erase(
