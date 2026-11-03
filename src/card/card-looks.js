@@ -318,6 +318,13 @@ class HatchPetCardLooks extends HatchPetCardTick {
     box.append(input, ok, skip);
     s.screen.append(box);
     this._askPlace(s, box);
+    // Where the chips' prompt would cover the pet's "what is it?" (300 px, the porthole; at
+    // 330 it only grazes the bubble's edge), it goes (FM s2784 Q3); the chip row's own
+    // label still says it to a screen reader.
+    if (tags && covers(tags[0], s.bubble)) {
+      tags[0].hidden = true;
+      this._askPlace(s, box);
+    }
     step.box = box;
     step.until = Date.now() + ASK_MS + 1000;
     step.timer = setTimeout(() => this._askTextEnd(s), ASK_MS);

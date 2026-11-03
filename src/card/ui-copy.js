@@ -715,6 +715,14 @@ function spriteSrc(speciesId, sprite) {
 const PHOTO = { w: 300, h: 380, px: 2, pic: 268, edge: 16 };
 const PHOTO_GROUND = { helper: 1.35, couch_potato: 1.35, player: -1.35, homebody: -1.3, fireside: 1.3, fog_wanderer: -0.6 };
 const PHOTO_GROUND_DY = { fog_wanderer: 4, homebody: 4, player: 0 }; // x ks below the feet, as the shelf has them
+// Whether a shown element sits over another's, not just grazing its edge: they cross side to
+// side and a's bottom edge falls inside b (a hidden or missing one never does).
+const covers = (a, b) => {
+  if (!a?.offsetHeight || !b?.offsetHeight) return false;
+  const r = a.getBoundingClientRect();
+  const q = b.getBoundingClientRect();
+  return r.left < q.right && q.left < r.right && r.bottom > q.top && r.bottom <= q.bottom;
+};
 const inCompanionApp = () => /Home Assistant\//.test(navigator.userAgent || "");
 // The Android app can't save a picture from its page (no share, no long-press save).
 const inAndroidApp = () => inCompanionApp() && /Android/i.test(navigator.userAgent || "");

@@ -36,6 +36,9 @@ class El {
     return null;
   }
   querySelector() { return null; }
+  // Laid out only when the test gives its class a box (RECTS), else not shown.
+  get offsetHeight() { return RECTS[this.className] ? RECTS[this.className].bottom - RECTS[this.className].top : 0; }
+  getBoundingClientRect() { return RECTS[this.className]; }
   all() { return [this, ...this.children.flatMap((c) => c.all())]; }
   fire(type, extra = {}) {
     const ev = { target: this, stopPropagation() {}, ...extra };
@@ -43,6 +46,7 @@ class El {
   }
 }
 const document = { createElement: (tag) => new El(tag), hidden: false };
+const RECTS = {};
 `;
 
 function load({ shared = false } = {}) {
@@ -62,6 +66,7 @@ function load({ shared = false } = {}) {
     DOM,
     table("MEMORY_TAG_CHIPS"),
     grab(/\nconst SHARED_KEY = [^\n]*\n/),
+    grab(/\nconst covers = [\s\S]*?\n\};\n/),
     grab(/\nfunction sharedScreen\(\) \{[\s\S]*?\n\}\n/),
     `const ASK_MS = 60000; const FOLLOW_TEXT_MAX = 40; const KEPT = "kept"; const MINE = "mine";
      const BIG_DAY = { what: "what is it?", kept: "i'll remember ♥" };
@@ -69,12 +74,12 @@ function load({ shared = false } = {}) {
      const followTextKeep = () => {};`,
     `function makeCard(mine) {
       const card = {
-        calls: [], said: [], tapped: 0,
+        calls: [], said: [], tapped: 0, placed: 0,
         _followOk: true,
         _memoryOn: undefined,
         _hass: { user: { id: "ada" }, callWS(msg) { card.calls.push(msg); return Promise.resolve({ until: "2026-11-10" }); } },
         _line(s, who, text) { card.said.push(text); },
-        _askPlace() {},
+        _askPlace() { card.placed += 1; },
         _tapped() { card.tapped += 1; },
         ${method("_mineSwitch")},
         ${method("_sendFollow")},
@@ -83,10 +88,10 @@ function load({ shared = false } = {}) {
         ${method("_tagChips")},
         ${method("_askTextEnd")},
       };
-      const s = { mine, memoryAllowed: undefined, ids: { "sensor.life_stage": "e" }, screen: new El("div") };
+      const s = { mine, memoryAllowed: undefined, ids: { "sensor.life_stage": "e" }, screen: new El("div"), bubble: Object.assign(new El("div"), { className: "bubble" }) };
       return { card, s };
     }`,
-    "this.out = { makeCard, SHARED_KEY, MEMORY_TAG_CHIPS };",
+    "this.out = { makeCard, SHARED_KEY, MEMORY_TAG_CHIPS, RECTS };",
   ].join("\n"), ctx);
   if (shared) store.set(ctx.out.SHARED_KEY, "on");
   return { ...ctx.out, timers };
@@ -106,6 +111,31 @@ function open(out, mine = ON, kind = "big_day", day = "2026-11-06") {
   const input = box?.children.find((c) => c.tagName === "INPUT");
   return { card, s, box, chips, button, input, chip: (key) => chips.find((c) => c.dataset.tag === key) };
 }
+
+test("where the prompt would cover the pet's bubble it is hidden, the row keeps it as its label", () => {
+  const out = load();
+  const box = (top, bottom) => ({ left: 10, right: 200, top, bottom });
+  out.RECTS.bubble = box(10, 40);
+  out.RECTS.tagq = box(16, 30); // over its words (300 px: 29 px into it; the porthole: 22)
+  let o = open(out);
+  let prompt = o.box.children.find((c) => c.className === "tagq");
+  assert.equal(prompt.hidden, true);
+  assert.equal(o.card.placed, 2, "placed again without it");
+  const row = o.box.children.find((c) => c.className === "tags");
+  assert.equal(row.getAttribute("aria-label"), "what kind of day is it?");
+  assert.equal(o.chips.length, 9);
+  for (const [top, bottom] of [[32, 46], [50, 64]]) { // grazing its edge (330: 8 px), under it (420)
+    out.RECTS.tagq = box(top, bottom);
+    o = open(out);
+    prompt = o.box.children.find((c) => c.className === "tagq");
+    assert.ok(!prompt.hidden, `${top}-${bottom}`);
+    assert.equal(o.card.placed, 1);
+  }
+  delete out.RECTS.bubble; // no bubble showing
+  out.RECTS.tagq = box(10, 40);
+  o = open(out);
+  assert.ok(!o.box.children.find((c) => c.className === "tagq").hidden);
+});
 
 test("the chips have the approved words: the prompt, no tag first, then the eight", () => {
   const out = load();
