@@ -141,6 +141,45 @@ const PRESETS = {
     rain("lit", "rain, the backlight on", { deviceFx: { rain: true }, scene: "night", classes: ["lit"] });
     rain("reduce", "rain, reduced motion (still sheen; no onset)", { deviceFx: { rain: true, onset: "start", at: 600 }, motion: "reduce" });
     rain("off", "rain, screen effects off (nothing)", { deviceFx: { rain: true, onset: "start", at: 600 }, lcd: "off" });
+    // Device-alive slice 4B: the other weather keys on the same glass (rain's shots are above), one table
+    // row per key, as the card's WEATHER table is: the look at rest, the onset mid-run and late, the echo, the
+    // end, a line open over it, a dark shell, reduced motion (the still look, no onset), the switch off.
+    // A row is the house's `current` and the length of its onset, so the storm's frames can be looked at in
+    // turn (it is the one that must not flash). `at` is ms into the animation. A new key is a row here.
+    const WEATHER_LOOKS = {
+      snow: { current: { snow: true }, line: "brr, it's snowing ~", frames: [500, 1300, 2200] },
+      fog: { current: { fog: true }, line: "i can't see far ~", frames: [600, 1400, 2200] },
+      storm: { current: { storm: true }, line: "that sounds loud!", frames: [300, 700, 1200, 1800, 2600] },
+      wind: { current: { wind: true }, line: "whoosh ~", frames: [300, 900, 1500] },
+    };
+    const weather = (key, name, label, extra) => {
+      for (const width of [420, 300]) {
+        out.push({ name: `alive/${key}-${width}-${name}`, group: `alive-${key}-${width}`, label, world: "woodland", width,
+          clip: "screen", ...extra });
+      }
+    };
+    for (const [key, look] of Object.entries(WEATHER_LOOKS)) {
+      const fx = (more) => ({ deviceFx: { key, current: look.current, ...more } });
+      weather(key, "dry", `${key} false (nothing)`, { deviceFx: { key, current: { [key]: false } } });
+      weather(key, "rest", `${key} at rest`, fx({}));
+      look.frames.forEach((at, i) => weather(key, `onset-${i + 1}`, `${key} onset, ${at} ms in`, fx({ onset: "start", at })));
+      weather(key, "echo", `${key} echo (first view 20 s on), 300 ms in`, fx({ echo: "start", at: 300 }));
+      weather(key, "end", `${key} ended, 700 ms in`, { deviceFx: { key, current: { [key]: false }, onset: "end", at: 700 } });
+      weather(key, "dialogue", `${key} with a line open`, { ...fx({ onset: "start", at: look.frames[1] }), say: look.line });
+      weather(key, "dark", `${key} on a dark shell`, { ...fx({ onset: "start", at: look.frames[1] }), shell: { finish: "smoke" }, scene: "night" });
+      weather(key, "reduce", `${key}, reduced motion (the still look; no onset)`, { ...fx({ onset: "start", at: 600 }), motion: "reduce" });
+      weather(key, "off", `${key}, screen effects off (nothing)`, { ...fx({ onset: "start", at: 600 }), lcd: "off" });
+    }
+    weather("storm", "rain", "lightning-rainy: rain and storm together", { deviceFx: { current: { rain: true, storm: true } } });
+    weather("snow", "wind", "snow and wind together", { deviceFx: { current: { snow: true, wind: true } } });
+    // The moon (FM11), off the wire: a full and a new day, with a house that has no device_fx at all.
+    for (const [name, moon, extra] of [["full", "full", {}], ["new", "new", {}], ["full-dark", "full", { shell: { finish: "smoke" }, scene: "night" }],
+      ["full-reduce", "full", { motion: "reduce" }], ["full-off", "full", { lcd: "off" }]]) {
+      for (const width of [420, 300]) {
+        out.push({ name: `alive/moon-${width}-${name}`, group: `alive-moon-${width}`, label: `${moon} moon${name === "full" || name === "new" ? "" : ` (${name})`}`,
+          world: "woodland", width, clip: "screen", moon, ...extra });
+      }
+    }
     // Device-alive slice 3C: the rim cues, one shot per cue mid-flight (clip: the device, so the bezel shows),
     // against a light and a dark shell, then the protected states: the switch off (nothing), reduced motion
     // (nothing), a care scene running (the scene wins: no cue), medicine (no cue). `at` is ms into the cue.

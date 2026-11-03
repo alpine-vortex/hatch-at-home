@@ -263,11 +263,11 @@ test("the cue's life: the rim's own animation is the lease's clock, and its end 
 test("the part: no fx- class, rim classes all dir-, the rim recipes ride the director's shell track", () => {
   assert.ok(!/\bfx-/.test(part));
   for (const [kind, r] of Object.entries(F.RECIPES)) {
-    if (kind === "rain") continue;
+    if (Object.keys(F.WEATHER).includes(kind)) continue;
     assert.strictEqual(r.track, "shellImpulse", kind);
     assert.strictEqual(r.priority, D.PRIORITY.care, kind);
   }
-  assert.deepStrictEqual(Object.keys(F.RECIPES).sort(), ["rain", "rimClean", "rimFeed", "rimPlay", "rimTuck"]);
+  assert.deepStrictEqual(Object.keys(F.RECIPES).sort(), [...Object.keys(F.WEATHER), "rimClean", "rimFeed", "rimPlay", "rimTuck"].sort());
 });
 
 // ---- the card's method, on a stub card ----

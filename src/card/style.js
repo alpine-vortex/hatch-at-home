@@ -871,8 +871,73 @@ const STYLE = `
     .hw.glass.dir-echo.dir-clear::before { animation-duration: .6s; }
     @keyframes dir-run { 0% { top: -8%; opacity: 0; } 10%, 80% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
     @keyframes dir-dry { from { opacity: .8; } to { opacity: 0; } }
-    /* Reduced motion: the still sheen only; the onset is a move, so there is none (the card never starts
-       one, and the global rule above also stops the animation). */
+    /* The other layers (slice 4B, plan 6.6b): five <b> in the glass, one per look, each at rest by a
+       transition on opacity. 1 frost (snow), 2 fog, 3 storm, 4 wind, 5 the moon (client-computed, off the
+       wire). The ambience is the class on the glass (dir-frost ...): still, a transition at most, never a
+       finite animation that ends on the glass (F11). An onset is the layer's own animation to or from
+       its resting look, and the glass carries the lease's clock, the one named animation dir-glass-life,
+       the only thing the card's animationend listener releases on. */
+    .hw.glass b { position: absolute; inset: 0; display: block; opacity: 0; pointer-events: none;
+      transition: opacity .8s ease-out; }
+    @keyframes dir-glass-life { from, to { opacity: 1; } }
+    .hw.glass.dir-drop { animation: dir-glass-life 1.8s linear both; }
+    .hw.glass.dir-clear { animation: dir-glass-life 1.2s linear both; }
+    .hw.glass.dir-frost-form, .hw.glass.dir-thaw, .hw.glass.dir-fog-in, .hw.glass.dir-fog-out { animation: dir-glass-life 2.4s linear both; }
+    .hw.glass.dir-storm-in, .hw.glass.dir-storm-out { animation: dir-glass-life 3s linear both; }
+    .hw.glass.dir-wind-gust, .hw.glass.dir-wind-die { animation: dir-glass-life 2s linear both; }
+    /* Snow: frost in the four corners, in hard pixel rings. It forms in six steps and thaws the same way. */
+    .hw.glass b:nth-child(1) { background:
+      radial-gradient(circle at 0 0, rgba(238,247,255,.85) 0 calc(var(--b) * 9), rgba(238,247,255,.5) calc(var(--b) * 9) calc(var(--b) * 15), rgba(238,247,255,.22) calc(var(--b) * 15) calc(var(--b) * 22), transparent calc(var(--b) * 22)),
+      radial-gradient(circle at 100% 0, rgba(238,247,255,.85) 0 calc(var(--b) * 8), rgba(238,247,255,.5) calc(var(--b) * 8) calc(var(--b) * 13), rgba(238,247,255,.22) calc(var(--b) * 13) calc(var(--b) * 19), transparent calc(var(--b) * 19)),
+      radial-gradient(circle at 0 100%, rgba(238,247,255,.85) 0 calc(var(--b) * 8), rgba(238,247,255,.5) calc(var(--b) * 8) calc(var(--b) * 13), rgba(238,247,255,.22) calc(var(--b) * 13) calc(var(--b) * 19), transparent calc(var(--b) * 19)),
+      radial-gradient(circle at 100% 100%, rgba(238,247,255,.85) 0 calc(var(--b) * 9), rgba(238,247,255,.5) calc(var(--b) * 9) calc(var(--b) * 15), rgba(238,247,255,.22) calc(var(--b) * 15) calc(var(--b) * 22), transparent calc(var(--b) * 22)); }
+    .hw.glass.dir-frost b:nth-child(1) { opacity: .9; }
+    .hw.glass.dir-frost-form b:nth-child(1) { animation: dir-layer-in 2.4s steps(6) both; }
+    .hw.glass.dir-thaw b:nth-child(1) { animation: dir-layer-in 2.4s steps(6) reverse both; }
+    /* Fog: a soft veil that thickens toward the rim. It gathers and clears slowly. */
+    .hw.glass b:nth-child(2) { background:
+      radial-gradient(ellipse at 50% 52%, rgba(226,232,238,.05) 0 34%, rgba(226,232,238,.22) 74%, rgba(226,232,238,.42)); }
+    .hw.glass.dir-fog b:nth-child(2) { opacity: .9; }
+    .hw.glass.dir-fog-in b:nth-child(2) { animation: dir-layer-in 2.4s ease-in-out both; }
+    .hw.glass.dir-fog-out b:nth-child(2) { animation: dir-layer-in 2.4s ease-in-out reverse both; }
+    /* Storm: a cooler dim over the screen. NOT a flash: the shiver is a slow wobble on the tint's
+       opacity (every step at most .17, none shorter than a fifth of a 1.8 s echo, so under 2 Hz), the
+       release a plain ease, and nothing here repeats. A source test holds these numbers. */
+    .hw.glass b:nth-child(3) { background: linear-gradient(180deg, rgba(30,44,80,.34), rgba(30,44,80,.2)); }
+    .hw.glass.dir-storm b:nth-child(3) { opacity: 1; }
+    .hw.glass.dir-storm-in b:nth-child(3) { animation: dir-storm-shiver 3s linear both; }
+    .hw.glass.dir-storm-out b:nth-child(3) { animation: dir-layer-in 3s ease-in-out reverse both; }
+    @keyframes dir-storm-shiver { 0% { opacity: 0; } 20% { opacity: .5; } 40% { opacity: .38; } 60% { opacity: .55; } 80% { opacity: .46; } 100% { opacity: 1; } }
+    /* Wind: a few flecks, level and short, that lean in from the side. */
+    .hw.glass b:nth-child(4) { background:
+      linear-gradient(rgba(240,246,252,.85), rgba(240,246,252,.85)) 14% 24% / calc(var(--b) * 7) var(--b) no-repeat,
+      linear-gradient(rgba(240,246,252,.85), rgba(240,246,252,.85)) 62% 18% / calc(var(--b) * 9) var(--b) no-repeat,
+      linear-gradient(rgba(240,246,252,.7), rgba(240,246,252,.7)) 38% 44% / calc(var(--b) * 6) var(--b) no-repeat,
+      linear-gradient(rgba(240,246,252,.85), rgba(240,246,252,.85)) 80% 52% / calc(var(--b) * 8) var(--b) no-repeat,
+      linear-gradient(rgba(240,246,252,.7), rgba(240,246,252,.7)) 22% 70% / calc(var(--b) * 9) var(--b) no-repeat,
+      linear-gradient(rgba(240,246,252,.85), rgba(240,246,252,.85)) 70% 84% / calc(var(--b) * 6) var(--b) no-repeat; }
+    .hw.glass.dir-wind b:nth-child(4) { opacity: .7; }
+    .hw.glass.dir-wind-gust b:nth-child(4) { animation: dir-wind-in 2s steps(10) both; }
+    .hw.glass.dir-wind-die b:nth-child(4) { animation: dir-wind-out 2s steps(10) both; }
+    @keyframes dir-layer-in { from { opacity: 0; } }
+    @keyframes dir-wind-in { from { opacity: 0; transform: translateX(-26%); } to { opacity: .7; transform: none; } }
+    @keyframes dir-wind-out { from { opacity: .7; transform: none; } to { opacity: 0; transform: translateX(30%); } }
+    /* An echo is the same onset, shorter (its lease clock too). */
+    .hw.glass.dir-echo.dir-frost-form, .hw.glass.dir-echo.dir-thaw, .hw.glass.dir-echo.dir-fog-in, .hw.glass.dir-echo.dir-fog-out,
+    .hw.glass.dir-echo.dir-frost-form b, .hw.glass.dir-echo.dir-thaw b, .hw.glass.dir-echo.dir-fog-in b, .hw.glass.dir-echo.dir-fog-out b { animation-duration: 1.2s; }
+    .hw.glass.dir-echo.dir-storm-in, .hw.glass.dir-echo.dir-storm-out, .hw.glass.dir-echo.dir-storm-in b, .hw.glass.dir-echo.dir-storm-out b { animation-duration: 1.8s; }
+    .hw.glass.dir-echo.dir-wind-gust, .hw.glass.dir-echo.dir-wind-die, .hw.glass.dir-echo.dir-wind-gust b, .hw.glass.dir-echo.dir-wind-die b { animation-duration: 1s; }
+    .hw.glass.dir-echo.dir-drop { animation-duration: .9s; }
+    .hw.glass.dir-echo.dir-clear { animation-duration: .6s; }
+    /* The moon, on the full and the new day (computed by the card from the server's clock, no wire key):
+       a still halo at the top right of the glass. */
+    .hw.glass b:nth-child(5) { background: none; }
+    .hw.glass.dir-moon b:nth-child(5) { opacity: 1; background:
+      radial-gradient(circle at 86% 13%, rgba(255,246,208,.9) 0 calc(var(--b) * 3), rgba(255,246,208,.4) calc(var(--b) * 3) calc(var(--b) * 6), rgba(255,246,208,.14) calc(var(--b) * 6) calc(var(--b) * 10), transparent calc(var(--b) * 10)); }
+    .hw.glass.dir-newmoon b:nth-child(5) { opacity: 1; background:
+      radial-gradient(circle at 86% 13%, rgba(14,20,40,.62) 0 calc(var(--b) * 3), rgba(190,206,255,.34) calc(var(--b) * 3) calc(var(--b) * 4), transparent calc(var(--b) * 4)); }
+    /* Reduced motion: the still looks only; an onset is a move, so there is none (the card never starts
+       one, and the global rule above also stops the animation and the transition). */
     @media (prefers-reduced-motion: reduce) { .hw.glass.dir-drop::after, .hw.glass.dir-clear::before { display: none; } }
   }
   /* The rim cues (device-alive 3C, plan section 7): a press's one pulse on the bezel's plastic, on its

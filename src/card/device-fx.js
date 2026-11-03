@@ -1,19 +1,25 @@
-// The rain adapter for the device-alive director (docs/plan-2026-11-03-device-alive-interactions.md,
-// slice 3B; sections 5.2, 6.3, 6.6, 6.7). It turns what the server's signal bridge sends
-// (custom_components/virtual_pet/device_fx.py) into the director's calls, and holds the rain recipe.
+// The weather adapter for the device-alive director (docs/plan-2026-11-03-device-alive-interactions.md,
+// slices 3B and 4B; sections 5.2, 6.3, 6.6, 6.6b, 6.7). It turns what the server's signal bridge sends
+// (custom_components/virtual_pet/device_fx.py) into the director's calls, and holds the weather recipes.
+// Slice 4B made it a table (`WEATHER`, keyed like the server's DEVICE_SIGNAL_MAP and its JSON export,
+// tests/js/device_signal_map.json): `ambientOf`, `cueOf`, `paint` and `sync` read the table, no key is
+// named anywhere else. A new key is one row here, one row in the map, and its CSS.
 // One frozen namespace, no `this`, no Home Assistant, no timer of its own. The only DOM it reaches
 // is the slide's own glass element (`slide.glass`, its classes), through the recipe's two hooks.
 //
-// The wire, as 3A built it: house.device_fx = {version: 1, current: {rain: bool}} (rain missing
-// until the server has known it once; the whole key missing for a house with no weather source);
-// snapshot.device_fx_recent, a ring of entries, oldest first; and a live {"fx": entry}. An entry
-// is {id, kind, occurred_at, expires_at, scope}, kind rain_started or rain_stopped. Anything else
-// is dropped here: the server never sends CSS, selectors or paths, and the card picks from what it
-// declares.
+// The wire, as 3A built it and 4A widened it: house.device_fx = {version: 1, current: {rain, snow, fog,
+// storm, wind: bool}} (each missing until the server has known it once; the whole key missing for a
+// house with no weather source); snapshot.device_fx_recent, a ring of entries, oldest first; and a live
+// {"fx": entry}. An entry is {id, kind, occurred_at, expires_at, scope}, kind `<key>_started` or
+// `<key>_stopped`. Anything else is dropped here: the server never sends CSS, selectors or paths, and
+// the card picks from what it declares. `current` is the truth and an entry at most one cue (4A: one
+// onset per pass), so a missing kind is not an error.
 //
-// The classes on the glass are the director's own and all start `dir-`: `dir-wet` is the ambience
-// (state), `dir-drop` / `dir-clear` the onset, `dir-echo` its shortened form. Never the screen
-// classes the house effects use (plan FM4, m5): a source test keeps the two families apart.
+// The classes on the glass are the director's own and all start `dir-`: an ambience class per key
+// (`dir-wet`, `dir-frost`, `dir-fog`, `dir-storm`, `dir-wind`; still, a transition at most), an onset
+// pair per key, `dir-echo` the shortened form, and the client-computed moon (`dir-moon`, `dir-newmoon`,
+// off the wire: FM11). Never the screen classes the house effects use (plan FM4, m5): a source test
+// keeps the two families apart. CLASSES_BY_LAYER lists them by layer, tested against style.js.
 //
 // Slice 3C adds the rim cues (plan section 7's last paragraph): feed, play, clean and the tuck, each a
 // `shellImpulse` lease on the slide's rim layer (`slide.rim`, a `.hw.rim` in the bezel, deaf to the
@@ -22,15 +28,50 @@
 // haptic; reduced motion offers none; a care scene already running wins.
 const HATCH_DEVICE_FX = Object.freeze(
   (() => {
-    const COLLAPSE = "rain"; // a start and its end share it: they cancel, neither plays
-    // The wire kind to the recipe's kind, direction and data (M6): `stillTrue` and the collapse
-    // read these, the wire has neither.
-    const KINDS = Object.freeze({
-      rain_started: Object.freeze({ direction: "start", value: true }),
-      rain_stopped: Object.freeze({ direction: "end", value: false }),
+    // The weather keys, in the server map's order (tests/js/device_signal_map.json is checked against
+    // this table). Per key: the ambience class (state, still), the onset class for a start and for an
+    // end, the onset's length and its echo's (the director's watchdog; the glass's own `dir-glass-life`
+    // clock is the real end), the echo rank (the map's `echo_rank`) and the per-kind cooldown. The
+    // cooldown stays under the map's `block_s` so a held reverse (45-55 s after its start) is not eaten.
+    const row = (ambient, start, end, durationMs, echoMs) =>
+      Object.freeze({ ambient, start, end, durationMs, echoMs, echoRank: 2, cooldownMs: 20000 });
+    const WEATHER = Object.freeze({
+      rain: row("dir-wet", "dir-drop", "dir-clear", 1800, 900), // a drop runs down; the last bead clears
+      snow: row("dir-frost", "dir-frost-form", "dir-thaw", 2400, 1200), // corner frost forms / thaws
+      fog: row("dir-fog", "dir-fog-in", "dir-fog-out", 2400, 1200), // fog gathers at the rim / clears
+      storm: row("dir-storm", "dir-storm-in", "dir-storm-out", 3000, 1800), // a dim shiver, never a flash
+      wind: row("dir-wind", "dir-wind-gust", "dir-wind-die", 2000, 1000), // flecks lean across the glass
     });
-    const CLASSES = Object.freeze(["dir-drop", "dir-clear", "dir-echo"]);
-    const RIM_CLASSES = Object.freeze(["dir-feed", "dir-play", "dir-clean", "dir-tuck"]);
+    const KEY_LIST = Object.freeze(Object.keys(WEATHER));
+    // The wire kind to the recipe's key, direction and value (M6): `stillTrue` and the collapse read
+    // these, the wire has neither.
+    const KINDS = Object.freeze(
+      Object.fromEntries(
+        KEY_LIST.flatMap((key) => [
+          [`${key}_started`, Object.freeze({ key, direction: "start", value: true })],
+          [`${key}_stopped`, Object.freeze({ key, direction: "end", value: false })],
+        ])
+      )
+    );
+    // The moon, off the wire (FM11): a static halo on the full and the new day, computed from the server's
+    // clock. Not a key: it has no edge, no onset, no ring entry, no echo.
+    const MOON = Object.freeze({ full: "dir-moon", new: "dir-newmoon" });
+    // The rim cues a moment drives (slice 4D fills this: doorbell, appliance, heating and cooling, the vacuum),
+    // by the moment's type: {kind, cls, ms, cooldownMs}, the same lamp vocabulary as RIM below. Empty in 4B: the
+    // entry point (`offerMoment`) and the recipe factory are here so 4D adds rows, not a second refactor.
+    const HOUSE_RIM = Object.freeze({});
+    const USER_RIM_CLASSES = ["dir-feed", "dir-play", "dir-clean", "dir-tuck"];
+    // Every class a recipe or the paint may set, by layer (F11): each recipe's start clears its layer's
+    // onset set, the paint owns the ambient set. A test checks it against every `.hw.glass.dir-*` and
+    // `.hw.rim.dir-*` rule in style.js.
+    const ONSETS = Object.freeze(KEY_LIST.flatMap((key) => [WEATHER[key].start, WEATHER[key].end]).concat("dir-echo"));
+    const CLASSES_BY_LAYER = Object.freeze({
+      glass: ONSETS,
+      ambient: Object.freeze(KEY_LIST.map((key) => WEATHER[key].ambient).concat(Object.values(MOON))),
+      rim: Object.freeze(USER_RIM_CLASSES.concat(Object.values(HOUSE_RIM).map((cue) => cue.cls))),
+    });
+    const CLASSES = CLASSES_BY_LAYER.glass;
+    const RIM_CLASSES = CLASSES_BY_LAYER.rim;
     const isObj = (x) => !!x && typeof x === "object";
 
     // The ambient state the house view carries. Missing is "nothing to paint", never dry; a
@@ -38,8 +79,9 @@ const HATCH_DEVICE_FX = Object.freeze(
     const ambientOf = (house) => {
       const fx = isObj(house) ? house.device_fx : null;
       if (!isObj(fx) || fx.version !== 1) return {};
-      const rain = isObj(fx.current) ? fx.current.rain : undefined;
-      return typeof rain === "boolean" ? { rain } : {};
+      const out = {};
+      if (isObj(fx.current)) for (const key of KEY_LIST) if (typeof fx.current[key] === "boolean") out[key] = fx.current[key];
+      return out;
     };
 
     // One wire entry as a director cue, or null. A live onset leaves `occurredAt` and `ttlMs`
@@ -51,8 +93,8 @@ const HATCH_DEVICE_FX = Object.freeze(
       const kind = Object.prototype.hasOwnProperty.call(KINDS, entry.kind) ? KINDS[entry.kind] : null;
       if (!kind) return null;
       const cue = {
-        id: entry.id, kind: "rain", origin: "house", presentation: ring ? "echo" : "onset",
-        direction: kind.direction, data: { key: "rain", value: kind.value },
+        id: entry.id, kind: kind.key, origin: "house", presentation: ring ? "echo" : "onset",
+        direction: kind.direction, data: { key: kind.key, value: kind.value },
       };
       if (ring) {
         const at = Date.parse(entry.occurred_at);
@@ -67,29 +109,33 @@ const HATCH_DEVICE_FX = Object.freeze(
 
     const clear = (glass) => glass.classList.remove(...CLASSES);
 
-    // The recipe. A drop forms and runs down the inner glass (start), or the last bead clears
-    // (end); an echo is the same, shorter. The shell/glass only: never the pet, never a screen
-    // class. The hooks put the classes on the slide's glass; the animation's end releases it
-    // (the card listens), and the director's watchdog is the backstop.
-    const RAIN = Object.freeze({
-      track: "shellImpulse", priority: HATCH_DIRECTOR.PRIORITY.house, // the director loads first (manifest.txt)
-      durationMs: 1800, echoMs: 900, echoRank: 2, // a weather onset: after the doorbell and the appliance (6.7)
-      collapseKey: COLLAPSE, cancel: "finish",
-      start: (slide, effect) => {
-        const glass = slide && slide.glass;
-        if (!glass) return;
-        clear(glass);
-        void glass.offsetWidth; // a replaced effect restarts its animation
-        glass.classList.add(effect.data && effect.data.value === false ? "dir-clear" : "dir-drop");
-        if (effect.presentation === "echo") glass.classList.add("dir-echo");
-        slide.dirEffect = effect.id;
-      },
-      dispose: (slide, effect) => {
-        const glass = slide && slide.glass;
-        if (glass) clear(glass);
-        if (slide && slide.dirEffect === effect.id) slide.dirEffect = 0;
-      },
-    });
+    // The recipe, one per key, made from its row. An onset class is set on the glass: the layer of its
+    // key animates (a drop runs down the inner glass, frost forms, fog gathers, the dim shivers, flecks
+    // lean across) and the glass's own `dir-glass-life` is the lease's clock, so the card releases on
+    // that one name only (F11). An echo is the same, shorter. The shell/glass only: never the pet,
+    // never a screen class. The director's watchdog is the backstop.
+    const weatherRecipe = (key) => {
+      const w = WEATHER[key];
+      return Object.freeze({
+        track: "shellImpulse", priority: HATCH_DIRECTOR.PRIORITY.house, // the director loads first (manifest.txt)
+        durationMs: w.durationMs, echoMs: w.echoMs, echoRank: w.echoRank, // a weather onset: after the doorbell and the appliance (6.7)
+        cooldownMs: w.cooldownMs, collapseKey: key, cancel: "finish",
+        start: (slide, effect) => {
+          const glass = slide && slide.glass;
+          if (!glass) return;
+          clear(glass);
+          void glass.offsetWidth; // a replaced effect restarts its animation
+          glass.classList.add(effect.data && effect.data.value === false ? w.end : w.start);
+          if (effect.presentation === "echo") glass.classList.add("dir-echo");
+          slide.dirEffect = effect.id;
+        },
+        dispose: (slide, effect) => {
+          const glass = slide && slide.glass;
+          if (glass) clear(glass);
+          if (slide && slide.dirEffect === effect.id) slide.dirEffect = 0;
+        },
+      });
+    };
 
     // The rim cues, by the toy's data-action: the cue kind, its class on the rim and its length (the
     // CSS animation's own clock is the same). Medicine, snack, scold and praise have none (plan 13).
@@ -100,10 +146,10 @@ const HATCH_DEVICE_FX = Object.freeze(
       lights: Object.freeze({ kind: "rimTuck", cls: "dir-tuck", ms: 1800 }), // the lamps dimming in sequence
     });
     const clearRim = (rim) => rim.classList.remove(...RIM_CLASSES);
-    const rimRecipe = (cue) =>
+    const rimRecipe = (cue, priority = HATCH_DIRECTOR.PRIORITY.care) => // a press is over a house onset
       Object.freeze({
-        track: "shellImpulse", priority: HATCH_DIRECTOR.PRIORITY.care, // a press is over a house onset
-        durationMs: cue.ms, cancel: "finish",
+        track: "shellImpulse", priority, durationMs: cue.ms, cancel: "finish",
+        ...(cue.cooldownMs > 0 ? { cooldownMs: cue.cooldownMs } : {}),
         start: (slide, effect) => {
           const rim = slide && slide.rim;
           if (!rim) return;
@@ -119,8 +165,9 @@ const HATCH_DEVICE_FX = Object.freeze(
         },
       });
     const RECIPES = Object.freeze({
-      rain: RAIN,
+      ...Object.fromEntries(KEY_LIST.map((key) => [key, weatherRecipe(key)])),
       ...Object.fromEntries(Object.values(RIM).map((cue) => [cue.kind, rimRecipe(cue)])),
+      ...Object.fromEntries(Object.values(HOUSE_RIM).map((cue) => [cue.kind, rimRecipe(cue, HATCH_DIRECTOR.PRIORITY.house)])),
     });
 
     // A rim cue for the toy `action` (its data-action), from the card's press (or a confirmed tuck).
@@ -135,14 +182,50 @@ const HATCH_DEVICE_FX = Object.freeze(
       return dir.offer(slide, { id, kind: cue.kind, origin: "user", presentation: "onset" });
     };
 
-    // The ambience on the glass: the wet sheen, when the switch is on and the house says rain.
-    // Painted for any slide (it is still: no animation, nothing to freeze).
+    // A rim cue for a moment the card has just handled (slice 4D; plan 6.6c): `moment` is the moment's type, `id`
+    // its own (`m.at` plus the type, or a card sequence), called from the same callback as the moment's screen-effect
+    // sibling, never from a wire edge. A house cue: `origin: "house"`, the house priority, no `occurredAt` (a
+    // moment has no clock dependence, so it is not gated on `clockKnown`). The same gates as `rim`: reduced
+    // motion refuses it, a care scene running wins; the director decides the rest (the switch, on show, visible).
+    const offerMoment = (dir, slide, moment, id, env) => {
+      const cue = Object.prototype.hasOwnProperty.call(HOUSE_RIM, moment) ? HOUSE_RIM[moment] : null;
+      if (!cue) return { accepted: false, reason: "no-cue", effectId: 0 };
+      if (env.calm) return { accepted: false, reason: "calm", effectId: 0 };
+      if (dir.busyOwners(slide).includes("scene")) return { accepted: false, reason: "busy", effectId: 0 };
+      return dir.offer(slide, { id, kind: cue.kind, origin: "house", presentation: "onset" });
+    };
+
+    // The full or the new moon for a time (ms), or "". The synodic month from a known new moon
+    // (2000-01-06 18:14 UTC); the day is within 1.2 days of the phase.
+    const SYNODIC_DAYS = 29.530588853;
+    const NEW_MOON_MS = Date.UTC(2000, 0, 6, 18, 14);
+    const moonOf = (ms) => {
+      if (typeof ms !== "number" || !Number.isFinite(ms)) return "";
+      const age = (((ms - NEW_MOON_MS) / 864e5) % SYNODIC_DAYS + SYNODIC_DAYS) % SYNODIC_DAYS;
+      if (age < 1.2 || age > SYNODIC_DAYS - 1.2) return "new";
+      return Math.abs(age - SYNODIC_DAYS / 2) < 1.2 ? "full" : "";
+    };
+
+    // The ambience on the glass: one still class per key the house says is true, and the moon, when the
+    // switch is on. Painted for any slide (it is still: no animation, nothing to freeze, a transition
+    // at most). Returns whether anything is painted.
     const paint = (dir, slide, env) => {
       const glass = slide && slide.glass;
       if (!glass) return false;
-      const wet = !!env.lcdOn && dir.ambient(slide).rain === true;
-      glass.classList.toggle("dir-wet", wet);
-      return wet;
+      const amb = dir.ambient(slide);
+      let any = false;
+      for (const key of KEY_LIST) {
+        const on = !!env.lcdOn && amb[key] === true;
+        glass.classList.toggle(WEATHER[key].ambient, on);
+        any = any || on;
+      }
+      const moon = env.lcdOn ? moonOf(env.now) : "";
+      for (const phase of Object.keys(MOON)) {
+        const on = moon === phase;
+        glass.classList.toggle(MOON[phase], on);
+        any = any || on;
+      }
+      return any;
     };
 
     // A house view arrived (snapshot or diff): the ambient state first, then the paint.
@@ -167,6 +250,6 @@ const HATCH_DEVICE_FX = Object.freeze(
       return dir.enterView(slide, ringOf(recent), env.clockKnown === true);
     };
 
-    return { RECIPES, KINDS, CLASSES, RIM, RIM_CLASSES, ambientOf, cueOf, ringOf, paint, sync, live, enter, rim };
+    return { RECIPES, KINDS, WEATHER, CLASSES, CLASSES_BY_LAYER, RIM, HOUSE_RIM, RIM_CLASSES, moonOf, ambientOf, cueOf, ringOf, paint, sync, live, enter, rim, offerMoment };
   })()
 );
