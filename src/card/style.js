@@ -464,6 +464,47 @@ const STYLE = `
   /* D-a: today's visitor watching a dig, still, behind the buttons (fresh-expand E5). */
   .game .gwatch { position: absolute; right: 4%; bottom: 26%; height: 18%; image-rendering: pixelated;
     pointer-events: none; transform: scaleX(-1); }
+  /* Hop of the Day (experimental_hop; plan ship 2b). The row under the picker: the picker's own
+     chunky button, a strip at the foot; _fitPicker moves it into the last line of the games where
+     the strip leaves them no room (.slot) and shrinks it to its label (.tight). */
+  .game .ghop { left: 3%; right: 3%; bottom: 2%; min-height: 44px; width: auto; border-radius: 14px;
+    padding: 4px 10px; font: inherit; font-size: 14px; box-shadow: 0 4px 0 #3a2a1a; }
+  .game .ghop[hidden] { display: none; }
+  .game .ghop.tight { padding: 0 6px; font-size: 11px; white-space: nowrap; }
+  .game .ghop:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
+  /* The board: the grid on the left, the keys on the right (2 x 4; the close button is the eighth).
+     Sizes are set in JS (_hopLayout) from the overlay: --hk the key, --c the cell. No new art:
+     the cells are CSS. The real pet stays under the board, still, and the piece wears its frame. */
+  .game .hopb[hidden] { display: none; }
+  .game .hgrid { position: absolute; display: grid; grid-auto-rows: var(--c); outline: none;
+    pointer-events: auto; }
+  .game .hc { box-sizing: border-box; border: 1px solid rgba(58, 42, 26, .35); }
+  .game .hc.pad { background: rgba(255, 253, 245, .86); border-radius: 22%; }
+  .game .hc.pad.find::after { content: "✦"; display: grid; place-items: center; height: 100%;
+    color: #b8651b; font-size: calc(var(--c) * .5); line-height: 1; }
+  .game .hc.stone { background: rgba(110, 104, 96, .9); border-radius: 30%; }
+  .game .hc.water { background: rgba(70, 130, 190, .72); }
+  .game .hc.wall { background: rgba(58, 42, 26, .92); border-radius: 0; }
+  .game .hc.nest { background: rgba(255, 253, 245, .55); border: 2px dashed #3a2a1a; border-radius: 50%; }
+  .game .hc.nest.open { background: rgba(255, 253, 245, .95); border-style: solid; }
+  .game .hc.sunk { background: rgba(58, 42, 26, .28); border-style: dashed; }
+  .game .hc.sunk::after { content: none; }
+  .game .hc.legal { box-shadow: inset 0 0 0 2px #3a2a1a; }
+  .game .hc.lit { box-shadow: inset 0 0 0 3px #fffdf5, inset 0 0 0 5px #3a2a1a; background: rgba(255, 253, 245, 1); }
+  .game .hpath { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none;
+    z-index: 1; }
+  .game .hpath path { fill: none; stroke: #3a2a1a; stroke-width: 2; stroke-dasharray: 2 4; stroke-linecap: round; }
+  .game .hpiece { position: absolute; left: 0; top: 0; z-index: 2; image-rendering: pixelated;
+    pointer-events: none; object-fit: contain; transition: translate .14s ease-out; }
+  .game .hkeys { position: absolute; display: grid; grid-template-columns: repeat(2, var(--hk));
+    grid-auto-rows: var(--hk); gap: 3px; pointer-events: none; }
+  .game .hk { position: static; min-width: 0; min-height: 0; width: var(--hk); height: var(--hk);
+    font: inherit; font-size: calc(var(--hk) * .42); line-height: 1; }
+  .game .hk.on { background: #3a2a1a; color: #fffdf5; }
+  .game.hop .gx { top: auto; right: var(--hr); bottom: var(--hb); width: var(--hk); height: var(--hk);
+    min-width: 0; min-height: 0; font-size: calc(var(--hk) * .42); }
+  .screen:has(> .game.hop:not([hidden])) :is(.pet, .ghost, .drape, .perch, .attention) { visibility: hidden; }
+  .screen:has(> .game.hop:not(.end):not([hidden])) .bubble { display: none; }
   /* Trait flair: placed in JS from the head point and the feet line. Every piece
      must read standing still too (reduced motion turns all animation off). */
   .flair { position: absolute; inset: 0; z-index: 2; pointer-events: none;

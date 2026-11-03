@@ -1173,7 +1173,7 @@ async function runShots(browser, base, shots, outDir, workers) {
           }, shot.lines);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(n));
         }
-        if (shot.costume || shot.gift || shot.look || shot.care || shot.lightsAlign) {
+        if (shot.costume || shot.gift || shot.look || shot.care || shot.lightsAlign || shot.view === "board" || (shot.hop && shot.view === "games")) {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
         }
