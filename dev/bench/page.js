@@ -668,6 +668,7 @@
   let HOP_FIXTURES;
   async function hopBoard(shot) {
     HOP_FIXTURES ||= await (await realFetch("/dev/bench/hop-boards.json")).json();
+    for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-hop|")) localStorage.removeItem(k); // no parked list from a shot before
     const b = shot.board || {};
     const fx = HOP_FIXTURES.boards[b.fixture || "hop-adult"];
     if (!fx) throw new Error(`no hop fixture ${b.fixture}`);
@@ -689,6 +690,12 @@
       info.grid = rel(r(s.gameBox.querySelector(".hgrid")));
       info.keys = rel(r(s.gameBox.querySelector(".hkeys")));
       info.close = rel(r(s.gameBox.querySelector(".gx")));
+      info.moves = s.game.moves.length;
+      info.uses = s.game.st.uses;
+      info.done = s.game.done;
+      info.tidy = s.game.tidy;
+      info.keyState = Object.fromEntries([...s.gameBox.querySelectorAll(".hk")].map((k) => [k.dataset.k,
+        `${k.getAttribute("aria-disabled") === "true" ? "off" : "on"}: ${k.getAttribute("aria-label")}`]));
     } else {
       const gx = r(s.gameBox.querySelector(".gx"));
       const bubble = r(s.bubble);
@@ -924,9 +931,17 @@
       const b = shot.board || {};
       const list = b.moves === "win" ? fx.win : b.moves === "tidy" ? fx.tidy : b.moves || "";
       const cells = [...list].map((ch) => HATCH_HOP_LETTERS.indexOf(ch)).slice(0, b.take ?? 1e9);
-      for (const c of cells) card._hopMove(cur, c);
+      // `spent`: stop at the first move the winning list pays a use for (none: all of it).
+      for (const c of cells) {
+        const uses = cur.game.st.uses;
+        card._hopMove(cur, c);
+        if (b.spent && cur.game.st.uses < uses) break;
+      }
       if (b.special) { cur.game.special = true; }
-      if (b.lit !== undefined) cur.game.lit = b.lit;
+      if (b.lit === "first") { // the first legal cell: the board's first tap of a two-tap commit
+        const t = card._hopTargets(cur.game);
+        cur.game.lit = [...t.plain, ...t.special][0];
+      } else if (b.lit !== undefined) cur.game.lit = b.lit;
       if (b.special || b.lit !== undefined) card._hopDraw(cur, false);
       card._hopPlace(cur, false); // the piece is on its cell, not on its way
     }

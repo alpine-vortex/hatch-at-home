@@ -40,7 +40,7 @@ const OUT = path.join(__dirname, "..", "dev", "card-check");
 const results = [];
 
 // The gated sections of main(), in file order.
-const SECTIONS = ["shelf", "shell", "play", "resume", "moments", "photos", "personality", "types",
+const SECTIONS = ["shelf", "shell", "play", "resume", "board", "moments", "photos", "personality", "types",
   "egg", "sharedscreen", "memorytags", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "winter", "care",
   "editor", "boot", "infrared", "lowbattery", "restart", "gifts", "finds", "collection", "oldcard"];
 // oldcard asserts restart's seeded bond; finds taps the basket restart seeds; collection
@@ -4305,6 +4305,390 @@ async function main() {
     await tab.close();
   }
 
+  }
+  if (enter("board")) {
+  // Hop of the Day, ship 2b (plan 2026-11-02-hop-of-the-day): board mode behind the YAML-only
+  // experimental_hop key. The `hop` service is stubbed on the card (_hopFetch) with replies
+  // from tests/fixtures/hop_cases.json's boards, never a random draw. The real-HA run owns the
+  // wiring only (the last check: the row calls `board` and the reply has the right shape).
+  await pinAwake(card, "board");
+  {
+    const cases = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "tests", "fixtures", "hop_cases.json"), "utf8")).boards;
+    const replyOf = (name, id = name) => {
+      const { w, h, grid, family, specials } = cases[name];
+      return { result: "ok", day: "2026-11-03", id, w, h, grid, family, specials, world: "woodland", twist: null,
+        done: false, tidy: false };
+    };
+    const warnings = [];
+    page.on("console", (m) => { if (m.type() === "warning" && /hop board/.test(m.text())) warnings.push(m.text()); });
+    const flag = (on) => card.evaluate((el, on) => {
+      const config = { ...el._config };
+      if (on) config.experimental_hop = true;
+      else delete config.experimental_hop;
+      el.setConfig(config);
+      el.hass = el._hass;
+    }, on);
+    const stub = (reply) => card.evaluate((el, r) => { el.__hopCalls = 0; el._hopFetch = async () => { el.__hopCalls++; return r; }; }, reply);
+    const unstub = () => card.evaluate((el) => { delete el._hopFetch; });
+    const picker = async () => {
+      await inject(pet["sensor.energy"], { state: "80" });
+      await page.waitForTimeout(400);
+      await button(2).click();
+      await page.waitForTimeout(500);
+    };
+    const open = async (reply) => {
+      await stub(reply);
+      await picker();
+      await cur().locator(".ghop").click();
+      await page.waitForTimeout(500);
+    };
+    const quit = async () => {
+      if (await cur().locator(".game").isVisible()) await cur().locator(".gx").click();
+      await page.waitForTimeout(250);
+    };
+    const game = () => card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const g = s.game;
+      return g && { kind: g.kind, moves: g.moves?.length, list: g.moves && [...g.moves], pos: g.st?.pos, uses: g.st?.uses,
+        sunk: g.st?.sunk, lit: g.lit, cell: g.cell, done: g.done, picking: !!g.picking };
+    });
+    const centre = (i) => cur().locator(`.hc[data-i="${i}"]`).boundingBox().then((b) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 }));
+    const stored = () => card.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter((k) => k.startsWith("hatch-hop|"))
+      .map((k) => [k.replace(/^hatch-hop\|[^|]*\|/, ""), localStorage.getItem(k)])));
+    const targets = () => card.evaluate((el) => el._hopTargets(el._slides[el._index].game));
+    const key = (k) => cur().locator(`.hk[data-k="${k}"]`);
+
+    // Off by default: no row, no board; the picker's count is the old three.
+    await flag(false);
+    await stub(replyOf("sample"));
+    await picker();
+    check("flag off: the picker has three games and no Hop row", (await cur().locator(".gpick button").count()) === 3 &&
+      (await cur().locator(".ghop").count()) === 0);
+    await quit();
+
+    // The flag on: the row is a sibling of .gpick, the picker still counts three, no `hop` call yet.
+    await flag(true);
+    await stub(replyOf("sample"));
+    await picker();
+    const rowAt = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const row = s.gameBox.querySelector(".ghop");
+      return { inPick: !!row?.closest(".gpick"), sibling: row?.parentElement === s.gameBox, text: row?.textContent,
+        aria: row?.getAttribute("aria-label"), calls: el.__hopCalls };
+    });
+    check("flag on: the Hop row sits outside .gpick, the picker still counts three, and Play asked for no board",
+      (await cur().locator(".gpick button").count()) === 3 && rowAt.sibling && !rowAt.inPick && rowAt.text === "Hop of the Day" &&
+        rowAt.aria === "Play Hop of the Day" && rowAt.calls === 0, JSON.stringify(rowAt));
+    await quit();
+
+    // At each width (the viewport's, as every section here: a card in it is narrower, 226 px at 300), the Hop row
+    // overlaps nothing and sits no lower than the games do with the flag off; a game that already crowds the close
+    // button or the foot at that width with no row is not the row's doing (the baseline), and is reported as such.
+    const fitOf = () => card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const rect = (e) => e && !e.hidden && e.getClientRects().length ? e.getBoundingClientRect() : null;
+      const hit = (a, b) => a && b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      const box = s.gameBox.getBoundingClientRect();
+      const games = [...s.gameBox.querySelectorAll(".gpick button")].map(rect);
+      const row = rect(s.gameBox.querySelector(".ghop"));
+      const [gx, bub] = [rect(s.gameBox.querySelector(".gx")), rect(s.bubble)];
+      const bad = [];
+      for (const [i, g] of games.entries()) {
+        if (hit(g, gx)) bad.push(`game${i}+close`);
+        if (hit(g, bub)) bad.push(`game${i}+prompt`);
+        if (hit(g, row)) bad.push(`game${i}+row`);
+        if (g.bottom > box.bottom + 0.5) bad.push(`game${i} off the foot`);
+      }
+      if (hit(row, gx)) bad.push("row+close");
+      if (hit(row, bub)) bad.push("row+prompt");
+      if (row && row.bottom > box.bottom + 0.5) bad.push("row off the foot");
+      return { bad, cardW: Math.round(el.getBoundingClientRect().width), boxW: Math.round(box.width), boxH: Math.round(box.height),
+        low: Math.round(Math.max(...games.map((g) => g.bottom)) - box.bottom), rowLow: row && Math.round(row.bottom - box.bottom),
+        rowH: row && Math.round(row.height), cls: s.gameBox.querySelector(".ghop")?.className };
+    });
+    for (const width of [300, 330, 420]) {
+      await page.setViewportSize({ width, height: 860 });
+      await page.waitForTimeout(500);
+      await flag(false);
+      await picker();
+      await page.waitForTimeout(2600); // a long line gives way to "pick a game!" after 2 s
+      const base = await fitOf();
+      await quit();
+      await flag(true);
+      await picker();
+      await page.waitForTimeout(2600);
+      const fit = await fitOf();
+      const mine = fit.bad.filter((b) => (!base.bad.includes(b) && b !== "row off the foot") || /^row[+]|[+]row/.test(b));
+      check(`${width} px (a ${fit.cardW} px card): the Hop row overlaps no game, the close button or the prompt, and sits no lower than the games did without it`,
+        fit.rowH !== null && mine.length === 0 && fit.rowH >= 43 && fit.rowLow <= Math.max(0, base.low), JSON.stringify({ fit, base }));
+      await shot(`board-picker-${width}`);
+      await quit();
+    }
+    await page.setViewportSize({ width: 300, height: 860 });
+    await page.waitForTimeout(500);
+
+    // The keys come with the board and go with it; the care pad is not touched and no game key presses it.
+    const padOf = () => card.evaluate((el) => {
+      const s = el._slides[el._index];
+      return [...s.el.querySelectorAll(".toy")].map((b) => `${b.getAttribute("aria-label")}|${b.getAttribute("aria-disabled")}`);
+    });
+    const padBefore = await padOf();
+    await open(replyOf("sample"));
+    const up = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      return { kind: s.game?.kind, hopb: !!s.gameBox.querySelector(".hopb:not([hidden])"), keys: s.gameBox.querySelectorAll(".hk").length,
+        gl: s.gameBox.querySelector(".gl").hidden, gr: s.gameBox.querySelector(".gr").hidden, gpick: s.gameBox.querySelector(".gpick").hidden,
+        row: s.gameBox.querySelector(".ghop").hidden, labels: [...s.gameBox.querySelectorAll(".hk")].map((k) => k.getAttribute("aria-label")),
+        close: !s.gameBox.querySelector(".gx").hidden };
+    });
+    check("the keys show with the board: seven keys and the close button, the old keys and the picker gone",
+      up.kind === "hop" && up.hopb && up.keys === 7 && up.gl && up.gr && up.gpick && up.row && up.close, JSON.stringify(up));
+    check("the keys carry aria labels, and a blocked direction says why",
+      up.labels.every(Boolean) && up.labels.some((l) => /, (blocked|sunk)$/.test(l)) &&
+        up.labels.includes("Take back the last move") && up.labels.includes("Start the board again") &&
+        up.labels.some((l) => /^Special move, \d left$/.test(l)), JSON.stringify(up.labels));
+    check("the care pad is the same while a board is open", JSON.stringify(await padOf()) === JSON.stringify(padBefore));
+    await shot("board-300-start");
+    const calls = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const seen = [];
+      const real = el._hass.callService;
+      const press = el._press;
+      const lights = el._toggleLights;
+      el._hass.callService = (d, svc, ...r) => { seen.push(`${d}.${svc}`); return real.call(el._hass, d, svc, ...r); };
+      el._press = (...a) => { seen.push("_press"); return press.apply(el, a); };
+      el._toggleLights = (...a) => { seen.push("_toggleLights"); return lights.apply(el, a); };
+      try {
+        for (const k of s.gameBox.querySelectorAll(".hk")) k.click();
+        el._quitGame(s, null); // a board's quit: no play_game call
+      } finally {
+        el._hass.callService = real;
+        delete el._press;
+        delete el._toggleLights;
+      }
+      return { seen, gone: !s.game && !s.gameBox.querySelector(".hopb") && s.gameBox.hidden };
+    });
+    check("no care action fires from a game key, and quitting a board makes no play_game call (or any call)",
+      calls.seen.length === 0 && calls.gone, JSON.stringify(calls));
+    check("the keys go away with the board", (await padOf()).join() === padBefore.join());
+
+    // Tap, then confirm, at 300: a first tap lights the legal cell nearest, a second commits. An arrow key commits at once.
+    await open(replyOf("sample"));
+    let g = await game();
+    const t0 = await targets();
+    const aim = t0.plain[0];
+    const at = await centre(aim);
+    await page.mouse.click(at.x, at.y);
+    const lit = await game();
+    await page.mouse.click(at.x, at.y);
+    const done = await game();
+    check("300 px: the cells are under 44 px, so a first tap lights a cell and a second on it commits",
+      g.cell < 44 && lit.lit === aim && lit.moves === 0 && done.moves === 1 && done.pos === aim && done.lit === null,
+      JSON.stringify({ cell: g.cell, aim, lit, done }));
+    await shot("board-300-lit-commit");
+    // A tap far from every legal cell does nothing and says nothing.
+    const far = await cur().locator(".hc.wall, .hc.stone, .hc.sunk").first().boundingBox().catch(() => null);
+    const before = await game();
+    const sayBefore = await cur().locator(".bubble").innerText();
+    const legalNow = (await targets()).plain.concat((await targets()).special);
+    const dead = await card.evaluate((el, legal) => {
+      const s = el._slides[el._index];
+      const cells = [...s.gameBox.querySelectorAll(".hc")];
+      const pick = cells.map((c, i) => [c, i]).filter(([c, i]) => !legal.includes(i) && legal.every((l) => {
+        const a = c.getBoundingClientRect();
+        const b = cells[l].getBoundingClientRect();
+        return Math.hypot(a.left + a.width / 2 - b.left - b.width / 2, a.top + a.height / 2 - b.top - b.height / 2) > 23;
+      }));
+      const r = pick[0]?.[0].getBoundingClientRect();
+      return r && { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }, legalNow);
+    if (dead) await page.mouse.click(dead.x, dead.y);
+    const after = await game();
+    check("a tap farther than 22 px from every legal cell does nothing and says nothing",
+      !!dead && after.moves === before.moves && after.lit === before.lit && (await cur().locator(".bubble").innerText()) === sayBefore,
+      JSON.stringify({ dead, before, after, far: !!far }));
+    const arrows = await card.evaluate((el) => [...el._slides[el._index].gameBox.querySelectorAll('.hk[aria-disabled="false"]')].map((k) => k.dataset.k));
+    const arrow = arrows.find((k) => ["left", "up", "down", "right"].includes(k));
+    const beforeArrow = await game();
+    await key(arrow).click();
+    const afterArrow = await game();
+    check("an arrow key commits at once (no confirm)", !!arrow && afterArrow.moves === beforeArrow.moves + 1 && afterArrow.lit === null,
+      JSON.stringify({ arrow, beforeArrow, afterArrow }));
+    // One tap commits from 44 px up: the card reads the cell size it drew (here, a drawn size of 44).
+    await card.evaluate((el) => { el._slides[el._index].game.cell = 44; });
+    const t1 = await targets();
+    const aim1 = t1.plain[0];
+    const wasMoves = (await game()).moves;
+    if (aim1 !== undefined) {
+      const c1 = await centre(aim1);
+      await page.mouse.click(c1.x, c1.y);
+    }
+    check("from 44 px up one tap commits (the card reads the cell size it drew)", aim1 !== undefined && (await game()).moves === wasMoves + 1,
+      JSON.stringify(await game()));
+    // Undo restores a sunk pad and a spent use (the hop family's jump: the special, then a direction).
+    await quit();
+    await open(replyOf("hop2"));
+    const start = await game();
+    await key("special").click();
+    const sp = await targets();
+    const jump = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const g = s.game;
+      return g.el.keys.querySelector('.hk[data-k="left"][aria-disabled="false"], .hk[data-k="right"][aria-disabled="false"], .hk[data-k="up"][aria-disabled="false"], .hk[data-k="down"][aria-disabled="false"]')?.dataset.k;
+    });
+    if (jump) await key(jump).click();
+    const jumped = await game();
+    if (jumped?.moves) await key("undo").click();
+    const undone = await game();
+    check("undo restores a sunk pad and a spent use",
+      !!jump && jumped.moves === 1 && jumped.uses === start.uses - 1 && jumped.sunk !== 0 && undone.moves === 0 && undone.uses === start.uses &&
+        undone.sunk === 0 && undone.pos === start.pos, JSON.stringify({ start, sp: sp.special, jump, jumped, undone }));
+    await quit();
+
+    // Park and resume: every move is written, and every way out leaves the same moves for the way back.
+    const id = "board-id-1";
+    const home = await card.evaluate((el) => el._index);
+    await open(replyOf("sample", id));
+    for (let n = 0; n < 3; n++) {
+      const k = await card.evaluate((el) => [...el._slides[el._index].gameBox.querySelectorAll('.hk[aria-disabled="false"]')]
+        .map((b) => b.dataset.k).find((x) => ["left", "up", "down", "right"].includes(x)));
+      if (k) await key(k).click();
+    }
+    const parked = await game();
+    const key1 = `2026-11-03|${id}`;
+    const w1 = await stored();
+    check("each move is written to localStorage as it is made", parked.moves >= 2 && Object.keys(w1).length === 1 && Object.values(w1)[0].length === parked.moves &&
+      Object.keys(w1)[0] === key1, JSON.stringify({ parked, w1 }));
+    const same = async (how, label) => {
+      await how();
+      await page.waitForTimeout(300);
+      const gone = await card.evaluate((el, h) => !el._slides[h].game && !el._slides[h].gameBox.querySelector(".hopb"), home);
+      const kept = await stored();
+      await card.evaluate((el, h) => { if (el._index !== h) el._go(h); }, home); // the board's own slide again
+      await page.waitForTimeout(300);
+      await open(replyOf("sample", id));
+      const back = await game();
+      check(`${label}: the moves are kept and resume as they were`, gone && JSON.stringify(kept) === JSON.stringify(w1) &&
+        JSON.stringify(back.list) === JSON.stringify(parked.list) && back.pos === parked.pos, JSON.stringify({ gone, kept, back, parked }));
+    };
+    await same(() => cur().locator(".gx").click(), "the close button");
+    await same(() => page.keyboard.press("Escape"), "Escape on the card");
+    await same(() => card.evaluate((el) => el._endGame(el._slides[el._index], null)), "the card's own _endGame (card removal and the failed call)");
+    const two = await card.evaluate((el) => el._slides.length > 1);
+    if (two) {
+      await same(() => card.evaluate((el) => { el._go((el._index + 1) % el._slides.length); }), "a swipe to another pet");
+    }
+    await same(() => card.evaluate((el) => el._forget(el._slides[el._index])), "a slide reused (_forget)");
+    await same(() => card.evaluate((el) => {
+      // the pet falling asleep mid-board: the card's own refresh with the asleep sensor on
+      const real = el._state;
+      const s = el._slides[el._index];
+      el._state = function (slide, k) { const st = real.call(this, slide, k); return k === "binary_sensor.asleep" && st ? { ...st, state: "on" } : st; };
+      try { el._renderSlide(s); } finally { el._state = real; }
+      el._renderSlide(s); // and awake again (the pinned state), as the next section expects
+    }), "the pet falling asleep");
+    await quit();
+    // A different board id drops the parked moves without comment.
+    await open(replyOf("sample", "board-id-2"));
+    const fresh = await game();
+    const w2 = await stored();
+    check("a different board id drops the parked moves", fresh.moves === 0 && !Object.keys(w2).includes(key1), JSON.stringify({ fresh, w2 }));
+    await quit();
+
+    // A reply the rules cannot play shows nothing and logs once.
+    await page.evaluate(() => {});
+    for (const bad of [{ ...replyOf("sample"), family: "nope" }, { ...replyOf("sample"), grid: ["P.", "N"] }]) {
+      await open(bad);
+      const none = await card.evaluate((el) => { const s = el._slides[el._index]; return { game: !!s.game, hopb: !!s.gameBox.querySelector(".hopb"), hidden: s.gameBox.hidden }; });
+      check("a malformed board reply shows nothing", !none.game && !none.hopb && none.hidden, JSON.stringify(none));
+    }
+    check("... and logs once", warnings.length === 1, JSON.stringify(warnings));
+    // A refusal is the ordinary refusal line.
+    await open({ result: "too_tired" });
+    check("a refusal reuses the refusal line", (await cur().locator(".bubble").innerText()) === "too tired to play" && !(await game()));
+
+    // The scene engine: a feed scene live when the row is pressed leaves nothing in the LCD; a scene
+    // offered late during a board is not played over it.
+    await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      el._endGame(s, null);
+      el._sceneStart(s, "feed");
+    });
+    const live = await card.evaluate((el) => !!el._slides[el._index].scene);
+    await stub(replyOf("sample", "board-id-3"));
+    await card.evaluate((el) => { const s = el._slides[el._index]; el._startGame(s, s.buttons.play); });
+    await page.waitForTimeout(300);
+    await cur().locator(".ghop").click();
+    await page.waitForTimeout(500);
+    const clean = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      return { scene: !!s.scene, inScene: s.screen.classList.contains("in-scene"), els: s.screen.querySelectorAll(".sc, [class*=bowl]").length,
+        game: s.game?.kind };
+    });
+    check("a feed scene live when the row is pressed ends first: no bowl or prop is left in the LCD",
+      !live || (!clean.scene && !clean.inScene && clean.els === 0 && clean.game === "hop"), JSON.stringify({ live, clean }));
+    const late = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      s.sceneOwes = [{ kind: "feed", until: Date.now() + 10000, playOwed: true, late: false }];
+      el._sceneStart(s, "feed");
+      el._sceneStart(s, "clean");
+      const taken = el._sceneOffer(s, { action: "feed", result: "ok" }, true);
+      return { scene: !!s.scene, taken, owes: (s.sceneOwes || []).length, game: s.game?.kind };
+    });
+    check("a scene started or offered late during a board is not played over it (it waits for the board to close)",
+      !late.scene && late.game === "hop" && late.owes === 0 && late.taken === false, JSON.stringify(late));
+    await quit();
+
+    // Reduced motion: a move is a cut (no transition, the piece already on its cell).
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await open(replyOf("sample", "board-id-4"));
+    const kr = await card.evaluate((el) => [...el._slides[el._index].gameBox.querySelectorAll('.hk[aria-disabled="false"]')]
+      .map((b) => b.dataset.k).find((x) => ["left", "up", "down", "right"].includes(x)));
+    await key(kr).click();
+    const cut = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const piece = s.gameBox.querySelector(".hpiece");
+      const [x, y] = s.game.el.piece.style.translate.split(" ").map(parseFloat);
+      const want = s.gameBox.querySelector(`.hc[data-i="${s.game.st.pos}"]`);
+      const grid = s.gameBox.querySelector(".hgrid").getBoundingClientRect();
+      const r = want.getBoundingClientRect();
+      return { dur: getComputedStyle(piece).transitionDuration, running: piece.getAnimations().length,
+        onCell: Math.abs(piece.getBoundingClientRect().left - (r.left + (r.width - piece.getBoundingClientRect().width) / 2)) < 1.5 &&
+          Math.abs(piece.getBoundingClientRect().top - (r.top + (r.height - piece.getBoundingClientRect().height) / 2)) < 1.5, x, y, grid: grid.width };
+    });
+    check("reduced motion: a move is a cut (no transition, the piece already on its cell)", cut.running === 0 && /^0s/.test(cut.dur) && cut.onCell,
+      JSON.stringify(cut));
+    await quit();
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.waitForTimeout(300);
+
+    // Flag off again: nothing of the board or the row is built.
+    await flag(false);
+    await open(replyOf("sample")).catch(() => {});
+    check("flag off again: no row and no board are built", (await cur().locator(".ghop").count()) === 0 && (await cur().locator(".hopb").count()) === 0);
+    await quit();
+
+    // The real server's wiring (a real HA): the row's call is the `hop` service with action board,
+    // and the reply has the right shape (done and tidy false). Nothing is stubbed here.
+    await unstub();
+    await flag(true);
+    await picker();
+    await cur().locator(".ghop").click();
+    await page.waitForTimeout(1500);
+    const real = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const g = s.game;
+      return g && g.kind === "hop" && { w: g.board.w, h: g.board.h, family: g.board.family, specials: g.board.specials, key: g.key };
+    });
+    check("real HA: the row calls the hop service and opens a playable board",
+      !!real && real.w >= 4 && real.w <= 6 && real.h >= 3 && real.h <= 4, JSON.stringify(real));
+    await shot("board-real");
+    await quit();
+    await flag(false);
+    await page.setViewportSize({ width: 420, height: 860 });
+    await page.waitForTimeout(400);
+  }
+  await unpinAwake(card);
   }
   if (enter("moments")) {
   await pinAwake(card, "moments");

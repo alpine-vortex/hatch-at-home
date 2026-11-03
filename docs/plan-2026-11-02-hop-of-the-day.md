@@ -1061,6 +1061,20 @@ Only a phone shows these. Each ship above stands without them; they tune numbers
   the overlay, as the dig's are, need it least).
 - How long a board takes: this plan guesses 2-5 minutes at child and 5-10 at adult.
 - The first week of `played`/`tidy` counts, against the bots' brackets (section 4).
+- **Cell size with the keys in the LCD (2b).** The grid shares the overlay with a 2×4 key
+  column, so the drawn cell is 19 / 22 / 28 px at 300 / 330 / 420 (6×4 board), not the 35-49
+  px this plan first expected. Every adult board is therefore tap-then-confirm; the one-tap
+  path (cell ≥ 44 px) is real but only a very wide card reaches it. Does a 19 px cell read at
+  arm's length, does the first tap find the cell, and is it better to let the keys overlap
+  the grid's own edge or to shrink the grid cap to 5×4 at 300?
+- Keys of 24-44 px (the overlay sizes them from its height): are the glyph keys (◀ ▲ ▼ ▶,
+  ✦n, undo, restart, ✕) understood without words, and are the smallest ones (24 px at 300)
+  hit reliably with a thumb?
+- The Hop row at 300: in the "slot" (beside the last game's button, label only) it is 44 px
+  high and sits close to the close button; does it read as a game or as a stray button?
+- The piece's 140 ms glide, the dotted path and the arc (hop, glide) on a real LCD: too
+  quick, too slow, or invisible at 19 px?
+- Glide's diagonal special has no key; it is tapped only. Is that found without a hint?
 
 ## 10. Docs the build updates
 

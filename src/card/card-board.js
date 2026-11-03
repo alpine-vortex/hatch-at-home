@@ -73,9 +73,7 @@ class HatchPetCardBoard extends HatchPetCardGames {
     if (s.scene) this._sceneEnd(s, { quiet: true }); // a live care scene leaves no bowl or prop under the grid
     let reply;
     try {
-      const res = await this._hass.callService("virtual_pet", "hop", { entity_id: id, action: "board" },
-        undefined, false, true);
-      reply = res?.response;
+      reply = await this._hopFetch(id);
     } catch (err) {
       if (s.game === picking) this._endGame(s, "hmm, that didn't work");
       return;
@@ -94,6 +92,13 @@ class HatchPetCardBoard extends HatchPetCardGames {
       return;
     }
     this._hopStart(s, reply);
+  }
+
+  // The `hop` service's `board` answer for this pet (the one seam a check stubs).
+  async _hopFetch(id) {
+    const res = await this._hass.callService("virtual_pet", "hop", { entity_id: id, action: "board" },
+      undefined, false, true);
+    return res?.response;
   }
 
   // The board is in hand: open it, with this device's parked moves if they are still a legal
