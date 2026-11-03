@@ -101,7 +101,7 @@ test("all 30 ready species read as a nature, and pace comes from voice.pace", ()
 });
 
 test("SPECIES_ADDS names only moves _idle handles, three copies at most, one row per habit", () => {
-  const idle = method("_idle");
+  const idle = method("_idle") + method("_idleMove"); // N2 moved the simple branches into _idleMove
   const handled = new Set([...idle.matchAll(/move === "(\w+)"/g)].map((m) => m[1]));
   assert.deepStrictEqual(Object.keys(SPECIES_ADDS).sort(), [...NATURE_VALUES.habit].sort());
   for (const [habit, moves] of Object.entries(SPECIES_ADDS)) {

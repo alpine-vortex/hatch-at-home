@@ -578,6 +578,39 @@ const PRESETS = {
       out.push({ species: "otter", world: "tidepool", stage, width: 330, pet: { flags: ["rainy"] }, idle: { mood: "content" },
         name: `nature/${stage}-none`, group: "nature-none", label: `${stage}: no nature line` });
     }
+    // Species nature N2 (section 10): the action lines. An idle species line per habit (the first cell; the pet is
+    // calm so the line is the shot, the moves are the JS tests' and card-check's), the two light performers' glow
+    // cells, at 330 and 300; a solo, a social watcher's and a social explorer's visitor greeting; a builder host's
+    // link line; mono and big text for the longest lines; a baby and a child with none.
+    const habits = [["hoarder", "squirrel"], ["builder", "tarantula"], ["basker", "tortoise"], ["groomer", "kitten"],
+      ["explorer", "fox"], ["watcher", "owl"], ["performer", "bird"], ["glow-firefly", "firefly"], ["glow-lunamoth", "lunamoth"]];
+    const idle = (species, draw = 0) => ({ species, world: worldOf(species), motion: "reduce", idle: { mood: "content", species: true, draw } });
+    for (const [habit, species] of habits) {
+      out.push({ ...idle(species), width: 330, name: `nature/species-idle-${habit}`, group: "nature-species-idle", label: `${habit} idle (${species})` });
+      out.push({ ...idle(species), width: 300, name: `nature/species-idle-${habit}-300`, group: "nature-species-idle-300", label: `${habit} idle 300` });
+    }
+    out.push({ ...idle("firefly", 0.99), width: 330, name: "nature/species-idle-glow-firefly-2", group: "nature-species-idle", label: "firefly idle, second cell" });
+    out.push({ ...idle("lunamoth", 0.99), width: 330, name: "nature/species-idle-glow-lunamoth-2", group: "nature-species-idle", label: "lunamoth idle, second cell" });
+    for (const [species, what] of [["fox", "solo"], ["deer", "social watcher"], ["corgi", "social explorer"]]) {
+      out.push({ species, world: worldOf(species), width: 330, visitor: { species: true },
+        name: `nature/species-visit-${species}`, group: "nature-species-visit", label: `${what} greeting (${species})` });
+    }
+    for (const species of ["tarantula", "puffin"]) {
+      out.push({ species, world: worldOf(species), width: 330, pets: 2, clip: "card", link: { rolls: [0.1, 0.1, 0], say: "host" },
+        name: `nature/species-link-${species}`, group: "nature-species-link", label: `${species} hosts (builder)` });
+    }
+    // The longest lines, in mono and big text: the find line (26) is said straight, as a find would, since the bench pins no V1 find.
+    const long = [["find-came-back", "fox", "*came back with something*"], ["idle-nudges", "tarantula", null, 0.99], ["idle-glows", "firefly", null],
+      ["idle-flickers", "lunamoth", null, 0.99], ["idle-fixes", "tarantula", null], ["idle-fixes-opossum", "opossum", null]];
+    for (const [name, species, say, draw] of long) {
+      for (const [mode, opts] of [["mono", { mono: true }], ["big", { bigText: true }]]) {
+        out.push(say ? { species, world: worldOf(species), width: 300, say, ...opts, name: `nature/species-long-${name}-${mode}`, group: `nature-species-long-${mode}`, label: `${name} ${mode}` }
+          : { ...idle(species, draw ?? 0), width: 300, ...opts, name: `nature/species-long-${name}-${mode}`, group: `nature-species-long-${mode}`, label: `${name} ${mode}` });
+      }
+    }
+    for (const stage of ["baby", "child"]) {
+      out.push({ ...idle("kitten"), stage, width: 330, name: `nature/species-idle-${stage}-none`, group: "nature-species-none", label: `${stage}: no species line` });
+    }
     return out;
   },
   // Resting (R1, plan favourite-resting §9): the label and breathing pose, its idle line and a

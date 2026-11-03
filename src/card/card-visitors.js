@@ -256,7 +256,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
       return;
     }
     const friend = !rare && this._visitFriendLine(s, v);
-    const { text } = rare || friend ? { text: rare || friend } : this._lines(s, "visit", pick([...VISIT_LINES, ...v.lines]));
+    const { text } = rare || friend ? { text: rare || friend } : this._lines(s, "visit", pick([...VISIT_LINES, ...v.lines]), undefined, { nature: "visit" });
     this._line(s, FLAVOUR, text, 3000);
   }
 
@@ -477,7 +477,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
     const normal = who ? FIND_LINES.left[0](a, who)
       : f.new ? FIND_LINES.fresh[0](a)
         : dailyPick(FIND_LINES.find, `${f.world}|${f.id}`)(a);
-    return this._lines(s, "find", normal).text;
+    return this._lines(s, "find", normal, undefined, { nature: who || f.new ? null : "find" }).text;
   }
 
   _revealEnd(s) {

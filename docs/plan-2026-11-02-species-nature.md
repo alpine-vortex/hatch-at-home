@@ -9,6 +9,8 @@ re-checked against `origin/main` `b38c9852`; where the code differs, section 2 s
 became of it.
 **N2 folded by s2793** from review s2792 (the first mate's decisions of 2026-11-03,
 section 16; every finding's fate in section 15). N2 is now a build-ready section (8, N2).
+**N2 shipped by s2794** (branch `crew/hatch-at-home-s2794-species-nature-n2-action-line`;
+section 16 "N2 shipped" says where the code differed and what each pin became).
 Names win over line numbers. **Every pet line, field-note and pose name here is DRAFT**
 until the first mate approves it (decisions-2026-10-28.md, "How the crew works with the
 owner"), **except N1's (shipped) and N2's 22 lines, which the first mate approved on
@@ -669,8 +671,9 @@ The sky reaction rides the idle path and the clock flavour rides existing moment
 
 ### N2: the action-line layer and the solo visit line (card only, tier 1, S-M)
 
-**Status: folded (s2793) from review s2792 and the first mate's decisions of 2026-11-03
-(section 16). Nothing below is open; a worker builds it as written.** Card, scan, tests and
+**Status: SHIPPED (s2794), as written below.** Differences, the pin audit and the bench shots
+are in section 16, "N2 shipped". The text that follows is the build brief as it was folded
+(s2793) from review s2792 and the first mate's decisions of 2026-11-03 (section 16). Card, scan, tests and
 bench only: **no server change, no save, no art, no `species.json` change, no heating flag**
 (the `cozy`/`sunny` stand-in for `fire` stays; section 16).
 
@@ -758,6 +761,34 @@ updated; `scripts/gate --auto` for the worker, the first mate's batch gate as us
 
 **Not "data + card".** N3 is server code, so `pick-sections` goes to `all` and the gate is
 `scripts/ci-gate` (AGENTS.md), not a partial card-check.
+
+**Reconciled against what N2 shipped (s2794).** Nothing in N3's build changes; these are the
+assumptions that moved, one note each:
+
+- *The scan.* N3's notes live in `species.json`, not in the card's copy block, so
+  `copy-scan.js` (which N2 gave a `home` fill and a `move`-key skip) does not read them. The
+  data test stays the only check on them (60 characters, the banned words).
+- *Wording must agree with the lines.* The notes sit beside N2's action lines, so they must
+  not contradict them: the **firefly and lunamoth** say "glows a little brighter" and
+  "flickers in a tiny loop" (an `own` cell), not the performer's hum and twirl, so their
+  notes must not say "hums" or "sings". A **solo** species peeks first at a visitor ("peeks
+  first, then waves"), whatever its habit; a note must not call a solo watcher or explorer
+  "alert at visitors" or "sniffs the air at visitors" (only the social deer, corgi and
+  duckling say those). No note promises a frequency (the lines are at most 1 in 4, 12.5%
+  for a typed pet).
+- *`nature` is also a `_lines` option now.* `_lines(s, key, normal, arg, { nature })` means
+  "ask the species table", unrelated to the `nature()` data helper N3 reads (the helper
+  stays global; the option is a local name, `natureKey`, inside `_lines`). N3 adds no
+  `_lines` call and no `SPECIES_LINES` key.
+- *The status page is untouched by N2.* `_renderStatus` (`card-status.js`), the
+  "personality" row and its 420/330/300 and big-text shots are as N3 describes them.
+- *The bench.* N3's shot (the status row at 420, 330 and 300, in big text) is a new preset or
+  a `--preset nature` addition; `nature()` now has 39 more N2 shots after N1's, so a new
+  group name (`nature-note`) keeps its sheets apart. `idle.species` and `visitor.species`
+  do not matter to it.
+- *The gate.* Unchanged: server code, so `scripts/gate --auto` picks `all` and the batch
+  gate is `scripts/ci-gate`. The new N2 card-check cases sit in `personality`, `visitors`
+  and `infrared`, not in anything N3 reorders.
 
 - **The notes.** **30 hand-written lines, one per species** (decided, section 1), not a
   template. They live in `species.json` as a sibling of `nature`:
@@ -1380,6 +1411,61 @@ s2742). Where the code differed from this plan, the code is right and N2-N4 read
    draw that picks the sky line) now exist, with `--preset nature`. N2 and N3 shots can reuse
    them. Not shot in N1: a sky reaction together with a trait flair, and big text (a bubble
    does not change with it).
+
+### N2 shipped (s2794): where the code differed, the pins, the shots
+
+N2 is built as section 8 (N2) and 5.4 say. Where the code differed, the code is right and
+N3-N4 read from it.
+
+1. **Shape.** `SPECIES_LINES` (`lines-fresh.js`, 22 distinct lines; the firefly and lunamoth
+   `own` cells are two entries with the same two lines) and `SPECIES_LINE_ODDS` and
+   `IDLE_BODY_MOVES` (`lines.js`). `_lines` has `{ fresh, nature: natureKey }`; a call
+   that names `nature` always returns `{ text, baby, move }` (`move` is `null` unless a
+   cell with a move was taken), a call that does not returns `{ text, baby }` exactly as before.
+2. **Helpers.** `_natureCells(s, key)` (the lookup, the home fill, the dropped cells; `[]`
+   for a non-teen/adult or no nature) and `_natureCell(s, key)` (the roll, drawn only for a
+   non-empty pool, then the pick) in `card-tick.js`; `_idleMove(s, move)` plays `look`,
+   `wander`, `perk`, `settle`, `munch`, `rock` with the same ms (1800, 2200, 320, 2500, 1500,
+   600), and `_idle`'s own branch calls it for `IDLE_BODY_MOVES`.
+3. **The `mumble` branch** now takes the `_lines` result, writes it, then calls `_idleMove`
+   for the move unless `calm()`. A resting pet, a neighbour line and a bodily mood do not call
+   `_lines` at all, as before. The draw order is the one section 5.4 states.
+4. **Bench.** `link.rolls` already existed (it was only undocumented for this use);
+   `idle.species` is new and, not in the plan, **`visitor.species`** (`Math.random` pinned to 0
+   for the greet so the species cell is taken). 39 shots in `--preset nature`.
+   The idle species shots are calm (the line is the shot); the moves are proved by the JS tests
+   and card-check.
+5. **Pins audited** (card-check, by name; line numbers drift): the **idle order** in
+   "P2b idle mumble" (draws delay 0, move 0, then `r`: heads r 0.1 is the persona's coin
+   passing, tails r 0.9 fails the coin and the roll 0.9 is over 0.25, so no species line;
+   `bored`, `excited`, and the bodily moods never reach the roll): expectations unchanged,
+   the draw comment updated; the **neighbour check** ("gaps-seams 5b", `t.pet("adult", null)`:
+   untyped; r 0.1 for `alone` now takes the species roll and says a species line, which the
+   check does not forbid, `!/Nib/`): unchanged; the **greet/sunset side-by-side** (`show`,
+   `Math.random = 0.1`, ~7514: `_greet` and `_moment` take no species key): safe, unchanged; the
+   **games** pins (`_pickGame`, `_guess`, dig, lucky), `wish_granted`, `how_day`, the
+   **meal lines** (~12639: `_mealLine`, no `_lines` nature) and the **feed** pin
+   (`_react`, key `feed`): none opts in, safe; the **friend and favourite visitor** pins
+   (`Math.random = 0.2`, the E3 and F4 cases): the friend and favourite branches come before
+   the species line, and the "at 2 days, never a friend line" check passes on a species line
+   too (not a friend line, non-empty): unchanged; `_linkStart` with `Math.random = 0`
+   (kindred pair, mellow host): the typed host's persona coin passes first, no species line:
+   unchanged. **Changed, because a real roll bites:** "visitors: the pet greets it with its
+   wave frames ... and one of its lines" and the reduced-motion greet check (a real random
+   greet; a teen or adult now says a species visit cell up to 1 in 4): the allowed-line list
+   gains the species visit cells (read from `SPECIES_LINES`); the **V-C reveal's V1 check**
+   (a real-random reveal of a hoarder or explorer says its find cell 1 in 4): accepts the
+   species' own find line (`_natureCells(s, "find")`). Plus new cases: the species idle line
+   (adult, teen; its move; none for a child, bored or hungry), the greeting (solo "peeks
+   first", social watcher "ears up", the same classes and hold, none for a child, nothing sent)
+   and the builder host's alternate hello (teen, adult; a baby and a child say the usual one;
+   nothing sent).
+6. **JS pins.** `tests/js/nature_lines.test.js`: "SPECIES_ADDS names only moves `_idle`
+   handles" reads `_idle` **and** `_idleMove` now (the branches moved; the check is as strict).
+   `tests/js/turn_pick.test.js` extracts `_lines` by its signature prefix and still passes.
+   `tests/js/nature_species_lines.test.js` is new (section 10's N2 list).
+7. **Not shot:** the V1 find line (the bench pins no find; proved in JS and by the card-check
+   V-C case) except as a long-line text in mono and big text (said straight, like the find).
 
 ## N2 fold: first mate decisions, 2026-11-03
 
