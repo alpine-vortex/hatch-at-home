@@ -109,6 +109,60 @@ def test_decode_and_encode():
     assert H.encode([0, 1, 23]) == "abx"
 
 
+@pytest.mark.parametrize("case", CASES["bad_boards"], ids=lambda c: c["why"])
+def test_bad_boards_are_refused(case):
+    """The reply shapes both engines refuse (the JS twin's `valid`)."""
+    with pytest.raises(ValueError):
+        H.Board.from_dict(case["board"])
+
+
+@pytest.mark.parametrize("specials", [True, 1.5, "1", None, 4, -1])
+def test_board_rejects_specials_out_of_range(specials):
+    with pytest.raises(ValueError):
+        H.Board(4, 3, ("f.N.", "..#.", "P.o."), "hop", specials)
+
+
+def test_a_view_round_trips_to_a_state():
+    """replay()'s `final` rebuilds the State apply and the solver take (it lists
+    the sunk cells; the State holds a bit mask). The audit's repro: on the baby
+    board, e then f leaves e (cell 4) sunk, so the pet on f may go to b or j."""
+    b = board("baby")
+    out = H.replay(b, "ef")
+    assert out["legal"] is True and out["final"]["sunk"] == [4, 8]
+    got = H.State.from_dict(out["final"])
+    s = H.apply_move(b, H.apply_move(b, H.start_state(b), 4), 5)
+    assert got == s and got.to_dict() == out["final"]
+    assert H.legal_targets(b, got) == [1, 9]
+    assert H.legal_targets(b, got) == H.legal_targets(b, s)
+    assert H.solve(b, got).win_count == H.solve(b, s).win_count
+    # Every prefix of every fixture case rebuilds to its own state.
+    for case in CASES["cases"]:
+        cb = board(case["board"])
+        state = H.start_state(cb)
+        for cell in H.decode(case["moves"]) or []:
+            nxt = H.apply_move(cb, state, cell)
+            if nxt is None:
+                break
+            state = nxt
+        assert H.State.from_dict(state.to_dict()) == state
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"pos": 24, "sunk": [], "uses": 0, "done": False},
+        {"pos": -1, "sunk": [], "uses": 0, "done": False},
+        {"pos": 0, "sunk": [24], "uses": 0, "done": False},
+        {"pos": 0, "sunk": ["a"], "uses": 0, "done": False},
+        {"pos": 0, "sunk": [], "uses": -1, "done": False},
+        {"pos": 0, "sunk": [], "uses": 1.5, "done": False},
+    ],
+)
+def test_state_from_dict_refuses_junk(bad):
+    with pytest.raises(ValueError):
+        H.State.from_dict(bad)
+
+
 def test_board_rejects_a_bad_grid():
     for grid, w, h in (
         (("P.N",), 3, 2),
@@ -220,6 +274,13 @@ def test_params_for():
     assert H.params_for("adult", "2026-11-04") == (3, 5, 4)
 
 
+@pytest.mark.parametrize("stage", ["egg", "", "elder", None])
+def test_params_for_refuses_a_stage_with_no_board(stage):
+    """An egg has no board (2a refuses it first); a clear error, not a KeyError."""
+    with pytest.raises(ValueError, match="no board for stage"):
+        H.params_for(stage, "2026-11-02")
+
+
 # --- Determinism and the id --------------------------------------------------------
 
 GOLDEN_INPUTS = [
@@ -309,14 +370,16 @@ def test_one_input_changed_changes_the_board():
 
 
 def test_board_id_binds_pet_day_and_version(monkeypatch):
-    """The id hashes (GEN_VERSION, pet, day, board, n): the same grid for two
-    pets or two days (a shared fallback) still has two ids."""
-    args = ("pet-a", "2026-11-02", 4, 3, ("f.N.", "..#.", "P.o."), "hop", 0)
+    """The id hashes (GEN_VERSION, pet, day, world, board, n): the same grid for
+    two pets, days or worlds (a shared fallback) still has two ids."""
+    args = ("pet-a", "2026-11-02", "woodland", 4, 3, ("f.N.", "..#.", "P.o."), "hop", 0)
     one = H.board_id(*args)
     assert len(one) == 10 and int(one, 16) >= 0
     assert H.board_id(*args) == one
     assert H.board_id("pet-b", *args[1:]) != one
     assert H.board_id(args[0], "2026-11-03", *args[2:]) != one
+    assert H.board_id(*args[:2], "hearth", *args[3:]) != one
+    assert H.board_id(*args[:2], None, *args[3:]) != one
     assert H.board_id(*args, n=1) != one
     monkeypatch.setattr(H, "GEN_VERSION", H.GEN_VERSION + 1)
     assert H.board_id(*args) != one
@@ -326,8 +389,9 @@ def test_fallback_id_differs_by_pet_and_day():
     one = H.hop_board("pet-a", "2026-11-02", "woodland", "hop", 0, 4, 3, candidates=0)
     two = H.hop_board("pet-b", "2026-11-02", "woodland", "hop", 0, 4, 3, candidates=0)
     three = H.hop_board("pet-a", "2026-11-03", "woodland", "hop", 0, 4, 3, candidates=0)
-    assert one.fallback and one.grid == two.grid == three.grid
-    assert len({one.id, two.id, three.id}) == 3
+    four = H.hop_board("pet-a", "2026-11-02", "hearth", "hop", 0, 4, 3, candidates=0)
+    assert one.fallback and one.grid == two.grid == three.grid == four.grid
+    assert len({one.id, two.id, three.id, four.id}) == 4
 
 
 # --- The generator and the bots ----------------------------------------------------

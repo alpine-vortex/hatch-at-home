@@ -10,12 +10,16 @@
 // "P" start (a pad), "N" nest (open once every find is in; entering it ends the board).
 // A move names the cell stepped onto, by index in reading order ("a"-"x" on the wire).
 // A state is {pos, sunk (bit mask of sunk pads), uses (specials left), done (in the nest)}.
-// Undo is a replay of the list without its last move.
+// Undo is a replay of the list without its last move. view() is the plain form (sunk as a list
+// of cells); fromView() turns it back into a state, which is what apply and legalTargets take.
 const HATCH_HOP = Object.freeze(
   (() => {
     const LETTERS = "abcdefghijklmnopqrstuvwx";
     const MAX_MOVES = 200; // rates.py HOP_MAX_MOVES
     const PADS = ".fP";
+    const CELLS = ".fo~#PN";
+    const FAMILIES = ["hop", "glide", "swim", "dig", "climb", "squeeze"];
+    const MAX_SPECIALS = 3; // hop.py's
     const STEPS = [
       [0, -1],
       [-1, 0],
@@ -87,6 +91,19 @@ const HATCH_HOP = Object.freeze(
       }
       return false;
     };
+    // hop.py's Board checks: is this reply a board the rules can play?
+    const valid = (board) => {
+      if (!board || typeof board !== "object") return false;
+      const { w, h, grid, family, specials } = board;
+      if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || w > 6 || h < 1 || h > 4) return false;
+      if (!Array.isArray(grid) || grid.length !== h || grid.some((r) => typeof r !== "string" || r.length !== w))
+        return false;
+      const cells = [...grid.join("")];
+      if (cells.some((c) => !CELLS.includes(c))) return false;
+      if (cells.filter((c) => c === "P").length !== 1 || cells.filter((c) => c === "N").length !== 1) return false;
+      if (!FAMILIES.includes(family)) return false;
+      return Number.isInteger(specials) && specials >= 0 && specials <= MAX_SPECIALS;
+    };
     const start = (board) => ({ pos: cellsOf(board).indexOf("P"), sunk: 0, uses: board.specials, done: false });
     // The cells the pet may name next, in index order.
     const legalTargets = (board, state) => {
@@ -120,8 +137,20 @@ const HATCH_HOP = Object.freeze(
     };
     const encode = (list) => list.map((i) => LETTERS[i]).join("");
     // Letters to cells (-1 for a letter outside a-x); null over MAX_MOVES (too_long).
-    const decode = (moves) => (moves.length > MAX_MOVES ? null : [...moves].map((ch) => LETTERS.indexOf(ch)));
+    // Letters count as code points, as Python's len (a UTF-16 length would differ for an emoji).
+    const decode = (moves) => {
+      const chars = [...moves];
+      return chars.length > MAX_MOVES ? null : chars.map((ch) => LETTERS.indexOf(ch));
+    };
     const view = (state) => ({ pos: state.pos, sunk: bits(state.sunk), uses: state.uses, done: state.done });
+    // The state a view() describes (replay's `final`): sunk back to a bit mask; null if it is
+    // not a state. hop.py's State.from_dict. apply, legalTargets and isTidy take this, not a view.
+    const fromView = (v) => {
+      const ok = (i) => Number.isInteger(i) && i >= 0 && i < LETTERS.length;
+      if (!v || !ok(v.pos) || !Array.isArray(v.sunk) || !v.sunk.every(ok)) return null;
+      if (!Number.isInteger(v.uses) || v.uses < 0) return null;
+      return { pos: v.pos, sunk: v.sunk.reduce((m, i) => m | (1 << i), 0), uses: v.uses, done: !!v.done };
+    };
     // hop.py's replay: {legal, bad_index, won, tidy, final, too_long}.
     const replay = (board, moves) => {
       const out = { legal: false, bad_index: null, won: false, tidy: false, final: null, too_long: false };
@@ -150,6 +179,6 @@ const HATCH_HOP = Object.freeze(
       out.tidy = isTidy(board, state);
       return out;
     };
-    return { LETTERS, MAX_MOVES, start, legalTargets, apply, isTidy, encode, decode, replay, view };
+    return { LETTERS, MAX_MOVES, valid, start, legalTargets, apply, isTidy, encode, decode, replay, view, fromView };
   })(),
 );
