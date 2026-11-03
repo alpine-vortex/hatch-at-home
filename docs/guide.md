@@ -673,6 +673,8 @@ Things to know:
   Assistant logs every message, the picks sent to the pets included.
 - After a downgrade to a version without memory, the record stays on disk, unread and
   no longer capped, until "forget my data" or a newer version.
+- Downgrading to a version before this one drops "exam" tags (and any tag the older list
+  lacks) the next time memory is saved.
 - **For admins:** "Pets may remember what people tell them" in each pet's People and
   privacy options (on by default) lets that pet keep, say and ask about memory. Off on
   one pet only quiets that pet. Off on every pet erases everyone's memory at once,
@@ -1169,7 +1171,8 @@ can open a card can already read your media players). What it notices about some
 they've been, their alarm and their answers are never an event: they go only to
 that person, in `virtual_pet.visit`'s response, and answers come in through the
 websocket command `virtual_pet/answer`, which (unlike a service call) puts nothing
-on the event bus.
+on the event bus. The visit service's door notes can carry a tag key (for example
+`"exam"`), so an automation that saves the response can see it.
 
 Events fired during a fast-forward carry `simulated: true`.
 

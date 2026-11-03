@@ -1269,7 +1269,9 @@ const STYLE = `
   .screen .askday.asktext .tags button.tag, .compact .screen .askday.asktext .tags button.tag { min-height: 28px;
     min-width: 0; font-size: 11px; line-height: 1; padding: 0 6px; border-radius: 9px; border-width: 2px;
     box-shadow: 0 2px 0 #3a2a1a; }
-  .screen .askday.asktext .tags button.tag[aria-pressed="true"] { background: #ffe9a8; }
+  /* The picked chip is inverted (dark fill, light text), not only yellow: the mono LCD look turns
+     #ffe9a8 and #fffdf5 into one tone, and a player there must still see which tag is picked. */
+  .screen .askday.asktext .tags button.tag[aria-pressed="true"] { background: #3a2a1a; color: #fffdf5; }
   .compact .screen .askday.asktext .tags { gap: 2px; }
   .compact .screen .askday.asktext .tags button.tag { min-height: 26px; padding: 0 4px; }
   .compact .screen .askday { gap: 4px; bottom: 2%; }

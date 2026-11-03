@@ -1793,7 +1793,9 @@ def test_door_eleven_reads_one_recent_named_tag() -> None:
         tag("2026-09-01", "work_thing"), tag("2026-10-01", "show", "weekend")
     )
     assert P.memory_recap(only, day) is None
-    assert P.memory_recap(tag_memory(tag("2025-11-01", "party")), day) is None
+    # A year back to the day counts (M2 audit s2785 N2); a day older does not.
+    assert P.memory_recap(tag_memory(tag("2025-11-03", "party")), day) == "party"
+    assert P.memory_recap(tag_memory(tag("2025-11-02", "party")), day) is None
 
 
 async def friends_pet(

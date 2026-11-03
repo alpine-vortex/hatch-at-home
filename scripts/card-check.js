@@ -8564,6 +8564,15 @@ async function main() {
             return chips().every((c) => { const r = c.getBoundingClientRect(); return r.left >= sr.left - 1 && r.right <= sr.right + 1 && r.top >= sr.top - 1 && r.bottom <= sr.bottom + 1; });
           })(),
         };
+        // The mono LCD look turns the old yellow fill and the chip's cream into one tone, so the
+        // picked chip must differ from an unpicked one in colours (fill and text), not by hue alone.
+        {
+          const hadMono = el._card.classList.contains("mono");
+          el._card.classList.add("mono");
+          const cs = (c) => { const x = getComputedStyle(c); return { bg: x.backgroundColor, fg: x.color }; };
+          out.mono = { picked: cs(chips()[0]), unpicked: cs(chips()[1]) };
+          el._card.classList.toggle("mono", hadMono);
+        }
         chips().find((c) => c.dataset.tag === "show")?.click();
         out.tapped = { tag: s.textStep?.tag, pressed: chips().find((c) => c.dataset.tag === "show")?.getAttribute("aria-pressed"), sent: answers().length };
         chips().find((c) => c.dataset.tag === "show")?.click();
@@ -8620,6 +8629,8 @@ async function main() {
         JSON.stringify(m2.on.order) === JSON.stringify(["tagq", "tags", "INPUT", "BUTTON", "BUTTON"]) && m2.on.shown,
       JSON.stringify(m2.on));
     check("memory M2: every chip shows inside the screen", m2.on.inside, JSON.stringify(m2.on));
+    check("memory M2: in mono the picked chip's fill and text colours differ from an unpicked one (dark fill, light text)",
+      m2.mono.picked.bg !== m2.mono.unpicked.bg && m2.mono.picked.fg !== m2.mono.unpicked.fg, JSON.stringify(m2.mono));
     check("memory M2: a tap picks the tag (and sends nothing); the same chip again clears it",
       m2.tapped.tag === "show" && m2.tapped.pressed === "true" && m2.tapped.sent === 0 && m2.untapped === null, JSON.stringify(m2.tapped));
     const one = m2.sent[0] || {};
