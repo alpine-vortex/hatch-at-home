@@ -23,8 +23,20 @@ logger:
 input_select:
   fake_weather:
     name: Fake weather
-    options: [sunny, partlycloudy, cloudy, rainy, pouring, snowy, fog, clear-night]
+    # lightning and windy are the card's storm and wind (home.py STORMY, WINDY).
+    options: [sunny, partlycloudy, cloudy, rainy, pouring, snowy, fog, clear-night, lightning, lightning-rainy, windy]
     initial: rainy
+
+  # The robot vacuum's state (a template vacuum below reads it).
+  fake_vacuum:
+    name: Fake vacuum state
+    options: [docked, cleaning, returning, paused, idle]
+    initial: docked
+
+input_button:
+  # A doorbell press: the template event below fires "ring" on each press.
+  fake_doorbell:
+    name: Fake doorbell press
 
 input_number:
   fake_indoor_temp:
@@ -86,6 +98,10 @@ input_boolean:
     name: Fake heating on
   fake_cooling:
     name: Fake cooling on
+  # Stand-in for a washer (device-alive 4D, ha-signals H6): the binary sensor below
+  # reads it. See the template block for how to make it count as a finished cycle.
+  fake_washer:
+    name: Fake washer running
 
 # A media_player is what the pet's TV and music options take, and the booleans above
 # are not one: these read them (on = playing). Music "playing" is not a video, so
@@ -162,6 +178,48 @@ template:
         unique_id: fake_motion_sensor
         device_class: occupancy
         state: "{{ is_state('input_boolean.fake_motion', 'on') }}"
+  # The robot vacuum: found by its domain, no mapping in the options. Set
+  # input_select.fake_vacuum to cleaning (robot_out), then to returning or docked
+  # (robot_home, only after a run the pet saw start).
+  - vacuum:
+      - name: Fake vacuum
+        unique_id: fake_vacuum
+        state: "{{ states('input_select.fake_vacuum') }}"
+        start:
+          action: input_select.select_option
+          target: { entity_id: input_select.fake_vacuum }
+          data: { option: cleaning }
+        return_to_base:
+          action: input_select.select_option
+          target: { entity_id: input_select.fake_vacuum }
+          data: { option: returning }
+        pause:
+          action: input_select.select_option
+          target: { entity_id: input_select.fake_vacuum }
+          data: { option: paused }
+        stop:
+          action: input_select.select_option
+          target: { entity_id: input_select.fake_vacuum }
+          data: { option: idle }
+  # The doorbell: found by its event domain and device class doorbell, no mapping.
+  # Press input_button.fake_doorbell. The pet's own cooldown is 30 minutes.
+  - triggers:
+      - trigger: state
+        entity_id: input_button.fake_doorbell
+    event:
+      - name: Fake doorbell
+        unique_id: fake_doorbell_event
+        device_class: doorbell
+        event_type: ring
+        event_types: "{{ ['ring'] }}"
+  # The washer (map binary_sensor.fake_washer_running under "appliances" in the
+  # pet's options): kind washer comes from the entity id. Turn the boolean on, wait
+  # 10 minutes (APPLIANCE_RUN_MINUTES), turn it off: appliance_done {kind: washer}.
+  # Once an hour per machine.
+  - binary_sensor:
+      - name: Fake washer running
+        unique_id: fake_washer_running
+        state: "{{ is_state('input_boolean.fake_washer', 'on') }}"
   - weather:
       - name: Fake weather
         unique_id: fake_weather
@@ -176,6 +234,7 @@ template:
         unique_id: spare_weather
         condition_template: "sunny"
         temperature_template: "60"
+        humidity_template: "40"
         temperature_unit: "°F"
 
 # --- The card -----------------------------------------------------------------
