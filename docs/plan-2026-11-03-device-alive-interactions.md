@@ -147,16 +147,26 @@ HATCH_DIRECTOR.create({ now, trusted, canRender, schedule, recipes })
   .offer(slide, cue)                 // -> { accepted, reason, effectId }
   .enterView(slide, recent, trusted) // at most one echo
   .cancel(slide, reason, tracks)
+  .release(slide, effectId)          // ends one effect by its token (animationend); false if stale
   .tick(now)                         // expires TTLs; called from the card's existing _tick
   .detach(slide)                     // timers, animations, observers
   .reset()                           // disconnect
 HATCH_DIRECTOR.BUSY_OWNERS           // the one busy list (below); no setBusy
 ```
 
+Built in slice 1 (`src/card/interaction-director.js`), beyond the sketch: `create` also takes
+`deviceNow`; `ambient(slide)`, `isBusy(slide)`, `busyOwners(slide)` and `inspect(slide)` read
+state; `setAmbient` returns `{changed, render}` (the director paints nothing, the adapter does,
+from `ambient(slide)`); `HATCH_DIRECTOR.PRIORITY` names section 5.1's ladder for recipe authors.
+
 Inputs are injected, so the part stays pure:
 
 - `now()` is the server clock the card passes in (`serverNow`, `shell-data.js:293`).
-  `trusted` says whether that clock is trusted (see section 6.7); `enterView` takes it too.
+  `trusted` (a boolean or a function) says whether that clock is trusted (see section 6.7);
+  `enterView` takes it too, and anything but `true` (including unset) is untrusted.
+- `deviceNow()` is the device clock (`Date.now`), for the busy read only. The slide's own
+  timers (`poseUntil`, `card-build.js:409`) are set from the device clock, `now()` is
+  offset from it by up to a day, so comparing them would be wrong. It defaults to `now`.
 - `schedule(ms, fn) -> cancel` is the only timer. The director never calls `setTimeout`
   itself; tests drive it with a fake. There is no new `setInterval` (section 3): `tick(now)`
   rides the card's existing `_tick`.
@@ -166,13 +176,25 @@ Inputs are injected, so the part stays pure:
 - `slide` is the slide object `s` itself, not a string key. Per-slide state sits in a
   `WeakMap`, so `_forget` (`card-build.js`) is `detach` and a dropped slide is freed.
 
-A cue carries an id, kind, origin (`user|house|pet|idle`), the server `occurredAt`, a
-presentation (`onset|echo|ambient|interaction`), a TTL and a whitelisted `data`. The
+A cue carries an id, kind, origin (`user|house|pet|idle`), the server `occurredAt` (ms on
+`now()`'s clock; the adapter turns the wire's `occurred_at` ISO string into it, and
+`expires_at` into `ttlMs`), a presentation (`onset|echo|ambient|interaction`), a TTL, a
+`direction` (`start|end`, only for a transition that has an opposite) and a whitelisted
+`data`. A recipe names the `collapseKey` it shares with its opposite: an end that meets its
+own still-running start (or the reverse) ends both and plays neither, and in an `enterView`
+ring a start then an end cancel each other. A recipe may also give `echoRank` (lower plays
+first, section 6.7's order), `echoMs` (the shortened length; half of `durationMs` if unset)
+and `stillTrue(ambient, cue)` (else `data.key`/`data.value` against the ambient state).
+The wire `kind` (`rain_started`) is the adapter's to map to a recipe kind and a direction. The
 server never sends CSS, JS, HTML, selectors or asset paths; the client picks from recipes
 it declares.
 
 Per slide, bounded in memory: active tracks, ambient state, `seenFxIds` (about 128), one
-`pendingEcho`, `lastMicroBeat`, a generation. **Every effect has a generation token**; a
+`pendingEcho` (a house onset offered while nothing may render, kept if it is the best, for
+`enterView` to use; it is never played late by itself), `lastMicroBeat`, cooldowns. The
+generation is one counter for the director, so no two effects share a token. A cue is
+marked seen once it is decided (played, dropped or collapsed), not when nothing may
+render or the clock is untrusted: those stay eligible for an echo inside their window. **Every effect has a generation token**; a
 timer or animation callback checks it before it clears a class, so an old timeout cannot
 clear a newer press. Never rely only on `animationend` (a hidden tab may drop it): each
 effect also gets a bounded watchdog, a `schedule` call the director cancels with the
@@ -486,8 +508,8 @@ art. **Do not run two workers on the card chain or `manifest.txt` at once.**
 |---|---|---|---|---|---|
 | 0 | This rewrite | 0 | M | docs only | none |
 | 1 | **Director core**: pure `interaction-director.js`, track leases, generation tokens, `BUSY_OWNERS`, injected `schedule`, `node --test`; a manifest line, one AGENTS.md table row. No adapter, no card-check case, no `pick-sections` entry. **No visual change.** Acceptance below. | 1 | S-M | `scripts/gate --auto` (picks no card-check section; the JS tests are the guard) | none (nothing to see) |
-| 2 | **Press release feel**: section 7 only. Rebound, pending, failed, cleanup, per-action character, as classes and custom properties on the cap. Bench `alive` preset. | 1 | S-M | `gate --auto` | Press the four care caps and a nav cap; swipe off a cap; Space on a focused cap; one refusal. |
-| 3 | **Signal bridge, rain**: `device_fx.py` (current, ring, hysteresis), `current` in `_house_view`, the live message, the client `ambient`/`echo`, one glass-drop pulse on the `.hw` family. The 14 cases for the rain row, plus 15-17. No new copy. | 1 (server) | L | `scripts/ci-gate` (pick-sections picks `all`) | Rain on a wall tablet (shared) and a phone; open at 20 s and at 3 min; HA restarted in rain. |
+| 2 | **Press release feel**: section 7 only. Rebound, pending, failed, cleanup, per-action character, as classes and custom properties on the cap. Bench `alive` preset. The cap states are CSS only and must not go through the director's `canRender` (`lcdOn() && !calm()`): a press with screen effects off still feels like a press. The per-action rim cues are `shellImpulse` effects, so they use the director; slice 2 is then the first slice with an adapter and takes slice 3's TDZ card-check case and `pick-sections` entry from section 5.2, or the rim cues wait for slice 3 (first mate's call; slice 1 leaves it open). | 1 | S-M | `gate --auto` | Press the four care caps and a nav cap; swipe off a cap; Space on a focused cap; one refusal. |
+| 3 | **Signal bridge, rain**: `device_fx.py` (current, ring, hysteresis), `current` in `_house_view`, the live message, the client `ambient`/`echo`, one glass-drop pulse on the `.hw` family. The 14 cases for the rain row, plus 15-17. No new copy. The adapter owns the wire-to-cue mapping (`occurred_at`/`expires_at` ISO to `occurredAt`/`ttlMs` on `serverNow`, `rain_started` to a recipe kind and a `direction`), passes `deviceNow` (`Date.now`) and `trusted` (`serverClockKnown()`), sets `s.statusOpen` in `_toggleStatus`, and calls `release` from `animationend`. | 1 (server) | L | `scripts/ci-gate` (pick-sections picks `all`) | Rain on a wall tablet (shared) and a phone; open at 20 s and at 3 min; HA restarted in rain. |
 | 4 | **Expand the matrix**: snow, fog, storm, wind, lights, fireplace, heating/cooling, media, TV, vacuum, appliance, moon, `DEVICE_SIGNAL_MAP` machine-checked. Two PRs. | 1 | M | `ci-gate` for the server half, `gate --auto` for the rest | Each row once on the phone: lights, fireplace, heating, doorbell, a storm with reduced motion on. |
 | 5 | **Idle delta**: section 8's three rows, only if N4 leaves them open. | 1 | S-M | `gate --auto` | A ten-minute idle watch on the phone; a game then idle. |
 | 6 | **Rare glass**: section 9. | 1 | S | `gate --auto` | A long idle watch; confirm it is rare and never over a control. |
