@@ -3277,9 +3277,11 @@ async function main() {
   // What the pet tells only you: a friendship month, last night's tuck-in, a
   // busy day; a record and a goodnight, to their person only. (A real push may
   // have replaced the close bond set above.)
-  await mineFor({ bond: { level: 8, nickname: "sunbeam" } });
+  // The close bond is set inside the same evaluate: a live push of the server's `mine` (no
+  // nickname) between two calls replaced it in CI (2026-11-03) and the tuck-in thanked "Dev".
   const secret = await page.locator("hatch-pet-card").evaluate((el, me) => {
     const s = el._slides[el._index];
+    el._mineFor(s, { ...(s.mine || {}), bond: { level: 8, nickname: "sunbeam" } });
     s.queue = [];
     el._nightLine = () => null; // E4 S-b's callback after a visitor or sunset: checked in moments
     el._note(s, { kind: "friends_for", months: 1 });
@@ -7234,6 +7236,10 @@ async function main() {
           el._greet(s); el._stopTyping(s);
           return s.bubble.textContent;
         },
+        // Why a greeting may not have been said (the card's _greet/_free gates), for a failure's message.
+        why: () => ({ free: el._free(s), heard: el._channelHeard(s), mood: s.moodState, species: !!s.species,
+          status: s.screen.classList.contains("show-status"), game: !!s.game, scene: !!s.scene, calling: !!s.calling,
+          until: ["sayUntil", "poseUntil", "propUntil", "flairUntil", "movingUntil"].filter((k) => s[k] > Date.now()) }),
         moment: (m) => { // what's said now, and what's queued after it
           free();
           s.sayEntry = null;
@@ -7340,7 +7346,7 @@ async function main() {
         out[type] = {};
         for (const r of [0.1, 0.9]) {
           t.random(r);
-          out[type][r] = { greet: t.greet() };
+          out[type][r] = { greet: t.greet(), why: t.why() };
           for (const [key, m] of moments) {
             const said = t.moment(m);
             out[type][r][key] = said.queued.length ? said.queued[0] : { text: said.said, catch: said.saidCatch };
@@ -7362,8 +7368,8 @@ async function main() {
     for (const type of TYPES) {
       const heads = half[type][0.1];
       const tails = half[type][0.9];
-      if (heads.greet !== filled(type, "hello", "Dev")[0]) halfBad.push(`${type} hello: ${heads.greet}`);
-      if (!NORMAL.greet.test(tails.greet)) halfBad.push(`${type} normal hello: ${tails.greet}`);
+      if (heads.greet !== filled(type, "hello", "Dev")[0]) halfBad.push(`${type} hello: ${heads.greet} ${JSON.stringify(heads.why)}`);
+      if (!NORMAL.greet.test(tails.greet)) halfBad.push(`${type} normal hello: ${tails.greet} ${JSON.stringify(tails.why)}`);
       for (const [key] of MOMENTS) {
         if (heads[key].text !== filled(type, key, "hazelnuts")[0]) halfBad.push(`${type} ${key}: ${heads[key].text}`);
         if (!NORMAL[key].test(tails[key].text)) halfBad.push(`${type} normal ${key}: ${tails[key].text}`);
