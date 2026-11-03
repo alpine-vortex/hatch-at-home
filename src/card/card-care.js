@@ -839,7 +839,7 @@ class HatchPetCardCare extends HatchPetCardActions {
     if (t >= 1800 && once("sigh")) {
       this._animate(s, s.pet, "sigh", 600);
       s.tuckedAt = Date.now();
-      if (sc.result === "ok") this._lightsSay(s, v === "C" ? "sigh" : this._tuckLine(s));
+      if (sc.result === "ok") this._lightsSay(s, sc.thanks ?? (v === "C" ? "sigh" : this._tuckLine(s)));
     }
     if (v === "B" && t >= 2400 && once("peek")) this._lightsSay(s, "peek");
     if (t < 100) return sc.sleepy;

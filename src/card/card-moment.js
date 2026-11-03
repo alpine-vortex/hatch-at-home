@@ -311,7 +311,15 @@ class HatchPetCardMoment extends HatchPetCardVisit {
           this._hass.user?.name?.trim().split(/\s+/)[0], 16);
         // Instead of the plain goodnight just said (or waiting), not after it.
         if (!capture && s.queue) s.queue = s.queue.filter((q) => q.type !== "fell_asleep");
-        line(withName(this._lines(s, "tucked_in", "thank you for tucking me in ♥").text, name), 4000);
+        const thanks = withName(this._lines(s, "tucked_in", "thank you for tucking me in ♥").text, name);
+        // This card's own tuck scene, before its sigh: the thanks is the scene's line (it says it there),
+        // not a second one around the goodnight.
+        const sc = s.scene;
+        if (!capture && sc?.kind === "lights" && !sc.wake && !sc.fired.has("sigh")) {
+          sc.thanks = { text: thanks, ms: 4000 };
+          break;
+        }
+        line(thanks, 4000);
         break;
       }
       case "bond_favourite":

@@ -1294,3 +1294,36 @@ test("lights, reduced motion: no scene, the pose only (sleepy for a tuck, conten
   assert.deepStrictEqual(plain(f.s.poseFrames), ["adult_content_1", "adult_content_2"]);
   assert.match(method("_sceneStart"), /s\.sceneFade = \{ kind, until: Date\.now\(\) \+ 10000 \};[^\n]*\n\s+entry\.calm\?\.call\(this, s\);/);
 });
+
+// --- Care D audit fixes (the tier-2 audit, 2026-11-02) ------------------------------------------
+test("audit P1: the tucked_in thanks is the scene's sigh line, not a second one around the goodnight", () => {
+  const m = method("_moment");
+  const ctx = { Date, calm: () => false, MOMENT_CLASS: {}, FLAVOUR: 1, KEPT: 3, sharedScreen: () => false, withName: (t) => t, short: (t) => t, BOND: { nickname: 3 }, pick: (l) => l[0] };
+  vm.runInNewContext(`const o = {${m}}; this.moment = o._moment;`, ctx);
+  const run = (s, moment, capture = null) => {
+    const lines = [];
+    const self = { _line: (_s, _c, text) => lines.push(text), _bond: () => null, _hass: { user: { name: "Dev" } }, _lines: (_s, _k, text) => ({ text }) };
+    ctx.moment.call(self, s, moment, capture);
+    return lines;
+  };
+  const tucked = { type: "tucked_in" };
+  // Before the sigh, a tuck scene keeps the thanks for its own line: nothing said now.
+  const s = { scene: { kind: "lights", wake: false, fired: new Set(["lie"]) } };
+  assert.deepStrictEqual(plain(run(s, tucked)), []);
+  assert.deepStrictEqual(plain(s.scene.thanks), { text: "thank you for tucking me in ♥", ms: 4000 });
+  // The sigh beat says it in place of the goodnight (variant C's too).
+  const f = lightsCard();
+  lightsTap(f);
+  const sc = f.s.scene;
+  sc.thanks = { text: "thank you for tucking me in ♥", ms: 4000 };
+  sc.result = "ok";
+  sc.dusk = f.s.pet; sc.asleep = []; sc.sleepy = [];
+  const opts = { ramp: () => 0, ease: () => 0 };
+  f.self._lightsTuck(f.s, sc, 1800, opts);
+  assert.deepStrictEqual(plain(f.log.lines), ["thank you for tucking me in ♥"]);
+  // After the sigh (or with no scene), it is said as before; a wake scene or the catch-up keep today's.
+  assert.deepStrictEqual(plain(run({ scene: { kind: "lights", wake: false, fired: new Set(["sigh"]) } }, tucked)), ["thank you for tucking me in ♥"]);
+  assert.deepStrictEqual(plain(run({ scene: null }, tucked)), ["thank you for tucking me in ♥"]);
+  assert.deepStrictEqual(plain(run({ scene: { kind: "lights", wake: true, fired: new Set() } }, tucked)), ["thank you for tucking me in ♥"]);
+  assert.deepStrictEqual(plain(run({ scene: { kind: "lights", wake: false, fired: new Set() } }, tucked, [])), []);
+});
