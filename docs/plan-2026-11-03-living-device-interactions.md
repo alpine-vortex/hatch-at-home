@@ -1,5 +1,12 @@
 # Hatch at Home: Living Device Interaction Plan
 
+> **Superseded by device-alive** (owner, 2026-11-03). The one canonical plan is
+> `docs/plan-2026-11-03-device-alive-interactions.md`. Its §5 (tracks, arbitration),
+> §7 (press profiles) and §12 (authoring model) are folded in there, rebased on current
+> main. Do not build from this file; it stays as the source of those sections. Its
+> frontend-only path for Home Assistant signals does not work (the server emits no edge
+> for most of them) and its internals plane is parked.
+
 **Status:** Implementation plan  
 **Prepared:** 2026-11-03  
 **Repository basis:** `alpine-vortex/hatch-at-home`, `main` at `ca19f71fef223747864a17cb653c4155bd2504bd`  
