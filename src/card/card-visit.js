@@ -623,6 +623,59 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     s.robotTimer = setTimeout(() => s.screen.classList.remove("fx-robot"), 6000);
   }
 
+  // --- The device-alive rain adapter (plan 2026-11-03, slice 3B) --------------------------
+  // The director and the wire mapping are src/card/interaction-director.js and device-fx.js;
+  // these methods only hand them the card's facts. The glass classes are all `dir-`.
+
+  // What the director asks the card, read fresh each time: the "screen effects here" switch, the OS
+  // reduced-motion setting, and whether the server clock has been read.
+  _dirEnv() {
+    return { lcdOn: lcdOn(), calm: calm(), clockKnown: serverClockKnown() };
+  }
+
+  // On show: the selected slide, the card on screen, the tab visible, the power-on screen gone.
+  _dirShown(s) {
+    return s === this._slides?.[this._index] && this._visible !== false && !document.hidden && !this._booting;
+  }
+
+  // A house view arrived (the snapshot, or a diff): the ambient state, painted.
+  _dirSync(s) {
+    HATCH_DEVICE_FX.sync(this._director, s, s.house, this._dirEnv());
+  }
+
+  // A live {"fx": entry}: a pulse now, or the best one held for the first view. It never redraws.
+  _dirLive(s, entry) {
+    HATCH_DEVICE_FX.live(this._director, s, entry, this._dirEnv());
+  }
+
+  // The slide is on show again (selected, back in view, tab back, power-on over, or its snapshot
+  // just came in): paint the ambience, and on the first view only, play at most one echo. A
+  // snapshot on a slide already viewed (a reconnect) never echoes (M7). Not "viewed" until the
+  // channel has been heard: a slide shown before its snapshot waits for it.
+  _dirView(s) {
+    if (!s || !this._director || !this._dirShown(s)) return;
+    const env = this._dirEnv();
+    HATCH_DEVICE_FX.paint(this._director, s, env);
+    if (s.dirViewed || !s.subscribed) return;
+    s.dirViewed = true;
+    HATCH_DEVICE_FX.enter(this._director, s, s.dirRecent, env);
+    s.dirRecent = null;
+  }
+
+  // The tab went hidden, or the card scrolled away: nothing runs; the state is painted on return.
+  _dirPause() {
+    for (const s of this._slides || []) this._director?.cancel(s, "paused", ["shellImpulse"]);
+  }
+
+  // The "screen effects here" switch changed: off draws nothing at once (the CSS also hangs on
+  // `lcd-on`); on paints the ambience again.
+  _dirSwitch() {
+    for (const s of this._slides || []) {
+      if (!lcdOn()) this._director?.cancel(s, "switch", ["shellImpulse"]);
+      HATCH_DEVICE_FX.paint(this._director, s, this._dirEnv());
+    }
+  }
+
   _sparkle(s) {
     const ring = document.createElement("span");
     ring.className = "burst big";

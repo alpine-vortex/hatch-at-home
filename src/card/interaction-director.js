@@ -5,7 +5,7 @@
 // no clock or timer of its own. The card passes `now` (the server clock), `trusted`,
 // `canRender` and `schedule(ms, fn) -> cancel`; tests pass fakes. One frozen namespace, no
 // loose globals: the card is a classic script, so a top-level name is shared with every other
-// card on the page. Nothing in the card calls it yet (slice 1); adapters come in slice 3.
+// card on the page. The card creates one per card (card-build.js); its rain adapter is device-fx.js.
 //
 // Tracks. `control`, `shellImpulse`, `screenFx` and `petBody` are leased: one effect each per
 // slide, a generation token on every effect. `shellAmbient` is state (setAmbient), never
@@ -54,7 +54,7 @@ const HATCH_DIRECTOR = Object.freeze(
         { name: "calling", busy: (s) => !!s.calling },
         { name: "asleep", busy: (s) => !!s.asleep },
         { name: "pose", busy: (s, now) => s.poseUntil > now },
-        // statusOpen is set by the adapter in _toggleStatus (slice 3); until then, by hand.
+        // statusOpen is set by the adapter in _toggleStatus (card-layout.js, slice 3B).
         { name: "status", busy: (s) => !!s.statusOpen },
       ].map((o) => Object.freeze(o))
     );

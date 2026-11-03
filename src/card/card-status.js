@@ -448,6 +448,7 @@ class HatchPetCardStatus extends HatchPetCardMoment {
         return; // no storage: the effects stay as they are
       }
       this._card.classList.toggle("lcd-on", on);
+      this._dirSwitch(); // the glass: nothing when off, the ambience again when on
       this._settingsChanged(s, on ? null : "effectsOff");
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });

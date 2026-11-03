@@ -27,6 +27,17 @@ class HatchPetCardBuild extends HatchPetCardBase {
     this._card = root.querySelector("ha-card");
     this._syncTheme();
     this._card.classList.toggle("lcd-on", lcdOn());
+    // The device-alive director (slice 3B): the server clock for the cues, the device clock for the
+    // slides' own timers, and one timer through setTimeout (the card's _tick also calls tick()).
+    this._director = HATCH_DIRECTOR.create({
+      now: serverNow, deviceNow: Date.now, trusted: serverClockKnown,
+      canRender: (s) => lcdOn() && this._dirShown(s),
+      schedule: (ms, fn) => {
+        const timer = setTimeout(fn, ms);
+        return () => clearTimeout(timer);
+      },
+      recipes: HATCH_DEVICE_FX.RECIPES,
+    });
     this._card.classList.toggle("mono", monoOn());
     this._card.classList.toggle("bigtext", bigOn());
     // The shell hardware's art: ui/shell_<part>.png, drawn by art/shell-parts/make_parts.py (see REQUEST.md there).
@@ -106,6 +117,8 @@ class HatchPetCardBuild extends HatchPetCardBase {
       this._visible = entries.some((e) => e.isIntersecting);
       this._card.classList.toggle("offscreen", !this._visible); // pauses the loops
       if (!this._visible) this._slides.forEach((x) => this._stopTyping(x));
+      if (!this._visible) this._dirPause();
+      else this._dirView(this._slides[this._index]); // in view: the first view's echo, or just the ambience
       if (this._visible && this._dirty) this._update(); // catch up on what was skipped
     });
     this._io.observe(this._card);
@@ -140,6 +153,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
             <div class="breeze"><span></span><span></span><span></span></div>
             <div class="lcd"></div>
             <div class="glow"></div>
+            <i class="hw glass" aria-hidden="true"></i>
             <img class="attention" alt="wants attention">
             <div class="bubble"></div>
             <div class="sr" role="status"></div>
@@ -173,8 +187,13 @@ class HatchPetCardBuild extends HatchPetCardBase {
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
       propEl: q(".gprop"), live: q(".sr[role=status]"), seasonBox: q(".season"),
-      basket: q(".basket"),
+      basket: q(".basket"), glass: q(".glass"),
     };
+    // The glass effect ends with its animation (the director's watchdog is the backstop): the
+    // token is the one the recipe's start left on the slide, so a stale end does nothing.
+    s.glass.addEventListener("animationend", () => {
+      if (s.dirEffect) this._director?.release(s, s.dirEffect);
+    });
     // The LCD grid: one cell per world art pixel, measured on the screen itself
     // (its width depends on the shell's padding as well as the slide's).
     s.lcdSize = new ResizeObserver(() => this._lcdPitch(s));
@@ -474,6 +493,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
       this._booting = false;
       this._bootEnding = false;
       this._card.classList.remove("booting");
+      this._dirView(this._slides[this._index]); // the power-on screen was the only thing in the way
       this._slides.forEach((x) => {
         x.boot.hidden = true;
         x.boot.classList.remove("filling");
@@ -742,7 +762,15 @@ class HatchPetCardBuild extends HatchPetCardBase {
       s.laySheet = false;
       s.nameSheet = false;
       s.screen.classList.remove("show-status");
+      s.statusOpen = false;
     }
+    // Device-alive: another pet's glass, ring and first view are not this one's (the house view that
+    // follows sets the ambient state again).
+    this._director?.detach(s);
+    s.dirViewed = false;
+    s.dirRecent = null;
+    s.dirEffect = 0;
+    s.glass?.classList.remove("dir-wet", ...HATCH_DEVICE_FX.CLASSES);
     this._layDrop(s); // a lay waited for belongs to the last pet
     this._clearNameTimers(s);
     s.nameFrom = null;
@@ -912,6 +940,8 @@ class HatchPetCardBuild extends HatchPetCardBase {
     });
     this._linkEnd(); // a swipe ends the visit at once
     this._index = to;
+    this._slides.forEach((x, i) => { if (i !== to) this._director?.cancel(x, "left", ["shellImpulse"]); });
+    this._dirView(this._slides[to]); // the glass on the slide that comes forward, and its first view's echo
     if (this._shelfRestored && this._shelfDevices) {
       shelfWrite(this._shelfDevices, to);
       if (!auto) shelfMark(this._shelfDevices);
