@@ -90,21 +90,21 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         } else if (m.how === "night") {
           say("...so sleepy");
         } else if (m.how === "lights") {
-          now(() => { if (!s.asleep && !s.scene && !calm()) this._animate(s, s.pet, "stretch", 1100); }); // lights on: a stretch, no line (plan 5.5)
+          // lights on: a stretch, no line (plan 5.5); not while a wake scene plays, nor two after one (its own stretch)
+          now(() => { if (!s.asleep && !s.scene && !calm() && !(Date.now() - (s.stretched || 0) < WAKE_STRETCH_MS)) this._animate(s, s.pet, "stretch", 1100); });
         }
         break;
       case "fell_asleep":
         if (m.how === "collapsed") {
           say("so... sleepy... zzz", 5000);
         } else if (m.how === "house" || m.how === "lights") {
+          // A tuck this card's own lights scene plays says its own sigh and thanks (care reactions D, plan 4.3b):
+          // nothing here while it lives, nor just after it said them. A tuck seen live from elsewhere is today's.
+          if (m.how === "lights" && !capture && (s.scene?.kind === "lights" || Date.now() - (s.tuckedAt || 0) < WAKE_STRETCH_MS)) break;
           // The pet's first bedtime (its first day, one per pet and generation on this browser):
           // its own line, spent when it is said, not in the catch-up and not for an egg.
-          const first = !capture && this._firstNightKey(s);
-          if (first) {
-            say(FIRST_NIGHT, 4500, () => onceEver(first));
-            break;
-          }
-          say(this._nightLine(s) || this._lines(s, "fell_asleep", pick(["good night...", "night night...", "sleep tight..."])).text, 4000);
+          const { text, ms, then } = this._tuckLine(s, capture);
+          say(text, ms, then);
         }
         break;
       case "rest_ended": // R1: back from resting, with a stretch (no line going in: rest_started)

@@ -473,4 +473,14 @@ const SNACK_LINES = {
   catch: ["*gotcha!*"],
   miss: ["*pounce!*"],
 };
+// Care reactions D (plan 14; the FM approved these, 2026-11-02, Q4): the tuck and the wake, said bare. sigh: variant C's
+// (the thanks, after the tuck, is the existing fell_asleep pools); peek: variant B's, as it looks out and dozes off;
+// night: a night creature's, as it turns round; wake: a plain wake's stretch; groggy: a wake in the sleep window.
+const LIGHTS_LINES = {
+  sigh: ["*sighs, all snug*"],
+  peek: ["*peeks out, then dozes*"],
+  night: ["*one more look around*"],
+  wake: ["*stretches*"],
+  groggy: ["*blinks, squinting*"],
+};
 // --- end fresh-expand copy ---

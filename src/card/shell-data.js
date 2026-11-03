@@ -303,3 +303,52 @@ function timeAgo(iso) {
   return `${Math.round(hours / 24)} d ago`;
 }
 
+
+// The blanket drape (care reactions D, plan 5.3): the pet's asleep and the lights are out. Three sizes
+// of one shared art, ui/drape_<s|m|l>_<1|2|3>.png, each a whole 256 px sprite frame with the blanket
+// drawn on it (ground line y=224; the final frame 100 / 112 / 120 px high for S / M / L), so it needs
+// no scaling. The size is chosen by the width of the pet's asleep_1 body, not by its stage (FM,
+// 2026-11-02): S up to 160 px wide, M 161-210, L 211-252. The entry is [size, y]: y is how far the
+// drape sits lower than its drawn place, in sprite px, whole art pixels (a multiple of 4): about 40% of
+// the body's height is under the blanket and the face stays clear on frame 3. null: no drape (the
+// bat hangs upside down, the otter floats on its back on a ripple), and the scene still plays every
+// other beat. tests/js/drape.test.js reads the sprites and holds every entry to its frame.
+const DRAPE = {
+  axolotl: { baby: ["s", 60], child: ["m", 64], teen: ["l", 68], adult: ["l", 68] },
+  ballpython: { baby: ["s", 56], child: ["m", 60], teen: ["l", 56], adult: ["l", 56] },
+  bananaslug: { baby: ["s", 64], child: ["m", 76], teen: ["l", 76], adult: ["l", 84] },
+  bat: null,
+  beardeddragon: { baby: ["s", 64], child: ["s", 56], teen: ["m", 64], adult: ["l", 80] },
+  beaver: { baby: ["s", 64], child: ["m", 72], teen: ["l", 72], adult: ["l", 68] },
+  bird: { baby: ["s", 40], child: ["m", 40], teen: ["m", 32], adult: ["l", 44] },
+  bunny: { baby: ["m", 64], child: ["l", 64], teen: ["l", 60], adult: ["l", 60] },
+  corgi: { baby: ["s", 56], child: ["m", 56], teen: ["l", 64], adult: ["l", 68] },
+  deer: { baby: ["m", 64], child: ["m", 52], teen: ["l", 60], adult: ["l", 44] },
+  duckling: { baby: ["m", 56], child: ["l", 48], teen: ["l", 44], adult: ["l", 56] },
+  ferret: { baby: ["m", 76], child: ["m", 68], teen: ["l", 68], adult: ["l", 76] },
+  firefly: { baby: ["s", 76], child: ["m", 84], teen: ["m", 76], adult: ["m", 80] },
+  fox: { baby: ["s", 48], child: ["m", 56], teen: ["l", 60], adult: ["l", 56] },
+  gecko: { baby: ["m", 72], child: ["m", 60], teen: ["l", 68], adult: ["l", 76] },
+  hamster: { baby: ["s", 56], child: ["m", 60], teen: ["m", 52], adult: ["l", 56] },
+  hermitcrab: { baby: ["s", 60], child: ["s", 56], teen: ["m", 48], adult: ["m", 52] },
+  kitten: { baby: ["l", 64], child: ["l", 56], teen: ["l", 60], adult: ["l", 56] },
+  lunamoth: { baby: ["s", 64], child: ["m", 64], teen: ["l", 48], adult: ["l", 56] },
+  octopus: { baby: ["s", 48], child: ["m", 52], teen: ["l", 52], adult: ["l", 60] },
+  opossum: { baby: ["s", 64], child: ["m", 60], teen: ["l", 64], adult: ["l", 68] },
+  otter: null,
+  owl: { baby: ["s", 40], child: ["m", 48], teen: ["m", 36], adult: ["m", 32] },
+  pondturtle: { baby: ["s", 64], child: ["m", 68], teen: ["l", 76], adult: ["m", 68] },
+  puffin: { baby: ["m", 52], child: ["m", 48], teen: ["l", 56], adult: ["m", 40] },
+  seal: { baby: ["m", 60], child: ["m", 56], teen: ["l", 56], adult: ["l", 68] },
+  squirrel: { baby: ["m", 56], child: ["m", 48], teen: ["l", 48], adult: ["l", 40] },
+  tarantula: { baby: ["s", 56], child: ["m", 56], teen: ["l", 52], adult: ["l", 52] },
+  tortoise: { baby: ["s", 60], child: ["m", 64], teen: ["m", 56], adult: ["m", 56] },
+  treefrog: { baby: ["s", 68], child: ["s", 52], teen: ["m", 48], adult: ["m", 44] },
+};
+const DRAPE_FALL_MS = 450; // the drape's three frames when it falls, seen live (steps(3)); the scene's blanket beat too
+const DRAPE_SLIDE_PX = 12; // frame 2's drop when it slides off (a wake): sprite px, three art pixels
+// The drape for a species and the stage it is drawn at, else null ({ size, y }).
+function drapeOf(speciesId, stage) {
+  const entry = DRAPE[speciesId]?.[stage];
+  return entry ? { size: entry[0], y: entry[1] } : null;
+}

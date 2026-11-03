@@ -118,10 +118,12 @@ class HatchPetCardActions extends HatchPetCardJournal {
     if (!entry || !s.species || s.game || s.screen.classList.contains("show-status")) return;
     const mood = this._state(s, "sensor.mood");
     const stage = this._state(s, "sensor.life_stage")?.state;
-    if (!mood || mood.state === "away" || stage === "egg" || s.asleep || s.lightsOut) return;
+    // Asleep or the lights out stops every scene but the lights' own: a wake is about exactly that.
+    if (!mood || mood.state === "away" || stage === "egg" || ((s.asleep || s.lightsOut) && kind !== "lights")) return;
     if (!entry.due.call(this, s, mood, stage)) return; // read after _press ended any scene (plan 4.2)
     if (calm()) {
       s.sceneFade = { kind, until: Date.now() + 10000 }; // no scene: the news fades in
+      entry.calm?.call(this, s); // but the pet visibly reacts: its pose (plan 9)
       return;
     }
     const held = {};
@@ -211,6 +213,7 @@ class HatchPetCardActions extends HatchPetCardJournal {
     const sc = s.scene;
     const entry = SCENES[sc.kind];
     const c = this._sceneClock(sc, t);
+    entry.watch?.call(this, s, sc, t); // lights: the live state is the answer (plan 4.3b)
     const helpers = (now) => {
       const ramp = (a, b) => Math.min(1, Math.max(0, (now - a) / (b - a)));
       const ease = (a, b) => {
@@ -273,9 +276,10 @@ class HatchPetCardActions extends HatchPetCardJournal {
   // An ok marks it answered and resumes a hold. A refusal is the entry's push-away from where
   // it is (refuseAt, on the scene's clock; one per scene); an entry without one ends, said as
   // ever by _react.
-  _sceneAnswer(s, result, at = performance.now() - s.scene.start) {
+  _sceneAnswer(s, result, at) {
     const sc = s.scene;
     if (!sc) return;
+    at ??= this._sceneNow(sc);
     const entry = SCENES[sc.kind];
     if (sc.answerAt == null) sc.answerAt = at;
     if (isYes({ action: sc.kind, result })) {
@@ -302,7 +306,12 @@ class HatchPetCardActions extends HatchPetCardJournal {
   _sceneFail(s) {
     const sc = s.scene;
     if (!sc || !SCENES[sc.kind]?.exit || sc.failAt != null) return;
-    sc.failAt = performance.now() - sc.start;
+    sc.failAt = this._sceneNow(sc);
+  }
+
+  // Ms since the tap: the real clock, or the bench's own (sc.at), which seeks a scene on a virtual one.
+  _sceneNow(sc) {
+    return sc.at ?? performance.now() - sc.start;
   }
 
   // The refusal's own line, said as the push-away starts (the words and the gesture together).

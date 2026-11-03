@@ -2684,7 +2684,9 @@ async function main() {
       await wait(30);
       s.buttons.lights.click();
       await wait(450);
-      return { feeds, again, lights: sent.filter((x) => x.startsWith("switch.")).length };
+      const lights = sent.filter((x) => x.startsWith("switch.")).length;
+      for (let i = 0; i < 40 && s.scene; i++) await wait(100); // a tuck predicted here: its quiet exit comes with no change
+      return { feeds, again, lights };
     } finally {
       el._hass.callService = real;
     }
@@ -12322,6 +12324,41 @@ async function main() {
       measured.scene && measured.answerAt !== null && measured.answerAt <= 650, JSON.stringify(measured));
     await feedEnd();
     await card.evaluate((el) => { delete el._slides[el._index].pinVariant; });
+    // Lights on the real server (care D, plan 13): the tap to the live asleep, logged and never failed on: the hour and
+    // the pet's energy decide whether a tuck sleeps at all (model.py _apply_lights), and the answer is a sensor push after
+    // the service call, slower than a log entry. If it is often over the gate (400 ms) the gate moves later (a code change,
+    // no replan). The pet is woken again after; two taps sending one call is checked above (taps.lights).
+    const tuck = await card.evaluate(async (el) => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const s = el._slides[el._index];
+      const mock = el._call;
+      delete el._call; // the card's own call, to this HA
+      const asleepId = s.ids["binary_sensor.asleep"];
+      const lightsId = s.ids["switch.lights_out"];
+      const out = { scene: false, delta: null, gate: null };
+      try {
+        const t0 = performance.now();
+        s.buttons.lights.click();
+        out.scene = !!s.scene;
+        out.gate = s.scene?.gate ?? null;
+        while (performance.now() - t0 < 3000) {
+          if (el._hass.states[asleepId]?.state === "on") {
+            out.delta = Math.round(performance.now() - t0);
+            break;
+          }
+          await wait(20);
+        }
+        for (let i = 0; i < 60 && s.scene; i++) await wait(100);
+        if (el._hass.states[asleepId]?.state === "on" || el._hass.states[lightsId]?.state === "on") {
+          await el._hass.callService("switch", "turn_off", { entity_id: lightsId }); // put it back
+          for (let i = 0; i < 60 && el._hass.states[asleepId]?.state === "on"; i++) await wait(100);
+        }
+      } finally {
+        el._call = mock;
+      }
+      return out;
+    });
+    console.log(`  lights: tap to asleep on this HA: ${tuck.delta === null ? "none (not sleepy, or no scene)" : `${tuck.delta} ms`} (scene ${tuck.scene}, gate ${tuck.gate})${tuck.delta > (tuck.gate ?? 400) ? "  WARN: over the gate" : ""}`);
 
     await inject(life, { attributes: lifeBefore });
     await page.waitForTimeout(800);

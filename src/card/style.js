@@ -1351,5 +1351,43 @@ const SCENE_STYLE = `
   .screen img.scene-snack { left: 0; top: 0; bottom: auto; transform-origin: 50% 50%; z-index: 2; opacity: 0; }
   .pet.puff { animation: puff .45s ease-in-out; } /* the stash: the cheeks fill */
   @keyframes puff { 50% { transform: scale(1.06, .97); } }
+  /* The blanket drape (care reactions D, plan 5.3): a box with the pet's own geometry that wears the
+     pet's classes and inline motion (_drapeMirror), so the blanket moves as the body does: the settle,
+     a pat, the scene's tilt and flip. The art is a whole 256 px frame (ui/drape_<size>_<n>.png); its
+     img sits lower by the species' y (a multiple of 4 px, as a % of the frame). Above the pet, below
+     the prop and the bubble. */
+  .screen .drape { position: absolute; left: 50%; bottom: 4%; height: 62%; aspect-ratio: 1; margin-left: -23.25%;
+    transform-origin: 50% 100%; pointer-events: none; }
+  .screen .drape[hidden] { display: none; }
+  /* What the pet's classes do to the pet, they do to the drape (_drapeMirror): the same rules, repeated
+     for it, so the blanket is never a beat behind the body. Same values as the pet's, above. */
+  .drape { transition: translate .25s ease-out, rotate .2s ease-out, scale .25s steps(2); }
+  .drape.heavy { aspect-ratio: 1.06; margin-left: -24.645%; }
+  .drape.resting { animation: breathe 4.5s ease-in-out infinite; }
+  .drape.pat-soft { animation: pat-soft .3s ease-out; }
+  .drape.pat-slow { animation: perk 1.1s ease-in-out; }
+  .drape.rock { animation: rock .6s steps(4, jump-none) 1; transform-origin: 50% 90%; }
+  .drape.rock2 { animation: rock .6s steps(4, jump-none) 2; transform-origin: 50% 90%; }
+  .drape.lean-l { rotate: -5deg; transition: translate .25s ease-out, rotate .15s ease-out, scale .25s steps(2); }
+  .drape.lean-r { rotate: 5deg; transition: translate .25s ease-out, rotate .15s ease-out, scale .25s steps(2); }
+  .drape.lean-rel { transition: translate .25s ease-out, rotate .3s ease-out, scale .25s steps(2); }
+  .drape.lean-sick.lean-l, .drape.lean-sick.lean-r { transition: translate .25s ease-out, rotate .225s ease-out, scale .25s steps(2); }
+  .drape.lean-sick.lean-rel { transition: translate .25s ease-out, rotate .45s ease-out, scale .25s steps(2); }
+  .drape.settle { animation: settle 2.5s ease-in-out; }
+  .drape.look { rotate: y 180deg; }
+  .drape.perk, .drape.stretch { animation: perk .3s ease-out; }
+  .drape.stretch { animation: perk .5s ease-out 2; }
+  .drape.breath { animation: settle 1s ease-in-out; }
+  .drape.breath-long { animation: settle 1.6s ease-in-out; }
+  .screen.dim .drape { filter: brightness(.8); }
+  .screen.lit.dim .drape { filter: brightness(.9); }
+  .screen .drape img { left: 0; top: 0; width: 100%; height: 100%; transform-origin: 50% 87.5%; }
+  /* The tuck's lie-down: a 300 ms squash (the swap to the asleep frame hides in it) and the sigh after. */
+  .pet.lie, .drape.lie { animation: lie .3s ease-in-out; }
+  @keyframes lie { 50% { transform: translateY(3%) scale(.97, .95); } }
+  .pet.sigh, .drape.sigh { animation: sigh .6s ease-in-out; }
+  @keyframes sigh { 50% { transform: scale(1.02); } }
+  /* Two steps of dusk over the background only, before the dim art itself is swapped in (lights scene). */
+  .screen .scene-dusk { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
 `;
 

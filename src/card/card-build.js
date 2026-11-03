@@ -132,6 +132,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
             <img class="perch" alt="">
             <img class="ghost" alt="">
             <img class="pet" alt="">
+            <div class="drape" hidden><img alt=""></div>
             <img class="prop" alt="">
             <img class="murk" alt="">
             <div class="rain"></div>
@@ -167,7 +168,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     const s = {
       el: slide, device: q(".device"), label: q(".label"), screen: q(".screen"), bg: q(".bg"),
       awaysign: q(".awaysign"), awaylabel: q(".awaylabel"), pet: q(".pet"), prop: q(".prop"),
-      perch: q(".perch"), ghost: q(".ghost"), monoGrid: q(".mono-grid"), pat: q(".pat"),
+      perch: q(".perch"), drape: q(".drape"), drapeImg: q(".drape img"), ghost: q(".ghost"), monoGrid: q(".mono-grid"), pat: q(".pat"),
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
@@ -211,6 +212,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
       s.perch.style.scale = s.ghost.style.scale = s.pat.style.scale = s.pet.style.scale;
       s.screen.style.setProperty("--k", s.pet.style.scale || 1); // go-left / go-right stop at the edge
       if (moved) this._ghostTrail(s);
+      this._drapeMirror(s);
     }).observe(s.pet, { attributes: true, attributeFilter: ["class", "style"] });
     // What the pet says to someone (a refusal, a game's result, a moment) is read
     // out by screen readers; its idle chatter isn't. Only the pet on show.

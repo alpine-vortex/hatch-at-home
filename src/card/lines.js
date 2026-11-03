@@ -22,6 +22,7 @@ const PROP_FOR = { game: "play", chore_treat: "snack" };
 const FALLBACK_PROPS = { scold: "../ui/prop_scold", praise: "../ui/prop_praise", fan: "../ui/prop_fan" };
 // Care scenes (SCENES, card-care.js; plan care-reactions 4.3-4.5). A log entry's action
 // answers the scene of its kind: lights_out answers a lights scene, every other its own.
+const WAKE_STRETCH_MS = 2500; // a lights scene's own stretch or tuck line holds the moment's twin off this long (care reactions D)
 const SCENE_KIND_OF = { lights_out: "lights" };
 const sceneKind = (action) => SCENE_KIND_OF[action] || action;
 const SCENE_HOLD_MS = 2000; // the longest a scene waits at its gate for the answer

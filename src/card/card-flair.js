@@ -215,9 +215,26 @@ class HatchPetCard extends HatchPetCardLink {
   _toggleLights(s) {
     const id = s.ids?.["switch.lights_out"];
     if (!id) return;
+    const button = s.buttons.lights;
+    // A tuck or a wake in progress: a second tap is ignored, the ring and the haptic only; nothing is sent
+    // (plan 4.3). Two quick taps with no scene (none predicted) send one call, by _call's own guard.
+    if (s.scene?.kind === "lights" || this._inflight?.has(button)) {
+      this._tapped(button, s, { perk: false });
+      return;
+    }
     // Turning the switch off wakes a pet that dozed off with the switch already off.
     const on = this._hass.states[id]?.state === "on" || s.asleep;
-    this._call(s.buttons.lights, s, "switch", on ? "turn_off" : "turn_on", id);
+    // The entry mirrors _press (plan 4.3b): its refusal's log entry is mine (lights_out answers a lights
+    // scene), then the scene starts, which ends any other first, and the call goes out.
+    s.pressed = [...(s.pressed || []).filter((p) => Date.now() - p.pressedAt < MINE_MATCH_MS), { action: "lights_out", pressedAt: Date.now() }];
+    if (s.scene) this._sceneEnd(s);
+    this._sceneStart(s, "lights");
+    const sc = s.scene;
+    Promise.resolve(this._call(button, s, "switch", on ? "turn_off" : "turn_on", id)).then((ok) => {
+      if (!sc || s.scene !== sc) return;
+      if (ok === false) this._sceneFail(s); // its exit beat; "that didn't work" is _call's
+      else if (ok) sc.called = this._sceneNow(sc); // the quiet exit counts from here (4.3b)
+    });
   }
 }
 
