@@ -56,6 +56,8 @@ const COPY_TABLES = {
   MEMORY_ASK: { asks: ["q"] }, // memory plan M1b: the one-time ask
   MEMORY_DOORS: { fill: "pick" }, // doors 2, 4, 5, 12
   MEMORY_TOLD: { fill: "season" }, // door 6
+  MEMORY_TAG_CHIPS: { asks: ["q"] }, // memory plan M2: the tag chips
+  MEMORY_TAG_DOORS: {}, // doors 1, 3, 10, 11
   HOUSE_LINES: {},
   SEASON_START_LINES: {}, // ha-signals H7
   SEASON_START_BITS: {},

@@ -350,6 +350,25 @@ const PRESETS = {
     }
     return out;
   },
+  // Memory's tag chips (memory plan M2) inside the big day's typed step: none picked and
+  // "show" picked at 420, 330 and 300, the weekend's, the porthole's rim, big text and mono,
+  // and memory off (the box as it was).
+  memorytags() {
+    const on = { memory_on: true, memory_allowed: true };
+    const out = [];
+    const shot = (name, label, extra) => out.push({ name: `memorytags/${name}`, group: "memorytags", label,
+      world: "woodland", mine: on, textStep: { kind: "big_day", day: "2026-06-18" }, ...extra });
+    for (const width of [420, 330, 300]) {
+      shot(`${width}-none`, `${width}: no tag`, { width });
+      shot(`${width}-show`, `${width}: show`, { width, textStep: { kind: "big_day", day: "2026-06-18", tag: "show" } });
+    }
+    shot("330-weekend", "330: weekend, something else", { width: 330, textStep: { kind: "weekend", tag: "something_else" } });
+    shot("330-porthole", "330: porthole", { width: 330, shell: { shape: "porthole" }, textStep: { kind: "big_day", tag: "lesson" } });
+    shot("330-bigtext", "330: big text", { width: 330, bigText: true, textStep: { kind: "big_day", tag: "work_thing" } });
+    shot("330-mono", "330: mono", { width: 330, mono: true, textStep: { kind: "big_day", tag: "exam" } });
+    shot("330-off", "330: memory off", { width: 330, mine: { memory_on: false, memory_allowed: true } });
+    return out;
+  },
   // The lay sheet (settings S2): the offer in two worlds at both card widths, big text at
   // 330, a pick made in HA outside the offer, and a waiting world change (the offer is the
   // new world's, raised by a second pet there).

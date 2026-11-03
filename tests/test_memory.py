@@ -165,7 +165,7 @@ def test_a_hand_edited_record_drops_bad_entries_one_by_one() -> None:
             {"day": "2026-10-01", "kind": "big_day", "tag": "appointment"},
             {"day": "2026-13-01", "kind": "weekend", "tag": "trip"},
             {"day": "2026-10-02", "kind": "big_day", "tag": "my sister's recital"},
-            {"day": "2026-10-03", "kind": "big_day", "tag": "test", "text": "maths"},
+            {"day": "2026-10-03", "kind": "big_day", "tag": "exam", "text": "maths"},
             "x",
         ],
         "picks": {
@@ -936,6 +936,11 @@ GUIDE_STRINGS = (
     "**What the pets say from memory.**",
     "the card's own check",
     '"great" is kept only while memory is on',
+    # M2: the tags.
+    "**Tags.**",
+    "exam, match, show, trip, party, lesson, work thing or something else",
+    "the Saturday for a weekend; never what you typed",
+    '"work thing" and "something else" are never said back',
 )
 
 
@@ -1463,3 +1468,206 @@ async def test_since_told_goes_where_the_pet_does_not_allow_memory(
     client = await hass_ws_client(hass, token)
     assert (await answer(client, "fav_season", "summer", shared=False))["success"]
     assert pet.people.memory(ada.id).get("since_told", {}) == {}
+
+
+# --- M2: the tags (plan sections 4, 5, 8 "Acceptance, tags", 10 "Tags") -----------------
+
+MONDAY = "2026-11-02"  # a big day's ask; the day picked is the Thursday
+THURSDAY = "2026-11-05"
+FRIDAY = (
+    "2026-11-06"  # a weekend's ask; its Saturday is the 7th, its due the Monday 9th
+)
+
+
+async def tag_pet(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    freezer: Any,
+    day: str = MONDAY,
+    on: bool = True,
+    **options: Any,
+) -> tuple[Any, Any, Any]:
+    """Pip, and Ada asked a dated question today (big day or weekend), memory on."""
+    freezer.move_to(f"{day} 17:00:00+00:00")
+    ada, token = await a_user(hass)
+    record = {"memory": {"on": True, "since": "2026-10-01"}} if on else {}
+    pet = await start(hass, hass_storage, {ada.id: record}, **options)
+    client = await hass_ws_client(hass, token)
+    return pet, ada, client
+
+
+def ask(pet: Any, user: str, kind: str = "big_day") -> None:
+    pet.people.data["people"][user]["asked"] = {
+        "day": today(),
+        "later": True,
+        "later_kind": kind,
+    }
+
+
+async def big_day_yes(client: Any, **extra: Any) -> dict[str, Any]:
+    return await answer(client, "big_day", "yes", day=THURSDAY, **extra)
+
+
+async def test_a_tag_rides_on_the_one_yes_keyed_by_the_events_day(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    """The big day's tag is kept on the day they picked; a "yes" with no tag keeps
+    none; a repeated "yes" the same day replaces it (and the event, as ever)."""
+    pet, ada, client = await tag_pet(hass, hass_storage, hass_ws_client, freezer)
+    ask(pet, ada.id)
+    assert (await big_day_yes(client, shared=False))["success"]
+    assert "tags" not in pet.people.memory(ada.id)  # no tag: none kept
+    assert pet.people.open_event(ada.id)["due"] == THURSDAY
+    msg = await big_day_yes(client, shared=False, tag="show", text="the school play")
+    assert msg["success"]
+    assert pet.people.memory(ada.id)["tags"] == [
+        {"day": THURSDAY, "kind": "big_day", "tag": "show"}
+    ]
+    # The dated ask keeps its slot after a "yes", so a hand-made repeat is answered
+    # again: the one (day, kind) entry is replaced, not doubled.
+    assert (await big_day_yes(client, shared=False, tag="match"))["success"]
+    assert pet.people.memory(ada.id)["tags"] == [
+        {"day": THURSDAY, "kind": "big_day", "tag": "match"}
+    ]
+    stored = saved_people(hass_storage)[ada.id]
+    assert "school play" not in json.dumps(stored)  # typed words: memory only
+    # Forgetting it leaves no twin.
+    assert await pet.people.forget_item(ada.id, "tags", THURSDAY, "big_day")
+    assert pet.people.memory(ada.id).get("tags") == []
+    assert saved_people(hass_storage)[ada.id]["memory"]["tags"] == []
+
+
+async def test_a_weekend_tag_is_kept_on_its_saturday(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    pet, ada, client = await tag_pet(
+        hass, hass_storage, hass_ws_client, freezer, day=FRIDAY
+    )
+    ask(pet, ada.id, "weekend")
+    msg = await answer(client, "weekend", "yes", shared=False, tag="trip")
+    assert msg["success"]
+    assert pet.people.open_event(ada.id)["due"] == "2026-11-09"  # the Monday
+    assert pet.people.memory(ada.id)["tags"] == [
+        {"day": "2026-11-07", "kind": "weekend", "tag": "trip"}
+    ]
+
+
+@pytest.mark.parametrize(
+    "bad", ["dentist", "test", "", "SHOW", {"tag": "show"}, 3, ["show"], True, 1.5]
+)
+async def test_a_tag_outside_the_list_is_refused_and_nothing_is_kept(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    freezer,
+    caplog: pytest.LogCaptureFixture,
+    bad: Any,
+) -> None:
+    """The one generic error, nothing saved (not the "yes", not the event), whatever
+    the memory state; no log line holds the value (the field is `object`-typed, so no
+    schema failure logs it). The websocket API's own DEBUG wire log ("Received {...}")
+    logs every message whole, the guide says so; INFO and up is what it logs unasked."""
+    caplog.set_level(logging.DEBUG, logger="custom_components.virtual_pet")
+    caplog.set_level(logging.INFO, logger="homeassistant.components.websocket_api")
+    pet, ada, client = await tag_pet(hass, hass_storage, hass_ws_client, freezer)
+    ask(pet, ada.id)
+    for extra in ({"shared": False}, {"shared": True}, {}):
+        msg = await big_day_yes(client, tag=bad, **extra)
+        assert msg["error"] == {"code": "not_asked", "message": "It didn't ask that"}
+    assert pet.people.open_event(ada.id) is None
+    assert "tags" not in pet.people.memory(ada.id)
+    assert pet.people.data["people"][ada.id]["asked"]["later_kind"] == "big_day"
+    # And with memory off: refused all the same (the list check comes first).
+    await pet.people.forget_memory(ada.id)
+    assert not (await big_day_yes(client, shared=False, tag=bad))["success"]
+    assert pet.people.open_event(ada.id) is None
+    log = " ".join(
+        r.getMessage()
+        for r in caplog.records
+        if not r.name.startswith("pytest_homeassistant_custom_component")
+    )
+    if isinstance(bad, str) and bad:
+        assert repr(bad) not in log and f'"{bad}"' not in log  # "test": test_pet's id
+        assert bad == "test" or bad not in log
+    assert "'tag'" not in log and '"tag"' not in log
+
+
+async def test_a_tag_on_any_other_answer_is_refused(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    pet, ada, client = await tag_pet(hass, hass_storage, hass_ws_client, freezer)
+    person = pet.people.data["people"][ada.id]
+    ask(pet, ada.id, "how_day")
+    msg = await answer(client, "how_day", "tough", shared=False, tag="exam")
+    assert msg["error"]["code"] == "not_asked"
+    assert pet.people._moods == {}  # nothing kept: not the soft morning either
+    ask(pet, ada.id)
+    msg = await answer(client, "big_day", "no", shared=False, tag="exam")
+    assert msg["error"]["code"] == "not_asked"
+    for question, value in (("dream", "sea"), ("guess", "sun")):
+        msg = await answer(client, question, value, shared=False, tag="exam")
+        assert msg["error"]["code"] == "not_asked"
+    assert "guess" not in person and "tags" not in pet.people.memory(ada.id)
+    assert "picks" not in pet.people.memory(ada.id)
+
+
+async def test_a_tag_is_not_kept_without_todays_ask(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    pet, ada, client = await tag_pet(hass, hass_storage, hass_ws_client, freezer)
+    assert not (await big_day_yes(client, shared=False, tag="show"))["success"]
+    ask(pet, ada.id, "weekend")  # asked, but another kind
+    assert not (await big_day_yes(client, shared=False, tag="show"))["success"]
+    assert pet.people.open_event(ada.id) is None
+    assert "tags" not in pet.people.memory(ada.id)
+
+
+@pytest.mark.parametrize(
+    ("memory", "options", "extra"),
+    [
+        (False, {}, {"shared": False}),  # memory off for this person
+        (True, {CONF_MEMORY: False}, {"shared": False}),  # this pet's option off
+        (True, {}, {}),  # an old card: no shared flag
+        (True, {}, {"shared": True}),  # a shared screen
+    ],
+)
+async def test_a_good_tag_that_cannot_be_kept_keeps_the_yes_silently(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    freezer,
+    memory: bool,
+    options: dict[str, Any],
+    extra: dict[str, Any],
+) -> None:
+    """FM s2782 Q7: no error, the big day and its words kept, no tag anywhere."""
+    pet, ada, client = await tag_pet(
+        hass, hass_storage, hass_ws_client, freezer, on=memory, **options
+    )
+    ask(pet, ada.id)
+    bus = async_capture_events(hass, MATCH_ALL)
+    msg = await big_day_yes(client, tag="party", text="nan's party", **extra)
+    await hass.async_block_till_done()
+    assert msg["success"] and msg["result"] == {"until": THURSDAY}
+    assert pet.people.open_event(ada.id)["due"] == THURSDAY
+    if not extra.get("shared"):  # a shared screen's words are never kept
+        assert pet.people._texts[ada.id] == "nan's party"
+    mem = pet.people.memory(ada.id)
+    assert mem is None if not memory else "tags" not in mem
+    text = json.dumps(saved_people(hass_storage), default=str)
+    assert "party" not in text
+    assert "party" not in json.dumps([(e.event_type, e.data) for e in bus], default=str)
+
+
+async def test_the_bus_never_sees_a_kept_tag(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    pet, ada, client = await tag_pet(hass, hass_storage, hass_ws_client, freezer)
+    ask(pet, ada.id)
+    bus = async_capture_events(hass, MATCH_ALL)
+    assert (await big_day_yes(client, shared=False, tag="lesson"))["success"]
+    await hass.async_block_till_done()
+    assert pet.people.memory(ada.id)["tags"][0]["tag"] == "lesson"
+    text = json.dumps([(e.event_type, e.data) for e in bus], default=str)
+    assert "lesson" not in text and THURSDAY not in text

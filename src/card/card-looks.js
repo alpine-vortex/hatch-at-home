@@ -261,18 +261,19 @@ class HatchPetCardLooks extends HatchPetCardTick {
 
   // A follow-up answer, fire and forget: only to a server that takes them, never on a
   // shared screen, never stashed or retried. shared: false, so the server may keep a game
-  // pick or a great day in their memory (memory plan R3, M1 B1).
-  _sendFollow(s, entity, question, answer, text = null, day = null) {
+  // pick or a great day in their memory (memory plan R3, M1 B1), or a big day's tag (M2).
+  _sendFollow(s, entity, question, answer, text = null, day = null, tag = null) {
     if (!this._followOk || sharedScreen() || !entity) return Promise.resolve(false);
     const msg = { type: "virtual_pet/answer", entity_id: entity, question, answer, shared: false };
     if (text) msg.text = text;
     if (day) msg.day = day; // the big day's (opp #2)
+    if (tag) msg.tag = tag; // memory plan M2: one fixed-list tag, on the one "yes"
     return this._hass.callWS(msg).then((r) => r || true, () => false);
   }
 
   // After a big day's "yes": "what is it?", then one input with "ok" and "skip". However
   // it ends (ok, skip, empty, the time, a slide switch, the tab hiding) the "yes" is sent
-  // once, with the text only if there is one.
+  // once, with the text only if there is one, and the tag (step.tag) only if one was picked.
   _askTextStart(s, entity, kind = "big_day", day = null) {
     if (!this._followOk || sharedScreen()) {
       this._sendFollow(s, entity, kind, "yes", null, day);
@@ -312,12 +313,51 @@ class HatchPetCardLooks extends HatchPetCardTick {
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") this._askTextEnd(s, cleanTyped(input.value), true);
     });
+    const tags = this._tagChips(s, step);
+    if (tags) box.append(...tags);
     box.append(input, ok, skip);
     s.screen.append(box);
     this._askPlace(s, box);
     step.box = box;
     step.until = Date.now() + ASK_MS + 1000;
     step.timer = setTimeout(() => this._askTextEnd(s), ASK_MS);
+  }
+
+  // Memory's tag chips (plan M2, FM s2782 Q2), inside the text step's own box: the
+  // prompt, then "no tag" (picked) and the eight tags. A tap picks one into step.tag; the
+  // same chip again, or "no tag", clears it. Only while their memory is on, this pet allows
+  // it and the screen is their own; else null, and the box is as it ever was.
+  _tagChips(s, step) {
+    if (!this._mineSwitch(s, "memory_on", this._memoryOn) || !this._mineSwitch(s, "memory_allowed", s.memoryAllowed) ||
+      sharedScreen()) return null;
+    const prompt = document.createElement("div");
+    prompt.className = "tagq";
+    prompt.textContent = MEMORY_TAG_CHIPS.q;
+    const row = document.createElement("div");
+    row.className = "tags";
+    row.setAttribute("role", "group");
+    row.setAttribute("aria-label", MEMORY_TAG_CHIPS.q);
+    const chips = [["", MEMORY_TAG_CHIPS.none], ...Object.entries(MEMORY_TAG_CHIPS.labels)].map(([key, label]) => {
+      const chip = document.createElement("button");
+      chip.className = "tag";
+      chip.dataset.tag = key;
+      chip.textContent = label;
+      chip.setAttribute("aria-label", label);
+      return chip;
+    });
+    const show = () => {
+      for (const chip of chips) chip.setAttribute("aria-pressed", String(chip.dataset.tag === (step.tag || "")));
+    };
+    row.addEventListener("click", (e) => {
+      const chip = e.target.closest("button.tag");
+      if (!chip || step.sent) return;
+      step.tag = chip.dataset.tag && chip.dataset.tag !== step.tag ? chip.dataset.tag : null;
+      show();
+      this._tapped(chip, s, { perk: false });
+    });
+    row.append(...chips);
+    show();
+    return [prompt, row];
   }
 
   _askTextEnd(s, text = null, said = false) {
@@ -332,7 +372,7 @@ class HatchPetCardLooks extends HatchPetCardTick {
     // "I'll remember" only once the server kept it (a step ending past midnight is refused).
     const kind = step.kind || "big_day";
     const user = this._hass?.user?.id;
-    this._sendFollow(s, step.entity, kind, "yes", text, step.day).then((ok) => {
+    this._sendFollow(s, step.entity, kind, "yes", text, step.day, step.tag).then((ok) => {
       if (ok && text && user && typeof ok.until === "string") followTextKeep(user, kind, text, ok.until);
       else if (ok && user) followTextKeep(user, kind, "", "0000-00-00"); // no words: an old copy goes
       if (ok && said && s.ids?.["sensor.life_stage"] === step.entity) this._line(s, MINE, BIG_DAY.kept, 3500);

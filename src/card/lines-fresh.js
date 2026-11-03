@@ -322,6 +322,50 @@ const MEMORY_DOORS = {
   door5: (pick) => `you like to say ${pick}! ♥`,
   door12: (pick) => `${pick} is your pick, i'm ready!`,
 };
+// Memory's big-day tags (plan M2, section 6a; copy APPROVED by the first mate 2026-11-03).
+// The chips inside the big day's and weekend's text step: the prompt, the eight labels
+// (keys as the server's MEMORY_TAGS) and "no tag", the default.
+const MEMORY_TAG_CHIPS = {
+  q: "what kind of day is it?",
+  labels: {
+    exam: "exam", match: "match", show: "show", trip: "trip", party: "party", lesson: "lesson",
+    work_thing: "work thing", something_else: "something else",
+  },
+  none: "no tag",
+};
+// Doors 1 (a week after a tagged big day), 3 (a year after), 10 (the eve of a weekday
+// pattern) and 11 (the 12-month friendship day), by tag. They never say the day happened
+// ("you told me", FM s2782 Q4); a tag with no line here says nothing.
+const MEMORY_TAG_DOORS = {
+  door1: {
+    exam: "thinking of the exam you told me about",
+    match: "thinking of the match you told me about",
+    show: "thinking of the show you told me about",
+    trip: "thinking of the trip you told me about",
+    party: "thinking of the party you told me about",
+    lesson: "thinking of the lesson you told me about",
+  },
+  door3: {
+    match: "a year ago you told me about a match ♥",
+    show: "a year ago you told me about a show ♥",
+    trip: "a year ago you told me about a trip ♥",
+    party: "a year ago you told me about a party ♥",
+    lesson: "a year ago you told me about a lesson ♥",
+  },
+  door10: {
+    match: "maybe a match tomorrow! go you ♥",
+    show: "maybe a show tomorrow! break a leg ♥",
+    lesson: "maybe a lesson tomorrow! have fun ♥",
+  },
+  door11: {
+    exam: "a whole year! you told me about an exam",
+    match: "a whole year! you told me about a match",
+    show: "a whole year! you told me about a show",
+    trip: "a whole year! you told me about a trip",
+    party: "a whole year! you told me about a party",
+    lesson: "a whole year! you told me about a lesson",
+  },
+};
 // Door 6 (FM Q-B): the first time a favourite told while memory was on comes back, once
 // per favourite, in place of that day's fav-weather or season line.
 const MEMORY_TOLD = {

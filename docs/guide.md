@@ -608,8 +608,8 @@ everyone's records and memory too).
 
 **Memory (off unless you turn it on).** With memory on, the pets keep a few
 things you told them for longer than a day, so they can bring them up later: the
-picks you made (tonight's dream, a game, a rain-or-sun guess, a great day) and, later,
-which kind of big day or weekend you had, each with its date. Only choices from fixed
+picks you made (tonight's dream, a game, a rain-or-sun guess, a great day) and which
+kind of big day or weekend you said was coming, each with its date. Only choices from fixed
 lists and dates: never typed words, never anyone's name, no times or places, and no
 tough days. It is per person and one switch for every pet, kept in the people store,
 until you forget it. Turn it on with "remember me" in settings (the gear on the status
@@ -618,6 +618,16 @@ on, so you can always turn it off). Turning it off
 (two taps), or "forget my data", erases it at once. "Forget my data" keeps the pets'
 record that they asked whether to remember (a yes-or-no and up to seven dates the question
 was offered, nothing you told them), so they don't ask again.
+
+**Tags.** With memory on, the box under "what is it?" (after a "yes" to "anything big
+this week?" or "anything fun this weekend?") also asks "what kind of day is it?", with
+one tag to pick: exam, match, show, trip, party, lesson, work thing or something else
+("no tag" is the default, and nothing is kept for it). The tag is kept with the day:
+the day you picked for a big day, the Saturday for a weekend; never what you typed. It
+rides on the same answer as the "yes", so a tag the pet can't keep (memory turned off
+on another screen, or this pet's option off) is just left out, and the big day stays.
+Tags are kept until you forget them, at most 120 (the oldest go first), and go with the
+rest of memory. "work thing" and "something else" are never said back.
 
 Once you and a pet are close (bond level 4), it asks once, on your own screen and only
 where its option allows it: "can i remember what you tell me?". "yes" turns memory on,

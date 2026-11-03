@@ -170,10 +170,11 @@ BIG_DAY_GAP = 6
 # count only (Q4 C). Every value is from a fixed list or an ISO date; anything else is
 # dropped on load, entry by entry (R5).
 MEMORY_TAG_KINDS = ("big_day", "weekend")
-# The big day and weekend tags (draft labels, M2): keys, never free text. No
-# "appointment" (plan section 4).
+# The big day and weekend tags (M2; labels MEMORY_TAG_CHIPS on the card): keys, never
+# free text. No "appointment", and "exam", not "test" (plan section 4, FM s2782 Q8: a
+# medical reading).
 MEMORY_TAGS = (
-    "test",
+    "exam",
     "match",
     "show",
     "trip",
