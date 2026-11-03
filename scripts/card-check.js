@@ -8227,6 +8227,13 @@ async function main() {
 
   }
   if (enter("egg")) {
+  // The pet's real stage, put back at the end of this section: the injections below leave it an
+  // egg, and a section that runs after this one without the sections between (a partial run, as
+  // `--only egg,care`) would find every care button disabled for an egg.
+  const stageBefore = await evaluate((id) => {
+    const st = document.querySelector("home-assistant").hass.states[id];
+    return { state: st.state, attributes: st.attributes };
+  }, pet["sensor.life_stage"]);
   // 5. The egg wiggles, then cracks, before it hatches.
   // A pet update can replace the injected egg, so inject until it shows (or 3 tries).
   for (const [minutes, frames] of [[12, "egg_wiggle"], [4, "egg_crack"]]) {
@@ -8561,6 +8568,8 @@ async function main() {
     return out;
   });
   for (const [name, ok] of Object.entries(naming)) check(`settings S3 name sheet: ${name}`, ok === true, JSON.stringify(naming));
+  await inject(pet["sensor.life_stage"], { state: stageBefore.state, attributes: { ...stageBefore.attributes, hatches_at: stageBefore.attributes.hatches_at ?? null } });
+  await page.waitForTimeout(1200);
 
   }
   if (enter("sharedscreen")) {
