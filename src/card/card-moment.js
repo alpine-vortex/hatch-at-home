@@ -189,6 +189,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         speak(pick(HOUSE_LINES[kind]), 4500, () => {
           this._animate(s, s.pet, "perk", 320);
           this._houseFx(s, kind === "heating" ? "fx-heat" : "fx-cool");
+          this._momentCue(s, "house_answered", kind); // the wash on the rim, with the screen's
         });
         break;
       }
@@ -198,6 +199,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         speak(pick(HOUSE_LINES[m.type]), 4500, () => {
           this._animate(s, s.pet, "perk", 320);
           if (m.type === "robot_out") this._robotFx(s);
+          this._momentCue(s, m.type); // the rotor turns (robot_out) or slows (robot_home), on the rim
         });
         break;
       }
@@ -208,6 +210,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         speak(pick(lines), 4500, () => {
           this._animate(s, s.pet, "perk", 320);
           this._houseFx(s, kind === "dryer" ? "fx-tumble" : "fx-suds");
+          this._momentCue(s, "appliance_done", kind); // one tick on the rim, the lamp by the kind
         });
         break;
       }
@@ -218,6 +221,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         now(() => {
           this._animate(s, s.pet, REACT_POSE.startle.move, REACT_POSE.startle.ms);
           this._houseFx(s, "fx-chime");
+          this._momentCue(s, "doorbell_live"); // the chime mark on the rim, with the screen's
         });
         speak(pick(HOUSE_LINES.doorbell), 4500);
         break;

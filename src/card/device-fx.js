@@ -26,6 +26,14 @@
 // pointer), classes `dir-feed`, `dir-play`, `dir-clean`, `dir-tuck`. They are the user's own press, so
 // they come from the card (`rim`, below), not the wire. Never on a `.cap` or `.toy`; no sound, no
 // haptic; reduced motion offers none; a care scene already running wins.
+//
+// Slice 4D adds the room: the 4C keys (`ROOM`: lights, heating, cooling, fireplace, tv, music) in the same
+// table, and the moment cues (`HOUSE_RIM`). A row says which layer it paints: lights and fireplace are the
+// rim (the bezel's plastic: a persistent glow class on `slide.rim`, `dir-rim-*`, kept apart from the cue
+// classes), music and tv the glass (a still layer, as the weather). A row with no kinds (heating, cooling)
+// is a tint and nothing else; a row of a closed enum (lights: off|on) paints by member and an unknown
+// member paints nothing. The moment cues (doorbell, appliance, vacuum, the heating wash) are offered by the
+// card from the same callback as the moment's own screen effect (`offerMoment`): never from the wire.
 const HATCH_DEVICE_FX = Object.freeze(
   (() => {
     // The weather keys, in the server map's order (tests/js/device_signal_map.json is checked against
@@ -33,8 +41,8 @@ const HATCH_DEVICE_FX = Object.freeze(
     // end, the onset's length and its echo's (the director's watchdog; the glass's own `dir-glass-life`
     // clock is the real end), the echo rank (the map's `echo_rank`) and the per-kind cooldown. The
     // cooldown stays under the map's `block_s` so a held reverse (45-55 s after its start) is not eaten.
-    const row = (ambient, start, end, durationMs, echoMs) =>
-      Object.freeze({ ambient, start, end, durationMs, echoMs, echoRank: 2, cooldownMs: 20000 });
+    const row = (ambient, start, end, durationMs, echoMs, more = {}) =>
+      Object.freeze({ layer: "glass", ambient, start, end, durationMs, echoMs, echoRank: 2, cooldownMs: 20000, ...more });
     const WEATHER = Object.freeze({
       rain: row("dir-wet", "dir-drop", "dir-clear", 1800, 900), // a drop runs down; the last bead clears
       snow: row("dir-frost", "dir-frost-form", "dir-thaw", 2400, 1200), // corner frost forms / thaws
@@ -42,33 +50,80 @@ const HATCH_DEVICE_FX = Object.freeze(
       storm: row("dir-storm", "dir-storm-in", "dir-storm-out", 3000, 1800), // a dim shiver, never a flash
       wind: row("dir-wind", "dir-wind-gust", "dir-wind-die", 2000, 1000), // flecks lean across the glass
     });
-    const KEY_LIST = Object.freeze(Object.keys(WEATHER));
+    // The room, in the server map's order after the weather (slice 4C's keys; section 6.6). `layer` is where
+    // it paints. An enum row (`lights`) names its members in `values` (the on edge's first, as the server's
+    // `kinds`) and its still look per member in `ambientBy`; a row with `kinds: []` is a tint and has no
+    // onset, no echo and no recipe (heating and cooling: their wash is a moment's, F9). The cooldowns are the
+    // plan's (6.5): music and tv 5 min, the fireplace 60 s, the lights as the weather. A held reverse inside
+    // a cooldown is ambience only, which is the plan's trade for "a started for every song".
+    const ROOM = Object.freeze({
+      lights: row(null, "dir-lamp-on", "dir-lamp-off", 1500, 600, {
+        layer: "rim", ambientBy: Object.freeze({ on: "dir-rim-lit", off: "dir-rim-dim" }), values: ["on", "off"],
+        kinds: ["lights_on", "lights_off"], echoRank: 3,
+      }), // the lamps brighten in turn / dim in turn; the rim lit or dimmed, never over the backlight
+      heating: row("dir-rim-warm", null, null, 0, 0, { layer: "rim", kinds: [], echoRank: null, cooldownMs: 0 }), // a warm tint while running
+      cooling: row("dir-rim-cool", null, null, 0, 0, { layer: "rim", kinds: [], echoRank: null, cooldownMs: 0 }), // a cool tint while running
+      fireplace: row("dir-rim-fire", "dir-ember-in", "dir-ember-out", 1500, 600, { layer: "rim", echoRank: 3, cooldownMs: 60000 }), // embers light along the bottom / set
+      tv: row("dir-tv", "dir-tv-on", "dir-tv-off", 1800, 900, { echoRank: 4, cooldownMs: 300000 }), // a reflected rectangle at the screen's edge
+      music: row("dir-bars", "dir-bars-up", "dir-bars-down", 1800, 900, { echoRank: 4, cooldownMs: 300000 }), // a few bars rise / fall
+    });
+    const ROWS = Object.freeze({ ...WEATHER, ...ROOM });
+    const ROW_KEYS = Object.freeze(Object.keys(ROWS));
+    // The keys with an onset (a kind pair), and the wire kind of each edge: the row's `kinds` or `<key>_started`
+    // / `<key>_stopped`, with the values it stands for (true / false, or the enum's on / off).
+    const EDGE_KEYS = Object.freeze(ROW_KEYS.filter((key) => !ROWS[key].kinds || ROWS[key].kinds.length > 0));
+    const kindsOf = (key) => ROWS[key].kinds || [`${key}_started`, `${key}_stopped`];
+    const valuesOf = (key) => ROWS[key].values || [true, false];
     // The wire kind to the recipe's key, direction and value (M6): `stillTrue` and the collapse read
     // these, the wire has neither.
     const KINDS = Object.freeze(
       Object.fromEntries(
-        KEY_LIST.flatMap((key) => [
-          [`${key}_started`, Object.freeze({ key, direction: "start", value: true })],
-          [`${key}_stopped`, Object.freeze({ key, direction: "end", value: false })],
+        EDGE_KEYS.flatMap((key) => [
+          [kindsOf(key)[0], Object.freeze({ key, direction: "start", value: valuesOf(key)[0] })],
+          [kindsOf(key)[1], Object.freeze({ key, direction: "end", value: valuesOf(key)[1] })],
         ])
       )
     );
     // The moon, off the wire (FM11): a static halo on the full and the new day, computed from the server's
     // clock. Not a key: it has no edge, no onset, no ring entry, no echo.
     const MOON = Object.freeze({ full: "dir-moon", new: "dir-newmoon" });
-    // The rim cues a moment drives (slice 4D fills this: doorbell, appliance, heating and cooling, the vacuum),
-    // by the moment's type: {kind, cls, ms, cooldownMs}, the same lamp vocabulary as RIM below. Empty in 4B: the
-    // entry point (`offerMoment`) and the recipe factory are here so 4D adds rows, not a second refactor.
-    const HOUSE_RIM = Object.freeze({});
+    // The rim cues a moment drives (slice 4D; plan 6.6a, 6.6c), by the moment's type: a cue is {kind, cls, ms,
+    // cooldownMs}, the same lamp vocabulary as RIM below (three amber lamps; opacity and `left` only). A moment
+    // with a variant (the appliance's kind, the heating or the cooling wash) is {by, fallback}: one cue per
+    // variant, and a variant it does not name takes the fallback's. They are offered by the card from the
+    // moment's own callback (`offerMoment`), never from the wire, and have no echo.
+    const cue = (kind, cls, ms, cooldownMs) => Object.freeze({ kind, cls, ms, cooldownMs });
+    const TICK_L = cue("rimTickLeft", "dir-tick-l", 900, 3000);
+    const TICK_M = cue("rimTickMid", "dir-tick-m", 900, 3000);
+    const TICK_R = cue("rimTickRight", "dir-tick-r", 900, 3000);
+    const HOUSE_RIM = Object.freeze({
+      doorbell_live: cue("rimChime", "dir-chime", 1200, 5000), // two notes along the top edge
+      appliance_done: Object.freeze({ // one tick, the lamp by the kind; any other kind is the middle tick
+        by: Object.freeze({ washer: TICK_L, dryer: TICK_M, dishwasher: TICK_R, machine: TICK_M }), fallback: "machine",
+      }),
+      house_answered: Object.freeze({ // the heating or the cooling came on for the pet: a wash along the top edge
+        by: Object.freeze({ heating: cue("rimWashWarm", "dir-wash-warm", 1300, 5000), cooling: cue("rimWashCool", "dir-wash-cool", 1300, 5000) }),
+      }),
+      robot_out: cue("rimRotorOut", "dir-rotor-out", 1100, 5000), // the rotor turns once
+      robot_home: cue("rimRotorHome", "dir-rotor-home", 2200, 5000), // the rotor slows
+    });
+    const houseCues = Object.freeze(
+      [...new Map(Object.values(HOUSE_RIM).flatMap((e) => (e.by ? Object.values(e.by) : [e])).map((c) => [c.kind, c])).values()]
+    );
     const USER_RIM_CLASSES = ["dir-feed", "dir-play", "dir-clean", "dir-tuck"];
+    const layerKeys = (layer) => EDGE_KEYS.filter((key) => ROWS[key].layer === layer);
     // Every class a recipe or the paint may set, by layer (F11): each recipe's start clears its layer's
-    // onset set, the paint owns the ambient set. A test checks it against every `.hw.glass.dir-*` and
+    // onset set, the paint owns the ambient sets (`ambient` on the glass, `rimAmbient` on the rim: a glow is
+    // not a cue, so a cue's start never wipes it). A test checks it against every `.hw.glass.dir-*` and
     // `.hw.rim.dir-*` rule in style.js.
-    const ONSETS = Object.freeze(KEY_LIST.flatMap((key) => [WEATHER[key].start, WEATHER[key].end]).concat("dir-echo"));
+    const ambientOfRow = (row) => (row.ambientBy ? Object.values(row.ambientBy) : [row.ambient]);
+    const ambientsOn = (layer) => ROW_KEYS.filter((key) => ROWS[key].layer === layer).flatMap((key) => ambientOfRow(ROWS[key]));
+    const onsetsOn = (layer) => layerKeys(layer).flatMap((key) => [ROWS[key].start, ROWS[key].end]);
     const CLASSES_BY_LAYER = Object.freeze({
-      glass: ONSETS,
-      ambient: Object.freeze(KEY_LIST.map((key) => WEATHER[key].ambient).concat(Object.values(MOON))),
-      rim: Object.freeze(USER_RIM_CLASSES.concat(Object.values(HOUSE_RIM).map((cue) => cue.cls))),
+      glass: Object.freeze(onsetsOn("glass").concat("dir-echo")),
+      ambient: Object.freeze(ambientsOn("glass").concat(Object.values(MOON))),
+      rim: Object.freeze(USER_RIM_CLASSES.concat(houseCues.map((c) => c.cls), onsetsOn("rim"), "dir-rim-echo")),
+      rimAmbient: Object.freeze(ambientsOn("rim")),
     });
     const CLASSES = CLASSES_BY_LAYER.glass;
     const RIM_CLASSES = CLASSES_BY_LAYER.rim;
@@ -80,7 +135,13 @@ const HATCH_DEVICE_FX = Object.freeze(
       const fx = isObj(house) ? house.device_fx : null;
       if (!isObj(fx) || fx.version !== 1) return {};
       const out = {};
-      if (isObj(fx.current)) for (const key of KEY_LIST) if (typeof fx.current[key] === "boolean") out[key] = fx.current[key];
+      if (!isObj(fx.current)) return out;
+      for (const key of ROW_KEYS) {
+        const v = fx.current[key];
+        const by = ROWS[key].ambientBy;
+        // A bool row takes a bool; an enum row takes only one of its own members (an unknown one is nothing).
+        if (by ? typeof v === "string" && Object.prototype.hasOwnProperty.call(by, v) : typeof v === "boolean") out[key] = v;
+      }
       return out;
     };
 
@@ -107,31 +168,34 @@ const HATCH_DEVICE_FX = Object.freeze(
     };
     const ringOf = (list) => (Array.isArray(list) ? list.map((e) => cueOf(e, true)).filter(Boolean) : []);
 
-    const clear = (glass) => glass.classList.remove(...CLASSES);
-
-    // The recipe, one per key, made from its row. An onset class is set on the glass: the layer of its
-    // key animates (a drop runs down the inner glass, frost forms, fog gathers, the dim shivers, flecks
-    // lean across) and the glass's own `dir-glass-life` is the lease's clock, so the card releases on
-    // that one name only (F11). An echo is the same, shorter. The shell/glass only: never the pet,
-    // never a screen class. The director's watchdog is the backstop.
-    const weatherRecipe = (key) => {
-      const w = WEATHER[key];
+    // The recipe, one per key with an onset, made from its row. An onset class is set on the row's layer (the
+    // glass for the weather, music and tv; the rim for lights and the fireplace): the layer of its key animates
+    // (a drop runs down the inner glass, frost forms, bars rise, the lamps brighten in turn) and the layer's own
+    // `dir-glass-life` / `dir-rim-life` is the lease's clock, so the card releases on that one name only (F11).
+    // An echo is the same, shorter. The shell/glass only: never the pet, never a screen class. The director's
+    // watchdog is the backstop.
+    const keyRecipe = (key) => {
+      const w = ROWS[key];
+      const onRim = w.layer === "rim";
+      const where = (slide) => slide && (onRim ? slide.rim : slide.glass);
+      const echoClass = onRim ? "dir-rim-echo" : "dir-echo";
+      const wipe = (el) => el.classList.remove(...(onRim ? RIM_CLASSES : CLASSES));
       return Object.freeze({
         track: "shellImpulse", priority: HATCH_DIRECTOR.PRIORITY.house, // the director loads first (manifest.txt)
-        durationMs: w.durationMs, echoMs: w.echoMs, echoRank: w.echoRank, // a weather onset: after the doorbell and the appliance (6.7)
+        durationMs: w.durationMs, echoMs: w.echoMs, echoRank: w.echoRank, // the onset rank is the map's (6.7)
         cooldownMs: w.cooldownMs, collapseKey: key, cancel: "finish",
         start: (slide, effect) => {
-          const glass = slide && slide.glass;
-          if (!glass) return;
-          clear(glass);
-          void glass.offsetWidth; // a replaced effect restarts its animation
-          glass.classList.add(effect.data && effect.data.value === false ? w.end : w.start);
-          if (effect.presentation === "echo") glass.classList.add("dir-echo");
+          const el = where(slide);
+          if (!el) return;
+          wipe(el);
+          void el.offsetWidth; // a replaced effect restarts its animation
+          el.classList.add(effect.data && effect.data.value === valuesOf(key)[1] ? w.end : w.start);
+          if (effect.presentation === "echo") el.classList.add(echoClass);
           slide.dirEffect = effect.id;
         },
         dispose: (slide, effect) => {
-          const glass = slide && slide.glass;
-          if (glass) clear(glass);
+          const el = where(slide);
+          if (el) wipe(el);
           if (slide && slide.dirEffect === effect.id) slide.dirEffect = 0;
         },
       });
@@ -165,9 +229,9 @@ const HATCH_DEVICE_FX = Object.freeze(
         },
       });
     const RECIPES = Object.freeze({
-      ...Object.fromEntries(KEY_LIST.map((key) => [key, weatherRecipe(key)])),
+      ...Object.fromEntries(EDGE_KEYS.map((key) => [key, keyRecipe(key)])),
       ...Object.fromEntries(Object.values(RIM).map((cue) => [cue.kind, rimRecipe(cue)])),
-      ...Object.fromEntries(Object.values(HOUSE_RIM).map((cue) => [cue.kind, rimRecipe(cue, HATCH_DIRECTOR.PRIORITY.house)])),
+      ...Object.fromEntries(houseCues.map((c) => [c.kind, rimRecipe(c, HATCH_DIRECTOR.PRIORITY.house)])),
     });
 
     // A rim cue for the toy `action` (its data-action), from the card's press (or a confirmed tuck).
@@ -183,16 +247,26 @@ const HATCH_DEVICE_FX = Object.freeze(
     };
 
     // A rim cue for a moment the card has just handled (slice 4D; plan 6.6c): `moment` is the moment's type, `id`
-    // its own (`m.at` plus the type, or a card sequence), called from the same callback as the moment's screen-effect
-    // sibling, never from a wire edge. A house cue: `origin: "house"`, the house priority, no `occurredAt` (a
-    // moment has no clock dependence, so it is not gated on `clockKnown`). The same gates as `rim`: reduced
-    // motion refuses it, a care scene running wins; the director decides the rest (the switch, on show, visible).
-    const offerMoment = (dir, slide, moment, id, env) => {
-      const cue = Object.prototype.hasOwnProperty.call(HOUSE_RIM, moment) ? HOUSE_RIM[moment] : null;
-      if (!cue) return { accepted: false, reason: "no-cue", effectId: 0 };
+    // its own (a card sequence), `variant` the appliance's kind or the wash's request, called from the same
+    // callback as the moment's screen-effect sibling, never from a wire edge. A house cue: `origin: "house"`, the
+    // house priority, no `occurredAt` (a moment has no clock dependence, so it is not gated on `clockKnown`).
+    // The same gates as `rim`: reduced motion refuses it, a care scene running wins; the director decides the
+    // rest (the switch, on show, visible). A moment is not an echo: its cue carries a short `ttlMs`, so one the
+    // director held while the slide was off show is never replayed at its first view.
+    const MOMENT_TTL_MS = 3000;
+    const momentCue = (moment, variant) => {
+      const entry = Object.prototype.hasOwnProperty.call(HOUSE_RIM, moment) ? HOUSE_RIM[moment] : null;
+      if (!entry) return null;
+      if (!entry.by) return entry;
+      const by = Object.prototype.hasOwnProperty.call(entry.by, variant) ? entry.by[variant] : entry.by[entry.fallback];
+      return by || null;
+    };
+    const offerMoment = (dir, slide, moment, id, env, variant) => {
+      const found = momentCue(moment, variant);
+      if (!found) return { accepted: false, reason: "no-cue", effectId: 0 };
       if (env.calm) return { accepted: false, reason: "calm", effectId: 0 };
       if (dir.busyOwners(slide).includes("scene")) return { accepted: false, reason: "busy", effectId: 0 };
-      return dir.offer(slide, { id, kind: cue.kind, origin: "house", presentation: "onset" });
+      return dir.offer(slide, { id, kind: found.kind, origin: "house", presentation: "onset", ttlMs: MOMENT_TTL_MS });
     };
 
     // The full or the new moon for a time (ms), or "". The synodic month from a known new moon
@@ -206,18 +280,24 @@ const HATCH_DEVICE_FX = Object.freeze(
       return Math.abs(age - SYNODIC_DAYS / 2) < 1.2 ? "full" : "";
     };
 
-    // The ambience on the glass: one still class per key the house says is true, and the moon, when the
-    // switch is on. Painted for any slide (it is still: no animation, nothing to freeze, a transition
-    // at most). Returns whether anything is painted.
+    // The ambience: one still class per key the house says is true (an enum's member by value), on the key's own
+    // layer, and the moon, when the switch is on. Painted for any slide (it is still: no animation, nothing to
+    // freeze, a transition at most), reduced motion included. Returns whether anything is painted.
     const paint = (dir, slide, env) => {
       const glass = slide && slide.glass;
       if (!glass) return false;
+      const rim = slide.rim;
       const amb = dir.ambient(slide);
       let any = false;
-      for (const key of KEY_LIST) {
-        const on = !!env.lcdOn && amb[key] === true;
-        glass.classList.toggle(WEATHER[key].ambient, on);
-        any = any || on;
+      for (const key of ROW_KEYS) {
+        const w = ROWS[key];
+        const el = w.layer === "rim" ? rim : glass;
+        if (!el) continue;
+        for (const cls of ambientOfRow(w)) {
+          const on = !!env.lcdOn && (w.ambientBy ? w.ambientBy[amb[key]] === cls : amb[key] === true);
+          el.classList.toggle(cls, on);
+          any = any || on;
+        }
       }
       const moon = env.lcdOn ? moonOf(env.now) : "";
       for (const phase of Object.keys(MOON)) {
@@ -250,6 +330,6 @@ const HATCH_DEVICE_FX = Object.freeze(
       return dir.enterView(slide, ringOf(recent), env.clockKnown === true);
     };
 
-    return { RECIPES, KINDS, WEATHER, CLASSES, CLASSES_BY_LAYER, RIM, HOUSE_RIM, RIM_CLASSES, moonOf, ambientOf, cueOf, ringOf, paint, sync, live, enter, rim, offerMoment };
+    return { RECIPES, KINDS, WEATHER, ROOM, ROWS, CLASSES, CLASSES_BY_LAYER, RIM, HOUSE_RIM, RIM_CLASSES, moonOf, ambientOf, cueOf, ringOf, paint, sync, live, enter, rim, offerMoment };
   })()
 );

@@ -109,10 +109,10 @@ test("m5: the adapter and its part never name a screen class of the house effect
   assert.doesNotMatch(code(part), /fx-/);
   assert.doesNotMatch(code(adapterText()), /fx-/);
   // every class the part or the adapter puts on a classList starts dir- (the glass's, or "dir-wet" / spread CLASSES)
-  const calls = [...(code(part) + code(adapterText()) + code(src.slice(src.indexOf("  _forget(s) {"), src.indexOf("    this._clearAsk(s);")))).matchAll(/glass\??\.classList\.(?:add|remove|toggle)\(([^)]*)\)/g)];
+  const calls = [...(code(part) + code(adapterText()) + code(src.slice(src.indexOf("  _forget(s) {"), src.indexOf("    this._clearAsk(s);")))).matchAll(/(?:glass|rim|el)\??\.classList\.(?:add|remove|toggle)\(([^)]*)\)/g)];
   assert.ok(calls.length >= 4, "the glass's classList calls were found");
   for (const m of calls) for (const lit of m[1].match(/"[^"]*"/g) || []) assert.match(lit, /^"dir-/, m[0]);
-  for (const c of [...F.CLASSES, ...F.CLASSES_BY_LAYER.ambient, ...F.CLASSES_BY_LAYER.rim]) assert.match(c, /^dir-/, c);
+  for (const c of [...F.CLASSES, ...Object.values(F.CLASSES_BY_LAYER).flat()]) assert.match(c, /^dir-/, c);
 });
 
 test("the adapter makes no sound, no haptic, and has no quiet-hours branch (12)", () => {

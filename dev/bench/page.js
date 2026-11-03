@@ -227,7 +227,9 @@
     const fx = shot.deviceFx;
     const key = fx.key || "rain"; // the weather key the onset and the echo are about (device-alive 4B)
     noteServerTime(new Date(shot.time).toISOString());
-    const entry = (kind, agoMs, n) => ({ id: `bench-${n}`, kind: `${key}_${kind === "start" ? "started" : "stopped"}`, scope: "house",
+    // `fx.kinds` names the wire kinds when they are not `<key>_started`/`_stopped` (device-alive 4D: lights_on/lights_off).
+    const kindOf = (kind) => (fx.kinds ? fx.kinds[kind === "start" ? 0 : 1] : `${key}_${kind === "start" ? "started" : "stopped"}`);
+    const entry = (kind, agoMs, n) => ({ id: `bench-${n}`, kind: kindOf(kind), scope: "house",
       occurred_at: new Date(Date.parse(shot.time) - agoMs).toISOString(), expires_at: new Date(Date.parse(shot.time) - agoMs + 90000).toISOString() });
     s.subscribed = true;
     s.house = { ...(s.house || {}) };
@@ -244,11 +246,12 @@
       s.dirViewed = true;
       if (fx.onset) card._channel(s, { fx: entry(fx.onset, 0, 2) });
     }
-    for (const a of s.glass.getAnimations({ subtree: true })) {
+    // the glass, and the rim too (lights and the fireplace paint and cue on the rim, 4D)
+    for (const a of [...s.glass.getAnimations({ subtree: true }), ...s.rim.getAnimations({ subtree: true })]) {
       if (typeof CSSTransition !== "undefined" && a instanceof CSSTransition) a.finish();
       else { a.pause(); a.currentTime = fx.at ?? 600; }
     }
-    window.bench.info = { glass: s.glass.className, effect: s.dirEffect || 0, canRender: card._director.inspect(s)?.tracks || null };
+    window.bench.info = { glass: s.glass.className, rim: s.rim.className, effect: s.dirEffect || 0, canRender: card._director.inspect(s)?.tracks || null };
   }
 
   // `rimCue` (device-alive 3C): {action, at}. The card's own `_rimCue` for the toy's data-action (feed, play,
@@ -264,6 +267,21 @@
     }
     (window.bench.info ||= {}).rim = { classes: s.rim.className, effect: s.dirEffect || 0, scene: s.scene?.kind || null,
       busy: card._director.busyOwners(s) };
+  }
+
+  // `momentCue` (device-alive 4D): {moment, variant, at}. The card's own `_momentCue` (what the doorbell, the appliance,
+  // the vacuum and the heating's wash call from their moment's callback), the rim layer's animations paused `at` ms in
+  // (default 500). Use `clip: "device"`. The switch comes from `lcd`, reduced motion from `motion`.
+  function momentShot(card, s, shot) {
+    const cue = shot.momentCue;
+    s.subscribed = true;
+    s.dirViewed = true;
+    card._momentCue(s, cue.moment, cue.variant);
+    for (const a of s.rim.getAnimations({ subtree: true })) {
+      if (typeof CSSTransition !== "undefined" && a instanceof CSSTransition) a.finish();
+      else { a.pause(); a.currentTime = cue.at ?? 500; }
+    }
+    (window.bench.info ||= {}).rim = { classes: s.rim.className, effect: s.dirEffect || 0, busy: card._director.busyOwners(s) };
   }
 
   // `look`: a look played over time by the card's own tick (the driver moves the pinned
@@ -1109,6 +1127,7 @@
     // `care`: a care scene started through _sceneStart, paused and seeked to `careAt` ms (careSeek).
     if (shot.care) await careSeek(card, cur, shot);
     if (shot.rimCue) rimShot(card, cur, shot);
+    if (shot.momentCue) momentShot(card, cur, shot);
     // `bowlStep`: the feed bowl on the floor at step 0 (full) to 3 of its clip, through the card's own
     // _bowlClip (plan care-reactions 5.1); `bowlRim` stands in for species.json "bowl_rim".
     if (shot.bowlStep !== undefined) {

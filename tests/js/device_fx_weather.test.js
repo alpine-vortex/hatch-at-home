@@ -20,10 +20,9 @@ const plain = (x) => JSON.parse(JSON.stringify(x));
 const ctx = { Date, Object, Array, Number, Math, JSON };
 vm.runInNewContext(`${director}\n${part}\nthis.D = HATCH_DIRECTOR; this.F = HATCH_DEVICE_FX;`, ctx);
 const { D, F } = ctx;
-// 4B's keys: the weather. The map also carries 4C's activity keys (lights, fireplace, tv, music, heating,
-// cooling); the card ignores those until 4D (plan 13, 4C row), and a test below says so.
+// 4B's keys: the weather. The map also carries 4C's room keys (lights, heating, cooling, fireplace, tv, music),
+// the card's since 4D: device_fx_room.test.js.
 const KEYS = ["rain", "snow", "fog", "storm", "wind"];
-const ACTIVITY = Object.keys(MAP.keys).filter((k) => !KEYS.includes(k));
 
 const T0 = Date.parse("2026-11-03T12:00:00Z");
 const entry = (kind, over = {}) => ({
@@ -69,7 +68,7 @@ test("every wire kind in the export has a KINDS and a RECIPES entry, in the map'
   assert.strictEqual(MAP.version, 1);
   assert.deepStrictEqual(Object.keys(F.WEATHER), KEYS);
   const wire = KEYS.flatMap((k) => MAP.keys[k].kinds);
-  assert.deepStrictEqual(Object.keys(F.KINDS), wire);
+  assert.deepStrictEqual(Object.keys(F.KINDS).slice(0, wire.length), wire); // the room's kinds follow (device_fx_room.test.js)
   for (const k of KEYS) {
     assert.ok(F.RECIPES[k], `a recipe for ${k}`);
     assert.strictEqual(F.RECIPES[k].collapseKey, k);
@@ -81,20 +80,9 @@ test("every wire kind in the export has a KINDS and a RECIPES entry, in the map'
   }
 });
 
-test("the map's first keys are the weather, in the table's order; the rest are 4C's and the card ignores them", () => {
+test("the map's first keys are the weather, in the table's order (the room's rows follow: device_fx_room.test.js)", () => {
   assert.deepStrictEqual(Object.keys(MAP.keys).slice(0, KEYS.length), KEYS);
-  for (const k of ACTIVITY) {
-    for (const kind of MAP.keys[k].kinds) assert.ok(!(kind in F.KINDS), `${kind} waits for 4D`);
-    assert.ok(!(k in F.RECIPES), `${k} has no recipe yet`);
-    const w = world(), s = w.slide();
-    F.sync(w.dir, s, house({ [k]: true }), w.env);
-    assert.deepStrictEqual(s.glass.names(), [], `${k} paints nothing`);
-    for (const kind of MAP.keys[k].kinds) {
-      const r = F.live(w.dir, s, entry(kind), w.env);
-      assert.ok(!r || !r.ok, `${kind} plays nothing`);
-      assert.deepStrictEqual(s.glass.names(), [], `${kind} paints nothing`);
-    }
-  }
+  assert.deepStrictEqual(Object.keys(F.WEATHER), KEYS);
 });
 
 test("the JS names no kind absent from the export (no <key>_started in the part outside the table)", () => {
@@ -288,11 +276,13 @@ const rules = (t) => [...strip(t).matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => 
 test("CLASSES_BY_LAYER: every .hw.glass.dir-* and .hw.rim.dir-* class in style.js has an owner, and every owner is used", () => {
   const glassUsed = new Set([...strip(css).matchAll(/\.hw\.glass((?:\.dir-[a-z-]+)+)/g)].flatMap((m) => m[1].split(".").filter(Boolean)));
   const rimUsed = new Set([...strip(rimCss).matchAll(/\.hw\.rim((?:\.dir-[a-z-]+)+)/g)].flatMap((m) => m[1].split(".").filter(Boolean)));
+  const rimOwned = [...F.CLASSES_BY_LAYER.rim, ...F.CLASSES_BY_LAYER.rimAmbient];
   const glassOwned = new Set([...F.CLASSES_BY_LAYER.glass, ...F.CLASSES_BY_LAYER.ambient]);
   assert.deepStrictEqual([...glassUsed].filter((c) => !glassOwned.has(c)), [], "a glass class with no owner");
   assert.deepStrictEqual([...glassOwned].filter((c) => !glassUsed.has(c)), [], "an owner with no glass rule");
-  assert.deepStrictEqual([...rimUsed].filter((c) => !F.CLASSES_BY_LAYER.rim.includes(c)), [], "a rim class with no owner");
-  assert.deepStrictEqual(plain(F.CLASSES_BY_LAYER.rim.filter((c) => !rimUsed.has(c))), [], "an owner with no rim rule");
+  assert.deepStrictEqual([...rimUsed].filter((c) => !rimOwned.includes(c)), [], "a rim class with no owner");
+  assert.deepStrictEqual(plain(rimOwned.filter((c) => !rimUsed.has(c))), [], "an owner with no rim rule");
+  assert.strictEqual(new Set(rimOwned).size, rimOwned.length, "no rim class twice, across the cue set and the glow set");
   // no class twice, across the glass's two sets
   assert.strictEqual(glassOwned.size, F.CLASSES_BY_LAYER.glass.length + F.CLASSES_BY_LAYER.ambient.length);
   assert.strictEqual(new Set(F.CLASSES_BY_LAYER.glass).size, F.CLASSES_BY_LAYER.glass.length);
@@ -418,43 +408,11 @@ test("the moon sits beside weather: a rainy full moon is both", () => {
   assert.deepStrictEqual(s.glass.names(), ["dir-moon", "dir-wet"]);
 });
 
-test("the card hands the part the server's now, and the markup has the five layers", () => {
+test("the card hands the part the server's now, and the markup has the seven layers (five weather and moon, then music and the tv)", () => {
   assert.match(src, /return \{ lcdOn: lcdOn\(\), calm: calm\(\), clockKnown: serverClockKnown\(\), now: serverNow\(\) \};/);
-  assert.match(src, /<i class="hw glass" aria-hidden="true"><b><\/b><b><\/b><b><\/b><b><\/b><b><\/b><\/i>/);
+  assert.match(src, /<i class="hw glass" aria-hidden="true"><b><\/b><b><\/b><b><\/b><b><\/b><b><\/b><b><\/b><b><\/b><\/i>/);
   // _forget clears every glass class, the ambient set too
   assert.match(src, /s\.glass\?\.classList\.remove\(\.\.\.HATCH_DEVICE_FX\.CLASSES_BY_LAYER\.ambient, \.\.\.HATCH_DEVICE_FX\.CLASSES\);/);
 });
 
 // ---- what 4D needs from the adapter (plan 6.6c, F16): a moment-driven entry point beside rim ----
-
-test("offerMoment: the entry point exists with the rim's gates; the 4B table is empty, so every moment has no cue yet", () => {
-  assert.strictEqual(typeof F.offerMoment, "function");
-  assert.deepStrictEqual(Object.keys(F.HOUSE_RIM), []);
-  const w = world(), s = w.slide();
-  assert.strictEqual(F.offerMoment(w.dir, s, "doorbell_live", "m-1", w.env).reason, "no-cue");
-  assert.strictEqual(F.offerMoment(w.dir, s, "__proto__", "m-2", w.env).reason, "no-cue");
-  assert.deepStrictEqual(s.rim.names(), []);
-});
-
-test("offerMoment with a house row (a stand-in table in a fresh realm): house origin, house priority, calm and a scene refuse it, no clock gate", () => {
-  const c2 = { Date, Object, Array, Number, Math, JSON };
-  const patched = part.replace("const HOUSE_RIM = Object.freeze({});",
-    'const HOUSE_RIM = Object.freeze({ doorbell_live: Object.freeze({ kind: "rimBell", cls: "dir-bell", ms: 900, cooldownMs: 5000 }) });');
-  assert.notStrictEqual(patched, part);
-  vm.runInNewContext(`${director}\n${patched}\nthis.D = HATCH_DIRECTOR; this.F = HATCH_DEVICE_FX;`, c2);
-  const { D: D2, F: F2 } = c2;
-  assert.ok(F2.CLASSES_BY_LAYER.rim.includes("dir-bell"), "the house class is in the rim layer's set");
-  assert.strictEqual(F2.RECIPES.rimBell.priority, D2.PRIORITY.house);
-  assert.strictEqual(F2.RECIPES.rimBell.cooldownMs, 5000);
-  assert.strictEqual(F2.RECIPES.rimFeed.priority, D2.PRIORITY.care, "a press stays over a house cue");
-  const t = { v: T0 };
-  const dir = D2.create({ now: () => t.v, deviceNow: () => t.v, trusted: () => false, canRender: () => true, schedule: () => () => {}, recipes: F2.RECIPES });
-  const mk = () => ({ glass: glassOf(), rim: glassOf() });
-  const env = { lcdOn: true, calm: false, clockKnown: false }; // an unknown clock does not matter for a moment
-  const s = mk();
-  const r = F2.offerMoment(dir, s, "doorbell_live", "m-1", env);
-  assert.ok(r.accepted, r.reason);
-  assert.deepStrictEqual(s.rim.names(), ["dir-bell"]);
-  assert.strictEqual(F2.offerMoment(dir, mk(), "doorbell_live", "m-2", { ...env, calm: true }).reason, "calm");
-  assert.deepStrictEqual(Object.keys(F2.RIM), Object.keys(F.RIM), "offerMoment adds no user rows");
-});

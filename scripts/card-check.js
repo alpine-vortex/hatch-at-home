@@ -10195,6 +10195,107 @@ async function main() {
     return { full, nw, none, lit };`);
   check("devicefx 4B: the moon is a still halo on the full and the new day, from the clock, with no device_fx", moon.full === "dir-moon" && moon.nw === "dir-newmoon" && moon.none === "" && moon.lit.animation === "none", JSON.stringify(moon));
 
+  // 4D: the room's keys on the real CSS (docs/plan section 13, the 4D row): the fireplace and the lights on the rim, with the
+  // 4C wire's kinds (fireplace_started, lights_on/lights_off, `current.lights` the enum). Per key: the house's current paints
+  // the rim's still glow; a live onset puts the onset class on the rim, the rim's own `dir-rim-life` (a real animation, a real
+  // animationend) ends it by itself and leaves the glow; the glow is not wiped by the cue; reduced motion keeps the glow and
+  // plays no onset; the switch off draws nothing. Then the doorbell moment through the card's own _moment: one rim chime beside
+  // the screen's fx-chime.
+  const ROOM4 = { fireplace: ["dir-rim-fire", "dir-ember-in", "fireplace_started", { fireplace: true }, 1500],
+    lights: ["dir-rim-lit", "dir-lamp-on", "lights_on", { lights: "on" }, 1500] };
+  for (const [key, [amb, start, kind, cur4, ms]] of Object.entries(ROOM4)) {
+    const k = await fx(`
+      await quiet(); cool();
+      const rcls = () => [...s.rim.classList].filter((c) => c.startsWith("dir-")).sort().join();
+      const rquiet = async () => { for (let i = 0; i < 60 && /dir-(ember|lamp|chime|tick|wash|rotor)/.test(rcls()); i++) await wait(100); return rcls(); };
+      el._channel(s, { house: weatherHouse(${JSON.stringify(cur4)}) }, me);
+      const rest = rcls();
+      s.dirViewed = true;
+      const said = F.spoken.length;
+      el._channel(s, { fx: ent("${kind}", 0, "cc-${key}-1") }, me);
+      const onset = rcls();
+      await wait(300);
+      const life = getComputedStyle(s.rim).animationName, lcount = getComputedStyle(s.rim).animationIterationCount;
+      const mid = { running: s.dirEffect > 0 };
+      const t0 = Date.now();
+      const after = await rquiet();
+      const took = Date.now() - t0 + 300;
+      const glassClean = [...glass.classList].filter((c) => c.startsWith("dir-") && !/^dir-(moon|newmoon)$/.test(c)).join();
+      // a second start inside the cooldown (fireplace 60 s) plays nothing; the glow stays
+      el._channel(s, { fx: ent("${kind}", 0, "cc-${key}-2") }, me);
+      const again = rcls();
+      return { rest, onset, mid, life, lcount, after, took, again, glassClean, effectEnd: s.dirEffect, said: F.spoken.length - said, vib: F.vib };`);
+    check(`devicefx 4D ${key}: the house's ${key} paints ${amb} on the rim; a live onset is one ${start}, no speech, no haptic, nothing on the glass`,
+      k.rest === amb && k.onset === [start, amb].sort().join() && k.said === 0 && k.vib === 0 && k.glassClean === "", JSON.stringify(k));
+    check(`devicefx 4D ${key}: the rim's own dir-rim-life is the clock, it ends by itself on the glow, and a second start inside its cooldown plays nothing`,
+      k.life === "dir-rim-life" && k.lcount === "1" && k.mid.running && k.after === amb && k.effectEnd === 0 && k.took >= ms * 0.7 && k.took < ms + 1500 && k.again === amb, JSON.stringify(k));
+    const calm4 = await (async () => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const r = await fx(`
+        cool();
+        el._channel(s, { house: weatherHouse(${JSON.stringify(cur4)}) }, me);
+        el._channel(s, { fx: ent("${kind}", 0, "cc-${key}-3") }, me);
+        const rcls = () => [...s.rim.classList].filter((c) => c.startsWith("dir-")).sort().join();
+        const live = rcls();
+        const lamps = getComputedStyle(s.rim.querySelector("b")).display, rim = getComputedStyle(s.rim).display;
+        const glow = getComputedStyle(s.rim, "::before").opacity;
+        return { live, lamps, rim, glow, vib: F.vib };`);
+      await page.emulateMedia({ reducedMotion: null });
+      return r;
+    })();
+    check(`devicefx 4D ${key}: reduced motion keeps the still ${amb} (the glow drawn, the lamps hidden) and plays no onset`,
+      calm4.live === amb && calm4.lamps === "none" && calm4.rim === "block" && calm4.glow === "1" && calm4.vib === 0, JSON.stringify(calm4));
+    await setLcd(false);
+    const off4 = await fx(`
+      cool();
+      el._channel(s, { house: weatherHouse(${JSON.stringify(cur4)}) }, me);
+      el._dirSwitch();
+      const rcls = () => [...s.rim.classList].filter((c) => c.startsWith("dir-")).sort().join();
+      const quietRim = rcls();
+      el._channel(s, { fx: ent("${kind}", 0, "cc-${key}-5") }, me);
+      return { quietRim, live: rcls(), shown: getComputedStyle(s.rim).display };`);
+    await setLcd(true);
+    await card.evaluate((el) => el._dirSwitch());
+    check(`devicefx 4D ${key}: the switch off draws nothing on the rim`, off4.quietRim === "" && off4.live === "" && off4.shown === "none", JSON.stringify(off4));
+    await fx(`await quiet(); el._director.cancel(s, "check"); el._channel(s, { house: F.kept.house }, me); return 0;`);
+  }
+  // The lights' flip: on to off. The enum's member paints the rim lit, then dimmed; the end plays the lamps going out.
+  const flip = await fx(`
+    await quiet(); cool();
+    const rcls = () => [...s.rim.classList].filter((c) => c.startsWith("dir-")).sort().join();
+    el._channel(s, { house: weatherHouse({ lights: "on" }) }, me);
+    const lit = rcls();
+    s.dirViewed = true;
+    el._channel(s, { house: weatherHouse({ lights: "off" }) }, me);
+    el._channel(s, { fx: ent("lights_off", 0, "cc-flip-1") }, me);
+    const ending = rcls();
+    const glow = getComputedStyle(s.rim, "::before").opacity;
+    const unknown = (() => { el._channel(s, { house: weatherHouse({ lights: "dim" }) }, me); return rcls(); })();
+    el._channel(s, { house: F.kept.house }, me);
+    return { lit, ending, glow, unknown };`);
+  check("devicefx 4D lights: lit then off flips the glow, the lamps go out (dir-lamp-off), an unknown member paints nothing",
+    flip.lit === "dir-rim-lit" && flip.ending === "dir-lamp-off,dir-rim-dim" && flip.unknown === "dir-lamp-off" && Number(flip.glow) >= 0, JSON.stringify(flip));
+  // The heating's tint is still (no onset, no wire kind); the wash is the moment's. The doorbell moment: one chime on the rim
+  // with the screen's fx-chime, from the card's own _moment (the same callback), and a game (s.game) has neither.
+  const bell = await fx(`
+    await quiet(); cool();
+    const rcls = () => [...s.rim.classList].filter((c) => c.startsWith("dir-")).sort().join();
+    el._channel(s, { house: weatherHouse({ heating: true }) }, me);
+    const tint = rcls();
+    el._channel(s, { fx: ent("heating_started", 0, "cc-heat") }, me);
+    const noKind = rcls();
+    s.dirViewed = true;
+    s.game = { kind: "x" };
+    el._moment(s, { type: "doorbell_live", at: new Date().toISOString() });
+    const gameRim = rcls(), gameScreen = s.screen.classList.contains("fx-chime");
+    s.game = null;
+    el._moment(s, { type: "doorbell_live", at: new Date().toISOString() });
+    const chime = rcls(), screen = s.screen.classList.contains("fx-chime");
+    el._director.cancel(s, "check"); el._channel(s, { house: F.kept.house }, me);
+    return { tint, noKind, gameRim, gameScreen, chime, screen };`);
+  check("devicefx 4D: heating is a still tint with no onset; the doorbell moment is one rim chime beside the screen's fx-chime, and a game has neither",
+    bell.tint === "dir-rim-warm" && bell.noKind === "dir-rim-warm" && bell.gameRim === "dir-rim-warm" && !bell.gameScreen && bell.chime === "dir-chime,dir-rim-warm" && bell.screen, JSON.stringify(bell));
+
   // Put everything back.
   await fx(`await quiet();
     el._director.cancel(s, "check");
