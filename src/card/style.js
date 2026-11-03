@@ -1278,22 +1278,34 @@ const STYLE = `
   .toy { gap: calc(var(--px, 2px) * 3 + 2px); }
   .toy .cap { position: relative; width: calc(var(--px, 2px) * var(--cap-n, 23));
     height: calc(var(--px, 2px) * var(--cap-n, 23)); display: flex; align-items: center; justify-content: center;
-    background: #fff7ec; color: #3a2a1a; clip-path: var(--cap-clip); transition: transform .08s, background .2s; }
+    background: #fff7ec; color: #3a2a1a; clip-path: var(--cap-clip);
+    transition: translate var(--rebound-ms, .12s) var(--rebound, cubic-bezier(.3, 2, .5, 1)), background .2s, filter .25s; }
   .toy .cap::before, .toy .cap::after { content: ""; position: absolute; left: 0; top: 0; width: 100%;
     height: calc(var(--px, 2px) * (var(--cap-n, 23) + 3)); z-index: -1; pointer-events: none; }
   .toy .cap::before { background: var(--d-btn-shadow); clip-path: var(--cap-side); }
   .toy .cap::after { background: var(--cap-tones) 0 0 / 100% 100%; }
   .toy .cap > * { position: relative; }
   /* Pressed: held down for at least 160 ms so even a quick tap reads as a press. */
-  .toy:active .cap, .toy.pressed .cap { transform: translateY(calc(var(--px, 2px) * 2));
-    clip-path: var(--cap-clip-dn); transition-duration: .04s; }
+  .toy:active .cap, .toy.pressed .cap { translate: 0 calc(var(--px, 2px) * 2);
+    clip-path: var(--cap-clip-dn); transition-duration: .04s, .2s, .25s; transition-timing-function: ease-out; }
   .toy:active .cap::before, .toy.pressed .cap::before { clip-path: var(--cap-side-dn); }
   .toy:active .cap::after, .toy.pressed .cap::after { background-image: var(--cap-tones-dn);
     height: calc(var(--px, 2px) * (var(--cap-n, 23) + 1)); }
-  .toy.pending .cap { animation: waiting .9s ease-in-out infinite; }
-  @keyframes waiting { 50% { filter: brightness(.9); } }
-  .toy.failed .cap { animation: shake .35s; }
-  @keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+  /* Release: the cap's own transition overshoots as it comes back up (the rebound; the
+     .toy button, the hit target, does not move). Each action has its own curve, the rest the
+     default above. A cap's state never uses transform or an animation of it (the pressed
+     offset is translate), so nothing here can cancel another move. */
+  .toy[data-action="feed"] .cap { --rebound: cubic-bezier(.3, 1.7, .5, 1); --rebound-ms: .14s; }
+  .toy[data-action="play"] .cap { --rebound: cubic-bezier(.3, 2.8, .5, 1); --rebound-ms: .12s; }
+  .toy[data-action="clean"] .cap { --rebound: cubic-bezier(.2, 2.4, .6, .6); --rebound-ms: .1s; }
+  .toy[data-action="medicine"] .cap { --rebound: cubic-bezier(.3, 1.25, .5, 1); --rebound-ms: .09s; }
+  .toy[data-action="lights"] .cap { --rebound: cubic-bezier(.3, .9, .5, 1); --rebound-ms: .14s; }
+  /* Pending (_call: the service call is out) and failed (it was rejected): tones only. Both
+     have a still value, so reduced motion (no animation, no transition) shows them too. Failed
+     wins over pending. A refusal is not a failure and shows nothing here. */
+  .toy.pending .cap { filter: brightness(.94); animation: waiting .9s ease-in-out infinite; }
+  @keyframes waiting { 50% { filter: brightness(.86); } }
+  .toy.failed .cap { animation: none; filter: saturate(.35) brightness(.88); }
   .burst { position: absolute; left: 50%; top: 0; width: 46px; height: 46px; margin-left: -23px;
     border-radius: 50%; pointer-events: none; border: 3px solid #ffe9a8;
     animation: burst .45s ease-out forwards; }

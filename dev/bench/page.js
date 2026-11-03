@@ -963,6 +963,13 @@
     }
     // `classes`: screen states the fake hass cannot pin (`lit`, `faded`...), put on last.
     for (const c of shot.classes || []) cur.screen.classList.add(c);
+    // `capClasses`: `{feed: ["pressed"], clean: ["failed"]}`, classes on a toy button by action key (`lights`
+    // too): the press states (`pressed`, `pending`, `failed`) the bench cannot hold with `:active`.
+    for (const [key, list] of Object.entries(shot.capClasses || {})) {
+      cur.buttons[key]?.classList.add(...list);
+      // `pending` pulses forever: held at its first frame, so a shot is the same every run.
+      for (const a of cur.buttons[key]?.querySelector(".cap")?.getAnimations() || []) { a.pause(); a.currentTime = 0; }
+    }
     // `petClasses`: classes on the pet itself (a reaction such as `droop`); `petAt` pauses
     // its animation that many ms in, so a mid-motion frame is the same every run.
     // `visitor`: one world visit pinned (see visitorShot).

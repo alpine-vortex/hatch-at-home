@@ -96,6 +96,28 @@ const PRESETS = {
     }
     return out;
   },
+  // Device-alive slice 2: the caps' press states pinned by class (the bench cannot hold `:active`):
+  // at rest, every cap down (`pressed`), in flight (`pending`), and a rejected call (`failed`), at 420
+  // and 300, day and under reduced motion (the still tones). The five caps are the care four and
+  // the lights toy; the rebound itself is a move, so a device row looks at it.
+  alive() {
+    const out = [];
+    const keys = ["feed", "play", "clean", "medicine", "lights"];
+    const all = (cls) => Object.fromEntries(keys.map((k) => [k, [cls]]));
+    const states = [["rest", {}], ["pressed", all("pressed")], ["pending", all("pending")], ["failed", all("failed")],
+      ["mixed", { feed: ["pressed"], play: ["pending"], clean: ["failed"] }]];
+    for (const width of [420, 300]) {
+      for (const motion of ["", "reduce"]) {
+        for (const [state, capClasses] of states) {
+          if (motion && state === "rest") continue;
+          out.push({ name: `alive/${width}-${state}${motion ? "-reduce" : ""}`, group: `alive-${width}`,
+            label: `${state}${motion ? " (reduced motion)" : ""}`, world: "woodland", width, clip: "device",
+            capClasses, ...(motion ? { motion } : {}) });
+        }
+      }
+    }
+    return out;
+  },
   // The card around the toy: status screen, game picker, a speech bubble.
   ui() {
     const out = [];

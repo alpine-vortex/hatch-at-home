@@ -255,7 +255,7 @@ function finishSwatch(key, color) {
 const SAY_NOTE = `<div class="status-feedback say" role="status" aria-live="polite" hidden></div>`;
 // Classes a button wears only for a moment (a tap, a call in flight): never part of the selector
 // that puts focus back after a redraw.
-const PASSING_CLASSES = new Set(["tap-feedback", "tapped", "pressed", "pending"]);
+const PASSING_CLASSES = new Set(["tap-feedback", "tapped", "pressed", "pending", "failed"]);
 // A failed shell save, by the server's error code; anything else is the generic line.
 const SHELL_ERRORS = {
   no_pet: "can't find this pet",

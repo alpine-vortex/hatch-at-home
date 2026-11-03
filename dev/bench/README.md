@@ -17,6 +17,7 @@ node scripts/bench.js --preset shells     # 144 shots, ~8 s
 node scripts/bench.js --preset species    # 1230 shots, ~35 s
 node scripts/bench.js --preset nature     # species nature N1: each sky's reaction line (both lines, 330 and 300, calm), the sunset and morning lines per clock, a baby and a child with none; **N2** adds 39 shots: an idle species line per habit and the two glow cells (330 and 300, calm so the line is the shot), a solo, a social watcher's and a social explorer's visitor greeting, a builder host's link line, the longest lines in mono and big text, a baby and a child with none; **N3** adds 34 shots (`--only nature/note-`): the status page's "nature" row (the longest note per world at 420, 330, 300, big text and the porthole; a teen, a child, a baby, and an egg with no row)
 node scripts/bench.js --preset ui         # status, game picker, bubble
+node scripts/bench.js --preset alive     # device-alive slice 2: the caps at rest, pressed, pending, failed and mixed, 420/300, day and reduced motion (the still tones)
 node scripts/bench.js --preset finishes   # 576 shots: every shell finish, every world
 node scripts/bench.js --preset settings         # the gear's sheet, 420/330, day/night
 node scripts/bench.js --preset settings-shared  # the same on a shared screen
@@ -104,6 +105,7 @@ A shot (all optional):
 | `social` | the social meter's level, 0-10 (`7`: three and a half hearts), for the status page's "friends" row |
 | `bigText` | `true` (`--big-text`): the "big text" switch on (larger words on the status box's pages) |
 | `classes` | an array of classes put on `.screen` last, before the transitions finish: `faded`, `raining`, `lit`... (the bench's `scene: "rain"` is woodland's rain backdrop without `raining`) |
+| `capClasses` | `{feed: ["pressed"], clean: ["failed"]}`: classes put on a toy button by action key (`lights` too), the press states `pressed`, `pending` and `failed` that the bench cannot hold with `:active` (a `pending` pulse is held at its first frame). `--preset alive` pins them |
 | `petClasses`, `petAt` | classes put on the pet itself (`["droop"]`), and `petAt` ms to pause its animations at (keyframes and the pet's own CSS transitions: `look`, `wander-l`), so a mid-motion frame is the same every run |
 | `attentionAt` | ms: the call icon as it arrives (`.attention.arrive`: the pop, then the pulse), paused that many ms in. Needs a calling pet (`mood: "calling"`) |
 | `statusClose` | ms (with `view: "status"`): the sheet closed through the card's own `_toggleStatus`, its wipe-up (motion ship 2) paused that many ms in; its 170 ms timer is stopped. With `motion: reduce` it just closes |
