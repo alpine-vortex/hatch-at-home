@@ -102,13 +102,13 @@ class HatchPetCardGames extends HatchPetCardCare {
     if (!pick || !gx || pick.hidden) return true;
     const box = s.gameBox.getBoundingClientRect();
     if (!box.height) return true;
-    pick.classList.remove("wrap", "tight");
+    pick.classList.remove("wrap", "tight", "snug");
     // The Hop row (flag on) sits at the foot, outside .gpick: it is measured too, so no game
     // button covers it, and the picker's room is the box less its strip.
     const row = s.gameBox.querySelector(".ghop");
     const rowOn = !!row && !row.hidden;
     if (row) {
-      row.classList.remove("slot", "tight");
+      row.classList.remove("slot", "tight", "snug");
       row.style.cssText = "";
     }
     pick.style.marginRight = "";
@@ -127,26 +127,55 @@ class HatchPetCardGames extends HatchPetCardCare {
     })) return true;
     // The row's strip: the picker ends above it.
     const strip = () => (rowOn ? `${Math.round(box.bottom - row.getBoundingClientRect().top + 4)}px` : "2%");
-    pick.style.bottom = strip();
     // The games' height, from the first one's top to the last one's foot, + the press shadow.
     const need = () => Math.max(...buttons.map((b) => b.offsetTop + b.offsetHeight)) -
       Math.min(...buttons.map((b) => b.offsetTop)) + 4;
+    // Last resort on the smallest LCD (a 284 px card: two rows of 44 px don't fit under the close
+    // button): `snug`, 36 px buttons and a 2 px gap. Only after the usual sizes have left a game
+    // under the close button, the row or past the foot.
+    let snugOk = false;
     const rows = () => {
-      pick.classList.remove("wrap", "tight");
+      pick.classList.remove("wrap", "tight", "snug");
       if (need() > pick.clientHeight) pick.classList.add("wrap");
       if (need() > pick.clientHeight) pick.classList.add("tight");
+      if (snugOk) pick.classList.add("snug"); // the last resort stays on once it was needed
       return need() <= pick.clientHeight;
     };
-    // Under the close button and, if it fits there, under a wrapped prompt too (F6).
-    const bubble = keep.find((r) => r.left < box.left + box.width / 2);
-    const under = Math.max(gx.getBoundingClientRect().bottom, bubble?.bottom || 0);
-    pick.style.top = `${Math.round(under - box.top + 6)}px`;
-    let clear = rows();
-    if (!clear) {
-      pick.style.top = `${Math.round(gx.getBoundingClientRect().bottom - box.top + 6)}px`;
-      rows();
+    const place = () => {
+      row?.classList.remove("slot", "tight", "snug");
+      if (row) row.style.cssText = "";
+      buttons.forEach((b) => { b.style.marginRight = b.style.gridColumn = b.style.justifySelf = b.style.width = ""; });
+      pick.style.bottom = strip();
+      // Under the close button and, if it fits there, under a wrapped prompt too (F6).
+      const bubble = keep.find((r) => r.left < box.left + box.width / 2);
+      const under = snugOk ? 0 : Math.max(gx.getBoundingClientRect().bottom, bubble?.bottom || 0);
+      const gap = snugOk ? 3 : 6;
+      pick.style.top = `${Math.round(Math.max(under, snugOk ? gx.getBoundingClientRect().bottom : 0) - box.top + gap)}px`;
+      let clear = rows();
+      if (!clear) {
+        pick.style.top = `${Math.round(gx.getBoundingClientRect().bottom - box.top + gap)}px`;
+        rows();
+      }
+      if (rowOn && !rows()) clear = this._fitHopSlot(s, row, pick, box, rows) && clear;
+      row?.classList.toggle("snug", pick.classList.contains("snug"));
+      return clear;
+    };
+    let clear = place();
+    // A game under the close button, the row, or past the foot: the snug sizes, once.
+    const sound = () => {
+      const kept = [gx, row].filter((el) => el && !el.hidden).map((el) => el.getBoundingClientRect());
+      return buttons.every((b) => {
+        const r = b.getBoundingClientRect();
+        return r.bottom <= box.bottom + 0.5 && !kept.some((k) => hit(r, k));
+      });
+    };
+    if (!sound()) {
+      snugOk = true;
+      place();
+      // Snug sits under the close button only: clear if the prompt is not under the games.
+      const bub = s.bubble && !s.bubble.hidden && s.bubble.getBoundingClientRect();
+      clear = sound() && !(bub?.height && buttons.some((b) => hit(b.getBoundingClientRect(), bub)));
     }
-    if (rowOn && !rows()) clear = this._fitHopSlot(s, row, pick, box, rows) && clear;
     return clear;
   }
 
@@ -160,6 +189,17 @@ class HatchPetCardGames extends HatchPetCardCare {
     const buttons = [...pick.querySelectorAll("button")];
     const last = buttons[buttons.length - 1];
     row.classList.add("tight");
+    if (pick.classList.contains("snug") && buttons.length % 2) {
+      // Two even columns: the row takes the empty cell beside the last game.
+      last.style.gridColumn = "1";
+      last.style.justifySelf = "stretch";
+      last.style.width = "auto";
+      const at = last.getBoundingClientRect();
+      row.classList.add("slot");
+      row.style.cssText = `left:${Math.round(at.right + 3 - box.left)}px;top:${Math.round(at.top - box.top)}px;` +
+        `height:${Math.round(at.height)}px;bottom:auto;right:auto;width:${Math.round(at.width)}px`;
+      return rows();
+    }
     row.style.cssText = "width: max-content; right: auto";
     const need = row.offsetWidth + 4;
     row.style.cssText = "";

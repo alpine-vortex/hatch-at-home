@@ -450,6 +450,14 @@ const STYLE = `
   .game .gpick.wrap button { min-width: 0; padding: 0 10px; font-size: 12px; justify-content: center; }
   .game .gpick.wrap.tight { left: 1%; right: 1%; gap: 4px 3px; } /* still too tall: two a row */
   .game .gpick.wrap.tight button { padding: 0 6px; font-size: 11px; }
+  /* A 284 px card's LCD (182 x 136): two rows of 44 px don't fit under the close button, so two even
+     columns of 36 px (_fitPicker, the last resort only; a label may take two lines, whatever order the
+     games are in). An odd game sits in the middle, or, with the Hop row, leaves it the other cell. */
+  .game .gpick.wrap.snug:not([hidden]) { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 3px; align-content: center; }
+  .game .gpick.wrap.snug button { min-height: 36px; padding: 0 4px; font-size: 11px; line-height: 1.05;
+    text-align: center; }
+  .game .gpick.wrap.snug button:last-child:nth-child(odd) { grid-column: 1 / -1; justify-self: center;
+    width: calc(50% - 1.5px); }
   /* F2: the pile's leaves, or higher or lower's number, beside the pet (opposite the bubble,
      under the close button), so its face shows all game. */
   .game .gnum { position: absolute; right: 5%; top: 34%;
@@ -471,6 +479,7 @@ const STYLE = `
     padding: 4px 10px; font: inherit; font-size: 14px; box-shadow: 0 4px 0 #3a2a1a; }
   .game .ghop[hidden] { display: none; }
   .game .ghop.tight { padding: 0 6px; font-size: 11px; white-space: nowrap; }
+  .game .ghop.snug { min-height: 36px; line-height: 1.05; white-space: normal; }
   .game .ghop:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
   /* The board: the grid on the left, the keys on the right (2 x 4; the close button is the eighth).
      Sizes are set in JS (_hopLayout) from the overlay: --hk the key, --c the cell. No new art:
@@ -1375,6 +1384,7 @@ const STYLE = `
   ha-card.bigtext .game .hl { font-size: 16px; }
   ha-card.bigtext .game .gpick.wrap button { font-size: 14px; }
   ha-card.bigtext .game .gpick.wrap.tight button { font-size: 13px; }
+  ha-card.bigtext .game .gpick.wrap.snug button { font-size: 12px; }
   ha-card.bigtext .screen .askday button { font-size: 15px; }
   .screen .bondhearts img, .screen .linkhearts img, .screen .carehearts img { position: absolute; left: calc(50% + var(--x)); top: 52%; width: 18px; height: auto;
     opacity: 0; image-rendering: pixelated; pointer-events: none; z-index: 2; animation: bondheart 1.6s ease-out forwards; }

@@ -4406,9 +4406,13 @@ async function main() {
         low: Math.round(Math.max(...games.map((g) => g.bottom)) - box.bottom), rowLow: row && Math.round(row.bottom - box.bottom),
         rowH: row && Math.round(row.height), cls: s.gameBox.querySelector(".ghop")?.className };
     });
-    for (const width of [300, 330, 420]) {
+    // 300 px is the 284 px card (LCD 182 x 136) and 340 a 324 px one: there no game may touch the close button, the prompt, the row or the
+    // foot, with the flag on or off and in big text too (s2804); the other widths keep the baseline rule.
+    const bigText = (on) => card.evaluate((el, on) => { el._card.classList.toggle("bigtext", on); }, on);
+    for (const [width, big] of [[300, false], [330, false], [420, false], [340, false], [340, true], [300, true], [330, true], [420, true]]) {
       await page.setViewportSize({ width, height: 860 });
       await page.waitForTimeout(500);
+      await bigText(big);
       await flag(false);
       await picker();
       await page.waitForTimeout(2600); // a long line gives way to "pick a game!" after 2 s
@@ -4419,11 +4423,18 @@ async function main() {
       await page.waitForTimeout(2600);
       const fit = await fitOf();
       const mine = fit.bad.filter((b) => (!base.bad.includes(b) && b !== "row off the foot") || /^row[+]|[+]row/.test(b));
-      check(`${width} px (a ${fit.cardW} px card): the Hop row overlaps no game, the close button or the prompt, and sits no lower than the games did without it`,
-        fit.rowH !== null && mine.length === 0 && fit.rowH >= 43 && fit.rowLow <= Math.max(0, base.low), JSON.stringify({ fit, base }));
-      await shot(`board-picker-${width}`);
+      const label = `${width} px${big ? " big text" : ""} (a ${fit.cardW} px card)`;
+      if (fit.cardW <= 290 || width === 340) {
+        check(`${label}: every game and the Hop row sit inside the LCD and touch nothing, flag off and on`,
+          fit.bad.length === 0 && base.bad.length === 0 && fit.rowH >= 36, JSON.stringify({ fit, base }));
+      } else {
+        check(`${label}: the Hop row overlaps no game, the close button or the prompt, and sits no lower than the games did without it`,
+          fit.rowH !== null && mine.length === 0 && fit.rowH >= 43 && fit.rowLow <= Math.max(0, base.low), JSON.stringify({ fit, base }));
+      }
+      if (!big) await shot(`board-picker-${width}`);
       await quit();
     }
+    await bigText(false);
     await page.setViewportSize({ width: 300, height: 860 });
     await page.waitForTimeout(500);
 

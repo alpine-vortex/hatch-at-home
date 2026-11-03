@@ -924,6 +924,8 @@
       if (shot.scrollEnd) cur.status.scrollTop = cur.status.scrollHeight; // the foot's links
     }
     if (shot.view === "games") card._startGame(cur, cur.buttons.play); // the button itself can be disabled
+    // `pickWait`: ms to hold the picker, so a long line has given way to "pick a game!" (2 s) before the shot.
+    if (shot.view === "games" && shot.pickWait) await new Promise((r) => setTimeout(r, shot.pickWait));
     if (shot.view === "board") {
       const fx = await hopBoard(shot);
       card._startGame(cur, cur.buttons.play);
@@ -1112,7 +1114,7 @@
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     await settled(card);
     window.bench.screenClass = cur.screen.className;
-    if (shot.view === "board" || (shot.hop && shot.view === "games")) (window.bench.info ||= {}).hop = hopInfo(card, cur);
+    if (shot.view === "board" || shot.view === "games") (window.bench.info ||= {}).hop = hopInfo(card, cur);
     if (shot.lightsAlign) (window.bench.info ||= {}).lights = lightsInfo(cur);
     return true;
   }
