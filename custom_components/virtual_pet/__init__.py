@@ -493,6 +493,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         # "anything big this week?": the day they picked (opp #2), an ISO date.
         vol.Optional("day"): cv.string,
         vol.Optional("shared"): bool,
+        # A big day's or weekend's tag (memory plan M2): any value passes the schema, so
+        # a schema failure can never log it; the pet checks it against the fixed list.
+        vol.Optional("tag"): object,
     }
 )
 @websocket_api.async_response
@@ -532,6 +535,7 @@ async def websocket_answer(
             # (memory plan R3, M1 B1); an old card or a shared one keeps the
             # answer as ever, and memory is left alone.
             private=msg.get("shared") is False,
+            tag=msg.get("tag"),
         )
     except ValueError:
         connection.send_error(msg["id"], "not_asked", "It didn't ask that")

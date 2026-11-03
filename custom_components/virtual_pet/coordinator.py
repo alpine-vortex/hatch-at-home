@@ -1889,10 +1889,16 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             else:
                 note = {"kind": "pet_birthday", **born}
             celebrations.append(("pet", "birthday", today, note))
+        # Memory (plan M1b): doors only while it is on and this pet allows it. Read
+        # with .get (memory()), never person(), so nothing here re-creates a record.
+        mem = self.people.memory(user) if self.memory_allowed else None
         if friends:
-            celebrations.append(
-                ("pet", "friends", today, {"kind": "friends_for", "months": months})
-            )
+            note = {"kind": "friends_for", "months": months}
+            # Door 11 (plan M2, 6a): the 12-month day only, one fixed-list tag and
+            # nothing else; no memory mark (the bond's `noted` is the line's own).
+            if months == 12 and mem is not None and (tag := P.memory_recap(mem, today)):
+                note["tag"] = tag
+            celebrations.append(("pet", "friends", today, note))
         out += celebrations[:1]
         gen = str(state.generation)
         if gen in bond.get("photos", {}) and noted.get("photo") != gen:
@@ -1953,9 +1959,6 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             )
             if note := wellbeing.notice(seen, level, hour):
                 out.append(("person", "day", today, note))
-        # Memory (plan M1b): doors only while it is on and this pet allows it. Read
-        # with .get (memory()), never person(), so nothing here re-creates a record.
-        mem = self.people.memory(user) if self.memory_allowed else None
 
         def told(kind: str) -> bool:
             """Door 6: a favourite told on an earlier day while memory was on, and
@@ -2171,6 +2174,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         text: Any = None,
         day: Any = None,
         private: bool = False,
+        tag: Any = None,
     ) -> dict[str, Any] | None:
         """A remembered answer: a favourite, tonight's dream, a guess, its
         catchphrase, or a follow-up's (F1: a tough day's softer morning, a big
@@ -2178,9 +2182,22 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
         private: the card said it isn't a shared screen (`shared: false`). Only
         then may a pick also go to the person's memory (memory plan R3, M1 B1),
-        if it's on and this pet allows it; else the answer is kept as ever."""
+        if it's on and this pet allows it; else the answer is kept as ever.
+
+        tag: a big day's or weekend's "yes" may carry one fixed-list tag (memory
+        plan M2). One outside the list, not a string, or on any other answer is
+        refused before anything is kept; a good one that can't be kept here
+        (memory off, this pet's option off, a shared or old card) is dropped and
+        the "yes" kept (FM s2782 Q7)."""
         assert self.state is not None
         keep = private and self.memory_allowed
+        if tag is not None and not (
+            question in P.MEMORY_TAG_KINDS
+            and answer == "yes"
+            and isinstance(tag, str)
+            and tag in P.MEMORY_TAGS
+        ):
+            raise ValueError("It didn't ask that")
         if question in P.LATER_CHECKED:
             if answer not in P.ANSWERS.get(question, ()):
                 raise ValueError("Not an answer the pet keeps")
@@ -2215,10 +2232,25 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     if not P.big_day_pick(today, day):
                         raise ValueError("Not a day this week")
                     self.people.open_follow(user, question, today, text, day=day)
-                    kept = {"until": self.people.open_event(user)["until"]}
+                    event = self.people.open_event(user)
+                    kept = {"until": event["until"]}
+                    if tag and keep:  # the day they picked (memory plan M2)
+                        self.people.remember(
+                            user,
+                            "tags",
+                            {"day": event["due"], "kind": question, "tag": tag},
+                        )
                 elif answer == "yes":  # weekend: with their words, if any
                     self.people.open_follow(user, question, today, text)
-                    kept = {"until": self.people.open_event(user)["until"]}
+                    event = self.people.open_event(user)
+                    kept = {"until": event["until"]}
+                    if tag and keep:  # its Saturday: due is the Monday (plan M2 N12)
+                        saturday = date.fromisoformat(event["due"]) - timedelta(days=2)
+                        self.people.remember(
+                            user,
+                            "tags",
+                            {"day": saturday.isoformat(), "kind": question, "tag": tag},
+                        )
                 # Audit 0.43.0 F-01: answered, the later slot holds no open question
                 # (the evening's ask may then take it). The dated follow-ups keep it:
                 # their typed step answers the same ask again.

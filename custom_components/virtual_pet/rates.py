@@ -459,6 +459,12 @@ MEMORY_CHOSEN_KEPT = 7  # memory_chosen_days' length on disk (the loader's bound
 MEMORY_DOOR2_UNTIL = 12
 MEMORY_DOORS_FROM, MEMORY_DOORS_UNTIL = 11, 20
 MEMORY_DOOR_GAP_DAYS = 7
+# Door 10 (memory plan M2): a weekday pattern said at most once in this many days, one
+# spacing across every pattern (FM s2782 Q5).
+MEMORY_DOOR10_GAP_DAYS = 28
+# ... and only while the pattern's latest entry on its weekday is at most 8 weeks old
+# (FM s2784 Q2): a season of lessons that ended stops being remarked on.
+MEMORY_DOOR10_STALE_DAYS = 56
 CATCHPHRASE_LEVEL = 7  # "what should I say at the end of things?"
 BIRTHDAY_QUIET_BELOW = 30.0  # happiness: below it, a quiet "happy birthday ♥"
 ASK_DAY_FROM = 16  # "how was your day?" on its rotation day
