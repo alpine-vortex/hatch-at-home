@@ -228,6 +228,17 @@ class HatchPetCardGames extends HatchPetCardCare {
     s.gameNum.dataset.n = String(n);
   }
 
+  // A new number as a flip-clock does it: the old digit tips away (rotateX 0 -> 90, two steps), the new one
+  // is swapped in while it is a line, and tips back, .16 s in all (`.gnum.flip`). A win keeps the perk
+  // after it (`.win`). data-n is the new number at once. Reduced motion: the number, instantly.
+  _flipNumber(s, n, win = false) {
+    if (calm()) return this._showNumber(s, n);
+    s.gameNum.dataset.n = String(n);
+    s.gameNum.classList.toggle("win", win);
+    this._animate(s, s.gameNum, "flip", win ? 500 : 250);
+    setTimeout(() => { if (s.gameNum.dataset.n === String(n)) s.gameNum.innerHTML = digit(n, 3); }, FLIP_SWAP_MS);
+  }
+
   // One play_game call; ends the game (with a line) on a failure or refusal.
   // A reply for a game that was stopped (or replaced) meanwhile is dropped.
   async _playCall(s, data) {
@@ -304,8 +315,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     g.wins = info.wins;
     g.lastAt = Date.now();
     if (kind === "higher_lower") {
-      this._showNumber(s, info.number);
-      this._animate(s, s.gameNum, "flip", 300);
+      this._flipNumber(s, info.number, !!info.correct);
       this._animate(s, s.pet, "perk", 300);
       this._write(s, info.correct ? `yes! ${info.number}` : `nope, ${info.number}!`);
     } else {
@@ -397,8 +407,9 @@ class HatchPetCardGames extends HatchPetCardCare {
 
   // Berry dig: the pile's leaves left in .gnum, the bank and basket on the
   // score line, keep only with something in the basket.
-  _digShow(s, info) {
-    this._showNumber(s, info.leaves);
+  _digShow(s, info, flip = false, win = false) {
+    if (flip) this._flipNumber(s, info.leaves, win);
+    else this._showNumber(s, info.leaves);
     s.gameNum.setAttribute("aria-label", `${info.leaves} leaves left`);
     s.gameScore.classList.add("two");
     s.gameScore.textContent = `round ${Math.min(info.round + 1, info.rounds)}/${info.rounds}\n` +
@@ -448,9 +459,8 @@ class HatchPetCardGames extends HatchPetCardCare {
     g.wins = info.wins;
     g.basket = info.basket;
     g.lastAt = Date.now();
-    this._digShow(s, info);
+    this._digShow(s, info, true, info.found !== "bee"); // a berry or a safe basket is a win: the counter perks
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
-    this._animate(s, s.gameNum, "flip", 300);
     if (info.found === "bee") {
       s.propEl.src = BEE_FRAMES[0];
       s.propEl.style.left = "10%"; // beside the pile, clear of the score and the buttons
@@ -506,8 +516,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     g.lastAt = Date.now();
     g.busy = false;
     g.prompt = "dig or keep?";
-    this._digShow(s, info);
-    this._animate(s, s.gameNum, "flip", 300);
+    this._digShow(s, info, true);
     this._write(s, GAME_COPY.dugThere, 60000);
     s.sayUntil = Date.now() + 60000;
     s.gameBox.querySelector(".gr").focus({ preventScroll: true });

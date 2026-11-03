@@ -108,6 +108,9 @@ const gameDayList = (type) => {
 };
 const SHINY_ODDS = 1 / 25; // a berry's chance of being the shiny one (D-b, a card roll)
 const LINK_NEWS_ODDS = 1 / 3; // a link's chance of the guest's news (E9 L-a)
+const WIPE_UP_MS = 170; // the status sheet closing (_wipe "up"): the .16 s wipe, then off
+const FLIP_SWAP_MS = 80; // a game counter's flip-clock swap: halfway through its .16 s (_flipNumber)
+const TURN_MS = 200; // the edge-on sprite swap (_swapFlip): .1 s away, .1 s back
 const LINK_NEWS_MS = 1500; // after the guest's reply; the visit holds this much longer
 const LONG_AWAY_MS = 48 * 3600 * 1000; // a first look this long after the last: a welcome (E8 A-a)
 // An adult's tricks (E8 LS-a): one more each month from its 14th day, all three by month 3,
