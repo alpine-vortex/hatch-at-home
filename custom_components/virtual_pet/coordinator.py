@@ -2328,6 +2328,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     raise ValueError("Not on this pet")
                 self.people.set_memory(user, True, today)
             person["memory_asked"] = True
+            person.pop("memory_chosen_days", None)
             person["asked"].pop("later_kind", None)
             self.people.save()
         self._push_everywhere()  # their mine.memory_on
@@ -2397,10 +2398,15 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         """Memory on or off for this person (memory plan M1a), one switch for every
         pet. On only where this pet allows it (ValueError); off always, and it
         erases: popped first, then saved at once, so an answer landing during the
-        save finds no memory (R7, review S6)."""
+        save finds no memory (R7, review S6). Either way the person has answered the
+        ask (`memory_asked`, kept through "forget my data"), so it never comes."""
         if enabled and not self.memory_allowed:
             raise ValueError("Not on this pet")
         async with self.people.lock(user):
+            # Using the row is an answer: the pet doesn't ask later (M1b audit).
+            person = self.people.person(user)
+            person["memory_asked"] = True
+            person.pop("memory_chosen_days", None)
             if enabled:
                 if self.people.set_memory(user, True, self._today(self._now())[0]):
                     self.people.save()

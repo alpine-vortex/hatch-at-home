@@ -274,12 +274,11 @@ memory = {
             "game":  [{"day": ..., "pick": "dig"}, ...],
             "guess": [{"day": ..., "pick": "sun"}, ...],
             "great": [{"day": ..., "ask": "how_day"}, ...]},
-  "since_told": {"fav_weather": "2026-11-20", "fav_season": "...", "visitor_<world>": "..."},
+  "since_told": {"fav_weather": "2026-11-20", "fav_season": "..."},
                                        # only for a favourite told WHILE memory is on
   "said": {"door2": "2026-11-15", "door6_fav_weather": "2026-11-21", ...},
                                        # last day a door's line was said; door 6 is one-shot
                                        # per favourite, so its key holds the day it fired
-  "heard": {"day": "...", "pet": "<pet id>"},   # door 9 only; pruned after its day
 }
 ```
 
@@ -287,9 +286,8 @@ memory = {
 |---|---|---|
 | `tags` | **120 entries**, oldest out | Big day is asked at most once a week and weekend once a week (`BIG_DAY_GAP` 6, `FOLLOW_ASK_PER_WEEK` 2), so at the very most about 104 tags a year. 120 holds the anniversary window (13+ months) even for someone who says yes to everything; for most people it spans several years. About 40 bytes an entry, so under 5 KB. |
 | `picks.dream`, `.game`, `.guess`, `.great` | **5 each**, oldest out | Doors 4, 5 and 12 look at "3 of the last 5"; more history buys no door and keeps more in backups. 20 entries at most. |
-| `since_told` | one per favourite: weather, season, one per world | Bounded by the fixed lists (at most about 12). |
+| `since_told` | one per favourite: weather, season | Bounded by the fixed lists (at most about 12). |
 | `said` | one per door, plus one per door-6 favourite (about 14) | A "last said" day so a door doesn't repeat; bounded by the door list. **Lives only in `memory["said"]`** (M1 S2): never in `person["noted"]`, which `People.said` / `People.mark` use and which survives "off". |
-| `heard` | 1, dropped after its day | Door 9's "which pet already cheered this big day", so pets don't all say it. Bookkeeping, not a memory (R6). |
 
 The whole record is bounded at roughly 160 entries, well under 10 KB.
 
@@ -555,9 +553,9 @@ Because it is the most sensitive door, the plan limits it:
   than 3 remain), and turning memory off erases the history it came from.
 - Separate commit so the first mate can drop it from the batch without touching the rest.
 
-**Door 9 and `_event_ok`.** The event record stays free of `pet`. The "which pet already
-cheered" lives in `memory["heard"]` (one entry, dropped after its day) and is read when
-a second pet's first look finds a tagged big day of the day.
+**Door 9 and `_event_ok`.** Dropped with door 9 (FM Q4): no `heard` entry exists. An old
+store holding `heard`, `door9` or a `visitor_*` since-told key still loads; the loader
+drops them quietly (M1b audit, finding 4).
 
 **Door 9 and the "not chosen" list (review S10).** `docs/HANDOFF.md:525` lists, as *not
 chosen, don't start unasked*, "learning household routines" and "pets on the shelf noticing
@@ -1004,6 +1002,15 @@ tools), none of these slices needs one: no new art (section 9).
 - **`back_from` and the guess outcome lines** are fixed lines and repeat. Out of scope;
   the same turn-rotation pass would fix them.
 - **A downgrade** leaves memory on disk unread (R8); the guide says so.
+- **M1b audit (s2765): player-impact 1, nits 5.** Fixed: the settings row, on or off,
+  counts as answering the ask (`memory_asked`); "yes", "not now" and the row pop
+  `memory_chosen_days`; the dead door-9 data is gone (above). Accepted as known limits:
+  - **Door 6 is spent for good** when the card can't show it (an old cached card ignores
+    `told`; `_visit` drops a reply after a slide change), until `ask_again` re-arms it.
+  - **A mixed-option household** (one pet's option off) can starve the ask: the pet with
+    the option off may take the one later slot first on a shared dashboard.
+  - **A card that never sends "shown"** loses the later slot 3 days in every 14, for good
+    (the sliding window; a card that does send it is capped by `likes_asked`).
 - **Stale cards burn a door.** Door notes are marked said when the visit makes them; an
   old cached card drops a note kind it doesn't know, so that look's door is lost (door 2,
   once per great day, is gone for that day; doors 4, 5 and 12 wait a week). Accepted, as

@@ -192,11 +192,10 @@ MEMORY_PICKS: dict[str, tuple[str, tuple[str, ...]]] = {
     "great": ("ask", ("how_day", "big_how")),
 }
 MEMORY_LISTS = ("tags", *MEMORY_PICKS)
-# since_told keys: a favourite told while memory is on (weather, season, a world's
-# visitor); said keys: the last day a door's line was said (door 6, one per favourite).
-_SINCE_TOLD = re.compile(r"fav_weather|fav_season|visitor_[a-z0-9_]{1,32}")
-_MEMORY_SAID = re.compile(r"door(?:[1-9]|1[0-2])(?:_fav_weather|_fav_season)?")
-_PET_ID = re.compile(r"[A-Za-z0-9_]{1,64}")
+# since_told keys: a favourite told while memory is on (weather, season);
+# said keys: the last day a door's line was said (door 6, one per favourite).
+_SINCE_TOLD = re.compile(r"fav_weather|fav_season")
+_MEMORY_SAID = re.compile(r"door(?:[1-8]|1[0-2])(?:_fav_weather|_fav_season)?")
 _SPACES = re.compile(r"\s+")
 # Said inside a line ("good luck with {it}! ♥"): no trailing punctuation or emoticon of
 # their own (critique #8), as the card's cleanTyped.
@@ -843,15 +842,6 @@ def _memory(v: Any) -> dict[str, Any] | None:
     }
     if said:
         out["said"] = said
-    heard = v.get("heard")
-    if (
-        isinstance(heard, dict)
-        and set(heard) == {"day", "pet"}
-        and _memory_day(heard["day"])
-        and isinstance(heard["pet"], str)
-        and _PET_ID.fullmatch(heard["pet"])
-    ):
-        out["heard"] = dict(heard)
     return out
 
 

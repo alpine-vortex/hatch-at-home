@@ -68,9 +68,8 @@ def full_memory() -> dict[str, Any]:
         "since": "2011-01-01",
         "tags": tags,
         "picks": picks,
-        "since_told": {"fav_weather": "2011-02-02", "visitor_woodland": "2011-02-03"},
+        "since_told": {"fav_weather": "2011-02-02"},
         "said": {"door2": "2011-03-03", "door6_fav_weather": "2011-03-04"},
-        "heard": {"day": "2011-04-04", "pet": "test_pet"},
     }
 
 
@@ -178,9 +177,19 @@ def test_a_hand_edited_record_drops_bad_entries_one_by_one() -> None:
             "great": [{"day": "2026-10-06", "ask": "how_day"}],
             "names": [{"day": "2026-10-07", "pick": "Ada"}],
         },
-        "since_told": {"fav_weather": "2026-10-08", "Ada": "2026-10-08"},
-        "said": {"door2": "2026-10-09", "door99": "2026-10-09", "noted": "x"},
-        "heard": {"day": "2026-10-10", "pet": "Ada's pet!"},
+        "since_told": {
+            "fav_weather": "2026-10-08",
+            "Ada": "2026-10-08",
+            "visitor_woodland": "2026-10-08",
+        },
+        "said": {
+            "door2": "2026-10-09",
+            "door9": "2026-10-09",
+            "door99": "2026-10-09",
+            "noted": "x",
+        },
+        # Door 9's old bookkeeping, dropped quietly (M1b audit finding 4).
+        "heard": {"day": "2026-10-10", "pet": "pip"},
         "words": "my sister's recital",
     }
     out = P._person({"memory": record})["memory"]
@@ -1093,6 +1102,7 @@ async def test_yes_turns_memory_on_and_not_now_ends_the_ask(
     assert pet.people.memory(ada.id) == {"on": True, "since": ASK_DAY}
     person = pet.people.data["people"][ada.id]
     assert person["memory_asked"] is True
+    assert "memory_chosen_days" not in person  # the unshown days mean nothing now
     assert "later_kind" not in person["asked"]
     assert not (await answer(client, "memory", "not_now", shared=False))["success"]
     # Yes, then off: never asked again (the settings row is the way back).
@@ -1107,8 +1117,45 @@ async def test_yes_turns_memory_on_and_not_now_ends_the_ask(
     assert (await answer(bob_client, "memory", "not_now", shared=False))["success"]
     bob_person = pet.people.data["people"][bob.id]
     assert bob_person["memory_asked"] is True and not pet.people.memory_on(bob.id)
+    assert "memory_chosen_days" not in bob_person
     assert ask_pure(bob_person, "2026-12-20") != "memory"
     # Forget me keeps the refusal: still not asked.
+    assert (await ws(bob_client, "forget_me"))["success"]
+    assert pet.people.data["people"][bob.id]["memory_asked"] is True
+
+
+async def test_the_settings_row_counts_as_answering_the_ask(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    """Using the row, on or off, is an answer (M1b audit finding 1): the ask is not
+    due, the unshown days go, and "forget my data" keeps it."""
+    freezer.move_to("2026-11-02 14:00:00+00:00")
+    ada, token = await a_user(hass)
+    pet = await ready_pet(hass, hass_storage, freezer, ada.id)
+    client = await hass_ws_client(hass, token)
+    person = pet.people.data["people"][ada.id]
+    await ask_memory(pet, ada.id)  # due, with a chosen day
+    assert person["memory_chosen_days"] == [ASK_DAY]
+    # On.
+    assert (await switch(client, True, shared=False))["success"]
+    assert person["memory_asked"] is True and "memory_chosen_days" not in person
+    assert ask_pure(person, "2026-12-20") != "memory"
+    # Then off.
+    assert (await switch(client, False, shared=False))["success"]
+    assert not pet.people.memory_on(ada.id)
+    assert person["memory_asked"] is True
+    assert ask_pure(person, "2026-12-20") != "memory"
+    # Off alone, on someone who never turned it on and was never asked.
+    bob, bob_token = await a_user(hass)
+    pet.people.data["people"][bob.id] = copy.deepcopy(READY)
+    pet.state.bonds.setdefault(bob.id, {})["points"] = 25
+    await ask_memory(pet, bob.id)
+    bob_client = await hass_ws_client(hass, bob_token)
+    assert (await switch(bob_client, False, shared=False))["success"]
+    bob_person = pet.people.data["people"][bob.id]
+    assert bob_person["memory_asked"] is True
+    assert ask_pure(bob_person, "2026-12-20") != "memory"
+    # Forget me keeps it.
     assert (await ws(bob_client, "forget_me"))["success"]
     assert pet.people.data["people"][bob.id]["memory_asked"] is True
 
