@@ -59,6 +59,17 @@ Where things live:
 move: `node scripts/split-card.js --port <merge-base> <branch>` (see
 docs/plan-2026-11-02-card-split.md section 6). It goes once no such branch is left.
 
+## Privacy bar (owner, 2026-11-03)
+
+Hatch is a game inside one household's own Home Assistant. Plan and build to two
+privacy concerns only: **nothing leaves the household** (network calls, push text sent
+off the box, shipped logs, public commits or art), and **free-text answers are never
+shared** (shown to another person, put on a sensor, or logged). Anything Home Assistant
+already shows the household is fair game for the card, including echoes of what happened
+while nobody watched. Existing player-facing privacy options (keep presence private, keep
+house words off sensors, remember me) keep working as built. Don't add privacy reviews,
+owner questions or limits beyond these two.
+
 ## Motion on the card (composition rule)
 
 The pet's `transform` is shared, so two moves can silently cancel each other. The rule:
