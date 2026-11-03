@@ -7802,7 +7802,7 @@ async function main() {
     el._greet(s); // an egg doesn't greet: the flag stays down for the hatch
     out.greetedAfter = s.greeted;
     s.greeted = greeted;
-    s.patAt = 0;
+    s.patAt = 0; s.patRun = null;
     s.sayUntil = 0;
     out.say25 = el._say(s, null, false);
     s.hatchesAt = new Date(Date.now() + 4 * 60000).toISOString();
@@ -9667,7 +9667,7 @@ async function main() {
   const patReset = () => card.evaluate((el) => {
     const s = el._slides[el._index];
     if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
-    Object.assign(s, { patAt: 0, queue: [], sayUntil: 0, sayClass: 0 });
+    Object.assign(s, { patAt: 0, patRun: null, queue: [], sayUntil: 0, sayClass: 0 });
     s.bubble.textContent = "";
     s.pat.hidden = !el._patOn(s);
   });
@@ -9677,9 +9677,9 @@ async function main() {
     await page.mouse.click(r.x + r.width * fx, r.y + r.height * fy);
     await page.waitForTimeout(150);
   };
-  const tapPet = async () => {
+  const tapPet = async () => { // the head (care reactions C: the top 40% of the box; the body wiggles instead)
     const r = await cur().locator(".pat").boundingBox();
-    await page.mouse.click(r.x + r.width / 2, r.y + r.height * 0.6);
+    await page.mouse.click(r.x + r.width / 2, r.y + r.height * 0.2);
     await page.waitForTimeout(150);
   };
   const PAT = { content: "hehe ♥", excited: "hehe! ♪", sleepy: "mmm...", sick: "thanks... ♥" };
@@ -9803,7 +9803,7 @@ async function main() {
         return key === "sensor.life_stage" && st ? { ...st, state: "teen" } : st;
       };
       const pat = () => {
-        Object.assign(s, { patAt: 0, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+        Object.assign(s, { patAt: 0, patRun: null, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
         s.pet.classList.remove("greethop");
         el._pat(s, { detail: 0, stopPropagation() {} });
       };
@@ -9826,7 +9826,7 @@ async function main() {
         Object.assign(el, { _line: real.line, _persona: real.persona, _state: real.state });
         Math.random = () => 0.9;
         s.moodState = real.mood;
-        Object.assign(s, { patAt: 0, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+        Object.assign(s, { patAt: 0, patRun: null, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
       }
       return out;
     }, { own });
@@ -9954,7 +9954,7 @@ async function main() {
     const n = await card.evaluate((el) => {
       const i = (el._index + 1) % el._slides.length;
       const s = el._slides[i];
-      s.patAt = 0;
+      s.patAt = 0; s.patRun = null;
       s.bubble.textContent = "";
       s.sayUntil = Date.now() + 60000; // its own chatter held, so a line would be the pat's
       let stopped = false;
@@ -10000,6 +10000,84 @@ async function main() {
     delete el.__calls;
     if (window.__patRandom) Math.random = window.__patRandom;
   });
+  // Care reactions C, touch (plan 5.4): where the tap lands, the lean, the ladder, saturation.
+  await patReset();
+  const touch = async (fx, fy) => {
+    const r = await cur().locator(".pat").boundingBox();
+    await page.mouse.click(r.x + r.width * fx, r.y + r.height * fy);
+    await page.waitForTimeout(80);
+  };
+  const petClasses = () => card.evaluate((el) => [...el._slides[el._index].pet.classList]);
+  await card.evaluate((el) => { const s = el._slides[el._index]; s.pet.classList.remove("look"); });
+  await touch(0.2, 0.15);
+  const headL = await petClasses();
+  await page.waitForTimeout(1300);
+  const leanGone = await petClasses();
+  await patReset();
+  await touch(0.8, 0.15);
+  const headR = await petClasses();
+  check("touch: a tap on the head's left leans the pet left, on the right to the right, and the lean lets go",
+    headL.includes("lean-l") && !headL.includes("lean-r") && headR.includes("lean-r") && !leanGone.some((c) => c.startsWith("lean-l")),
+    JSON.stringify({ headL, headR, leanGone }));
+  await page.waitForTimeout(1300);
+  await patReset();
+  await touch(0.8, 0.8);
+  const bodyTap = await petClasses();
+  check("touch: a tap on the body wiggles (two rocks) and does not lean",
+    bodyTap.includes("rock2") && !bodyTap.some((c) => c.startsWith("lean-")), JSON.stringify(bodyTap));
+  await page.waitForTimeout(1400);
+  const ladder = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    Object.assign(s, { patAt: 0, patRun: null, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+    s.pet.classList.remove("look", "rock2", "lean-l", "lean-r");
+    const ev = { detail: 0, stopPropagation() {} };
+    const out = { ns: [], flop: null, soft: [], noLine: true };
+    const quiet = () => [...s.pet.classList].filter((c) => c !== "pat-soft").sort().join();
+    for (let i = 1; i <= 12; i++) {
+      s.patAt = 0; // each pat is past the line cooldown; the ladder alone decides
+      const before = quiet();
+      const said = s.bubble.textContent;
+      el._pat(s, ev);
+      out.ns.push(s.patRun.n);
+      if (i === 10) out.flop = { src: s.pet.getAttribute("src"), quietFor: s.patRun.quietUntil - Date.now(), pose: s.poseUntil - Date.now() };
+      if (i > 10) {
+        out.soft.push(s.pet.classList.contains("pat-soft"));
+        if (quiet() !== before || s.bubble.textContent !== said) out.noLine = false;
+      }
+      await wait(60);
+    }
+    await wait(120);
+    out.kept = s.pet.getAttribute("src");
+    s.patRun.quietUntil = Date.now() - 1; // the quiet over: the first pat is a new run at 1
+    el._pat(s, ev);
+    out.again = s.patRun.n;
+    return out;
+  });
+  check("touch: ten pats count to 10, the tenth flops (the cozy frame kept for the quiet) and 11 and 12 are pat-soft only, no class churn, no line",
+    ladder.ns.slice(0, 10).join() === "1,2,3,4,5,6,7,8,9,11" && ladder.flop?.src?.includes("cozy") && ladder.flop.quietFor > 6000 &&
+      ladder.flop.pose > 5000 && ladder.soft.every(Boolean) && ladder.noLine && ladder.kept?.includes("cozy") && ladder.again === 1,
+    JSON.stringify(ladder));
+  const asleepEgg = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const ev = { detail: 0, stopPropagation() {} };
+    const reset = () => { Object.assign(s, { patAt: 0, patRun: null, poseUntil: 0, queue: [], sayUntil: 0, sayClass: 0 }); s.pet.classList.remove("look", "rock", "rock2", "pat-slow"); };
+    const out = {};
+    reset(); s.asleep = true;
+    for (let i = 0; i < 3; i++) { el._pat(s, ev); await wait(40); }
+    out.stir = { src: s.pet.getAttribute("src"), asleep: s.asleep, until: s.poseUntil - Date.now() };
+    s.asleep = false; reset(); s.egg = true;
+    const seen = [];
+    for (let i = 0; i < 3; i++) { el._pat(s, ev); seen.push(s.pet.classList.contains("rock2") ? "rock2" : s.pet.classList.contains("rock") ? "rock" : ""); await wait(40); }
+    out.egg = seen;
+    s.egg = false; reset();
+    return out;
+  });
+  check("touch: an asleep pet stirs on the third pat (the sleepy face, still asleep); an egg's third pat is a double rock",
+    asleepEgg.stir.src.includes("sleepy") && asleepEgg.stir.asleep && asleepEgg.stir.until > 0 && asleepEgg.egg.join() === "rock,rock,rock2",
+    JSON.stringify(asleepEgg));
+  await patReset();
   // Motion ship 1 (CSS-first wins), on the awake pet. A wander left turns first: `look` goes on
   // with `wander-l` and both go off on the one timer; a wander right never turns. The call icon
   // pops (`.arrive`) once, when a call comes, not on a redraw; the pet settles as it falls asleep.
@@ -10267,14 +10345,14 @@ async function main() {
     // A pat during a reaction speaks and keeps the reaction's move.
     const pat = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
-      Object.assign(s, { patAt: 0, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+      Object.assign(s, { patAt: 0, patRun: null, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
       s.pinVariant = { praise: "hearts" };
       el._react(s, { action: "praise", result: "ok", at: Date.now() / 1000 });
       s.sayUntil = 0; s.queue = []; s.sayClass = 0;
       s.pet.classList.remove("perk");
       el._pat(s, { detail: 0, stopPropagation() {} });
       const out = { cls: [...s.pet.classList], said: s.bubble.textContent, live: s.poseUntil > Date.now() };
-      s.patAt = 0;
+      s.patAt = 0; s.patRun = null;
       return out;
     });
     check(`react: ${stage} a pat during a reaction speaks, keeps its move, adds no perk`,
@@ -10368,7 +10446,7 @@ async function main() {
       const sp0 = s.species;
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       const reset = () => {
-        Object.assign(s, { poseUntil: 0, patPoseUntil: 0, patAt: 0, movingUntil: 0, queue: [], sayUntil: 0, sayClass: 0, game: null, calling: false });
+        Object.assign(s, { poseUntil: 0, patPoseUntil: 0, patAt: 0, patRun: null, movingUntil: 0, queue: [], sayUntil: 0, sayClass: 0, game: null, calling: false });
         s.pet.classList.remove("look", "settle", "munch", "pat-soft", "perk");
       };
       const src = () => s.pet.getAttribute("src") || "";

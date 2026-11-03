@@ -744,15 +744,28 @@ class HatchPetCardTick extends HatchPetCardLayout {
   // Hidden with focus on it: the focus moves to the Status button, not the page.
   _patSync(s, hide = !this._patOn(s)) {
     if (hide && !s.pat.hidden && this.shadowRoot?.activeElement === s.pat) this._card?.querySelector(".statusbtn")?.focus();
+    if (hide && s.patRun) { // a scene, a slide change, the status or a game ends the run (plan 5.4)
+      s.patRun = null;
+      this._patLeanOff(s);
+    }
     s.pat.hidden = hide;
   }
 
   // May a pat say its line? Not over a kept line or one waiting, a game, a question, a
   // call, the low-battery gag or a visitor (world or seasonal): then it is a wiggle only
   // (rapid pats can't cut off news, nor a pat the greeting).
-  _patMayTalk(s) {
+  // A milestone line (the flop, the giggle) may replace the pat's own line still on show (`own`): a ladder
+  // reaches its tenth pat inside the 2.5 s the first one's line is held.
+  _patMayTalk(s, own = false) {
+    const heldOwn = own && s.patSaid && s.sayEntry?.text === s.patSaid;
     return !s.calling && !s.power && !s.game && !this._questionOn(s) && !(s.visitUntil > Date.now()) &&
-      !(s.sayUntil > Date.now() && s.sayClass >= KEPT) && !s.queue?.some((q) => lineClass(q) >= KEPT);
+      (heldOwn || !(s.sayUntil > Date.now() && s.sayClass >= KEPT)) && !s.queue?.some((q) => lineClass(q) >= KEPT);
+  }
+
+  // A pat's line: the viewer's own, remembered as the pat's so a milestone may replace it.
+  _patSay(s, text) {
+    s.patSaid = text;
+    this._line(s, MINE, text, PAT_MS);
   }
 
   // acts.pat for ~900 ms on a pat (R2), kept in s.patPoseUntil so `reacting` in the
@@ -771,56 +784,61 @@ class HatchPetCardTick extends HatchPetCardLayout {
     this._show(s, s.pet, own[0]);
   }
 
-  // A pat (PR 3b, O01): card only, nothing is sent or stored. A perk and the tap's
-  // haptic; a C10 line by mood, at most one per PAT_COOLDOWN_MS. Asleep: a slow perk
-  // and nothing said. Under reduced motion only the line and the haptic.
+  // A pat (PR 3b, O01): card only, nothing is sent or stored. Where it lands matters (plan 5.4 of
+  // docs/plan-2026-11-02-care-reactions.md): the head leans in, the body wiggles; a run of pats (s.patRun,
+  // patStep) escalates: lean, a heart or a giggle, the habit move, a purr, then at the tenth a contented
+  // flop and 8 s of soft pats (the first mate's call, plan 1: it saturates, it is never annoyed). A C10 line
+  // by mood, at most one per PAT_COOLDOWN_MS (a milestone line may break the cooldown, not _patMayTalk).
+  // Asleep: a slow perk, and a stir at the third. An egg rocks, a double rock at the third. Under reduced
+  // motion the pose, the frame and the line only.
   _pat(s, e) {
     if (!this._patOn(s)) return; // let the tap reach the screen (status) or bring the slide forward
     e.stopPropagation();
     if (e.detail !== 0 && this._swiped) return; // the end of a swipe; a key after one still pats
     const now = Date.now();
     const still = calm();
-    if (s.egg) { // an egg rocks a little and chirps: no bond, no server call, one "♪" (F2)
-      this._tapped(s.pat);
-      if (!still) {
-        this._animate(s, s.pet, "rock", 600);
-        this._moving(s, 600);
-      }
-      if (now - (s.patAt || 0) >= PAT_COOLDOWN_MS || !s.sayUntil || now > s.sayUntil) {
-        s.patAt = now;
-        this._chirp(s, "tap");
-        this._line(s, MINE, EGG_PAT_LINE, PAT_MS);
-      }
-      return;
-    }
-    if (s.asleep) {
-      this._tapped(s.pat);
-      if (!still) {
-        this._animate(s, s.pet, "pat-slow", 1100);
-        this._moving(s, 1100);
-      }
-      return;
-    }
+    const step = patStep(s.patRun, now); // every pat counts, before the cooldown and `reacting`
+    s.patRun = step.run;
+    if (s.egg) return this._patEgg(s, step, still, now);
+    if (s.asleep) return this._patAsleep(s, step, still, now);
+    const spot = patZone(Number.isFinite(e.clientX) ? s.pat.getBoundingClientRect() : null, e.clientX, e.clientY, e.detail);
     // A reaction running plays whole: the pat still speaks, but adds no move of its own.
     const reacting = s.poseUntil > now;
-    this._patPose(s, reacting);
-    if (now - (s.patAt || 0) < PAT_COOLDOWN_MS || !this._patMayTalk(s)) {
+    if (step.quiet) { // the 8 s after the flop: a soft pat, the cozy frame kept, no line, nothing counted
       this._tapped(s.pat);
-      if (!still && !reacting) {
+      if (!still) {
         this._animate(s, s.pet, "pat-soft", 300);
         this._moving(s, 400);
       }
       return;
     }
-    this._tapped(s.pat, reacting ? undefined : s);
+    const moved = this._patMove(s, step, spot, reacting, still);
+    const sleepyOrSick = ["sleepy", "sick"].includes(s.moodState);
+    // The tenth and the body's third pat have a line of their own; sleepy and sick keep their one line (it's news).
+    const milestone = !sleepyOrSick && (step.flop ? "flop" : step.n === 3 && spot.zone === "body" ? "ticklish" : null);
+    const cooling = now - (s.patAt || 0) < PAT_COOLDOWN_MS;
+    if ((cooling && !milestone) || !this._patMayTalk(s, !!milestone)) {
+      this._tapped(s.pat);
+      if (!still && !reacting && !moved) {
+        this._animate(s, s.pet, "pat-soft", 300);
+        this._moving(s, 400);
+      }
+      return;
+    }
+    this._tapped(s.pat, reacting || moved === "anim" ? undefined : s);
     s.patAt = now;
+    if (milestone) {
+      this._patSay(s, this._fresh(s, `pat:${milestone}`, PAT_RUN_LINES[milestone]));
+      return;
+    }
     // Sleepy and sick keep their one line (it's news); otherwise the type's own words in
-    // turn with the mood's (P-a), and now and then the sweet spot (P-b): never counted.
-    const plain = !["sleepy", "sick"].includes(s.moodState);
+    // turn with the mood's (P-a), and now and then the sweet spot (P-b): never counted, and out of the
+    // ladder from the fourth pat (the habit move and the purr own that beat).
+    const plain = !sleepyOrSick;
     const lastSaid = (s.lastPick ??= {})["pat:said"];
-    if (plain && this._state(s, "sensor.life_stage")?.state !== "baby" && lastSaid !== PAT_SPOT && Math.random() < PAT_SPOT_ODDS) {
+    if (plain && step.n <= PAT_SPOT_MAX_N && this._state(s, "sensor.life_stage")?.state !== "baby" && lastSaid !== PAT_SPOT && Math.random() < PAT_SPOT_ODDS) {
       s.lastPick["pat:said"] = PAT_SPOT;
-      this._line(s, MINE, PAT_SPOT, PAT_MS);
+      this._patSay(s, PAT_SPOT);
       if (!still && !reacting) {
         this._animate(s, s.pet, "greethop", 1400);
         this._bondHearts(s);
@@ -828,7 +846,136 @@ class HatchPetCardTick extends HatchPetCardLayout {
       return;
     }
     const mood = PAT_LINES[s.moodState] || PAT_LINES.content;
-    this._line(s, MINE, plain ? this._lines(s, "pat", mood, undefined, { fresh: true }).text : mood, PAT_MS);
+    this._patSay(s, plain ? this._lines(s, "pat", mood, undefined, { fresh: true }).text : mood);
+  }
+
+  // The step a pat has reached on the ladder (the table of plan 5.4); returns "anim" if a class move
+  // played, "lean" if only a pose or a lean did, else "". `reacting` suppresses everything but the
+  // flop (it is the run's one saturation and must play; a newer pose wins). The pet may be a child:
+  // no acts.pat, so the lean and the wiggle are on its frame, and its extras take the habit step.
+  _patMove(s, { n, flop }, spot, reacting, still) {
+    if (flop) return this._patFlop(s, still);
+    if (reacting) return "";
+    const head = spot.zone === "head";
+    if (n <= 3) {
+      if (!head) {
+        if (n === 3) { // ticklish: the excited frame and a giggle (the line is _pat's)
+          this._reactFrames(s, "tickled");
+          return "anim";
+        }
+        if (still) return "";
+        this._animate(s, s.pet, "rock2", 1250);
+        this._moving(s, 1300);
+        return "anim";
+      }
+      this._patPose(s, false);
+      const leaned = this._patLean(s, spot.side, n === 1 ? PAT_LEAN_MS : PAT_LEAN_LONG_MS);
+      if (n === 3 && !still) this._bondHearts(s, "bondhearts", 1);
+      return leaned || n === 1 ? "lean" : "";
+    }
+    if (s.calling) return "";
+    this._patLeanOff(s); // a habit move may wander, and a purr is still: the lean is let go
+    if (n <= 6) { // the habit move: the cheer act and the type's move; a child its own pose where it has one
+      const extra = s.drawn === "child" && s.species?.extras?.[s.species?.reactions?.praise];
+      const frames = extra ? [].concat(extra) : null;
+      if (frames) {
+        s.poseFrames = frames;
+        s.poseUntil = Date.now() + REACTIONS.praised.ms;
+        this._show(s, s.pet, frames[0]);
+      }
+      this._reactFrames(s, "praised", { ms: REACTIONS.praised.ms, frames });
+      return "anim";
+    }
+    this._reactFrames(s, "patted", { ms: REACTIONS.patted.ms });
+    return "anim";
+  }
+
+  // The tenth pat: a contented flop (the cozy frame, settle 2.5 s) and the cozy frame kept for the quiet.
+  _patFlop(s, still) {
+    if (s.calling) return "";
+    this._patLeanOff(s);
+    this._reactFrames(s, "flopped", { ms: REACTIONS.flopped.ms });
+    if (s.poseUntil) { // the frame outlasts the settle: the 8 s the run is quiet
+      s.poseUntil = Date.now() + PAT_QUIET_MS;
+      this._poseEnd(s);
+    }
+    return still ? "" : "anim";
+  }
+
+  // The lean (plan 5.4): +-5deg about the feet toward the tapped side, held while pats keep coming and
+  // let go `holdMs` after the last. `rotate` is one property (plan 4.9): none while .look or a wander is
+  // on the pet, nor under reduced motion, nor for a pat with no side (a key). Returns whether it leans.
+  _patLean(s, side, holdMs) {
+    const c = s.pet.classList;
+    if (calm() || !side || c.contains("look") || [...c].some((k) => k.startsWith("wander-"))) return false;
+    clearTimeout(s.leanTimer);
+    clearTimeout(s.leanRelTimer);
+    c.remove("lean-rel");
+    c.remove(side === "l" ? "lean-r" : "lean-l");
+    c.toggle("lean-sick", s.moodState === "sick"); // slower, in and out
+    c.add(side === "l" ? "lean-l" : "lean-r");
+    s.leanTimer = setTimeout(() => this._patLeanOff(s), holdMs);
+    this._moving(s, holdMs + 300); // the pet is off true: no idle look or wander, no hat placed, till it lets go
+    return true;
+  }
+
+  // Let the lean go, over .3 s (.45 s when sick), then drop its classes.
+  _patLeanOff(s) {
+    clearTimeout(s.leanTimer);
+    const c = s.pet?.classList;
+    if (!c || !(c.contains("lean-l") || c.contains("lean-r"))) return;
+    clearTimeout(s.leanRelTimer);
+    c.add("lean-rel");
+    c.remove("lean-l", "lean-r");
+    s.leanRelTimer = setTimeout(() => c.remove("lean-rel", "lean-sick"), c.contains("lean-sick") ? 450 : 300);
+  }
+
+  // An asleep pat: the slow perk as ever; the third stirs it (the sleepy face for 500 ms, a small turn)
+  // and it stays asleep; "mm..." now and then (1 in 4, through the cooldown and _patMayTalk).
+  _patAsleep(s, step, still, now) {
+    this._tapped(s.pat);
+    if (!still) {
+      this._animate(s, s.pet, "pat-slow", 1100);
+      this._moving(s, 1100);
+    }
+    if (step.n !== 3 || step.quiet) return;
+    const sp = s.species;
+    if (sp?.moods?.includes("sleepy")) {
+      const frames = [];
+      for (let i = 1; i <= (sp.frames || 1); i++) frames.push(`${s.drawn}_sleepy_${i}`);
+      s.poseFrames = frames;
+      s.poseUntil = now + 500;
+      this._show(s, s.pet, frames[0]);
+      this._poseEnd(s);
+    }
+    if (!still) this._look(s, 350);
+    if (Math.random() < 0.25 && now - (s.patAt || 0) >= PAT_COOLDOWN_MS && this._patMayTalk(s)) {
+      s.patAt = now;
+      this._patSay(s, PAT_RUN_LINES.asleep[0]);
+    }
+  }
+
+  // An egg's pat: a rock and one "♪" (F2); the third pat of a run a double rock (the cracking egg's own
+  // `rock2`), and the egg's wiggle frames where the species has them. No bond, no server call.
+  _patEgg(s, step, still, now) {
+    this._tapped(s.pat);
+    const third = step.n === 3 && !step.quiet;
+    const wiggle = third && s.species?.egg?.wiggle;
+    if (wiggle?.length) {
+      s.poseFrames = wiggle;
+      s.poseUntil = now + 1200;
+      this._show(s, s.pet, wiggle[0]);
+      this._poseEnd(s);
+    }
+    if (!still) {
+      this._animate(s, s.pet, third ? "rock2" : "rock", third ? 1200 : 600);
+      this._moving(s, third ? 1200 : 600);
+    }
+    if (now - (s.patAt || 0) >= PAT_COOLDOWN_MS || !s.sayUntil || now > s.sayUntil) {
+      s.patAt = now;
+      this._chirp(s, "tap");
+      this._line(s, MINE, EGG_PAT_LINE, PAT_MS);
+    }
   }
 
   // May a line of this class go into the bubble now? Only a higher class
