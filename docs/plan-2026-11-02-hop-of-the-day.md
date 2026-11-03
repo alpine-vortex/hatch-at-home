@@ -6,6 +6,9 @@ the others are tier 1. The owner picked Hop on 2026-11-02 from scout s2713's fiv
 The decisions made on 2026-11-02 are recorded at the end ("Decided"); nothing is left open
 except what section 11 lists. Folded on 2026-11-02 (s2722) from adversarial review s2718:
 every finding was checked against the code at `7fe09174` before it was written in.
+Folded again on 2026-11-02 (s2772, ship 1) from review s2771's P1-P13 and the first mate's
+answers to its four questions (Decided 8-11): the rules ship 1 pinned are in sections 2-2b,
+the generator, solver and bots as built in section 4, the API later ships call in ship 1.
 
 Sources: scout s2713's report (Pick, Shared base, section 1, Owner decisions) and its
 `renders/hop-sample-solver.py` (the sample board below is its board, rules adjusted in
@@ -28,8 +31,29 @@ on 40 random boards with the hop move only and no world twist took, per board,
 0.003 s at 5×4 with 1 hop, 0.02 s at 5×4 with 3 hops, 0.07 s at 6×4 with 3 hops (largest
 235,000 states; 1 board in 40 passed a 400,000-state cap). Of 40 random 6×4 boards, 39
 were solvable and 28 solvable tidy. So the solver is cheap at 6×4, and tidy is **common**
-on random boards: the generator needs a filter to make it hard (section 4). Nothing else in
-this plan was run.
+on random boards: the generator needs a filter to make it hard (section 4).
+
+**Measured in ship 1** (s2772, this machine, CPython 3.14, the dev venv). Review s2771 (P2)
+pointed out that the run above was a feasibility search with an early exit, and measured a
+full counting solve on open random 6×4 boards at about 1.2 s mean. The full count does blow
+up on open boards (an obstacle-free 6×4 at 3 hops passes 3,000,000 states), but the
+generator's candidates (section 4's table: 15-25% walls and water at teen and adult, the
+static-reach prune) solve in a few ms each. Measured:
+- `hop_board` (generator, every check, bots included), 200 boards per (family, stage), 4,800
+  boards: **median 7 ms, mean 21 ms, worst 0.87 s** (squeeze adult). By stage: baby median
+  0.3 ms, child 8 ms, teen 12 ms, adult 19 ms; worst per stage 55 ms, 152 ms, 314 ms, 866 ms.
+  The target was median under 1 s, worst under 5 s (Decided 9); a Pi-class box several times
+  slower stays inside it. The board still runs in the executor (2a).
+- `HOP_FULL=1`, 1,000 boards per (family, stage), 24,000 boards: **no fallback in any
+  cell** (the cap is 10%). Candidates per board: baby 2.4-2.6 (about 40% of baby 4×3
+  candidates pass), child 4.4-8.0, teen 2.1-4.7, adult 1.6-4.0. Largest solve 99,964 states
+  (hop adult) under the 100,000 cap.
+- Noisy casual bot over the same boards: wins 94.7-99.8% per cell, tidy 0.0-0.2%.
+- Careful bot (budget 300) tidy per cell: baby 100%, child 76-97%, teen 49-92%, adult
+  41-91% (squeeze lowest, dig highest). It moves with its budget: over 40 boards per
+  family, child 34% / 55% / 74% / 92% at budgets 25 / 50 / 100 / 300 moves tried, teen
+  23 / 45 / 57 / 75%, adult 18 / 48 / 60 / 72%. So the draft 40-70% band is a statement about
+  the budget, as review P9 said; the board-side knobs are `TRAP_MARGIN` and `TIDY_MAX`.
 
 ## 0. Summary
 
@@ -150,13 +174,24 @@ Terrain (a character per cell; all boards are at most 6 wide by 4 tall):
 |---|---|---|
 | `.` | pad | walkable; **sinks when the pet leaves it** (never walkable again) |
 | `f` | find pad | a pad; entering it picks up its find |
-| `o` | stone | walkable; never sinks, any number of crossings |
+| `o` | stone | walkable; never sinks, any number of crossings. **Never two orthogonally touching** (a generator rule, below) |
 | `~` | water | blocked |
 | `#` | wall (a rock or log) | blocked |
 | `P` | start | a pad the pet stands on |
 | `N` | nest | enterable only when every find is picked up; entering it ends the board (section 6 says what ends means for the card) |
 
 - **Step:** 1 cell up, down, left or right, onto a walkable cell that hasn't sunk.
+- **The move into the nest sinks the pad it leaves**, like any move: a tidy list's last pad
+  sinks on the way in.
+- **Entering the nest ends the board:** a letter after it is illegal at its index. An empty
+  list is illegal at 0; a letter outside `a`-`x` or past the board's last cell is illegal at
+  its index. A list over 200 letters is `too_long`, decided before any replay.
+- **No two touching stones** (FM, Decided 8). Every move but a step between two stones sinks a
+  pad or spends a use, so with no two stones side by side the moves can't loop and the count
+  of winning lists is finite. Two touching stones make a free loop (o1, o2, o1, ...) and an
+  endless count. The generator never places them; the solver raises on a state met twice on
+  one line rather than loop. Ship 4's never-sinking walkable twists (stumps, rugs) take the
+  same rule.
 - **Win:** the pet is in the nest with every find picked up.
 - **Tidy:** a win in which **every pad** (`.`, `f`, `P`) has sunk. Stones needn't be touched.
 - **Undo and restart:** free and unlimited. The move list that counts is the one left after
@@ -174,11 +209,11 @@ or the nest under the nest's own rule. The family names are drafts.
 | family | special move | spends 1 use per |
 |---|---|---|
 | **hop** | exactly 2 cells straight, over **anything** (a pad, stone, water or wall) | jump |
-| **glide** | 1 cell diagonally, over the corner whatever is there | glide |
+| **glide** | 1 cell diagonally, over the corner whatever is there (the landing is on the board, so both corner cells are) | glide |
 | **swim** | step onto a water cell. Water stays water; it never sinks and can be left by a step. | entry |
 | **dig** | 2 cells straight with a **wall** as the middle cell (tunnel under it) | tunnel |
 | **climb** | step onto a wall cell. A wall stays a wall; it never sinks and can be left by a step. | entry |
-| **squeeze** | step back onto **one sunk pad** (slip through the gap it left); it sinks again when left | squeeze |
+| **squeeze** | step back onto **one sunk pad** (slip through the gap it left), any pad: a find pad, the start; it stays sunk when left | squeeze (each one: "one sunk pad" is per use, not one at a time) |
 
 The scout's first sketch had the squeezer "fit through a crack" with a new terrain. This plan
 uses a sunk pad instead so six families need only four terrains. Swim and climb are the same
@@ -197,9 +232,10 @@ shape on different terrain on purpose, so the rules read in one line each.
 Size rotates by weekday: **Wednesday is one column narrower** than the stage's largest
 (draft; the scout's "a short one midweek"), **never below 4 wide**: a baby's Wednesday
 stays 4×3, because a 3×3 board (9 cells, no specials) is unlikely to pass the trap filter
-and every Wednesday baby would get the same fallback. Ship 1 reports the acceptance rate
-for 4×3 and 5×3 (steps only), and if even 4×3 is poor the fallback boards for it are
-accepted as a known limit and said so in the ship's report. The number comes from
+and every Wednesday baby would get the same fallback. The sizes are therefore 4×3 (baby,
+every day: the only steps-only boards), 5×4 (child; teen and adult on Wednesday), 4×4 (child
+on Wednesday) and 6×4 (teen, adult); there is no 5×3. Ship 1 reports the acceptance rate per
+size, 4×3 called out. The number comes from
 `life_stage(state)`.
 Growing up opens new boards; it does not touch today's (section 8: the stage is pinned for
 the day).
@@ -324,8 +360,10 @@ long single-pad chains. Walls and water may appear on every board as plain obsta
 Both live in `custom_components/virtual_pet/hop.py`: **pure functions, no Home Assistant
 imports**, as `model.py` keeps its game logic apart. Ship 1.
 
-**Deterministic.** `hop_board(pet_id, day, world, family, specials, size)` seeds
-`random.Random(f"hop|{GEN_VERSION}|{pet_id}|{day}|{world}|{family}|{specials}|{w}x{h}")`
+**Deterministic.** `hop_board(pet_id, day, world, family, specials, w, h, n=0)` seeds
+`random.Random(f"hop|{GEN_VERSION}|{pet_id}|{day}|{world}|{family}|{specials}|{w}x{h}|{n}")`
+(`n` is ship 5's practice board number, reserved now so ship 5 needs no `GEN_VERSION` bump;
+0 is the day's board)
 (a str seed; CPython derives it with a hash that is stable across runs and Python
 versions, unlike `hash()`). It draws **only from `random()`**, the one stream the stdlib
 documents as stable across versions: a pick is `seq[int(rng.random() * len(seq))]` and a
@@ -337,54 +375,88 @@ because the card never generates one (the JS engine has no generator). `pet_id` 
 config entry id (`coordinator.pet_id`), `day` is `_today(now)[0]` (the local date).
 
 **Version guard.** A change to the generator bumps `GEN_VERSION`, and the **board id**
-(a short hash of the grid and the specials) goes to the card with the board and back with
-the settle. A mid-day upgrade that changes today's board makes the settle answer
+goes to the card with the board and back with the settle. The id is `board_id()`: the first
+10 hex of sha256 over (`GEN_VERSION`, pet id, day, w, h, grid, family, specials, n) (FM,
+Decided 11). It binds the pet and the day, not only the grid, so a fallback board shared by
+two pets or two days still has two ids, and a list for another pet or day answers
+`board_changed`. It is a hash, so the entry id never leaves the server. A mid-day upgrade that changes today's board makes the settle answer
 `board_changed` and the card loads the new board and drops its parked moves. This happens
 at most once per release per pet.
 
-**Candidates and checks.** The generator draws a candidate (terrain by world and family,
-finds, start in a low corner, nest in a high corner), solves it, and accepts it only if:
+**Candidates and checks.** The generator draws a candidate, solves it, and accepts it only
+if it passes the checks below. A candidate (draft numbers, tunable, FM Decided 10; ship 1's
+values):
+
+| | baby | child | teen | adult |
+|---|---|---|---|---|
+| finds | 1 | 2 | 2-3 | 3 |
+| walls + water (share of cells, at least 1) | 1 cell | 10-20% | 15-25% | 15-25% |
+| stones (never two touching) | 1 | 1-2 | 1-2 | 1-2 |
+
+The start is a bottom corner, the nest a top-row cell on the far half. Swim boards always
+carry water and dig/climb boards a wall (their first obstacle), then 3 in 4 of the rest are
+the family's terrain; other families draw walls and water evenly. More obstacles at teen and
+adult keep the solve small (fewer open pads, fewer lines; review P2). The checks, cheapest
+first (`check()`): no touching stones; every pad, find and the nest reachable on the static
+board (a tidy list must visit every pad); the casual bot (checks 3, 4); then the full count:
 
 1. **Solvable:** at least one winning move list exists (`win_count >= 1`).
-2. **Tidy exists:** at least one tidy list, and not a flood (`1 <= tidy_count <= 40`).
-3. **The trap:** the **shortest** winning list is not tidy, and neither is the (deterministic)
-   casual bot's list (below). This is the scout's "has a trap" filter, and it is what makes
-   tidy hard.
+2. **Tidy exists:** at least one tidy list, and not a flood: `1 <= tidy_count <= 40, 80,
+   160, 320` for 0, 1, 2, 3 specials (`TIDY_MAX`: tidy lists grow with the specials, review
+   P10).
+3. **The trap:** the **shortest** winning list is not tidy (the shortest tidy list is at
+   least `TRAP_MARGIN` = 1 move longer than the shortest win), and neither is the
+   (deterministic) casual bot's list (below). This is the scout's "has a trap" filter, and it
+   is what makes tidy hard.
 4. **Win is easy:** the deterministic casual bot wins it.
-5. **Specials matter:** with specials > 0, every tidy list spends at least one use, and on
-   a child's boards a win needs one at least half the time (tunable: this is what makes
-   growing up feel new).
-6. **Size of search:** the solve stays under a state cap (400,000 in the scratch run) or
-   the candidate is thrown away.
+5. **Specials matter:** with specials > 0, every tidy list spends at least one use (a solve
+   with 0 uses has no tidy list), and on a child's boards a win needs one at least half the
+   time: a seeded coin per candidate (`rng.random() < 0.5`) decides, and when it says so the
+   solve with 0 uses must have no win (review P5).
+6. **Size of search:** the solve stays under `R.HOP_STATE_CAP` = 100,000 states or the
+   candidate is thrown away (FM, Decided 9).
 
-It tries up to a fixed number of candidates (200) and falls back to the nearest hand-made
-**fallback board** per (family, stage) in `hop.py` if none is accepted, so a day never has
-no puzzle. A test asserts the fallbacks pass checks 1-4. A baby has no special, so its six
-families share one fallback and a repeat board is possible; that is acceptable only if it is
-rare, so ship 1 reports the real acceptance rate per (family, stage) and the fallback share.
+It tries up to `R.HOP_CANDIDATES` = 60 candidates and falls back to the **fallback board**
+for its (family, specials, size) in `hop.py` if none is accepted, so a day never has no
+puzzle. The 37 fallbacks (the baby's 4×3 shared, 6 families × 6 sizes) are not hand-drawn:
+each is the first candidate from the seed `fallback|{family}|{specials}|{w}x{h}` that passed
+every check (a child's with its win needing the use) and that the noisy bot won 20 times in
+20, then pinned in `hop.py`, so a generator change does not move them and a fallback is
+instant. A test asserts they pass. The fallback share must stay at or under 10% per (family,
+stage); ship 1 measured it (section "Measured").
 
-**The solver:** a memoised depth-first search over (position, sunk set, uses left, and the
-twist's state: the move count's parity, the lantern flag, a crackle pad's half-sunk set). It
-counts winning and tidy lists, finds the shortest, and returns one tidy list. It is the
-scout's script made exact and bounded; the 6×4 / 3-hop run above is the only timing measured
-so far. Ship 1 measures all families and stages and sets the cap (the twists in ship 4).
-The same solver serves `hint` (ship 5) and the helper `scripts/hop_solve.py` (ship 1).
+**The solver:** `solve(board, state=None)`, a memoised depth-first search over (position,
+sunk set, uses left; ship 4 adds the twist's state: the move count's parity, the lantern flag,
+a crackle pad's half-sunk set) from any state, not only the start (ship 5's hint solves from
+where the pet is). It counts winning and tidy lists, finds the shortest of each, and returns
+one of each. It drops a state from which a find or the nest is cut off on the static board
+(a relaxed reach: sinking aside, a use never spent), which leaves the counts exact and about
+halves the states. It raises past the state cap, and on a state met twice on one line (a
+loop; section 2). The same solver serves `hint` (ship 5) and `scripts/hop_solve.py`.
 
 **Two bots stand in for players, and bracket the difficulty:**
-- **Casual bot:** goes to the nearest find by the shortest walk, then the next, then the
-  nest. It uses a special only when no walk exists. If it dead-ends it may undo at most 3
-  moves and try its second choice. This is "a player who doesn't think about tidy".
-- **Careful bot:** a search with a fixed node budget that prefers lists that sink more
-  pads. This is "a player who thinks, and has patience for several undos".
+- **Casual bot:** goes to the nearest find not yet in by a shortest walk **on the live
+  board** (sunk pads are gone), then the next, then the nest (passing over another find picks
+  it up). Ties: the goal first in reading order; along the walk, ◀ ▲ ▼ ▶. It uses a special
+  only when no walk exists (then the fewest specials, then the shortest). At a dead end it
+  undoes 1, then 2, then 3 moves, and from each, bans the move it made there (its second
+  choice) and plays on greedily with no further undo; the first that wins stands, else it
+  loses. This is "a player who doesn't think about tidy".
+- **Noisy casual bot** (statistics only): the same, seeded, with random ties among equal
+  goals and equal walks, and a shuffled find order it tries first.
+- **Careful bot:** a depth-first search that tries plain moves before specials, then the cell
+  with the fewest ways on, and drops a line that cuts off a pad, a find or the nest; after a
+  budget of 300 moves tried it plays the casual bot's list. This is "a player who thinks, and
+  has patience for several undos".
 
 **What "win easy, tidy hard" means as numbers.** Checks 3 and 4 are **per-candidate
 filters** and use the deterministic casual bot, so over accepted boards it wins 100% and is
 tidy on 0% by construction; asserting 90% / 20% of those would be vacuous. The statistics
-use a **noisy casual bot** the filter never sees: seeded, with random tie-breaks among
-equal walks and a shuffled find order, so it can differ from the deterministic one. Tuned in
-ship 1 over seeded boards per (family, stage) (the twist adds "per world" in ship 4):
-noisy casual bot wins at least 90% of accepted boards and is tidy on at most 20%; careful
-bot is tidy on 40-70%. The knobs that move the careful bracket are the trap's strictness
+use the **noisy casual bot** the filter never sees, so it can differ from the deterministic
+one. Asserted over seeded boards per (family, stage) (the twist adds "per world" in ship 4):
+the noisy casual bot wins at least 90% of accepted boards and is tidy on at most 20%. The
+careful bot's tidy rate is **reported, not asserted** (review P9): its node budget sets it
+more than the boards do. The draft aim was 40-70%; ship 1 measured it (section "Measured"). The knobs that move the careful bracket are the trap's strictness
 (how many moves the tidy list must exceed the shortest win by) and the window on
 `tidy_count` (check 2's 40). The scout's "tidy on 40-60% of days for a regular player" is a
 target a bot can only bracket. The real figure appears after release from the saved counts
@@ -639,9 +711,28 @@ uses `scripts/ci-gate`. 3a is tier 2.
 ### Ship 1: the Hop engine, generator and solver (Python and JS, tier 1, L)
 
 `hop.py` (rules, six families, stage table, `FAMILY_OF`, generator, solver, bots, fallback
-boards) and **its twin `hop-engine.js`** (pure, top-level in a new part before the class
-chain, no `this`), with `tests/js/hop_engine.test.js`; `rates.py` constants; the shared
-fixture file; `scripts/hop_solve.py` (below); no service, no card UI, no save field. The JS
+boards) and **its twin `hop-engine.js`**, with `tests/js/hop_engine.test.js`; `rates.py`
+constants (`HOP_MAX_MOVES` = 200, `HOP_CANDIDATES`, `HOP_STATE_CAP`; `HOP_WIN_HAPPINESS` is
+3a's); the shared fixture file (`tests/fixtures/`, new); `scripts/hop_solve.py` (below); no
+service, no card UI, no save field.
+
+The API later ships call (review P7), so they need not extend the engine after the fixtures
+are pinned:
+- `hop.py`: `params_for(stage, day) -> (specials, w, h)`, `family_of(species)`,
+  `hop_board(pet_id, day, world, family, specials, w, h, n=0)` (blocking: 2a runs it in the
+  executor, never on the loop), `board_id(...)`, `replay(board, moves) -> {legal, bad_index,
+  won, tidy, final, too_long}` (3a), `solve(board, state=None)` (ship 5's hint), `encode` /
+  `decode`, `legal_targets`, `apply_move`, `Board.from_dict` / `to_dict`.
+- `hop-engine.js`: one `const HATCH_HOP = Object.freeze({...})` (review P12: the card is a
+  classic script, so every top-level name is a page global shared with other cards; a
+  duplicate `const` would kill the card), in `manifest.txt` right after `world.js`, before
+  the class chain; no `this`, no DOM. It holds `start`, `legalTargets(board, state)` (2b's
+  lit cells, key `aria-disabled` and preview), `apply`, `replay`, `isTidy`, `encode`,
+  `decode`, `view`; undo is a replay of the list without its last move. It ships in the
+  built card from ship 1 (a few KB, unused until 2b).
+- `hop.py` imports `rates` (`from . import rates as R`), so a script that uses it runs with
+  the dev venv, as `scripts/balance_sim.py` does (review P11: importing the package runs its
+  `__init__`, which imports Home Assistant). The JS
 engine is here, not in 2b, so the shared fixtures are checked by both engines from the
 start: a rule ambiguity found while writing the JS then forces a rule change *before*
 anything has merged, not a `GEN_VERSION` bump and a golden regeneration after. It changes no
@@ -650,8 +741,11 @@ player-visible behaviour (it is dead code in the card until 2b).
 Acceptance (pytest, `tests/test_hop.py`; `node --test`, `tests/js/hop_engine.test.js`):
 - Rules: every case in `tests/fixtures/hop_cases.json` passes **both** engines (at least:
   one legal and one illegal case per family, a pad sinking, a stone crossed twice, the nest
-  closed until the finds are in, undo-equivalent lists, the scout's sample with its 20/3
-  counts at 1 hop).
+  closed until the finds are in, the pad left by the move into the nest sinking, a letter
+  after the nest, an empty list, an off-board letter, 201 letters, a squeeze onto a sunk find
+  pad and the sunk start; and each case's prefixes give the same state as a step-by-step
+  apply, which is what undo is). The scout's sample's 20/3 counts at 1 hop (and 12/16 moves)
+  are a pytest, since the JS engine has no solver.
 - `FAMILY_OF` covers every ready species (read from `species.py`'s catalog or
   `frontend/sprites/*/species.json`, not a copy), names no species outside `worlds.json`'s
   rosters, every family has at least one ready species (climb has four ready, five with the
@@ -659,17 +753,19 @@ Acceptance (pytest, `tests/test_hop.py`; `node --test`, `tests/js/hop_engine.tes
 - Determinism: the same inputs give the same board twice and in a fresh process; one input
   changed gives a different board; a golden set of 12 boards is pinned so an accidental
   generator change shows (an intentional one bumps `GEN_VERSION` and regenerates the file).
-- Checks 1-6 of section 4 hold for seeded boards per (family, stage): **50 per cell in the
-  default suite** (6 families × 4 stages = 24 cells, 1,200 generations) and **1,000 per cell
-  behind a marker** (24,000 generations, run once for the ship's report; the build confirms
-  the default run fits the pytest budget and adds the marker to the pytest config if there
-  is none). The bots' ranges are asserted over the larger run. The tests assert **state
+- Checks 1-6 of section 4 hold for seeded boards per (family, stage): **5 per cell in the
+  default suite** (24 cells, 120 generations; FM Decided 9) and **1,000 per cell with
+  `HOP_FULL=1`** (24,000 generations, run once for the ship's report, which prints the table;
+  an env var, not a pytest marker: the repo has none). The bots' ranges are asserted over
+  every cell's boards by default and per cell under `HOP_FULL=1`. The tests assert **state
   counts** (the solver's visited states stay under the cap), not wall-clock time, which
   flakes on CI shards. Fallback boards pass checks 1-4. There are no twists yet, so "per
   world" is not a ship 1 dimension; it joins in ship 4.
 - The ship's report gives the measured acceptance rate and fallback share per family and
-  stage, with 4×3 and 5×3 (baby, Wednesday) called out, and the noisy- and careful-bot rates,
-  so ships 4-5 and the owner's tuning start from numbers.
+  stage, with 4×3 (baby, every day) called out, the noisy- and careful-bot rates and the
+  `hop_board` timing, so ships 4-5 and the owner's tuning start from numbers.
+- The golden boards are `tests/fixtures/hop_golden.json`; `HOP_GOLDEN_WRITE=1` rewrites them
+  after an intended change (with the `GEN_VERSION` bump).
 - `scripts/hop_solve.py` reads a `board` reply (JSON on stdin) and prints a winning move
   list and a tidy one, using the same solver. Ship 3a's real-HA round trip uses it: the
   live board depends on the dev pet's entry id and today's date, so no fixture list can
@@ -810,13 +906,16 @@ Only a phone shows these. Each ship above stands without them; they tune numbers
 `docs/features.md` (a row; the Hop row on the play screen), `docs/guide.md` and README (the games text),
 the `virtual_pet` service texts (`strings.json`, `translations/en.json`, `services.yaml`),
 `dev/bench/README.md` (`view: board`, the `board` field, the preset), `AGENTS.md`'s part
-table (two new parts: `hop-engine`, `card-board`), and the how-to-play page. All with draft copy.
+table (two new parts: `hop-engine`, added in ship 1; `card-board`, 2b), and the how-to-play
+page. All with draft copy.
 
 ## 11. Not verified / risks
 
-- The only run was the scratch timing above: hop move only, random boards, no twist, no
-  trap filter. The generator's acceptance rate for the trap filter is unknown until ship 1;
-  if it is low, the candidate cap rises or boards are made by editing a solved base.
+- Ship 1 measured the generator, the filter and the bots (section "Measured in ship 1"); no
+  twist yet. A baby's 4×3 has only one obstacle, one stone and one find, so baby boards are
+  few in kind (about 40% of candidates pass), but none fell back in 6,000 baby boards. The
+  careful bot is tidy far above 70% at a budget of 300 moves tried; whether tidy should be
+  harder is the owner's call after the first week of real counts (`TRAP_MARGIN`, `TIDY_MAX`).
 - The 2×4 pad and the 35 × 34 px cell come from the scout's single 300 px render.
 - The picker-plus-row fit (section 5) has no bench shot yet; the review took none either.
   Ship 2b's first job is the 300 / 330 / 420 shots, and the row's strip may need a design
@@ -853,6 +952,17 @@ These were open questions in the first draft. The owner and the first mate settl
 6. **Pay** (first mate): the first win of the day pays 23 happiness; no loss state; tidy
    adds one world find (section 7).
 7. **No streak; counts only; no `game_record` line** (first mate; sections 7-8).
+8. **No two orthogonally touching stones**, nor touching never-sinking walkable cells of
+   any later kind (first mate, answering review s2771 Q1; section 2). The solver raises on a
+   loop rather than count it.
+9. **Cost targets** (first mate, Q2): median `hop_board` under 1 s on this machine, worst
+   under 5 s; state cap at most 100,000; about 5 boards per (family, stage) in the default
+   suite, 1,000 per cell behind `HOP_FULL=1`. Ship 1's report set the final numbers
+   (section "Measured").
+10. **The candidate table as tunable drafts** (first mate, Q3): finds baby 1, child 2, teen
+    2-3, adult 3; walls and water at most 25% of the cells (section 4).
+11. **The board id hashes the pet id, the day and `GEN_VERSION`** with the board and `n`
+    (first mate, Q4; section 4).
 
 Also settled by this fold, for the first mate to veto: a nest entry ends the board and
 settles at once, a plain win does not lock the day, and the solved view offers a free restart

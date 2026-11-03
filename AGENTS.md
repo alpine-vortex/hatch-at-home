@@ -26,6 +26,7 @@ Where things live:
 |---|---|
 | prefs | VERSION, BOOT_VERSION, icons, actions, games, sound/lcd/mono/shared prefs, chirps |
 | world | odds, ms, flair, SEASONS, hanukkah, turn/visitor day, once-per-day, season helpers |
+| hop-engine | `HATCH_HOP`, Hop of the Day's rules (one frozen namespace; hop.py's twin, no `this`) |
 | lines | poses, wishes, BABY, PERSONA |
 | lines-fresh | the fresh-expand copy block (scripts/copy-scan.js's COPY_TABLES) |
 | ui-copy | screen copy, kindred, follow text, QUESTIONS, notes, dreams, moment consts, helpers |

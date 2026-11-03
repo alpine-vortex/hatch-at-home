@@ -1,5 +1,6 @@
 prefs.js
 world.js
+hop-engine.js
 lines.js
 lines-fresh.js
 ui-copy.js
