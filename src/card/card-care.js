@@ -575,7 +575,7 @@ const SCENES = {
 const FEED_GOBBLE = 30; // under this hunger the feed may be a gobble (variant C)
 const FEED_MAX_MS = 3200; // a feed scene never runs longer, whatever the pace (plan 8)
 const FEED_EXTRA_ODDS = 0.25; // a heart, a lick or a burp at the end of a meal
-const SNACK_LINE_ODDS = 1; // how often a snack scene says its SNACK_LINES line (the FM may thin it)
+const SNACK_LINE_ODDS = 0.25; // how often a snack scene says its SNACK_LINES line (1 in 4, as FEED_EXTRA_ODDS: FM)
 const SNACK_NIBBLES = [[90, 25, 38], [8, 45, 40], [50, 55, 75]]; // C's three bites: centre (% of the snack) and radius
 
 // Where a snack is caught (plan 5.2, B2): species.json "head" is the crown of the head (a back,

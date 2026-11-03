@@ -12252,9 +12252,10 @@ async function main() {
     check("snack: a tap starts the toss; a second tap is ignored (one call, the scene goes on)",
       snackStart.scene === "snack" && snackStart.snack && snackStart.calls === snackCalls + 1 && snackMid.scene === "snack" &&
       snackMid.result === "ok" && snackDone.calls === snackCalls + 1, JSON.stringify({ snackStart, snackMid }));
-    check("snack: the pet eats (eat frames), says its line, hops once, and leaves no scene, translate, rotate or look",
+    // Its line is 1 in 4 (SNACK_LINE_ODDS): not asserted here.
+    check("snack: the pet eats (eat frames), hops once, and leaves no scene, translate, rotate or look",
       snackDone.eat && !snackDone.scene && snackDone.els === 0 && !snackDone.translate && !snackDone.rotate && !snackDone.look &&
-      snackDone.line.length > 0 && !/full|didn't work/.test(snackDone.line) && snackHops === 1, JSON.stringify({ snackDone, snackHops }));
+      !/full|didn't work/.test(snackDone.line) && snackHops === 1, JSON.stringify({ snackDone, snackHops }));
     // A spoiled reply (a fake call whined for it) is eaten: one scene, a smug line, no snack on the floor.
     await feedState(pet, "60", "snack");
     await feedTap(false, "snack");

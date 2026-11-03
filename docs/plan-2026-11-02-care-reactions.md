@@ -594,7 +594,7 @@ beat; the floor's `_react` never sees the entry, so no snack prop. A `late` or o
 `COPY_TABLES`): "*gotcha!*" (A, C, D) and "*pounce!*" (B), said bare, once, at the delight beat,
 in place of any other line. **Precedence:** spoiled smug > season `snackLines` > heavy >
 favourite-snack moment (the scene says nothing) > `SNACK_LINES`. "*sneaky grin*" is struck.
-`SNACK_LINE_ODDS` (1: every snack) is the one number the first mate may thin.
+`SNACK_LINE_ODDS` is 0.25 (FM, same 1-in-4 as `FEED_EXTRA_ODDS`; at 1 it would replace every ordinary snack line).
 
 **Child:** as 5.1.
 
@@ -1462,7 +1462,7 @@ B1 validation fixes below.
   `puffAt`); one-shots through `once()`.
 - `catchPoint(s, pet, box)`: `head` (or `face`), +8% of the height (+3% for `face`), mirrored when `.look`.
   Bench: `--preset snack` (`snackCatch`, `dev/bench/page.js snackBox`, `bench.js` pass rule) 30 of 30.
-- Copy: `SNACK_LINES = {catch, miss}` in `lines-fresh.js`, in `COPY_TABLES`; `SNACK_LINE_ODDS = 1`.
+- Copy: `SNACK_LINES = {catch, miss}` in `lines-fresh.js`, in `COPY_TABLES`; `SNACK_LINE_ODDS = 0.25`.
   `FEED_LINES` is approved (the DRAFT note is gone).
 - `favourite_snack` (a moment, not part of the scene): while a snack scene plays it sets `sc.fav` and the
   moment's line drops its `perk`; the delight is a `bighop`, the sparkle and two hearts.

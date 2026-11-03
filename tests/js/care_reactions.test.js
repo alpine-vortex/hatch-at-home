@@ -679,6 +679,8 @@ function snackEntry(over = {}) {
     fn("nature"), fn("paceOf"), fn("catchPoint"), block, "this.SCENES = SCENES; this.catchPoint = catchPoint;"].join("\n"), ctx);
   return ctx;
 }
+// The test's own override of the dice: Math.random() is `r` in the entry (0.1 is under every odds, 0.9 over).
+const dice = (r) => ({ ctx: { Math: Object.assign(Object.create(Math), { random: () => r }) } });
 function snackSlide(opts = {}) {
   const f = feedSlide(opts);
   f.s.species.head = { adult: [160, 70], child: [128, 96] };
@@ -801,7 +803,7 @@ test("snack's beats: the gate, the catch at 700, nothing over 3.2 s, at most 12 
 });
 
 test("snack's delight: exactly one greethop across the scene; a favourite day is a bighop and a sparkle; spoiled is two rocks", () => {
-  const { SCENES } = snackEntry();
+  const { SCENES } = snackEntry(dice(0.1)); // the line's 1-in-4 comes up
   const run = (mutate) => {
     const f = snackSlide();
     f.s.pinVariant = { snack: "A" };
@@ -849,7 +851,7 @@ test("snack's line: the season's candy line beats heavy beats SNACK_LINES; a mis
   const sc = f.setup(SCENES.snack);
   assert.strictEqual(sc.line, "candy!! ♪");
   assert.strictEqual(sc.candy, "../ui/season_halloween_candy");
-  const b = snackEntry();
+  const b = snackEntry(dice(0.1));
   const g = snackSlide();
   g.s.pinVariant = { snack: "B" };
   const bsc = g.setup(b.SCENES.snack);
@@ -916,4 +918,21 @@ test("snack is not skippable and plays an owed ok, as feed", () => {
   assert.strictEqual(SCENES.snack.playOwed, true);
   assert.strictEqual(SCENES.snack.gate, 650);
   assert.ok(SCENES.snack.refuseMs <= 900);
+});
+
+test("snack's line is 1 in 4 (SNACK_LINE_ODDS), like feed's extra; the dice over it say nothing", () => {
+  assert.strictEqual(src.match(/\nconst SNACK_LINE_ODDS = ([\d.]+);/)[1], "0.25");
+  assert.strictEqual(src.match(/\nconst FEED_EXTRA_ODDS = ([\d.]+);/)[1], "0.25");
+  const said = (r) => {
+    const { SCENES } = snackEntry(dice(r));
+    const f = snackSlide();
+    f.s.pinVariant = { snack: "A" };
+    const sc = f.setup(SCENES.snack);
+    sc.result = "ok";
+    const lines = [];
+    for (let t = 0; t <= sc.ms; t += 10) lines.push(...snackRun(f, sc, t, { entry: SCENES.snack }).log.lines);
+    return plain(lines);
+  };
+  assert.deepStrictEqual(said(0.2), ["*gotcha!*"]);
+  assert.deepStrictEqual(said(0.3), []);
 });
