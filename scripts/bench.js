@@ -867,9 +867,9 @@ const PRESETS = {
     // The drape sheet: every species and stage on frame 3, in the day (the scene at 1500) and in the dim.
     for (const species of allSpecies().sort()) {
       for (const stage of speciesData(species).stages.filter((x) => x !== "egg")) {
-        shot("sheet-day", `${species}-${stage}`, `${species} ${stage} day`, { species, stage, world: worldOf(species), careAt: 1500, live, tile: 150 });
+        shot("sheet-day", `${species}-${stage}`, `${species} ${stage} day`, { species, stage, world: worldOf(species), careAt: 1500, live, tile: 150, lightsAlign: true });
         out.push({ name: `tuck/sheet-dim/${species}-${stage}`, group: "tuck-sheet-dim", label: `${species} ${stage} dim`, ...plain, species, stage,
-          world: worldOf(species), tile: 150 });
+          world: worldOf(species), tile: 150, lightsAlign: true });
       }
     }
     return out;
@@ -1313,8 +1313,18 @@ async function lightsPass(browser, shots) {
     const want = DRAPE_TABLE[s.species]?.[s.stage];
     check(`sheet ${s.species} ${s.stage}`, want ? l?.drape === `ui/drape_${want[0]}_3.png` : l?.drape === null, `${l?.drape}`);
   }
+  // The drape sits on the pet (FM, 2026-11-02): its drawn pixels lie inside the pet's drawn pixels widened
+  // by 12% a side, and never below the pet's feet line (a pixel of rounding allowed).
+  for (const s of shots.filter((x) => /^tuck\/sheet-(day|dim)\//.test(x.name) && x.file)) {
+    const l = info(s.name);
+    if (!DRAPE_TABLE[s.species]?.[s.stage]) continue;
+    const p = l?.petDrawn, d = l?.drapeDrawn;
+    const slack = p ? 0.12 * (p[2] - p[0]) : 0;
+    const ok = !!(p && d && d[0] >= p[0] - slack && d[2] <= p[2] + slack && d[3] <= p[3] + 1);
+    check(`on the pet ${s.name.slice(5)}`, ok, p && d ? `drape ${d.map((v) => v.toFixed(1))} pet ${p.map((v) => v.toFixed(1))}` : "no box");
+  }
   for (const r of rows) {
-    if (!r.ok || /^(calm|align|compare)/.test(r.label)) console.log(`  ${r.ok ? "pass" : "FAIL"} ${r.label}: ${r.detail}`);
+    if (!r.ok || /^(calm|align|compare|on the pet)/.test(r.label)) console.log(`  ${r.ok ? "pass" : "FAIL"} ${r.label}: ${r.detail}`);
   }
   console.log(`lights pass rules: ${rows.filter((r) => r.ok).length} of ${rows.length} pass`);
   if (rows.some((r) => !r.ok)) process.exitCode = 1;

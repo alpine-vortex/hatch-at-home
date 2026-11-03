@@ -1520,11 +1520,14 @@ Names win over lines.
   `_drapeSync(s, asleep && lightsOut)` in `_renderSlide`: a tuck seen live falls in 450 ms, a wake seen live (any wake that clears the
   lights: the lights, or a natural morning) slides off in two steps, calm is on or off at once, a pet tucked when the card opens shows
   frame 3. The scene draws the same element, so the hand-over shows nothing.
-- **`DRAPE`** (`shell-data.js`, one table, no `species.json` edits): `{species: {stage: [size, y]} | null}`, `y` a multiple of 4. FM's
-  review of the art sheet said a plain `y` buries the small and squat pets; so `y` is chosen per species and stage so that about 40% of
-  the body's height is under the blanket on frame 3 and the face stays clear (the sheets `tuck-sheet-day` and `tuck-sheet-dim`, every
-  species at every stage). No vertical scale was needed. `tests/test_species.py` reads every `asleep_1` box and holds each entry to its
-  size, its grid, its ground and a 25-55% cover.
+- **`DRAPE`** (`shell-data.js`, one table, no `species.json` edits): `{species: {stage: [size, left, top, right, bottom]} | null}`, the
+  box in the pet's own 256 px frame that the art's last frame is scaled onto (`_drapeShow`; frames 1 and 2 take the same scale; the
+  card's `DRAPE_ART_BOX` holds each size's art box). `scripts/drape-table.py` makes it from the `asleep_1` alpha box: the body's width
+  plus 8 px a side, the feet line (the body's bottom) at the bottom, 40% of the body's height up, so the face stays clear; the size is the
+  art nearest that width. First cut (a plain `y` on the art's own scale, dropped below the ground line) put a dome far wider than the pet
+  at the card's foot; the FM held it (2026-11-02) and asked for the pet's width, the feet line and the pixel check. The check is the
+  tuck preset's `on the pet` rule: the drape's drawn pixels lie inside the pet's drawn pixels widened by 12% a side, and never below
+  its feet line, on every species and stage, day and dim. `tests/test_species.py` holds each entry to the same rule from the sprites.
 
 **Verification** (no gate: the first mate's)
 

@@ -917,8 +917,20 @@ class HatchPetCardCare extends HatchPetCardActions {
     }
     const src = this._drapeSrc(info.size, frame);
     if (img.getAttribute("src") !== src) img.setAttribute("src", src);
-    img.style.top = `${(info.y / 256) * 100}%`;
-    img.style.translate = slide ? `0 ${(slide / 256) * 100}%` : "";
+    // The art's last frame scaled onto the target box (in sprite px of the 256 frame), the other two
+    // frames the same; the origin is the blanket's foot, for the press beat's squash.
+    const [bl, bt, br, bb] = info.box;
+    const [al, at, ar, ab] = DRAPE_ART_BOX[info.size];
+    const sx = (br - bl) / (ar - al);
+    const sy = (bb - bt) / (ab - at);
+    const left = bl - al * sx;
+    const top = bt - at * sy;
+    const pct = (v) => `${(v / 256) * 100}%`;
+    Object.assign(img.style, {
+      left: pct(left), top: pct(top), width: pct(256 * sx), height: pct(256 * sy),
+      transformOrigin: `50% ${((bb - top) / (256 * sy)) * 100}%`,
+      translate: slide ? `0 ${(slide / (256 * sy)) * 100}%` : "",
+    });
     s.drape.hidden = false;
     s.drapeFrame = frame;
     this._drapeMirror(s);

@@ -302,12 +302,31 @@
 
   // D: what a lights shot shows, for its pass rules (bench.js lightsPass): the pet's frame and the drape
   // by name, the dim, and the pet's and the drape's boxes (a settle or a pat moves both).
+  // The alpha box of an image as drawn, in page px: its drawn pixels, found on a canvas at the sprite's
+  // own size, mapped through the element's box (care reactions D: a pixel check on the drape's place).
+  function drawnBox(img) {
+    const w = img.naturalWidth, h = img.naturalHeight;
+    if (!w || !h) return null;
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(img, 0, 0);
+    const a = g.getImageData(0, 0, w, h).data;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (a[(y * w + x) * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    }
+    if (x1 < 0) return null;
+    const r = img.getBoundingClientRect();
+    return [r.left + (x0 / w) * r.width, r.top + (y0 / h) * r.height, r.left + ((x1 + 1) / w) * r.width, r.top + ((y1 + 1) / h) * r.height];
+  }
   function lightsInfo(cur) {
     const name = (img) => (img.getAttribute("src") || "").replace(/^.*\/(sprites\/[^?]*|ui\/[^?]*)\?.*$/, "$1");
     const box = (el) => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; };
     return {
       scene: !!cur.scene, pet: name(cur.pet), drape: cur.drape.hidden ? null : name(cur.drapeImg), dim: cur.screen.classList.contains("dim"),
       said: cur.bubble.textContent, petBox: box(cur.pet), drapeBox: cur.drape.hidden ? null : box(cur.drape),
+      petDrawn: drawnBox(cur.pet), drapeDrawn: cur.drape.hidden ? null : drawnBox(cur.drapeImg),
       drapeAnim: [...cur.drape.getAnimations()].length, drapeInline: cur.drape.style.cssText,
     };
   }

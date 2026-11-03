@@ -1354,8 +1354,8 @@ const SCENE_STYLE = `
   /* The blanket drape (care reactions D, plan 5.3): a box with the pet's own geometry that wears the
      pet's classes and inline motion (_drapeMirror), so the blanket moves as the body does: the settle,
      a pat, the scene's tilt and flip. The art is a whole 256 px frame (ui/drape_<size>_<n>.png); its
-     img sits lower by the species' y (a multiple of 4 px, as a % of the frame). Above the pet, below
-     the prop and the bubble. */
+     img is scaled and placed inline (_drapeShow) so the blanket's last frame lands on the pet's body.
+     Above the pet, below the prop and the bubble. */
   .screen .drape { position: absolute; left: 50%; bottom: 4%; height: 62%; aspect-ratio: 1; margin-left: -23.25%;
     transform-origin: 50% 100%; pointer-events: none; }
   .screen .drape[hidden] { display: none; }

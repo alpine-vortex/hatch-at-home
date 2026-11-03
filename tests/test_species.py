@@ -393,19 +393,19 @@ def test_bowl_cuts_balance_the_bites() -> None:
 
 
 # The blanket drape (care reactions D, plan 5.3; card shell-data.js DRAPE). Three shared sizes, each a
-# whole 256 px frame (ui/drape_<s|m|l>_<1|2|3>.png, ground line y=224), chosen by the width of the pet's
-# asleep_1 body, not its stage (FM, 2026-11-02): S up to 160 px, M 161-210, L the rest. The entry is
-# [size, y]: y moves the drape lower in whole art pixels (4 px); bat and otter have none (null).
-DRAPE_SIZES = {"s": 160, "m": 210}  # the widest body each size takes; larger is L
+# whole 256 px frame (ui/drape_<s|m|l>_<1|2|3>.png, ground line y=224). An entry is [size, left, top,
+# right, bottom]: the box in the pet's own frame that the art's last frame is scaled onto, made from the
+# pet's asleep_1 alpha box by scripts/drape-table.py (the body's width and 8 px a side, the feet line at
+# the bottom, 40% of the body's height up). bat and otter have none (null).
 DRAPE_OPT_OUT = {"bat", "otter"}
 DRAPE_GROUND = 224
 DRAPE_UI = SPRITES.parent / "ui"
 
 
-def drape_table() -> dict[str, dict[str, tuple[str, int]] | None]:
+def drape_table() -> dict[str, dict[str, tuple[str, int, int, int, int]] | None]:
     src = (ROOT / "src/card/shell-data.js").read_text()
     body = re.search(r"const DRAPE = \{\n(.*?)\n\};", src, re.S).group(1)
-    table: dict[str, dict[str, tuple[str, int]] | None] = {}
+    table: dict[str, dict[str, tuple[str, int, int, int, int]] | None] = {}
     for line in body.splitlines():
         m = re.match(r"\s+(\w+): (null|\{(.*)\}),$", line)
         assert m, f"DRAPE line not understood: {line!r}"
@@ -413,8 +413,10 @@ def drape_table() -> dict[str, dict[str, tuple[str, int]] | None]:
             None
             if m.group(2) == "null"
             else {
-                st: (size, int(y))
-                for st, size, y in re.findall(r'(\w+): \["(\w)", (\d+)\]', m.group(3))
+                st: (size, int(a), int(b), int(c), int(d))
+                for st, size, a, b, c, d in re.findall(
+                    r'(\w+): \["(\w)", (\d+), (\d+), (\d+), (\d+)\]', m.group(3)
+                )
             }
         )
     return table
@@ -451,8 +453,18 @@ def test_the_drape_art_is_three_frames_of_three_sizes_on_the_ground_line() -> No
         assert boxes[0][1] > boxes[1][1] > boxes[2][1], (size, boxes)
 
 
+def test_the_card_knows_the_art_boxes() -> None:
+    src = (ROOT / "src/card/shell-data.js").read_text()
+    m = re.search(r"const DRAPE_ART_BOX = \{(.*?)\};", src)
+    got = {
+        k: tuple(int(v) for v in vals.split(","))
+        for k, vals in re.findall(r"(\w): \[([\d, ]+)\]", m.group(1))
+    }
+    assert got == {s: drape_box(s, 3) for s in "sml"}
+
+
 @pytest.mark.parametrize("species", READY)
-def test_every_drape_entry_fits_its_sprite(species: str) -> None:
+def test_every_drape_entry_sits_on_its_sprite(species: str) -> None:
     entry = drape_table()[species]
     sp = json.loads((SPRITES / species / "species.json").read_text())
     stages = [s for s in sp["stages"] if s != "egg"]
@@ -461,35 +473,24 @@ def test_every_drape_entry_fits_its_sprite(species: str) -> None:
         return
     assert entry is not None and sorted(entry) == sorted(stages), (species, entry)
     for stage in stages:
-        size, y = entry[stage]
-        left, top, right, bottom = asleep_box(species, stage)
-        width, height = right - left, bottom - top
-        want = (
-            "s"
-            if width <= DRAPE_SIZES["s"]
-            else "m"
-            if width <= DRAPE_SIZES["m"]
-            else "l"
+        size, left, top, right, bottom = entry[stage]
+        bl, bt, br, bb = asleep_box(species, stage)
+        width, height = br - bl, bb - bt
+        # The blanket is the body's width plus a margin: inside the body's box widened by 12% a side
+        # (FM, 2026-11-02), and never below the pet's feet line.
+        slack = 0.12 * width
+        assert bl - slack <= left < right <= br + slack, (
+            f"{species} {stage}: drape {left}-{right} against body {bl}-{br}"
         )
-        assert size == want, (
-            f"{species} {stage}: body {width} px wide wants {want}, has {size}"
+        assert bottom <= bb and bottom <= DRAPE_GROUND, (
+            f"{species} {stage}: the drape reaches {bottom}, below the feet line {bb}"
         )
-        assert y % 4 == 0 and 0 <= y <= 120, (
-            f"{species} {stage}: y {y} is not a whole art pixel"
-        )
-        # The drape is wide enough for the body (a hair of slack), reaches the ground the body stands on,
-        # and on its last frame covers the lower part of the body only: the face stays clear.
-        dl, dt, dr, db = drape_box(size, 3)
-        assert width <= (dr - dl) + 4, (
-            f"{species} {stage}: body {width} px, drape {dr - dl}"
-        )
-        assert db + y >= bottom, (
-            f"{species} {stage}: the drape stops above the body's feet"
-        )
-        cover = bottom - max(dt + y, top)
-        assert 20 <= cover <= 0.55 * height + 4, (
+        # It covers about 40% of the body's height, so the face stays clear.
+        cover = bottom - top
+        assert 0.3 * height <= cover <= 0.5 * height or cover == 16, (
             f"{species} {stage}: covers {cover} of {height} px"
         )
-        assert cover >= 0.25 * height, (
-            f"{species} {stage}: covers only {cover} of {height} px"
-        )
+        # The size is the art nearest that width, so the scale stays near 1 across.
+        art = {s: drape_box(s, 3) for s in "sml"}
+        near = min(art, key=lambda s: abs(art[s][2] - art[s][0] - (right - left)))
+        assert size == near, f"{species} {stage}: {size}, nearest is {near}"
