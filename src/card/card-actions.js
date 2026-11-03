@@ -4,7 +4,7 @@ class HatchPetCardActions extends HatchPetCardJournal {
   // Instant feedback for every control: a visible press and ring, a short
   // haptic where the browser supports it, and a perk when the pet is involved.
   // The real reaction (a prop, or a refusal in the bubble) follows on response.
-  _tapped(button, s) {
+  _tapped(button, s, { perk = true } = {}) {
     if (!button || button.disabled) return;
     const at = button.getBoundingClientRect(); // where it was, for a note that must not cover it (F13)
     this._tapRect = { top: at.top, bottom: at.bottom, at: Date.now() };
@@ -20,7 +20,7 @@ class HatchPetCardActions extends HatchPetCardJournal {
     if (navigator.vibrate) {
       try { navigator.vibrate(12); } catch (err) { /* Unsupported or blocked by the browser. */ }
     }
-    this._perk(s);
+    if (perk) this._perk(s);
   }
 
   // The pet perks up (a quick hop).
@@ -75,8 +75,14 @@ class HatchPetCardActions extends HatchPetCardJournal {
     const id = s.ids?.[`button.${action}`];
     const button = action in s.buttons ? s.buttons[action] : s.request;
     if (s.scene) {
-      // A second tap on the same care ends its scene and isn't sent again.
-      const same = s.scene.kind === action;
+      // A second tap on the same care: a meal (or a bedtime) is ignored, the ring and the
+      // haptic only, so the bowl is never left uneaten (plan 4.3); medicine and clean end
+      // their scene. Neither is sent again.
+      const same = s.scene.kind === sceneKind(action);
+      if (same && !SCENES[s.scene.kind]?.skippable) {
+        this._tapped(button, s, { perk: false });
+        return;
+      }
       this._sceneEnd(s);
       if (same) {
         this._tapped(button, s);
@@ -90,9 +96,11 @@ class HatchPetCardActions extends HatchPetCardJournal {
     // Its log entry is "mine" (PR 2a); a few kept, so two quick taps both count.
     s.pressed = [...(s.pressed || []).filter((p) => Date.now() - p.pressedAt < MINE_MATCH_MS), { action, pressedAt: Date.now() }];
     this._sceneStart(s, action);
+    const sc = s.scene;
     const layAt = action === "lay_egg" ? this._layWatch(s) : null; // the name sheet waits for the lay (S3)
     Promise.resolve(this._call(button, s, "button", "press", id)).then((ok) => {
       if (ok === false && layAt && s.layAt === layAt) this._layDrop(s); // a failed press: nothing to wait for
+      if (ok === false && sc && s.scene === sc) this._sceneFail(s); // its exit beat; "that didn't work" is _call's
     });
   }
 
@@ -104,14 +112,14 @@ class HatchPetCardActions extends HatchPetCardJournal {
   // time since the tap, so an interruption just ends it (_sceneEnd).
 
   // Start one if this care will work; refusals stay as they are (the server says no).
+  // What a scene does is its SCENES entry (card-care.js); this is the frame they share.
   _sceneStart(s, kind) {
-    if (!SCENE_MS[kind] || !s.species || s.game || s.screen.classList.contains("show-status")) return;
+    const entry = SCENES[kind];
+    if (!entry || !s.species || s.game || s.screen.classList.contains("show-status")) return;
     const mood = this._state(s, "sensor.mood");
     const stage = this._state(s, "sensor.life_stage")?.state;
     if (!mood || mood.state === "away" || stage === "egg" || s.asleep || s.lightsOut) return;
-    const due = kind === "medicine" ? (mood.attributes.flags || []).includes("sick")
-      : Number(this._state(s, "sensor.poop")?.state || 0) > 0;
-    if (!due) return;
+    if (!entry.due.call(this, s, mood, stage)) return; // read after _press ended any scene (plan 4.2)
     if (calm()) {
       s.sceneFade = { kind, until: Date.now() + 10000 }; // no scene: the news fades in
       return;
@@ -120,7 +128,10 @@ class HatchPetCardActions extends HatchPetCardJournal {
     for (const [key, id] of Object.entries(s.ids || {})) {
       if (key !== "sensor.last_care" && key !== "device") held[key] = this._hass.states[id];
     }
-    const sc = { kind, held, start: performance.now(), ms: SCENE_MS[kind], els: [], frames: null };
+    // answerAt (ms since the tap) and result come with the answer (_sceneAnswer); a scene with a
+    // gate holds there until then (_sceneClock).
+    const sc = { kind, held, start: performance.now(), ms: entry.ms, gate: entry.gate ?? null, els: [], frames: null,
+      answerAt: null, result: null };
     const add = (tag, cls) => {
       const el = document.createElement(tag);
       el.className = cls;
@@ -132,58 +143,25 @@ class HatchPetCardActions extends HatchPetCardJournal {
     const box = s.screen.getBoundingClientRect();
     const pet = s.pet.getBoundingClientRect();
     sc.cheer = this._sceneFrames(s, "cheer");
-    if (kind === "clean") this._actPose(s.species, s.drawn, s.speciesId, "splash", () => {}); // warm the load probe
-    if (kind === "medicine") {
-      sc.pill = add("img", "scene scene-pill");
-      sc.pill.setAttribute("src", spriteSrc(s.speciesId, s.species.props?.medicine || "bird/medicine"));
-      // It steps up until its front (most of the way across its frame) is at the pill.
-      const pill = sc.pill.getBoundingClientRect();
-      const front = pet.left + pet.width * 0.72;
-      sc.step = Math.max(0, Math.min(box.width * 0.22, pill.left + pill.width / 2 - front));
-      sc.eat = this._sceneFrames(s, "eat");
-      sc.sniff = this._floorVariant(s, "medicine", ["plain", "sniff"]) === "sniff"; // a lean to sniff it first (plan 5.5)
-      const extras = s.drawn === "child" && s.species.extras?.squint;
-      const excited = s.species.moods?.includes("excited") && s.drawn &&
-        Array.from({ length: s.species.frames || 1 }, (_, i) => `${s.drawn}_excited_${i + 1}`);
-      sc.cheer ||= extras ? [].concat(extras) : excited || null;
-      // A few sparkles about its head, where it stands.
-      sc.sparks = [[0.22, 0.2], [0.78, 0.12], [0.66, 0.42]].map(([x, y]) => {
-        const el = add("div", "scene-spark");
-        el.style.left = `${pet.left - box.left + pet.width * x}px`;
-        el.style.top = `${pet.top - box.top + pet.height * y}px`;
-        return el;
-      });
-    } else {
-      sc.water = s.world?.mess === "murk";
-      const own = (key) => [].concat(s.species.props?.[key] || SCENE_PROPS[key]);
-      sc.toolArt = own(sc.water ? "net" : "broom");
-      if (!sc.water) sc.dustArt = own("dust");
-      if (sc.water) sc.bubbleArt = own("bubbles");
-      if (sc.dustArt) sc.dust = add("img", "scene scene-dust");
-      sc.tool = add("img", `scene scene-${sc.water ? "net" : "broom"}`);
-      if (sc.bubbleArt) sc.bubbles = add("img", "scene scene-bubbles");
-      // Each mess on show goes as the broom (or net) passes its middle.
-      sc.mess = s.poops.filter((el) => el.style.display !== "none").map((el) => {
-        const r = el.getBoundingClientRect();
-        return { el, x: r.left - box.left + r.width / 2 };
-      });
-      sc.murk = s.murk.style.display !== "none" && Number(s.murk.style.opacity) > 0;
-      sc.petX = pet.left - box.left + pet.width / 2; // where the pet stands, for the hop over the broom
-    }
+    entry.setup.call(this, s, sc, { add, box, pet });
     s.scene = sc;
+    s.screen.classList.add("in-scene");
     this._patSync(s);
     for (const el of [s.pet, s.perch]) el.style.transition = "none";
-    // A tap on the screen ends it (and doesn't open the status).
+    // A tap on the screen ends a skippable one; a meal's takes the tap and does nothing.
+    // Either way it doesn't open the status. The status sheet, opened over it, keeps its own
+    // taps: a meal plays for seconds, and its settings must not go dead under it.
     sc.stop = (e) => {
+      if (s.status?.contains(e.target)) return;
       e.stopImmediatePropagation();
-      this._sceneEnd(s);
+      if (entry.skippable) this._sceneEnd(s);
     };
     s.screen.addEventListener("click", sc.stop, true);
     this._sceneRender(s, 0);
     const loop = () => {
       if (s.scene !== sc) return;
       const t = performance.now() - sc.start;
-      if (t >= sc.ms) {
+      if (this._sceneOver(s, t)) {
         this._sceneEnd(s);
         return;
       }
@@ -193,111 +171,69 @@ class HatchPetCardActions extends HatchPetCardJournal {
     sc.raf = requestAnimationFrame(loop);
   }
 
-  // A species' own care frames, when its art has them: species.json "acts", like
-  // {"eat": ["baby", "teen", "adult"], "cheer": true} (true: every stage), drawn as
-  // <stage>_eat_1 and <stage>_eat_2. Else null, and the scene uses what all have.
-  _sceneFrames(s, act) {
-    const stages = s.species?.acts?.[act];
-    const st = s.drawn;
-    if (!st || !(stages === true || (Array.isArray(stages) && stages.includes(st)))) return null;
-    return [`${st}_${act}_1`, `${st}_${act}_2`];
+  // The scene's own clock (plan 4.3), a pure function of t (ms since the tap), sc.answerAt and
+  // sc.failAt. Before the gate it is t; with no answer by the gate it sticks there (hold: ms
+  // held); an answer resumes it from the answer's time. A hold past SCENE_HOLD_MS, or a failed
+  // call (failAt), is the exit beat: exit is ms into it, te where the scene stopped.
+  _sceneClock(sc, t) {
+    const gate = sc.gate;
+    const at = (x) => (gate == null || x < gate ? x
+      : sc.answerAt == null ? gate : gate + Math.max(0, x - Math.max(sc.answerAt, gate)));
+    let failAt = sc.failAt ?? null;
+    if (gate != null && sc.answerAt == null && t >= gate + SCENE_HOLD_MS) failAt = Math.min(failAt ?? Infinity, gate + SCENE_HOLD_MS);
+    if (failAt != null && t >= failAt) return { te: at(failAt), exit: t - failAt, late: sc.answerAt == null && sc.failAt == null, hold: 0 };
+    return { te: at(t), exit: null, late: false, hold: gate != null && sc.answerAt == null && t >= gate ? t - gate : 0 };
   }
 
-  // Scene art (props) on the world's grid: its PNG is 4 frame px per art px, and
-  // an art px is 1/64 of the pet's 62% of the screen's height. That is the
-  // pet's frame scale (256 frame px), whichever grid the creature is drawn on.
-  _sceneArt(s, img, sprite) {
-    const src = spriteSrc(s.speciesId, sprite);
-    if (img.getAttribute("src") === src) return;
-    img.onload = () => {
-      img.style.height = `${(img.naturalHeight / 4) * 62 / 64}%`;
-    };
-    img.setAttribute("src", src);
+  // Is it over at t? The exit beat, the push-away, or the whole scene played on its clock.
+  _sceneOver(s, t) {
+    const sc = s.scene;
+    const entry = SCENES[sc.kind];
+    const c = this._sceneClock(sc, t);
+    if (c.exit != null) {
+      if (c.exit < SCENE_EXIT_MS) return false;
+      sc.late = c.late; // no answer came: a reply within the owe's 10 s plays the floor (4.5)
+      sc.failed = !c.late; // a failed call: no reply is coming
+      return true;
+    }
+    if (sc.refuseAt != null) return c.te >= sc.refuseAt + (entry.refuseMs || 0);
+    return c.te >= sc.ms;
   }
 
+  // Everything from one clock: t ms since the tap. The entry moves its pieces on its own
+  // clock (te) and names the pet's frames (null: its own). Holding at the gate, the pet sways
+  // on its own frame (+-2deg, two steps, 600 ms); a refusal plays the entry's push-away from
+  // sc.refuseAt; the exit beat is the entry's exit.
   _sceneRender(s, t) {
     const sc = s.scene;
-    const sw = s.screen.clientWidth;
-    const sh = s.screen.clientHeight;
-    const ramp = (a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));
-    const ease = (a, b) => {
-      const k = ramp(a, b);
-      return k * k * (3 - 2 * k);
+    const entry = SCENES[sc.kind];
+    const c = this._sceneClock(sc, t);
+    const helpers = (now) => {
+      const ramp = (a, b) => Math.min(1, Math.max(0, (now - a) / (b - a)));
+      const ease = (a, b) => {
+        const k = ramp(a, b);
+        return k * k * (3 - 2 * k);
+      };
+      return { sw: s.screen.clientWidth, sh: s.screen.clientHeight, ramp, ease, te: c.te };
     };
-    let frames = null;
-    if (sc.kind === "medicine") {
-      // Notice the pill, step up, lean in and take it, step back, a happy hop.
-      const step = sc.step * (ease(350, 850) - ease(1500, 1900));
-      const hop = -0.06 * sh * Math.sin(Math.PI * ramp(1450, 1750));
-      s.pet.style.translate = `${step}px ${hop}px`;
-      s.perch.style.translate = `${step}px 0`;
-      const sniff = sc.sniff ? 5 * (ease(550, 650) - ease(850, 950)) : 0; // 300 ms: lean in, look, back
-      s.pet.style.rotate = `${(sc.eat ? 4 : 9) * (ease(850, 1000) - ease(1250, 1400)) + sniff}deg`;
-      const gulp = ease(1000, 1250);
-      sc.pill.style.opacity = String(1 - gulp);
-      sc.pill.style.scale = String((0.3 + 0.7 * ease(0, 200)) * (1 - 0.7 * gulp));
-      sc.pill.style.translate = `${-0.3 * sc.step * gulp}px 0`;
-      if (t >= 850 && t < 1400) frames = sc.eat;
-      if (t >= 1400) frames = sc.cheer;
-      sc.sparks.forEach((el, i) => {
-        const k = ramp(1450 + i * 150, 2050 + i * 150);
-        el.style.opacity = k > 0 && k < 1 ? String(1 - k * k) : "0";
-        el.style.scale = String(0.4 + k);
-      });
+    let frames;
+    if (c.exit != null && entry.exit) {
+      entry.render.call(this, s, sc, c.te, helpers(c.te));
+      frames = entry.exit.call(this, s, sc, c.exit, helpers(c.exit)) ?? null;
+    } else if (sc.refuseAt != null && c.te >= sc.refuseAt && entry.refuse) {
+      const u = c.te - sc.refuseAt;
+      if (!sc.refuseSaid) {
+        sc.refuseSaid = true;
+        this._sceneRefusalLine(s, sc.result);
+      }
+      entry.render.call(this, s, sc, sc.refuseAt, helpers(sc.refuseAt)); // the scene stops where it was
+      frames = entry.refuse.call(this, s, sc, u, helpers(u)) ?? null;
     } else {
-      // The broom (on water worlds, a net) crosses the floor left to right.
-      const sweep = ramp(0, 1800);
-      this._sceneArt(s, sc.tool, sc.toolArt[Math.floor(t / 180) % sc.toolArt.length]);
-      const tw = sc.tool.getBoundingClientRect().width || sw * 0.25;
-      const left = -tw + (sw + tw) * sweep;
-      const point = left + tw / 2;
-      sc.tool.style.left = `${left}px`;
-      sc.tool.style.display = sweep < 1 ? "" : "none";
-      if (sc.water) sc.tool.style.translate = `0 ${Math.sin(t / 150) * 0.02 * sh}px`;
-      // The pet hops over the broom as it passes (the medicine hop's maths); on water it bobs on the
-      // net's wake. Then, as the broom leaves, a two-step shake-off.
-      const near = Math.abs(point - sc.petX) / (0.14 * sw);
-      const hopK = near < 1 && sweep < 1 ? Math.sin(Math.PI * (1 - near) / 2) : 0;
-      const lift = sc.water ? Math.sin(t / 150) * 0.015 * sh * hopK : -0.07 * sh * hopK;
-      s.pet.style.translate = `0 ${lift}px`;
-      if (t >= 1800 && !sc.shook) {
-        sc.shook = true;
-        s.pet.classList.add("rock2");
-        setTimeout(() => s.pet.classList.remove("rock2"), 1300);
+      frames = entry.render.call(this, s, sc, c.te, helpers(c.te)) || null;
+      if (c.hold > 0) {
+        s.pet.style.rotate = `${Math.floor(c.hold / 300) % 2 ? 2 : -2}deg`; // the waiting loop
+        frames = null;
       }
-      if (sc.dust) {
-        // Dust kicks up behind it.
-        this._sceneArt(s, sc.dust, sc.dustArt[Math.floor(t / 220) % sc.dustArt.length]);
-        sc.dust.style.left = `${left - sc.dust.getBoundingClientRect().width * 0.55}px`;
-        sc.dust.style.opacity = String(0.9 * ramp(60, 260) * (1 - ramp(1650, 2000)));
-      }
-      for (const { el, x } of sc.mess) {
-        const k = Math.min(1, Math.max(0, (point - x) / (0.05 * sw)));
-        el.style.opacity = String(1 - k);
-        el.classList.toggle("scene-gone", k >= 1);
-      }
-      if (sc.murk) {
-        // The water clears behind the net, with a soft edge.
-        const p = Math.min(106, Math.max(-6, (point / sw) * 100));
-        s.murk.style.maskImage = `linear-gradient(90deg, transparent ${p - 6}%, #000 ${p + 6}%)`;
-      }
-      if (sc.bubbles) {
-        // Then bubbles rise where the water was cleared.
-        const k = ramp(1600, 2300);
-        this._sceneArt(s, sc.bubbles, sc.bubbleArt[Math.floor(t / 200) % sc.bubbleArt.length]);
-        sc.bubbles.style.left = `${sw * 0.62}px`;
-        sc.bubbles.style.translate = `0 ${-0.35 * sh * k}px`;
-        sc.bubbles.style.opacity = String(k > 0 ? 1 - ramp(2000, 2300) : 0);
-      }
-      if (t >= 1800 && !sc.shone) {
-        sc.shone = true;
-        const prop = s.species.props?.clean;
-        if (prop) {
-          this._propShow(s, prop, 1500);
-        }
-        this._sparkle(s);
-      }
-      if (t >= 1800) frames = this._actPose(s.species, s.drawn, s.speciesId, "splash", () => {}) || sc.cheer;
     }
     sc.frames = frames;
     const shown = frames || s.frames;
@@ -308,48 +244,98 @@ class HatchPetCardActions extends HatchPetCardJournal {
   _sceneEnd(s, { quiet = false } = {}) {
     const sc = s.scene;
     if (!sc) return;
+    const entry = SCENES[sc.kind];
     cancelAnimationFrame(sc.raf);
     s.scene = null;
+    s.screen.classList.remove("in-scene");
     this._patSync(s);
-    s.screen.removeEventListener("click", sc.stop, true);
+    if (sc.stop) s.screen.removeEventListener("click", sc.stop, true);
     sc.els.forEach((el) => el.remove());
     for (const el of [s.pet, s.perch]) el.style.translate = el.style.rotate = el.style.transition = "";
-    for (const el of s.poops) {
-      el.style.opacity = "";
-      el.classList.remove("scene-gone");
+    entry?.clear?.call(this, s, sc);
+    if (sc.looked) s.pet.classList.remove("look"); // a flip the scene made does not outlive it (4.9)
+    // The server's answer may come after this (a tap on another care, a swipe, the hold run
+    // out): an owe of its kind takes it (_sceneOffer). A failed call leaves none.
+    if (!sc.answered && !sc.failed) {
+      const now = Date.now();
+      s.sceneOwes = [...(s.sceneOwes || []).filter((o) => now < o.until && o.kind !== sc.kind),
+        { kind: sc.kind, until: now + SCENE_OWE_MS, playOwed: !!entry?.playOwed, late: !!sc.late }];
     }
-    if (sc.murk) {
-      // What the net cleared stays clear: no fading back in from the held murk.
-      s.murk.style.transition = "none";
-      s.murk.style.opacity = "0";
-      s.murk.style.maskImage = "";
-      setTimeout(() => { s.murk.style.transition = ""; }, 50);
-    }
-    // The server's answer may come after this: it's shown, not acted again.
-    if (!sc.answered) s.sceneOwes = { kind: sc.kind, until: Date.now() + 10000 };
     s.frame = 0;
     if (!quiet) this._redraw(s);
-    if (!quiet && sc.answered && sc.kind === "medicine") this._allBetter(s, true); // the cheer is over
+    if (!quiet && sc.result === "ok") entry?.done?.call(this, s, sc);
   }
 
-  // The server's answer to a scene's tap (_react). The scene shows an "ok" itself;
-  // a refusal ends it, said as ever. Under reduced motion the news fades in.
-  _sceneAnswered(s, entry) {
-    const ok = entry.result === "ok";
-    if (s.scene?.kind === entry.action) {
-      if (ok) {
-        s.scene.answered = true;
-        return true;
-      }
+  // The answer reaches the live scene: at is ms since the tap (the bench passes its own).
+  // An ok marks it answered and resumes a hold. A refusal is the entry's push-away from where
+  // it is (refuseAt, on the scene's clock; one per scene); an entry without one ends, said as
+  // ever by _react.
+  _sceneAnswer(s, result, at = performance.now() - s.scene.start) {
+    const sc = s.scene;
+    if (!sc) return;
+    const entry = SCENES[sc.kind];
+    if (sc.answerAt == null) sc.answerAt = at;
+    if (result === "ok") {
+      sc.answered = true;
+      sc.result ??= "ok";
+      return;
+    }
+    if (!entry?.refuse) {
+      sc.answered = true; // the refusal is said by _react: no owe left to swallow a later ok
+      sc.result = result;
       this._sceneEnd(s);
-      return false;
+      return;
+    }
+    if (sc.refuseAt != null) return;
+    sc.answered = true;
+    sc.result = result;
+    const te = this._sceneClock(sc, at).te;
+    sc.refuseAt = entry.refuseAt ? entry.refuseAt.call(this, s, sc, te) : te;
+  }
+
+  // The call failed (network, unavailable): the scene takes its exit beat and leaves no owe;
+  // one without an exit (medicine, clean) plays on as it always has.
+  _sceneFail(s) {
+    const sc = s.scene;
+    if (!sc || !SCENES[sc.kind]?.exit || sc.failAt != null) return;
+    sc.failAt = performance.now() - sc.start;
+  }
+
+  // The refusal's own line, said as the push-away starts (the words and the gesture together).
+  _sceneRefusalLine(s, result) {
+    const line = REFUSALS[result];
+    if (!line) return;
+    this._line(s, MINE, this._lines(s, `REFUSALS.${result}`, line).text, Math.max(3500, MINE_MS), { write: true, type: "care" });
+  }
+
+  // One care log entry offered to the scenes (plan 4.5): true when a scene has it, and nothing
+  // more is played for it. A live scene of its kind takes it when it is the viewer's own
+  // (claimed); so does an owe of its kind, swallowing an ok the scene showed (medicine,
+  // clean) or passing it on to the floor (feed: playOwed, or a scene that gave up: late).
+  // Someone else's care never answers a scene. Under reduced motion the news fades in.
+  _sceneOffer(s, entry, claimed) {
+    const kind = sceneKind(entry.action);
+    const ok = entry.result === "ok";
+    const sc = s.scene;
+    if (sc?.kind === kind && claimed && sc.failAt == null) {
+      if (ok && sc.answered) return false; // a second ok: the floor's
+      this._careMarks(s, entry);
+      this._sceneAnswer(s, entry.result);
+      return s.scene === sc || ok; // an entry with no push-away ended: _react says the refusal
     }
     const now = Date.now();
-    if (s.sceneOwes?.kind === entry.action && now < s.sceneOwes.until) {
-      s.sceneOwes = null;
-      return ok;
+    const owes = (s.sceneOwes || []).filter((o) => now < o.until);
+    const i = claimed ? owes.findIndex((o) => o.kind === kind) : -1;
+    if (i >= 0) {
+      const [owe] = owes.splice(i, 1);
+      s.sceneOwes = owes;
+      if (!ok || owe.playOwed || owe.late) return false;
+      this._careMarks(s, entry);
+      if (entry.action === "medicine") this._allBetter(s, true); // the scene's cheer is over: said now
+      return true;
     }
-    if (s.sceneFade?.kind === entry.action && now < s.sceneFade.until) {
+    s.sceneOwes = owes;
+    if (s.sceneFade?.kind === kind && now < s.sceneFade.until) {
       s.sceneFade = null;
       if (ok) {
         for (const el of [s.pet, s.prop]) el.animate?.([{ opacity: 0.2 }, { opacity: 1 }], { duration: 350 });

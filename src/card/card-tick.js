@@ -678,9 +678,10 @@ class HatchPetCardTick extends HatchPetCardLayout {
     }, Math.max(0, ms - 300));
   }
 
-  // A choice from a short list that is never the one made last time for `key` (ship A's
-  // no-repeat; a bench may pin it with s.pinVariant[key]).
-  _floorVariant(s, key, list) {
+  // A choice from a short list that is never the one made last time for `key` (plan 4.7, the
+  // no-repeat pick for the floor and the scenes; a bench may pin it with s.pinVariant[key]).
+  // A conditional variant is filtered out of `list` before the call.
+  _careVariant(s, key, list) {
     const pinned = s.pinVariant?.[key];
     if (pinned && list.includes(pinned)) return pinned;
     const last = (s.lastVariant ||= {})[key];

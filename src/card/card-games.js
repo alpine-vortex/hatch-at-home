@@ -1,4 +1,4 @@
-class HatchPetCardGames extends HatchPetCardActions {
+class HatchPetCardGames extends HatchPetCardCare {
   // --- Games ----------------------------------------------------------------
   // The server keeps the game and the score (virtual_pet.play_game); the card
   // only asks, and shows what happened.

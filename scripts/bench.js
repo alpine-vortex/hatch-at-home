@@ -670,6 +670,88 @@ const PRESETS = {
     }
     return out;
   },
+  // Care B1, the bowl clip (plan care-reactions 5.1): every species' feed bowl on the floor at
+  // full, 2/3, 1/3 and gone (step 3: the food above the rim), at 330 and 420, day and night,
+  // one sheet per world and scene, a close-up of the bowl. A species with no "bowl_rim" is shown at its BOWL_CANDIDATES rim (so
+  // the sheet shows why it has none), labelled "cand". The pass rule is bowlPass's.
+  bowls() {
+    const out = [];
+    for (const species of allSpecies().sort()) {
+      const own = speciesData(species).bowl_rim;
+      const rim = own ?? BOWL_CANDIDATES[species];
+      const world = worldOf(species);
+      for (const scene of ["day", "night"]) {
+        for (const width of [330, 420]) {
+          ["full", "2/3", "1/3", "gone"].forEach((step, i) => {
+            out.push({ name: `bowls/${world}/${species}-${scene}-${width}-${i}`, group: `bowls-${world}-${scene}`,
+              label: `${species}${own ? "" : " cand"} ${rim} ${scene} ${width} ${step}`, species, stage: "adult", world, scene,
+              width, bowlStep: i, bowlRim: rim, mood: "content", clip: "screen", crop: [0.6, 0.62, 0.92, 0.97], dpr: 3, tile: 150, say: "" });
+          });
+        }
+      }
+    }
+    return out;
+  },
+  // Care B1, the feed scene (plan care-reactions 5.1, 13): an adult fox's four variants every
+  // 200 ms (the reply in at 200 ms), the push-away before and after the gate, the hold and
+  // the exit with no reply, a 300 px card with its poops (one under the bowl), the child ladder (rung 1: hamster,
+  // deer; rung 3: fox, bird), a water world (otter) and the night sky (owl), the end's extras,
+  // breakfast and supper, a resting pet, big text and mono for the line, and reduced motion.
+  feed() {
+    const out = [];
+    const ok = { at: 200, result: "ok" };
+    const shot = (group, name, label, extra) => out.push({ name: `feed/${group}/${name}`, group: `feed-${group}`, label,
+      species: "fox", stage: "adult", world: "woodland", width: 330, care: "feed", answer: ok, clip: "screen", say: "",
+      ...extra, pet: { hunger: 60, ...extra.pet }, variant: { "feed.extra": "none", ...extra.variant } });
+    for (const v of ["A", "B", "C", "D"]) {
+      for (let at = 0; at <= 3200; at += 200) {
+        shot(`variant-${v}`, `${v}-${at}`, `${v} ${at}`, { careAt: at, variant: { feed: v }, pet: v === "C" ? { hunger: 20 } : {} });
+      }
+    }
+    for (let at = 300; at <= 1500; at += 200) {
+      shot("refuse", `pre-${at}`, `full at 300: ${at}`, { careAt: at, answer: { at: 300, result: "full" }, variant: { feed: "A" } });
+    }
+    for (let at = 900; at <= 2100; at += 200) {
+      shot("refuse", `post-${at}`, `ok, full at 900: ${at}`, { careAt: at, answer: [ok, { at: 900, result: "full" }], variant: { feed: "A" } });
+    }
+    for (const at of [650, 950, 1250, 2650, 2850, 3100]) {
+      shot("refuse", `hold-${at}`, `no reply: ${at}`, { careAt: at, answer: undefined, variant: { feed: "A" } });
+    }
+    for (const at of [450, 1000, 1500, 2300]) {
+      shot("300", `poops-${at}`, `300, three poops ${at}`, { width: 300, careAt: at, variant: { feed: "A" }, pet: { poop: 3 } }); // the third sits at right: 7%, under the bowl
+    }
+    for (const [species, stage, rung] of [["hamster", "child", 1], ["deer", "child", 1], ["fox", "child", 3], ["bird", "child", 3]]) {
+      for (const at of [500, 1000, 1500, 2200]) {
+        shot("child", `${species}-${at}`, `${species} child (rung ${rung}) ${at}`,
+          { species, stage, world: worldOf(species), careAt: at, variant: { feed: "A" } });
+      }
+    }
+    for (const at of [300, 450, 600, 1000, 1150, 2300, 2600]) {
+      shot("worlds", `otter-${at}`, `water ${at}`, { species: "otter", world: "tidepool", careAt: at, variant: { feed: "A" } });
+    }
+    for (const at of [400, 500, 600, 1000]) {
+      shot("worlds", `owl-${at}`, `night sky ${at}`, { species: "owl", world: "nightsky", careAt: at, variant: { feed: "A" } });
+    }
+    // The fox is quick (bites of 320 ms): full at 1610, the bowl leaves at 2110.
+    shot("extras", "lick", "lick 1860", { careAt: 1860, variant: { feed: "A", "feed.extra": "lick" } });
+    shot("extras", "heart", "heart 1900", { careAt: 1900, variant: { feed: "A", "feed.extra": "heart" } });
+    shot("extras", "heart-line", "heart, its line 2300", { careAt: 2300, variant: { feed: "A", "feed.extra": "heart" } });
+    shot("extras", "burp", "heavy: burp 2300", { careAt: 2300, variant: { feed: "A", "feed.extra": "burp" }, pet: { weight: 90 } });
+    shot("extras", "breakfast", "breakfast 150", { careAt: 150, time: "2026-11-02T08:00:00Z", variant: { feed: "A" } });
+    shot("extras", "supper", "supper 2000", { careAt: 2000, time: "2026-11-02T19:00:00Z", variant: { feed: "A" } });
+    shot("extras", "performer", "performer hop (bird) 1260", { species: "bird", careAt: 1260, variant: { feed: "A" } });
+    for (const at of [100, 1000, 2300]) {
+      shot("resting", `resting-${at}`, `resting ${at}`, { careAt: at, variant: { feed: "A" }, pet: { resting: true } });
+    }
+    shot("text", "big", "big text 2300", { careAt: 2300, bigText: true, variant: { feed: "A" } });
+    shot("text", "mono", "mono 2300", { careAt: 2300, mono: true, variant: { feed: "A" } });
+    shot("text", "mono-1000", "mono 1000", { careAt: 1000, mono: true, variant: { feed: "A" } });
+    // Reduced motion: no scene (the tap), then the reply on the floor path, the prop still.
+    shot("calm", "tap", "calm: the tap, no scene", { careAt: 1000, motion: "reduce" });
+    shot("calm", "reply", "calm: the reply", { care: undefined, reactEntry: { action: "feed", result: "ok" }, motion: "reduce" });
+    shot("calm", "child-reply", "calm: a child's reply", { care: undefined, stage: "child", reactEntry: { action: "feed", result: "ok" }, motion: "reduce" });
+    return out;
+  },
   // The same sheet on a shared screen: nothing personal, only this screen's rows.
   "settings-shared"() {
     const out = [];
@@ -682,6 +764,49 @@ const PRESETS = {
     return out;
   },
 };
+
+// The bowl clip's rim for each species with no "bowl_rim" of its own: where its rim (or, with
+// no bowl, the widest row) sits, so the bowls sheet shows what a clip there would do.
+const BOWL_CANDIDATES = {
+  axolotl: 0.375, ballpython: 0.531, bananaslug: 0.5, bat: 0.406, beardeddragon: 0.375, beaver: 0.406, bird: 0.375,
+  bunny: 0.562, duckling: 0.344, hamster: 0.406, ferret: 0.375, firefly: 0.375, gecko: 0.344, hermitcrab: 0.344, lunamoth: 0.5,
+  opossum: 0.375, otter: 0.375, owl: 0.406, pondturtle: 0.344, puffin: 0.406, seal: 0.375, squirrel: 0.531,
+  tarantula: 0.469, tortoise: 0.469, treefrog: 0.375,
+};
+
+// The bowl clip's pass rule (plan care-reactions 5.1), from each sprite through the card's own
+// bowlRows and bowlCuts: each of the 3 steps removes at least BOWL_STEP_MIN of the sprite's
+// opaque pixels, and no cut reaches below the rim (every row under it is the full bowl's).
+// A species with "bowl_rim" that fails it fails the run.
+const BOWL_STEP_MIN = 0.08;
+async function bowlPass(browser, base) {
+  const page = await browser.newPage();
+  await page.goto(`${base}/`);
+  const list = allSpecies().sort().map((id) => {
+    const sp = speciesData(id);
+    return { id, sprite: sp.props?.feed || "bird/bowl_food", own: sp.bowl_rim ?? null, rim: sp.bowl_rim ?? BOWL_CANDIDATES[id] ?? null };
+  });
+  const out = await page.evaluate(async ({ list, min }) => {
+    await customElements.whenDefined("hatch-pet-card");
+    const res = [];
+    for (const b of list) {
+      const img = new Image();
+      img.src = spriteSrc(b.id, b.sprite);
+      await img.decode();
+      const rows = bowlRows(img);
+      const cuts = bowlCuts(rows, b.rim);
+      const total = rows.reduce((x, y) => x + y, 0);
+      const gone = (c) => rows.slice(0, c).reduce((x, y) => x + y, 0);
+      const steps = cuts ? cuts.map((c, i) => (gone(c) - (i ? gone(cuts[i - 1]) : 0)) / total) : [];
+      const rimRow = Math.round((b.rim * rows.length) / 4) * 4;
+      const pass = !!cuts && steps.every((x) => x >= min) && cuts.every((c) => c <= rimRow);
+      res.push({ ...b, cuts, steps: steps.map((x) => Math.round(x * 1000) / 1000), pass });
+    }
+    return res;
+  }, { list, min: BOWL_STEP_MIN });
+  await page.close();
+  return out;
+}
 
 // Presets of what the card's FINDS_SHOWN switch gates: run with it on, whatever the default.
 const FINDS_PRESETS = new Set(["finds", "gifts", "collection"]);
@@ -821,10 +946,15 @@ async function runShots(browser, base, shots, outDir, workers) {
           const b = el.getBoundingClientRect();
           return { x: b.x + scrollX, y: b.y + scrollY, width: b.width, height: b.height };
         }, inCard);
+        if (shot.crop) { // `crop`: [x0, y0, x1, y1], fractions of the clip (a close-up, such as the bowl)
+          const [x0, y0, x1, y1] = shot.crop;
+          Object.assign(clip, { x: clip.x + clip.width * x0, y: clip.y + clip.height * y0,
+            width: clip.width * (x1 - x0), height: clip.height * (y1 - y0) });
+        }
         const png = await page.screenshot({ path: file, clip });
         shot.file = file;
         if (shot.mono) shot.measure = { screen: await page.evaluate(() => window.bench.screenClass), ...await measureMono(page, clip, png) };
-        if (shot.costume || shot.gift || shot.look) {
+        if (shot.costume || shot.gift || shot.look || shot.care) {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
         }
@@ -1010,7 +1140,7 @@ async function buildSheets(browser, shots, outDir) {
   for (const [key, list] of groups) {
     const tiles = list.map((s) => {
       const data = fs.readFileSync(s.file).toString("base64");
-      return `<figure><img src="data:image/png;base64,${data}" style="width:${Math.round(s.clip === "screen" ? 160 : s.width * 0.5)}px"><figcaption>${s.label || s.name}</figcaption></figure>`;
+      return `<figure><img src="data:image/png;base64,${data}" style="width:${Math.round(s.tile || (s.clip === "screen" ? 160 : s.width * 0.5))}px"><figcaption>${s.label || s.name}</figcaption></figure>`;
     }).join("");
     await page.setContent(`<style>body{margin:0;padding:12px;background:#222;color:#ddd;font:11px system-ui}
       main{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start}figure{margin:0}img{display:block;image-rendering:pixelated}
@@ -1045,6 +1175,18 @@ async function main() {
       const bad = l.share <= MONO_LIT_MIN;
       console.log(`mono backlight ${bad ? "FAIL" : "ok"}: ${l.label} differ on ${(l.share * 100).toFixed(1)}% of pixels (need > ${MONO_LIT_MIN * 100}%)`);
       if (bad) process.exitCode = 1;
+    }
+    if (opts.preset === "bowls") {
+      const bowls = await bowlPass(browser, url);
+      fs.writeFileSync(path.join(opts.out, "bowl-pass.json"), JSON.stringify(bowls, null, 1));
+      const set = bowls.filter((b) => b.own !== null);
+      console.log(`bowl clip pass rule (each step >= ${BOWL_STEP_MIN * 100}% of the opaque pixels, no cut below the rim): ` +
+        `${bowls.filter((b) => b.pass).length} of ${bowls.length} pass at their rim; ${set.length} have bowl_rim`);
+      for (const b of bowls) {
+        const bad = b.own !== null && !b.pass;
+        console.log(`  ${bad ? "FAIL" : b.pass ? "pass" : "  - "} ${b.id.padEnd(14)} ${b.own !== null ? "bowl_rim" : "cand    "} ${b.rim} steps ${b.steps.map((x) => (x * 100).toFixed(1)).join(" / ")}`);
+        if (bad) process.exitCode = 1;
+      }
     }
     if (opts.sheet && opts.preset) {
       for (const f of await buildSheets(browser, shots, opts.out)) console.log(`sheet ${f}`);

@@ -16,6 +16,7 @@ card-status.js
 card-sheets.js
 card-journal.js
 card-actions.js
+card-care.js
 card-games.js
 card-season.js
 card-visitors.js

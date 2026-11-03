@@ -364,22 +364,29 @@ class HatchPetCardMoment extends HatchPetCardVisit {
   _care(s, fresh) {
     // The viewer's recent presses, oldest first: two quick taps both count.
     // Each fresh entry uses up one matching press, so none is left to claim later care.
+    // Claimed by kind (a lights_out entry is a lights press; plan 4.5).
     const pressed = (s.pressed || []).filter((p) => Date.now() - p.pressedAt < MINE_MATCH_MS);
-    let mine = false;
+    const claimed = new Set();
     for (const e of fresh) {
-      const i = pressed.findIndex((p) => p.action === e.action);
+      const i = pressed.findIndex((p) => sceneKind(p.action) === sceneKind(e.action));
       if (i >= 0) {
         pressed.splice(i, 1);
-        mine = true;
+        claimed.add(e);
       }
     }
     s.pressed = pressed;
-    const [newest] = fresh;
-    const other = fresh.find((e) => e.action !== newest.action);
+    // Every entry is offered to the scenes, newest first, not only the newest: a feed and a
+    // partner's praise in one update both count. What a scene takes is not played again.
+    const rest = fresh.filter((e) => !this._sceneOffer(s, e, claimed.has(e)));
+    if (!rest.length) return;
+    const mine = rest.some((e) => claimed.has(e));
+    const [newest] = rest;
+    const other = rest.find((e) => e.action !== newest.action);
     const both = other && CARE_NOUNS[other.action] && CARE_NOUNS[newest.action] &&
       ["ok", "won", "lost"].includes(other.result) && ["ok", "won", "lost"].includes(newest.result)
       ? `${CARE_NOUNS[other.action]} and ${CARE_NOUNS[newest.action]}! ♥` : null;
-    this._react(s, newest, { mine, both });
+    // While a scene plays, the rest is said only: no pose, no prop (the pet is busy eating).
+    this._react(s, newest, { mine, both, busy: !!s.scene, offered: true });
   }
 
   _isSick(s) {
@@ -562,17 +569,21 @@ class HatchPetCardMoment extends HatchPetCardVisit {
       mine ? Math.max(3000, MINE_MS) : 3000, { write: true, type: "care" });
   }
 
-  _react(s, entry, { mine = false, both = null } = {}) {
+  // What any care entry does, scene or not: the costume goes, a cure marks the day, a clean
+  // may pop a bubble.
+  _careMarks(s, entry) {
     s.screen.querySelector(".costume")?.remove(); // care takes the stage
-    const cured = entry.action === "medicine" && entry.result === "ok";
-    if (cured) this._curedMark(s); // E4 M-a: a line at tomorrow's first look
+    if (entry.action === "medicine" && entry.result === "ok") this._curedMark(s); // E4 M-a: a line at tomorrow's first look
     if (entry.action === "clean" && entry.result === "ok") this._bubblePop(s); // E4 M-b
-    const sceneLive = s.scene?.kind === entry.action;
-    if (this._sceneAnswered(s, entry)) {
-      // The scene's cheer says it when it ends; a scene already over says it now.
-      if (cured && !sceneLive) this._allBetter(s, true);
-      return;
-    }
+  }
+
+  // `offered`: _care has offered it to the scenes already; `busy`: a scene plays, so the
+  // line only.
+  _react(s, entry, { mine = false, both = null, busy = false, offered = false } = {}) {
+    // A scene's own answer (the scene shows it, and its cheer says it when it ends).
+    if (!offered && this._sceneOffer(s, entry, mine)) return;
+    this._careMarks(s, entry);
+    const cured = entry.action === "medicine" && entry.result === "ok";
     // One line at the end, of the press's class: the viewer's own is never
     // overwritten for MINE_MS; someone else's care waits its turn.
     let said = null;
@@ -602,13 +613,15 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         : ok && entry.action === "fan" ? "aired" : null;
       // Praise: a spin for an adult now and then, else the type's move; both with hearts.
       const praise = kind === "praised" && !inGame;
-      const variant = praise && s.drawn === "adult" ? this._floorVariant(s, "praise", ["hearts", "spin"]) : undefined;
+      const variant = praise && s.drawn === "adult" ? this._careVariant(s, "praise", ["hearts", "spin"]) : undefined;
       const long = kind === "scolded" || kind === "aired" ? REACTIONS[kind].ms : undefined; // a flinch is short, a lean is long
       // The child's ladder (plan section 7): rung 1, the species' own reaction pose, with the
       // stage's move; else rung 3, the mood frame (_reactFrames), with the same move.
       const pose = s.species?.reactions?.[entry.result === "won" ? "won" : entry.action];
       const poseFrames = s.drawn === "child" && s.species?.extras?.[pose];
-      if (poseFrames) {
+      if (busy) {
+        // a scene has the stage: the line only
+      } else if (poseFrames) {
         s.poseFrames = Array.isArray(poseFrames) ? poseFrames : [poseFrames];
         s.poseUntil = Date.now() + 2500;
         this._show(s, s.pet, s.poseFrames[0]);
@@ -616,8 +629,8 @@ class HatchPetCardMoment extends HatchPetCardVisit {
       } else if (kind) {
         this._reactFrames(s, kind, { inGame, ms: long, variant });
       }
-      if (praise && !spoiled && !calm() && !s.asleep) this._bondHearts(s, "carehearts", variant === "spin" ? 1 : 2);
-      if (entry.action === "fan") { // the fan stands by, and its breeze crosses the scene
+      if (!busy && praise && !spoiled && !calm() && !s.asleep) this._bondHearts(s, "carehearts", variant === "spin" ? 1 : 2);
+      if (entry.action === "fan" && !busy) { // the fan stands by, and its breeze crosses the scene
         s.screen.classList.add("breezy");
         clearTimeout(s.breezeTimer);
         s.breezeTimer = setTimeout(() => s.screen.classList.remove("breezy"), 2600);
@@ -642,14 +655,14 @@ class HatchPetCardMoment extends HatchPetCardVisit {
       }
       if (spoiled) said = [this._lines(s, "REFUSALS.spoiled", REFUSALS.spoiled).text, 3500]; // "hehe, whining works"
       const prop = candy || s.species?.props?.[key] || FALLBACK_PROPS[key];
-      if (prop && entry.action !== "play") { // a play is the ball beat at the tap (_startGame), not a prop here
+      if (prop && !busy && entry.action !== "play") { // a play is the ball beat at the tap (_startGame), not a prop here
         // The star rises above the head, the finger wags above it, the fan slides in; else it drops.
         const cls = entry.action === "praise" ? "above rise" : entry.action === "scold" ? "above wag"
           : entry.action === "fan" ? "slide" : "";
         this._propShow(s, prop, entry.action === "fan" ? 2600 : 2500, cls);
       }
       // The smug beat (plan 4.4): two rocks after the praise, snack or play it was whining for.
-      if (spoiled && !calm()) {
+      if (spoiled && !busy && !calm()) {
         setTimeout(() => {
           if (!s.scene && !s.asleep && !s.game) this._animate(s, s.pet, "rock2", 1250);
         }, 1300);
@@ -658,10 +671,10 @@ class HatchPetCardMoment extends HatchPetCardVisit {
       return;
     }
     const line = REFUSALS[entry.result];
-    if (REACT_REFUSALS.has(entry.result)) {
+    if (REACT_REFUSALS.has(entry.result) && !busy) {
       // A refusal is a turn-away, a head shake, a yawn or a flop (not the same one twice).
       const pool = REFUSAL_VARIANTS[entry.result] || REFUSAL_POOL;
-      const pick1 = this._floorVariant(s, `refused.${entry.result}`, pool);
+      const pick1 = this._careVariant(s, `refused.${entry.result}`, pool);
       this._reactFrames(s, "refused", { variant: pick1 === "look" ? undefined : pick1 });
       if (entry.result === "unfair") { // the finger wags at a pet that did nothing
         const finger = s.species?.props?.scold || FALLBACK_PROPS.scold;

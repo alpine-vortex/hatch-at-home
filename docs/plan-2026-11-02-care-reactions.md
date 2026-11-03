@@ -1323,3 +1323,72 @@ the following. B1 builds on it; names win over lines.
 **Not shipped, for the first mate (copy)**: the plan's lines for the wake (`*stretches*`, groggy),
 `ahh, so breezy ♪` (the fan keeps its existing thank-you), and `*shakes its head*` (where it is said
 beside "i'm full!" is not stated). No new player copy went in.
+
+## 20. B1 shipped: notes for B2 and D (s2749)
+
+Ship B1 (the engine and feed, branch `crew/hatch-at-home-s2749-care-b1-scene-engine-feed`, on ship A).
+Names win over lines.
+
+**The engine B2 and D build on**
+
+- `SCENES` (new part `card-care.js`, after `card-actions` in the manifest; `card-games` extends
+  `HatchPetCardCare`) holds one entry per scene: `due(s, mood, stage)`, `ms` (setup may set `sc.ms`),
+  `gate` (setup may set `sc.gate`), `setup(s, sc, { add, box, pet })`, `render(s, sc, t, k)` returning
+  the frames, `refuse(s, sc, u, k)` with `refuseMs` and `refuseAt(s, sc, te)`, `exit(s, sc, u, k)`,
+  `clear`, `done`, `skippable`, `playOwed`. The comment at the top of the part is the contract.
+  `k` has `sw`, `sh`, `ramp`, `ease` on the clock the entry is given.
+- The shared frame stays in `card-actions.js`: `_sceneClock(sc, t)` (pure: the gate, the hold, the
+  2 s give-up, `failAt`), `_sceneOver`, `_sceneRender` (the hold's sway; a refusal renders the entry at
+  `refuseAt`, then `refuse`; the exit renders it at the stop, then `exit`), `_sceneAnswer(s, result, at)`
+  (the one way to answer a scene; the bench calls it too), `_sceneFail`, `_sceneOffer` (replaces
+  `_sceneAnswered`), `_sceneRefusalLine`. `_care` claims per entry by kind and offers every fresh entry
+  to `_sceneOffer`; the rest is `_react(..., { busy: true })` while a scene lives (the line only).
+  `_careMarks` (costume, cure mark, bubble) runs for an entry a scene takes.
+- `s.sceneOwes` is a list `[{kind, until, playOwed, late}]`; `SCENE_KIND_OF` (`lights_out -> lights`)
+  and `sceneKind()` are in `lines.js` with `SCENE_HOLD_MS`, `SCENE_EXIT_MS`, `SCENE_OWE_MS`.
+- A non-skippable scene ignores a second tap of its care (`_tapped(..., { perk: false })`, nothing sent)
+  and swallows a screen tap, but not a tap inside the status sheet opened over it (every scene: a meal
+  plays for seconds, and the sheet's controls must not go dead under it). `sc.looked`: set it when an entry toggles `.look`; `_sceneEnd` removes it.
+  `.screen.in-scene` hides the resting label for every scene (4.9 b); the "a care prop is up" half of
+  that rule is **not** built.
+- `_careVariant` **is** ship A's `_floorVariant`, renamed (one function, `s.lastVariant`, the bench's
+  `s.pinVariant` map). Feed's keys: `feed` (`A`-`D`) and `feed.extra` (`none`, `heart`, `lick`, `burp`).
+- `_sceneFail` acts only on an entry with an `exit`: medicine and clean play on after a failed call, as
+  before (their PNGs are still sha256-identical, 162 shots, `renders/hash/` in the s2749 worker dir).
+
+**For B2 (snack)**
+
+- `_sceneOffer` and `_sceneAnswer` treat only `"ok"` as a yes. Snack's `spoiled` must be eaten (4.4):
+  make both treat `spoiled` as ok **for snack** (it is not for medicine), then the smug beat; and the
+  floor's spoiled snack prop (ship A, `_react`) must not also show when the scene takes the entry (it
+  will not: a taken entry never reaches `_react`).
+- The bench seek warms a scene's own prop first (`careSeek`'s `own` map in `dev/bench/page.js`): add
+  `snack`. `pet.hunger` pins the prediction; `answer` takes a list.
+- The feed entry is the model: beats from `sc.bites`, one-shot CSS moves through `once()` (`sc.fired`),
+  which the bench's virtual clock seeks (a timer or a CSS animation a beat starts is pinned to its scene
+  time). New CSS: `.pet.chomp`, `.pet.breath`, `.pet.breath-long`, `.scene-bowl`, `.scene-crumb`.
+- The ignore rule needs only `skippable: false`; `playOwed: true` makes an owed ok play the floor.
+
+**For D (tuck and wake)**
+
+- Not built: the `_toggleLights` entry (4.3b steps 1-2), the answer by live `asleep` state and the
+  600 ms quiet exit, `_layout` skipping the background block while a lights scene lives, the
+  `s.wasAsleep` writes, `_moment`'s no-settle rule. What exists: the kind map (a `lights_out` refusal
+  claimed as mine answers a `lights` scene; JS-tested on a stand-in entry), the hold and exit,
+  `_sceneAnswer` for the bench.
+- A refusal on a lights scene says `REFUSALS.not_sleepy` through `_sceneRefusalLine` at the push-away's start.
+
+**The bowl (plan 15 Q1, for the first mate)**
+
+- `bowl_rim` is on 5 species, the ones that pass 5.1's rule and read on the sheet: corgi, deer, fox,
+  kitten, octopus. The cuts are even thirds of the food above the rim, on the 4 px art grid
+  (`bowlCuts`); pytest holds the data to the rule. Hamster's heap is too thin at its rim (best split
+  9.5/11.1/6.1%). Six loose heaps or the cloche pass the number but have no bowl (bunny, bananaslug,
+  squirrel, lunamoth, tortoise, ballpython): left without `bowl_rim`. 25 of 30 eat with the bowl
+  leaving whole. Sheets: `--preset bowls` (s2749 `renders/bowls/`).
+
+**Not built, on purpose or open**
+
+- The season's snack prop standing in for the bowl food (5.1 "may"); the hoarder's carried-off piece.
+- Copy: `*pushes the bowl back*` (where it goes beside "i'm full!" is not stated). The three feed lines
+  (`FEED_LINES`: lick, tummy with the heart, burp) shipped as DRAFT for the first mate's approval.

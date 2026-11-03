@@ -2674,6 +2674,8 @@ async function main() {
       feed.click();
       await wait(450);
       const feeds = sent.filter((x) => x === "button.press").length;
+      // A feed scene ignores a tap while it plays (care B1): free again once it is over.
+      for (let i = 0; i < 40 && s.scene; i++) await wait(100);
       feed.click(); // free again once the first call is done
       await wait(450);
       const again = sent.filter((x) => x === "button.press").length;
@@ -5293,7 +5295,7 @@ async function main() {
     el._sceneEnd(s);
     out.own = { text: s.bubble.textContent, cls: s.sayClass };
     s.sayUntil = 0; s.sayClass = 0; s.queue = [];
-    s.sceneOwes = { kind: "medicine", until: Date.now() + 5000 };
+    s.sceneOwes = [{ kind: "medicine", until: Date.now() + 5000, playOwed: false }];
     el._react(s, { action: "medicine", result: "ok", at: new Date().toISOString() }, { mine: true });
     out.late = { text: s.bubble.textContent, cls: s.sayClass };
     s.sayUntil = 0; s.sayClass = 0; s.queue = [];
@@ -12089,6 +12091,158 @@ async function main() {
         strips[`${kind}-${species}`] = got;
       }
     }
+    // Care B1, the feed scene (plan care-reactions 5.1, 13). A pet awake with room to eat.
+    const feedState = async (p, hunger = "60") => {
+      await put(p, "binary_sensor.asleep", { state: "off" });
+      await put(p, "switch.lights_out", { state: "off" });
+      await put(p, "binary_sensor.calling", { state: "off" });
+      await put(p, "sensor.mood", { state: "content", attributes: { flags: [], requests: [] } });
+      await put(p, "sensor.hunger", { state: hunger });
+      await put(p, "button.feed", { state: "unknown" });
+      await page.waitForTimeout(600);
+      await card.evaluate((el) => {
+        const s = el._slides[el._index];
+        s.sayUntil = 0; s.poseUntil = 0; s.propUntil = 0; s.prop.style.display = "none"; s.queue = [];
+        s.pet.classList.remove("look", "wander-l", "wander-r", "hop");
+        s.pinVariant = { feed: "A", "feed.extra": "none" };
+      });
+    };
+    const feedTap = (twice = false) => card.evaluate(async (el, twice) => {
+      const s = el._slides[el._index];
+      window.__feedSeen = [];
+      clearInterval(window.__feedWatch);
+      window.__feedWatch = setInterval(() => window.__feedSeen.push(s.pet.getAttribute("src") || ""), 50);
+      s.buttons.feed.click();
+      if (twice) {
+        await new Promise((r) => setTimeout(r, 40));
+        s.buttons.feed.click();
+      }
+    }, twice);
+    const feedLook = () => card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const sc = s.scene;
+      return { scene: sc?.kind || null, calls: el.__calls.length, result: sc?.result || null, refuseAt: sc?.refuseAt ?? null,
+        answerAt: sc?.answerAt ?? null, gate: sc?.gate ?? null, bowl: !!s.screen.querySelector(".scene-bowl"),
+        els: s.screen.querySelectorAll(".scene, .scene-crumb, .scene-spark").length, line: s.bubble.textContent,
+        translate: s.pet.style.translate, rotate: s.pet.style.rotate, look: s.pet.classList.contains("look"),
+        fade: s.sceneFade?.kind || null, owes: (s.sceneOwes || []).map((o) => `${o.kind}${o.late ? ":late" : ""}`).join(),
+        pose: s.poseUntil > Date.now(), prop: s.prop.style.display !== "none" ? s.prop.getAttribute("src") : "",
+        eat: (window.__feedSeen || []).some((x) => /_eat_/.test(x)) };
+    });
+    const feedEnd = async () => {
+      for (let i = 0; i < 50 && (await feedLook()).scene; i++) await page.waitForTimeout(100);
+      await page.waitForTimeout(300);
+      await card.evaluate(() => clearInterval(window.__feedWatch));
+      return feedLook();
+    };
+    // A double tap: one call, the scene plays on, the pet eats, the meal's line, nothing left behind.
+    await feedState(pet);
+    const feedCalls = (await feedLook()).calls;
+    await feedTap(true);
+    await page.waitForTimeout(80);
+    const feedStart = await feedLook();
+    await answer(pet, "feed");
+    await page.waitForTimeout(1200);
+    const feedMid = await feedLook();
+    await shot("care-feed-mid");
+    // A meal takes a stray tap on the screen, but not the taps of the status sheet opened over it.
+    const overMeal = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      s.screen.click();
+      await new Promise((r) => setTimeout(r, 50));
+      const out = { sceneAfterTap: s.scene?.kind || null, statusAfterTap: s.screen.classList.contains("show-status") };
+      el._toggleStatus(s);
+      const probe = document.createElement("button");
+      let heard = 0;
+      probe.addEventListener("click", (e) => { e.stopPropagation(); heard++; });
+      s.status.appendChild(probe);
+      probe.click();
+      probe.remove();
+      out.heard = heard;
+      out.scene = s.scene?.kind || null;
+      el._toggleStatus(s);
+      return out;
+    });
+    check("feed: a meal takes a stray screen tap, and the status sheet opened over it keeps its taps",
+      overMeal.sceneAfterTap === "feed" && !overMeal.statusAfterTap && overMeal.heard === 1 && overMeal.scene === "feed",
+      JSON.stringify(overMeal));
+    const feedDone = await feedEnd();
+    check("feed: a tap starts the bowl scene; a second tap is ignored (one call, the scene goes on)",
+      feedStart.scene === "feed" && feedStart.bowl && feedStart.calls === feedCalls + 1 && feedMid.scene === "feed" &&
+      feedMid.result === "ok" && feedDone.calls === feedCalls + 1, JSON.stringify({ feedStart, feedMid }));
+    check("feed: the pet eats (eat frames), says the meal's line, and leaves no scene, translate, rotate or look",
+      feedDone.eat && !feedDone.scene && feedDone.els === 0 && !feedDone.translate && !feedDone.rotate && !feedDone.look &&
+      feedDone.line.length > 0 && !/full|didn't work/.test(feedDone.line), JSON.stringify(feedDone));
+    // A stale card (it reads 60, the server says full): the push-away, the refusal said, one call.
+    await feedState(pet);
+    const staleCalls = (await feedLook()).calls;
+    await feedTap();
+    await page.waitForTimeout(150);
+    await answer(pet, "feed", "full");
+    await page.waitForTimeout(700);
+    const stale = await feedLook();
+    const staleEnd = await feedEnd();
+    check("feed: a stale card's full is a push-away from the bowl, its line said, one call",
+      stale.scene === "feed" && stale.result === "full" && stale.refuseAt !== null && /full/.test(stale.line) &&
+      staleEnd.calls === staleCalls + 1 && !staleEnd.scene && staleEnd.els === 0 && !staleEnd.look, JSON.stringify({ stale, staleEnd }));
+    // At the card's own 100, no scene: today's refusal.
+    await feedState(pet, "100");
+    await feedTap();
+    await page.waitForTimeout(150);
+    const fullTap = await feedLook();
+    await answer(pet, "feed", "full");
+    await page.waitForTimeout(500);
+    const fullDone = await feedEnd();
+    check("feed: a pet the card already sees full plays no scene, and the refusal as today",
+      !fullTap.scene && !fullTap.bowl && fullDone.pose && /full/.test(fullDone.line), JSON.stringify({ fullTap, fullDone }));
+    // No reply: it holds at the gate, gives up 2 s on, and a late reply plays the floor (pose, prop, line).
+    await feedState(pet);
+    await feedTap();
+    await page.waitForTimeout(1500);
+    const held = await feedLook();
+    const gaveUp = await feedEnd();
+    await answer(pet, "feed");
+    await page.waitForTimeout(600);
+    const late = await feedLook();
+    check("feed: with no reply it holds at the gate, then gives up (a late owe)",
+      held.scene === "feed" && held.answerAt === null && !gaveUp.scene && gaveUp.els === 0 && gaveUp.owes === "feed:late",
+      JSON.stringify({ held, gaveUp }));
+    check("feed: a late reply plays the floor: the pose, the bowl dropped, the line",
+      late.pose && /bowl_food/.test(late.prop) && late.line.length > 0 && late.owes === "", JSON.stringify(late));
+    // Reduced motion: no scene element; the reply still changes the pose.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await feedState(pet);
+    await feedTap();
+    await page.waitForTimeout(150);
+    const calmTap = await feedLook();
+    await answer(pet, "feed");
+    await page.waitForTimeout(500);
+    const calmDone = await feedLook();
+    await page.emulateMedia({ reducedMotion: null });
+    check("feed under reduced motion: no scene element, the news fades in, the pose still changes",
+      !calmTap.scene && calmTap.els === 0 && calmTap.fade === "feed" && calmDone.pose, JSON.stringify({ calmTap, calmDone }));
+    // The real server, once: the tap to the answer, logged, and over the gate (650 ms) fails (plan 13).
+    await feedState(pet);
+    const measured = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const mock = el._call;
+      delete el._call; // the card's own call, to this HA
+      try {
+        s.buttons.feed.click();
+        const sc = s.scene;
+        const t0 = performance.now();
+        while (sc && sc.answerAt == null && s.scene === sc && performance.now() - t0 < 3000) await new Promise((r) => setTimeout(r, 20));
+        return { scene: !!sc, answerAt: sc?.answerAt ?? null, result: sc?.result ?? null, gate: sc?.gate ?? null };
+      } finally {
+        el._call = mock;
+      }
+    });
+    console.log(`  feed: tap to answer on this HA: ${measured.answerAt === null ? "none" : `${Math.round(measured.answerAt)} ms`} (${measured.result}, gate ${measured.gate})`);
+    check("feed: this HA answers a tap before the gate (650 ms)",
+      measured.scene && measured.answerAt !== null && measured.answerAt <= 650, JSON.stringify(measured));
+    await feedEnd();
+    await card.evaluate((el) => { delete el._slides[el._index].pinVariant; });
+
     await inject(life, { attributes: lifeBefore });
     await page.waitForTimeout(800);
     const octo = strips["clean-octopus"] || [];

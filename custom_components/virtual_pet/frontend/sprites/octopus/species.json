@@ -28,6 +28,7 @@
     "away": "bird/sitter_sign",
     "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]
   },
+  "bowl_rim": 0.5,
   "murk": "otter/murk",
   "backgrounds": { "day": "otter/bg_day", "night": "otter/bg_night", "rain": "otter/bg_rain", "dim": "otter/bg_night" },
   "words": { "food": "shrimp", "home": "den" },
