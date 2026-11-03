@@ -236,7 +236,10 @@ class HatchPetCardTick extends HatchPetCardLayout {
   // (callers pass catch: !baby); a personality line may, as the normal one does.
   // { fresh: true } (fresh-expand E1): the type's lines by _fresh, and never the same
   // text as this key said last on this slide (the other side of the coin instead).
-  _lines(s, key, normal, arg, { fresh = false } = {}) {
+  // { nature: "<key>" } (species nature N2) opts in to the species' action line: after the persona's
+  // coin has failed, a teen or adult's habit cell for the key, 1 time in SPECIES_LINE_ODDS, said bare;
+  // the result then also carries its move ({text, baby, move}). Without it, nothing changes.
+  _lines(s, key, normal, arg, { fresh = false, nature: natureKey = null } = {}) {
     const set = this._babySet(s, key);
     const own = !set && this._persona(s)?.[key];
     const take = (list) => (fresh ? this._fresh(s, key, list) : pick(list));
@@ -248,8 +251,32 @@ class HatchPetCardTick extends HatchPetCardLayout {
       if (text === said) line = line === null ? take(own) : null;
       s.lastPick[`${key}:said`] = line === null ? normal : fill(line);
     }
-    if (line === null) return { text: normal, baby: false };
-    return { text: fill(line), baby: !!set };
+    if (line === null) {
+      const cell = natureKey && !set ? this._natureCell(s, natureKey) : null;
+      if (cell) return { text: cell.text, baby: false, move: cell.move || null };
+      return natureKey ? { text: normal, baby: false, move: null } : { text: normal, baby: false };
+    }
+    return natureKey ? { text: fill(line), baby: !!set, move: null } : { text: fill(line), baby: !!set };
+  }
+
+  // The species' cells for a key (species nature N2): own[species], else company, else habit; the
+  // first level that has the key wins whole. Each is { text, move } with the {home} word filled in;
+  // a cell with no home word drops out. No nature, no key, or a pet that is not a teen or adult: [].
+  _natureCells(s, key) {
+    const st = this._state(s, "sensor.life_stage")?.state;
+    const n = nature(s.species);
+    if (!n || (st !== "teen" && st !== "adult")) return [];
+    const L = SPECIES_LINES;
+    const cells = L.own[s.speciesId]?.[key] || L.company[n.company]?.[key] || L.habit[n.habit]?.[key];
+    if (!cells) return [];
+    const home = this._words(s).home;
+    return cells.map((c) => ({ text: typeof c.text === "function" ? c.text(home) : c.text, move: c.move })).filter((c) => c.text);
+  }
+
+  // One species cell or null: the pool, then the roll (drawn only for a non-empty pool), then the pick.
+  _natureCell(s, key) {
+    const pool = this._natureCells(s, key);
+    return pool.length && Math.random() < SPECIES_LINE_ODDS ? pick(pool) : null;
   }
 
   // A random line, never the one this key gave last on this slide (memory only).
@@ -412,6 +439,18 @@ class HatchPetCardTick extends HatchPetCardLayout {
     this._moving(s, cracking ? 1200 : 600);
   }
 
+  // The simple idle body moves (also a species line's move): look and wander are the persistent
+  // classes with their own _moving, the rest one-shot animations. The habit moves (settle, munch,
+  // rock) are CSS that was already there.
+  _idleMove(s, move) {
+    if (move === "look") this._look(s, 1800);
+    else if (move === "wander") this._wander(s, 2200);
+    else if (move === "perk") this._animate(s, s.pet, "perk", 320);
+    else if (move === "settle") this._animate(s, s.pet, "settle", 2500);
+    else if (move === "munch") this._animate(s, s.pet, "munch", 1500);
+    else if (move === "rock") this._animate(s, s.pet, "rock", 600);
+  }
+
   _idle(s) {
     const now = Date.now();
     const scale = s.vroom ? 1 : this._idleScale(s); // a multiplier, no draw: the Math.random order is as before
@@ -435,18 +474,8 @@ class HatchPetCardTick extends HatchPetCardLayout {
       s.poseFrames = Array.isArray(frames) ? frames : [frames];
       s.poseUntil = now + 2500;
       this._show(s, s.pet, s.poseFrames[0]);
-    } else if (move === "look") {
-      this._look(s, 1800);
-    } else if (move === "wander") {
-      this._wander(s, 2200);
-    } else if (move === "perk") {
-      this._animate(s, s.pet, "perk", 320);
-    } else if (move === "settle") { // the species' habit moves (SPECIES_ADDS): CSS that was already there
-      this._animate(s, s.pet, "settle", 2500);
-    } else if (move === "munch") {
-      this._animate(s, s.pet, "munch", 1500);
-    } else if (move === "rock") {
-      this._animate(s, s.pet, "rock", 600);
+    } else if (IDLE_BODY_MOVES.has(move)) {
+      this._idleMove(s, move);
     } else if (move === "spin" || move === "perk2") {
       this._trickMove(s, move);
     } else if (move === "hop") {
@@ -479,9 +508,13 @@ class HatchPetCardTick extends HatchPetCardLayout {
       const normal = pick(lines);
       // Resting (R1): its own easy-going lines, unless its body has something to say.
       const restful = s.resting && !bodily && (this._babySet(s, "idle.resting") || RESTING_IDLE);
+      // The species' own action line (N2) for the content and cozy idle only, with its move (not when calm).
+      const said = restful || neighbour || bodily ? null
+        : this._lines(s, key, normal, undefined, key === "idle" ? { nature: "idle" } : {});
       this._write(s, restful ? pick(restful)
-        : neighbour ? pick(NEIGHBOUR_LINES)(neighbour) : bodily ? normal : this._lines(s, key, normal).text, 2500);
+        : neighbour ? pick(NEIGHBOUR_LINES)(neighbour) : bodily ? normal : said.text, 2500);
       s.plain = s.bubble.textContent; // idle chatter isn't read out
+      if (said?.move && !isCalm) this._idleMove(s, said.move);
     }
   }
 

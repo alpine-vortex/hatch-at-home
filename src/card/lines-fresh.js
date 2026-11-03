@@ -553,4 +553,38 @@ const LIGHTS_LINES = {
   wake: ["*stretches*"],
   groggy: ["*blinks, squinting*"],
 };
+// Species nature, N2 (plan-2026-11-02-species-nature.md section 5.4, FM-approved copy): an
+// *action* line per habit, said bare in place of a normal line on an opted-in _lines call
+// (idle, find, visit, link_host). A cell is { text, move }: text a string or (home) => string
+// (falsy without a home: the cell drops out), move one of perk settle munch rock look wander
+// and only on idle. Looked up own[species], then company[nature.company], then habit[nature.habit].
+const SPECIES_LINES = {
+  habit: {
+    hoarder: {
+      idle: [{ text: "*tucks something away*", move: "munch" }, { text: "*pats its cheeks*" }],
+      find: [{ text: "*stashes it, happily*" }],
+    },
+    builder: {
+      idle: [{ text: (home) => home && `*fixes up the ${home}*`, move: "settle" }, { text: "*nudges a bit into place*" }],
+      link_host: [{ text: (home) => home && `*shows off the ${home}*` }],
+    },
+    basker: { idle: [{ text: "*a long, slow stretch*", move: "settle" }, { text: "*soaks it in*" }] },
+    groomer: { idle: [{ text: "*grooms*", move: "rock" }, { text: "*smooths itself down*" }] },
+    explorer: {
+      idle: [{ text: "*sniffs around*", move: "wander" }, { text: "*pokes at a corner*" }],
+      find: [{ text: "*came back with something*" }],
+      visit: [{ text: "*sniffs the air*" }],
+    },
+    watcher: {
+      idle: [{ text: "*watches closely*", move: "look" }, { text: "*stays very quiet*" }],
+      visit: [{ text: "*ears up*" }],
+    },
+    performer: { idle: [{ text: "*hums a little tune*", move: "perk" }, { text: "*does a tiny twirl*" }] },
+  },
+  company: { solo: { visit: [{ text: "*peeks first, then waves*" }] } },
+  own: {
+    firefly: { idle: [{ text: "*glows a little brighter*", move: "perk" }, { text: "*flickers in a tiny loop*" }] },
+    lunamoth: { idle: [{ text: "*glows a little brighter*", move: "perk" }, { text: "*flickers in a tiny loop*" }] },
+  },
+};
 // --- end fresh-expand copy ---

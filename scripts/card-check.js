@@ -7610,7 +7610,9 @@ async function main() {
         s.bubble.textContent = "";
         for (let i = 0; i < 5 && !s.bubble.textContent; i++) { // the card's own tick may hold the pet a moment
           Object.assign(s, { sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0, nextIdle: 1 });
-          let calls = 0; // draws: the next-idle delay, the move (0: mumble, first of the list), then the coin
+          // draws: the next-idle delay, the move (0: mumble, first of the list), pick(lines), then the coin;
+          // a failed coin (0.9) goes on to the species roll (N2: 0.9 is over SPECIES_LINE_ODDS, so no species line)
+          let calls = 0;
           t.random(() => (calls++ < 2 ? 0 : r));
           const shelf = el._slides;
           el._slides = [s]; // no neighbour lines (gaps-seams 5b, checked on their own)
@@ -7637,6 +7639,60 @@ async function main() {
     }
     check("P2b idle mumble: the type's lines by mood (default, bored, excited) on the heads side, sleepy/hungry/dirty and the tails side stay normal",
       idleBad.length === 0, idleBad.join(" | "));
+    // Species nature N2: a failed persona coin goes on to the species roll (0.1 is under SPECIES_LINE_ODDS): the species'
+    // first idle cell, bare, with its move after it (not calm); no species line for a baby or a child, the bored or excited
+    // key, or a bodily mood; nothing is sent to the server.
+    const speciesIdle = await typeAs(async (el, s, t) => {
+      const out = {};
+      const calls = [];
+      const realCall = el._hass.callService;
+      el._hass.callService = (...a) => { calls.push(a[1]); return realCall.apply(el._hass, a); };
+      const moved = [];
+      const real = { animate: el._animate, look: el._look, wander: el._wander };
+      el._animate = function (sl, el2, cls, ...rest) { moved.push(cls); return real.animate.call(this, sl, el2, cls, ...rest); };
+      el._look = function (...a) { moved.push("look"); return real.look.apply(this, a); };
+      el._wander = function (...a) { moved.push("wander"); return real.wander.apply(this, a); };
+      const say = (stage, moodState) => {
+        t.pet(stage, "mellow");
+        s.moodState = moodState;
+        s.bubble.textContent = "";
+        moved.length = 0;
+        const seq = [0, 0, 0.1, 0.9, 0.1, 0]; // delay, move (mumble), pick(lines), coin (fails), roll (takes), pick(cell)
+        for (let i = 0; i < 5 && !s.bubble.textContent; i++) {
+          Object.assign(s, { sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0, nextIdle: 1 });
+          let n = 0;
+          t.random(() => seq[n++] ?? 0.9);
+          const shelf = el._slides;
+          el._slides = [s];
+          el._idle(s);
+          el._slides = shelf;
+        }
+        return { text: s.bubble.textContent, moved: moved.slice() };
+      };
+      try {
+        t.pet("adult", "mellow");
+        out.cells = Array.from(el._natureCells(s, "idle"), (c) => ({ text: c.text, move: c.move || null }));
+        out.calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        out.adult = say("adult", "content");
+        out.teen = say("teen", "content");
+        out.child = say("child", "content");
+        out.bored = say("adult", "bored");
+        out.hungry = say("adult", "hungry");
+      } finally {
+        Object.assign(el, { _animate: real.animate, _look: real.look, _wander: real.wander });
+        el._hass.callService = realCall;
+      }
+      out.calls = calls;
+      return out;
+    });
+    const sFirst = speciesIdle.cells[0];
+    const sTexts = speciesIdle.cells.map((c) => c.text);
+    check("species nature N2: an adult and a teen say the species' first idle cell bare, its move after it (none when calm); nothing sent",
+      sTexts.length >= 2 && speciesIdle.adult.text === sFirst.text && speciesIdle.teen.text === sFirst.text &&
+      (speciesIdle.calm || !sFirst.move ? speciesIdle.adult.moved.length === 0 : speciesIdle.adult.moved.length >= 1) &&
+      speciesIdle.calls.length === 0, JSON.stringify(speciesIdle));
+    check("species nature N2: no species idle line for a child, the bored key or a bodily mood",
+      ![speciesIdle.child, speciesIdle.bored, speciesIdle.hungry].some((o) => sTexts.includes(o.text)), JSON.stringify(speciesIdle));
     // gaps-seams 5b: with a neighbour on the shelf, the neighbour roll (1 in 6) names it,
     // never for a bodily mood; alone on the shelf, never.
     const near = await typeAs(async (el, s, t) => {
@@ -11136,7 +11192,10 @@ async function main() {
   });
   // A teen or adult may greet in its type's words (gaps-seams 4b).
   const VPERSONA = require("vm").runInNewContext(`(${vsrc.match(/const PERSONA = (\{[\s\S]*?\n\});/)[1]})`);
-  const lines = [...VLINES, ...V0.lines, ...Object.values(VPERSONA).flatMap((t) => t.visit)];
+  // Species nature N2: a teen or adult's greeting may be its habit's (or a solo species') action line, 1 time in 4 at most.
+  const VSPECIES = require("vm").runInNewContext(`(${vsrc.match(/\nconst SPECIES_LINES = (\{[\s\S]*?\n\});/)[1]})`);
+  const speciesVisit = [...Object.values(VSPECIES.habit), ...Object.values(VSPECIES.company)].flatMap((c) => (c.visit || []).map((x) => x.text));
+  const lines = [...VLINES, ...V0.lines, ...Object.values(VPERSONA).flatMap((t) => t.visit), ...speciesVisit];
   const waves = greeted.drawn !== "child" && greeted.waves;
   const greetFrame = greeted.drawn === "child" || (waves ? /_wave_\d/.test(greeted.src) : /_(cheer|excited)_\d/.test(greeted.src));
   check("visitors: the pet greets it with its wave frames (child: the greet as before; no waves: cheer or excited) and one of its lines",
@@ -11226,6 +11285,56 @@ async function main() {
     return { text };
   }, { key: babyKey, ms: (V0.in || 1400) + 1300 });
   check("visitors: a baby says baby talk (BABY.visit)", VBABY.some((l) => baby.text.includes(l)), JSON.stringify(baby));
+  // Species nature N2: a solo species' greeting is "peeks first", a social watcher's "ears up" (the roll pinned to
+  // take it); both play the same greet (one class set, the same hold, the same stay), a baby says baby talk, and
+  // nothing is sent beyond the greeted report.
+  {
+    await vprep(V0);
+    const sp = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const species = s.species;
+      const real = { state: el._state, random: Math.random, mine: s.mine };
+      const nat = { clock: "day", sky: "sun", company: "social", habit: "watcher" };
+      const run = (company, stage) => {
+        s.species = { ...species, nature: { ...nat, company } };
+        el._state = function (slide, k) {
+          const st = real.state.call(this, slide, k);
+          return k === "sensor.life_stage" && st && slide === s ? { ...st, state: stage, attributes: { ...st.attributes, personality: null } } : st;
+        };
+        s.mine = { ...(real.mine || {}), fav_visitor: null };
+        Object.assign(s, { sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0, queue: [] });
+        el.__vtick(s);
+        if (!s.visitor) return { none: true };
+        const before = (el.__vcalls || []).length;
+        Math.random = () => 0.1;
+        try { el._visitorGreet(s, s.visitor.v); } finally { Math.random = real.random; }
+        const out = { text: s.bubble.textContent, classes: [...s.pet.classList].sort().join(" "), hold: Math.round((s.sayUntil - Date.now()) / 500),
+          sent: (el.__vcalls || []).length - before };
+        el._stopTyping(s);
+        el._visitorEnd(s);
+        return out;
+      };
+      const out = {};
+      try {
+        out.solo = run("solo", "adult");
+        out.social = run("social", "adult");
+        out.soloTeen = run("solo", "teen");
+        out.soloChild = run("solo", "child");
+      } finally {
+        s.species = species;
+        el._state = real.state;
+        s.mine = real.mine;
+        Math.random = real.random;
+        Object.assign(s, { sayUntil: 0, flairUntil: 0, poseUntil: 0, visitUntil: 0, queue: [] });
+        for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-")) localStorage.removeItem(k);
+      }
+      return out;
+    });
+    check("species nature N2: a solo species greets with 'peeks first', a social watcher with 'ears up', the same classes and hold; nothing sent",
+      sp.solo?.text.includes("*peeks first, then waves*") && sp.social?.text.includes("*ears up*") && sp.soloTeen?.text.includes("*peeks first, then waves*") &&
+      sp.solo.classes === sp.social.classes && sp.solo.hold === sp.social.hold && !sp.solo.sent && !sp.social.sent &&
+      !/\*(peeks|ears)/.test(sp.soloChild?.text ?? "*"), JSON.stringify(sp)); // (the bubble may carry the pet's sound first)
+  }
   // Fresh-expand E3 (V-a): a visitor seen here on 3 days is a friend: half its greets are
   // its friend lines (random stubbed to the friend side). At 2, never. Two starts on one
   // day add 1. A new generation's tally starts at 0 (its key carries the generation).
@@ -13224,6 +13333,46 @@ async function main() {
             k.during && k.live && !k.after && k.left === 0 && k.hello, JSON.stringify(k));
         }
       }
+      // Species nature N2: a builder host, untyped, says its alternate hello when the roll takes it
+      // (draws: the normal hello's pick, the roll, the cell pick, then the guest's); a baby or a child never does;
+      // the guest's reply is the usual one and nothing is sent to the server.
+      const builder = (stage) => card.evaluate(async (el, stage) => {
+        const [host, guest] = [el._slides[0], el._slides[1]];
+        const before = el._state;
+        el._state = function (slide, key) {
+          const st = before.call(this, slide, key);
+          return key === "sensor.life_stage" && st && slide === host ? { ...st, state: stage, attributes: { ...st.attributes, personality: null } } : st;
+        };
+        const species = host.species;
+        const had = { persona: el._persona, babyStage: el._babyStage, babySet: el._babySet };
+        host.species = { ...species, nature: { clock: "day", sky: "sun", company: "social", habit: "builder" }, words: { ...species.words, home: "burrow" } };
+        el._persona = function (slide) { return slide === host ? null : had.persona.call(this, slide); };
+        el._babyStage = function (slide) { return slide === host ? null : had.babyStage.call(this, slide); }; // baby talk off
+        el._babySet = function (slide, key) { return slide === host ? null : had.babySet.call(this, slide, key); };
+        const calls = [];
+        const realCall = el._hass.callService;
+        el._hass.callService = (...a) => { calls.push(a[1]); return realCall.apply(el._hass, a); };
+        const nm = (s) => { const d = el._hass.devices[s.ids.device]; return d.name_by_user || d.name; };
+        const real = Math.random;
+        let n = 0;
+        const draws = [0.1, 0.1, 0, 0.9, 0.9, 0.9];
+        Math.random = () => draws[n++] ?? 0.9;
+        try { el._linkStart(host, guest); } finally { Math.random = real; }
+        const said = el._link?.said?.[0] ?? null;
+        el._linkEnd();
+        Object.assign(el, { _state: before, _persona: had.persona, _babyStage: had.babyStage, _babySet: had.babySet });
+        el._hass.callService = realCall;
+        host.species = species;
+        return { stage, said, guest: nm(guest), calls };
+      }, stage);
+      const adultHost = await builder("adult");
+      const teenHost = await builder("teen");
+      const babyHost = await builder("baby");
+      const childHost = await builder("child");
+      check("species nature N2: a builder host says its alternate hello (teen, adult); a baby or a child hosts as before; no call sent",
+        adultHost.said === "*shows off the burrow*" && teenHost.said === "*shows off the burrow*" &&
+        [babyHost, childHost].every((h) => h.said && !h.said.startsWith("*shows off") && h.said.includes(h.guest)) &&
+        [adultHost, teenHost, babyHost, childHost].every((h) => h.calls.length === 0), JSON.stringify([adultHost, teenHost, babyHost, childHost]));
     }
     // The swipes above kept a place in this browser (UX fix 2, F8: hatch-shelf-*, shared by every
     // tab of the origin). Put it back, or a later page load (restart's) would open on pet 2, not 1.
@@ -14063,7 +14212,8 @@ async function main() {
     el._pat = realPat;
     Object.assign(out, { shown: R?.shown || [], said: [...new Set(said.filter(Boolean))], patAt: s.patAt === patAt,
       quiet: !!R?.quiet, end: { reveal: !!s.reveal, hidden: s.basket.hidden, basket: s.house?.basket, visitUntil: s.visitUntil },
-      calls: el.__calls.slice(), baby: !!el._babySet(s, "find") });
+      calls: el.__calls.slice(), baby: !!el._babySet(s, "find"),
+      nature: Array.from(el._natureCells(s, "find"), (c) => c.text) }); // N2: a V1 find may be the species' own line
     return out;
   });
   const ids = seedB.map((f) => `${f.world}/${f.id}`);
@@ -14079,7 +14229,7 @@ async function main() {
   const v3 = `the ${leaverName} left ${aOf(seedB[2].id)} ♪`;
   const linesOk = tap.baby
     ? tap.said.some((t) => /yay yay!|hehe!/.test(t))
-    : tap.said.some((t) => v1.some((x) => t.includes(x))) && tap.said.some((t) => t.includes(v2)) &&
+    : tap.said.some((t) => v1.some((x) => t.includes(x)) || tap.nature.some((n) => t.includes(n))) && tap.said.some((t) => t.includes(v2)) &&
       tap.said.some((t) => t.includes(v3)); // the bubble may carry the pet's sound first
   check("V-C: the reveal's lines: V1 for a find met before, V2 for a first-ever one, V3 by the visitor's name (baby: BABY.find)",
     !tap.quiet && linesOk, JSON.stringify({ said: tap.said, want: tap.baby ? "baby" : [v1, v2, v3] }));

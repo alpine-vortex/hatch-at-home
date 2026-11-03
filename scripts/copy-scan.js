@@ -14,6 +14,7 @@ const FILL = {
   creature: "Mexican red-knee tarantula", // 26, the longest creature name
   pick: "higher or lower", // 15, the longest pick label a memory door says (GAMES)
   season: "spring", // 6, as long as every season's name
+  home: "vivarium", // 8, the longest words.home of the 30 species
 };
 // Each table: the fill its functions take, and the keys (at any depth) that may ask.
 const COPY_TABLES = {
@@ -75,12 +76,15 @@ const COPY_TABLES = {
   FEED_LINES: {}, // care reactions B1 (plan-2026-11-02-care-reactions.md 14)
   SNACK_LINES: {}, // care reactions B2
   LIGHTS_LINES: {}, // care reactions D: the tuck and the wake
+  SPECIES_LINES: { fill: "home" }, // species nature N2: the habit action lines
 };
 
 function lines(value, path, out) {
   if (typeof value === "string" || typeof value === "function") out.push([path, value]);
   else if (Array.isArray(value)) value.forEach((v, i) => lines(v, `${path}[${i}]`, out));
-  else if (value && typeof value === "object") for (const [k, v] of Object.entries(value)) lines(v, `${path}.${k}`, out);
+  else if (value && typeof value === "object") {
+    for (const [k, v] of Object.entries(value)) if (k !== "move") lines(v, `${path}.${k}`, out); // a move name is not copy
+  }
   return out;
 }
 

@@ -530,7 +530,7 @@
     const beat = vis.beat || "greet";
     if (beat === "leave") V.el.classList.replace("in", "out");
     const random = Math.random;
-    if (vis.friend) Math.random = () => 0;
+    if (vis.friend || vis.species) Math.random = () => 0; // `species` (N2): the species roll taken (an untyped pet; the line is the first cell)
     try {
       if (beat === "greet") card._visitorGreet(s, v);
     } finally {
@@ -724,6 +724,17 @@
       let n = 0;
       // `idle.draw`: the draw after the delay, for the sky reaction's line pick (0 the first line, .99 the second).
       Math.random = () => { const i = n++; return i === 1 && shot.idle.draw !== undefined ? shot.idle.draw : i < 2 ? 0 : 0.1; };
+      // `idle.species` (species nature N2): the species' own action line. The persona's coin is forced to fail and the
+      // roll to pass: the delay 0, the move 0 (mumble), [the neighbour roll, with another pet on the shelf: over the odds],
+      // pick(lines) 0.1, [the coin 0.9, a typed pet only], the roll 0.1, then `idle.draw` (0 the first cell, .99 the second).
+      if (shot.idle.species) {
+        const seq = [0, 0];
+        if (card._slides.length > 1) seq.push(0.99);
+        seq.push(0.1);
+        if (card._persona(cur)?.idle) seq.push(0.9);
+        seq.push(0.1, shot.idle.draw ?? 0);
+        Math.random = () => (n < seq.length ? seq[n++] : (n++, 0.5));
+      }
       Object.assign(cur, { moodState: shot.idle.mood || "content", nextIdle: 1, sayUntil: 0, poseUntil: 0, movingUntil: 0 });
       card._idle(cur);
       Math.random = real;
