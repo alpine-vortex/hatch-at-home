@@ -43,7 +43,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import TemperatureConverter
 
-from . import channel, model, notify, people as P, rates as R, wellbeing
+from . import channel, hop, model, notify, people as P, rates as R, wellbeing
 from .backup import (
     NOTHING,
     async_backup,
@@ -327,6 +327,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # Games dropped unfinished (idle, away, asleep, switched from): the
         # next guess of that kind starts a new game, and its reply says so.
         self._dropped_games: set[str] = set()
+        # Hop of the Day's boards, today's only, in memory: one shared build per
+        # (day, world, family, specials, w, h), so two screens calling at once
+        # run the generator once (ship 3a's settle reads the same cache).
+        self._hop_boards: dict[tuple, asyncio.Future[hop.Board]] = {}
         self._visits: dict[str, float] = {}
         # People (HA user IDs) whose person entity just came home, and when the
         # pet last cheered for each (in memory).
@@ -3115,6 +3119,69 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._save()
         self._publish()
         return info
+
+    async def async_hop_board(self) -> dict[str, Any]:
+        """Today's Hop board for this pet, or why there is none. Changes
+        nothing: no care log (so not start_game), no event, no save, no
+        publish, and no person (the board is the pet's, the same on every
+        screen)."""
+        assert self.state is not None
+        now = self._now()
+        self._advance(now)
+        refusal = model._refuse_play(self.state)
+        if refusal is not None:
+            if refusal == "away" and self.privacy:
+                refusal = "asleep"
+            return {"result": refusal}
+        day = self._today(now)[0]
+        specials, w, h = hop.params_for(model.life_stage(self.state), day)
+        board = await self.async_hop_day_board(
+            day, hop.family_of(self.state.species), specials, w, h
+        )
+        return {
+            "result": model.OK,
+            "day": day,
+            **board.to_dict(),
+            # `twist` is ship 4's; `done` and `tidy` are ship 3a's (the day's
+            # pay state). Until they ship the board is a plain, unpaid one.
+            "twist": None,
+            "done": False,
+            "tidy": False,
+        }
+
+    async def async_hop_day_board(
+        self, day: str, family: str, specials: int, w: int, h: int
+    ) -> hop.Board:
+        """The day's board, built once off the loop and kept for the day. Calls
+        with the same arguments at once share one build. Ship 3a's settle
+        calls this too, so it replays the board the screen was shown."""
+        key = (day, self.world, family, specials, w, h)
+        for old in [k for k in self._hop_boards if k[0] != day]:
+            del self._hop_boards[old]
+        future = self._hop_boards.get(key)
+        if future is None:
+            future = self.hass.async_add_executor_job(
+                hop.hop_board, self.pet_id, day, self.world, family, specials, w, h
+            )
+            self._hop_boards[key] = future
+
+            def failed(done: asyncio.Future[hop.Board]) -> None:
+                # A build that died is not kept: the next call tries again.
+                if done.cancelled() or done.exception() is not None:
+                    if self._hop_boards.get(key) is done:
+                        del self._hop_boards[key]
+
+            future.add_done_callback(failed)
+        try:
+            # Shielded: one caller giving up must not cancel the build the
+            # others wait on.
+            return await asyncio.shield(future)
+        except Exception:
+            # Dropped here as well as in the callback, which may run after
+            # this caller has already raised.
+            if self._hop_boards.get(key) is future:
+                del self._hop_boards[key]
+            raise
 
     def share_news(self, headline: str, topic: str | None = None) -> str:
         """An automation brings news: the pet says it in its bubble, a passing

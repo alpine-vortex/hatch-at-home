@@ -423,6 +423,20 @@
         }
       }
     },
+    "hop": {
+      "name": "Hop of the Day",
+      "description": "Hop of the Day, the pet's daily board game. The board action returns today's board for the pet: the same on every screen all day, built once and kept until midnight. It changes nothing and pays nothing, and is refused (result egg, asleep, away or too_tired) when the pet could not play a game now.",
+      "fields": {
+        "entity_id": {
+          "name": "Pet",
+          "description": "Any entity of the pet."
+        },
+        "action": {
+          "name": "Action",
+          "description": "board: return today's board."
+        }
+      }
+    },
     "share_news": {
       "name": "Share news",
       "description": "Tells the pet a bit of news, and it says it in its speech bubble on the card ('did you hear? ...'). Cosmetic only: no stat changes. Dropped while the pet is asleep, away or still an egg, and at most one bit of news shows every 30 minutes per pet.",
