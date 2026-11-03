@@ -946,6 +946,8 @@ GUIDE_STRINGS = (
     "between 11:00 and 20:00",
     "friends for a whole year",
     'They say "you told me", never that the day happened, and never count.',
+    "maybe a match tomorrow! go you ♥",
+    "one such remark a month at most across all three",
 )
 
 
@@ -1939,3 +1941,100 @@ async def test_a_door_reads_the_capped_tags(
     mem = people.memory("u")
     assert len(mem["tags"]) == P.MEMORY_TAGS_CAP
     assert P.memory_door(mem, "2026-11-03", 12) is None
+
+
+# --- M2: door 10, the weekday pattern (plan section 6, its own commit) ------------------
+
+# Saturdays in October 2026 (weekday 5); 2026-11-06 is a Friday, the eve of one.
+SATURDAYS = ["2026-10-03", "2026-10-10", "2026-10-17", "2026-10-24", "2026-10-31"]
+FRI = "2026-11-06"
+
+
+def test_door_ten_on_the_eve_of_a_weekday_pattern() -> None:
+    mem = tag_memory(*(tag(d, "match") for d in SATURDAYS[:3]))
+    assert P.memory_door(mem, FRI, 12) == ("door10", {"kind": "door10", "tag": "match"})
+    assert P.memory_door(mem, "2026-11-05", 12) is None  # not the eve
+    assert P.memory_door(mem, "2026-11-07", 12) is None  # the day itself
+    for hour in (10, 20):  # outside the window: lost, nothing kept for it
+        assert P.memory_door(mem, FRI, hour) is None
+    # Two of five is no pattern; nor a weekend tag, nor a kind that isn't weekly.
+    assert (
+        P.memory_door(tag_memory(*(tag(d, "match") for d in SATURDAYS[:2])), FRI, 12)
+        is None
+    )
+    for name, kind in (
+        ("match", "weekend"),
+        ("trip", "big_day"),
+        ("exam", "big_day"),
+        ("party", "big_day"),
+    ):
+        mem = tag_memory(*(tag(d, name, kind) for d in SATURDAYS[:3]))
+        assert P.memory_door(mem, FRI, 12) is None, name
+
+
+def test_door_ten_once_in_twenty_eight_days_across_every_pattern() -> None:
+    mem = tag_memory(
+        *(tag(d, "match") for d in SATURDAYS[:3]),
+        # And show on Sundays: its eve is Saturday the 7th.
+        *(tag(d, "show") for d in ("2026-10-04", "2026-10-11", "2026-10-18")),
+        door10=FRI,
+    )
+    assert P.memory_door(mem, "2026-11-07", 12) is None  # match's said holds show back
+    assert P.memory_door(mem, "2026-11-13", 12) is None  # 7 days on
+    assert P.memory_door(mem, "2026-11-28", 12) is None  # 22 days on: a Saturday's eve
+    mem["said"]["door10"] = "2026-10-09"  # 28 days before the 6th
+    assert P.memory_door(mem, FRI, 12) == ("door10", {"kind": "door10", "tag": "match"})
+
+
+def test_door_ten_is_re_derived_from_what_remains() -> None:
+    """M2 S11: exactly 3 stops after one is forgotten; 4 of 5 survives one forget;
+    forgetting an entry off the weekday moves the last-5 window and can start one."""
+    three = [tag(d, "lesson") for d in SATURDAYS[:3]]
+    mem = tag_memory(*three)
+    assert P.memory_door(mem, FRI, 12)[0] == "door10"
+    mem["tags"] = three[1:]
+    assert P.memory_door(mem, FRI, 12) is None
+    four = [tag(d, "lesson") for d in SATURDAYS[:4]] + [tag("2026-11-02", "lesson")]
+    mem = tag_memory(*four)
+    mem["tags"].remove(four[0])
+    assert P.memory_door(mem, FRI, 12)[0] == "door10"  # 3 Saturdays of the last 5 left
+    # Saturdays the 3rd and 10th, then three Mondays: no pattern in the last 5 is a
+    # Saturday's (2 of 5); forgetting one Monday brings the oldest Saturday (Sep 26)
+    # into the window: 3 of the then-last 5 are Saturdays.
+    older = [tag("2026-09-26", "lesson")]
+    sats = [tag(d, "lesson") for d in SATURDAYS[:2]]
+    mondays = [tag(d, "lesson") for d in ("2026-10-19", "2026-10-26", "2026-11-02")]
+    mem = tag_memory(*older, *sats, *mondays)
+    assert P.memory_door(mem, FRI, 12) is None
+    mem["tags"].remove(mondays[0])
+    assert P.memory_door(mem, FRI, 12) == (
+        "door10",
+        {"kind": "door10", "tag": "lesson"},
+    )
+
+
+def test_door_ten_goes_after_one_and_before_the_picks() -> None:
+    mem = door_memory()
+    mem["tags"] = [tag(d, "match") for d in SATURDAYS[:3]]
+    mem["tags"].append(tag("2026-10-30", "show"))  # door 1 on the 6th
+    mem["said"] = {"door2": FRI}
+    assert P.memory_door(mem, FRI, 12)[0] == "door1"
+    mem["said"]["door1"] = FRI
+    assert P.memory_door(mem, FRI, 12)[0] == "door10"
+    mem["said"]["door10"] = FRI
+    assert P.memory_door(mem, FRI, 12)[0] == "door4"
+
+
+async def test_door_ten_through_the_visit_marks_memory_only(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer
+) -> None:
+    freezer.move_to(f"{FRI} 12:00:00+00:00")
+    ada, _ = await a_user(hass)
+    mem = tag_memory(*(tag(d, "show") for d in SATURDAYS[2:]))
+    pet = await ready_pet(hass, hass_storage, freezer, ada.id, record={"memory": mem})
+    reply = await door_visit(pet, ada.id)
+    assert door_notes(reply) == [{"kind": "door10", "tag": "show"}]
+    assert pet.people.memory_said(ada.id, "door10") == FRI
+    assert door_notes(await door_visit(pet, ada.id)) == []
+    noted = pet.people.data["people"][ada.id].get("noted") or {}
+    assert not any(k.startswith("door") for k in noted)

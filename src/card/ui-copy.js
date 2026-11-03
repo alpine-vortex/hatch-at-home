@@ -308,6 +308,7 @@ const NOTES = {
   // Doors 1, 3 (memory plan M2) and 10, by their tag; a tag with no line says nothing.
   door1: (n) => tagDoor("door1", n.tag),
   door3: (n) => tagDoor("door3", n.tag),
+  door10: (n) => tagDoor("door10", n.tag),
   early_alarm: () => "early start tomorrow! sleep well ♥",
   up_early: () => "mmh... you're up before the sun... zzz ♥",
   photo: () => "i made you something! it's in your journal ♥",

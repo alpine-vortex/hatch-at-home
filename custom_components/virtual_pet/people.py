@@ -1142,6 +1142,9 @@ def memory_ask_due(person: dict[str, Any], today: str, level: int) -> bool:
 MEMORY_DOOR1_TAGS = ("exam", "match", "show", "trip", "party", "lesson")
 MEMORY_DOOR3_TAGS = ("match", "show", "trip", "party", "lesson")
 MEMORY_DOOR11_TAGS = MEMORY_DOOR1_TAGS
+# Door 10 (a weekday pattern): weekly kinds only, in the order they are tried.
+MEMORY_DOOR10_TAGS = ("match", "show", "lesson")
+MEMORY_DOOR10_NEED = 3  # of the last MEMORY_PICKS_CAP (5) of one tag, on one weekday
 # The pick doors (plan section 6): door, picks list, how many of its newest
 # MEMORY_PICKS_CAP must be the same pick. In door-number order.
 MEMORY_PICK_DOORS = (
@@ -1175,7 +1178,8 @@ def memory_door(
     true for days. A note holds its kind and at most one fixed-list pick or tag, never
     a day (FM Q1, s2782 Q1). Door 2: a great day yesterday, before noon, once for it.
     Door 3: a big day told of exactly a year ago; door 1: one exactly a week ago; each
-    once that day, in the day's window, and lost with no look in it. Doors 4, 5, 12: a
+    once that day, in the day's window, and lost with no look in it. Door 10: the eve
+    of a weekday pattern, in the window, once in 28 days. Doors 4, 5, 12: a
     repeated pick, in the day's window, at most once a week and only with a pick made
     since it was last said (so a habit long over isn't said week after week)."""
     said = mem.get("said") or {}
@@ -1206,6 +1210,8 @@ def memory_door(
         for e in _big_day_tags(mem, MEMORY_DOOR1_TAGS):
             if e["day"] == week_ago:
                 return "door1", {"kind": "door1", "tag": e["tag"]}
+    if (door10 := _weekday_pattern(mem, now, said.get("door10"))) is not None:
+        return "door10", {"kind": "door10", "tag": door10}
     for door, kind, need in MEMORY_PICK_DOORS:
         entries = sorted(picks.get(kind) or [], key=lambda e: e["day"])
         entries = entries[-MEMORY_PICKS_CAP:]
@@ -1223,6 +1229,22 @@ def memory_door(
         for pick, n in counts.items():
             if n >= need:
                 return door, {"kind": door, "pick": pick}
+    return None
+
+
+def _weekday_pattern(mem: dict[str, Any], now: date, last: str | None) -> str | None:
+    """Door 10 (plan section 6): tomorrow is the weekday on which 3 of the last 5
+    big_day entries of match, show or lesson fell (by day, as they stand now), at
+    most once in MEMORY_DOOR10_GAP_DAYS across every pattern. Nothing is kept for
+    it, so forgetting an entry re-derives it from what remains (M2 S11)."""
+    if last and (now - date.fromisoformat(last)).days < R.MEMORY_DOOR10_GAP_DAYS:
+        return None
+    tomorrow = (now + timedelta(days=1)).weekday()
+    for name in MEMORY_DOOR10_TAGS:
+        days = sorted(e["day"] for e in _big_day_tags(mem, (name,)))
+        weekdays = [date.fromisoformat(d).weekday() for d in days[-MEMORY_PICKS_CAP:]]
+        if weekdays.count(tomorrow) >= MEMORY_DOOR10_NEED:
+            return name
     return None
 
 

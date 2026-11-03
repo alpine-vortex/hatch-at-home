@@ -254,7 +254,7 @@ function notes() {
     table("MEMORY_TAG_DOORS"),
     grab(/\nconst tagDoor = [^\n]*\n/),
     `const months = (n) => n + " months";`,
-    `const NOTES = { ${["friends_for", "door1", "door3"].map((k) => entry(table("NOTES"), k)).join("\n")} };`,
+    `const NOTES = { ${["friends_for", "door1", "door3", "door10"].map((k) => entry(table("NOTES"), k)).join("\n")} };`,
     "this.out = { NOTES, MEMORY_TAG_DOORS };",
   ].join("\n"), ctx);
   return ctx.out;
@@ -269,6 +269,16 @@ test("doors 1 and 3 say their approved line by tag, and nothing for a tag with n
     assert.ok(!NOTES.door3({ kind: "door3", tag: t }), String(t));
   }
   for (const t of ["work_thing", "something_else", "constructor", undefined]) assert.ok(!NOTES.door1({ kind: "door1", tag: t }), String(t));
+});
+
+test("door 10 says its approved line for match, show and lesson only", () => {
+  const { NOTES } = notes();
+  assert.equal(NOTES.door10({ kind: "door10", tag: "match" }), "maybe a match tomorrow! go you ♥");
+  assert.equal(NOTES.door10({ kind: "door10", tag: "show" }), "maybe a show tomorrow! break a leg ♥");
+  assert.equal(NOTES.door10({ kind: "door10", tag: "lesson" }), "maybe a lesson tomorrow! have fun ♥");
+  for (const t of ["exam", "trip", "party", "work_thing", "something_else", "valueOf", undefined]) {
+    assert.ok(!NOTES.door10({ kind: "door10", tag: t }), String(t));
+  }
 });
 
 test("door 11: the 12-month friends note with a tag says the recap, else the usual line", () => {

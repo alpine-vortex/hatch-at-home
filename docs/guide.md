@@ -642,7 +642,11 @@ time a favourite weather or season you told it with memory on comes back; and, f
 big day's tag, a week after that day ("thinking of the show you told me about") and a
 year after it ("a year ago you told me about a show ♥", not for an exam). Each of those
 two is tied to its one day: with no look at the pet between 11:00 and 20:00 that day,
-it is skipped. On the day you have been friends for a whole year, the pet's line may
+it is skipped. If three of the last five big days you tagged as a match, a show or a
+lesson fell on the same weekday, the pet may wish you well on the eve of the next one
+("maybe a match tomorrow! go you ♥"), skipped the same way, and one such remark a month at
+most across all three. It is worked out from the tags kept and nothing else, so
+forgetting a tag can end it. On the day you have been friends for a whole year, the pet's line may
 name the most recent big day you tagged in that year ("a whole year! you told me about
 a show"). They say "you told me", never that the day happened, and never count. A shared
 screen never gets these: they come with the pet's private news, which the card asks
