@@ -95,6 +95,7 @@ from .const import (
     STORE_MINOR_VERSION,
     STORE_VERSION,
 )
+from .device_fx import DeviceFx, rain_reading
 from .home import (
     FOGGY,
     RAINY,
@@ -363,6 +364,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             immediate=False,
             function=self._async_home_changed,
         )
+        # The device-alive signal bridge (slice 3A): in memory only, never saved.
+        self.device_fx = DeviceFx(hass, self._home_debouncer.async_schedule_call)
 
     @property
     def settings(self) -> model.Settings:
@@ -745,6 +748,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             async_track_state_change_event(self.hass, ids, changed)
         )
         self.config_entry.async_on_unload(self._home_debouncer.async_shutdown)
+        self.config_entry.async_on_unload(self.device_fx.cancel)  # the rain block
 
         @callback
         def person_moved(event: Event[EventStateChangedData]) -> None:
@@ -915,6 +919,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         )
         readings = self.watcher.read(now, night, late)
         options = self.config_entry.options
+        if self._fx_mapped():  # only collected here: _push_watchers sends it
+            self.device_fx.observe_rain(rain_reading(readings), now)
         local = dt_util.as_local(dt_util.utc_from_timestamp(now))
         self._find_flags = find_flags(
             readings,
@@ -2881,6 +2887,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         only shared screens get it."""
         return {**house, "house_open_on": self.people.house_open_on() == self.pet_id}
 
+    def _fx_mapped(self) -> bool:
+        """The house can tell rain (a weather entity or a rain sensor is mapped);
+        with neither, there is no device_fx at all."""
+        options = self.config_entry.options
+        return bool(options.get(CONF_WEATHER) or options.get(CONF_RAIN))
+
     def _house_view(self) -> dict[str, Any]:
         """What every screen sees, shared ones too: the latest show or song,
         this morning's dream of one (other dreams are on the sensor), and
@@ -2906,6 +2918,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         )
         if self._powered_on:
             view["powered_on"] = {"at": self._powered_on}
+        # What the house is now, for the device's ambience: whitelisted booleans
+        # only (slice 3A). The transitions (recent) are never here: they expire
+        # between pushes and would make a spurious house diff.
+        if self._fx_mapped():
+            view["device_fx"] = self.device_fx.view()
         return view
 
     def channel_snapshot(
@@ -2921,12 +2938,16 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         moments = [] if shared else list(self._private.get(user, ()))
         if house["media"]:
             moments.append(house["media"])
-        return {
+        snapshot: dict[str, Any] = {
             "mine": mine,
             "house": house,
             "moments": moments,
             "now": dt_util.utcnow().isoformat(),
         }
+        if self._fx_mapped():
+            # Beside the house, built after _sent is stored and never diffed.
+            snapshot["device_fx_recent"] = self.device_fx.recent(self._now())
+        return snapshot
 
     def async_start_channel(self) -> None:
         """Push on every update, and send the watchers already open (a card
@@ -2964,6 +2985,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             if changed:
                 self._sent[token] = (mine, seen)
                 send(changed)
+        # The device's transitions go last, after any house change they belong
+        # to (the card must see the new ambience before the onset). One flush,
+        # shared by both callers of _sense_home. A watcher whose snapshot just
+        # went out sees the same id twice; the card keeps one.
+        for entry in self.device_fx.take_fresh(self._now()):
+            for _, _, send, _ in list(watchers.values()):
+                send({"fx": entry})
 
     def _push_everywhere(self) -> None:
         """A person's own switch changed (one for every pet): every pet's
