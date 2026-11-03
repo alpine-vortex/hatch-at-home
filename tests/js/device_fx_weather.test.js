@@ -20,7 +20,10 @@ const plain = (x) => JSON.parse(JSON.stringify(x));
 const ctx = { Date, Object, Array, Number, Math, JSON };
 vm.runInNewContext(`${director}\n${part}\nthis.D = HATCH_DIRECTOR; this.F = HATCH_DEVICE_FX;`, ctx);
 const { D, F } = ctx;
-const KEYS = Object.keys(MAP.keys);
+// 4B's keys: the weather. The map also carries 4C's activity keys (lights, fireplace, tv, music, heating,
+// cooling); the card ignores those until 4D (plan 13, 4C row), and a test below says so.
+const KEYS = ["rain", "snow", "fog", "storm", "wind"];
+const ACTIVITY = Object.keys(MAP.keys).filter((k) => !KEYS.includes(k));
 
 const T0 = Date.parse("2026-11-03T12:00:00Z");
 const entry = (kind, over = {}) => ({
@@ -75,6 +78,22 @@ test("every wire kind in the export has a KINDS and a RECIPES entry, in the map'
     assert.strictEqual(MAP.keys[k].type, "bool");
     assert.deepStrictEqual(plain(F.KINDS[`${k}_started`]), { key: k, direction: "start", value: true });
     assert.deepStrictEqual(plain(F.KINDS[`${k}_stopped`]), { key: k, direction: "end", value: false });
+  }
+});
+
+test("the map's first keys are the weather, in the table's order; the rest are 4C's and the card ignores them", () => {
+  assert.deepStrictEqual(Object.keys(MAP.keys).slice(0, KEYS.length), KEYS);
+  for (const k of ACTIVITY) {
+    for (const kind of MAP.keys[k].kinds) assert.ok(!(kind in F.KINDS), `${kind} waits for 4D`);
+    assert.ok(!(k in F.RECIPES), `${k} has no recipe yet`);
+    const w = world(), s = w.slide();
+    F.sync(w.dir, s, house({ [k]: true }), w.env);
+    assert.deepStrictEqual(s.glass.names(), [], `${k} paints nothing`);
+    for (const kind of MAP.keys[k].kinds) {
+      const r = F.live(w.dir, s, entry(kind), w.env);
+      assert.ok(!r || !r.ok, `${kind} plays nothing`);
+      assert.deepStrictEqual(s.glass.names(), [], `${kind} paints nothing`);
+    }
   }
 });
 
