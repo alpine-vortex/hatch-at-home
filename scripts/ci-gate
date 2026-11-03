@@ -4,7 +4,7 @@
 # wait, and on a pass write the same gate-passed marker scripts/gate writes.
 # Same checks, none of the local load. Needs gh and a clean, committed tree.
 #
-#   scripts/ci-gate          # gate HEAD's branch on GitHub (~15 min)
+#   scripts/ci-gate          # gate HEAD's branch on GitHub (~5-6 min)
 #
 # A failed run prints the failing card-checks and the run's link.
 set -uo pipefail
