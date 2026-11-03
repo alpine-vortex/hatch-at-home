@@ -21,7 +21,7 @@ Per `<species>_<stage>` (every hatched stage of every species that has an asleep
   (28 colours). Not for use itself: the redraw loses the original's finer detail.
 - `source/*_raw.png`: Sol's raw output on flat grey, stored at 512x512 and 64 colours to keep the
   repo small (the full 1024 px files are in the worker archive).
-- `SHA256SUMS` lists every file. `sheet.py` is the probe's 5-pet review sheet (kept for reference).
+- `SHA256SUMS` lists every file.
 
 Reworked frames (the first try failed the reject rule: tiny blanket, blanket over the tail,
 blanket hanging below the body) are listed in the s2799 report. Prompts and the call log are
