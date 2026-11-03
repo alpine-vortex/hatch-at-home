@@ -19,6 +19,9 @@ SP = (
     / "custom_components/virtual_pet/frontend/sprites"
 )
 WATER = {"duckling", "otter"}
+BLUISH = {
+    ("hermitcrab", "baby")
+}  # a pale blue shell: blanket = blue that differs from the original
 
 
 def comp(sp, st, cut, out):
@@ -31,6 +34,8 @@ def comp(sp, st, cut, out):
     if sp in WATER:
         orr, og, ob = o[..., 0], o[..., 1], o[..., 2]
         blue &= ~((o[..., 3] > 0) & (ob > orr + 8) & (ob >= og - 4))
+    if (sp, st) in BLUISH:
+        blue &= (o[..., 3] == 0) | (np.abs(t[..., :3] - o[..., :3]).sum(-1) > 70)
     bl = ndimage.binary_closing(blue[::4, ::4], structure=np.ones((3, 3)))
     bl = ndimage.binary_fill_holes(bl)
     lab, n = ndimage.label(bl)
