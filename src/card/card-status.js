@@ -194,6 +194,11 @@ class HatchPetCardStatus extends HatchPetCardMoment {
     const myDay = this._mineSwitch(s, "my_day", this._myDay);
     const birthdayKept = this._mineSwitch(s, "birthday_kept", this._birthdayKept);
     const birthdayPhone = this._mineSwitch(s, "birthday_phone", this._birthdayPhone);
+    // Memory (plan M1a): only on their own screen, and only where this pet allows it.
+    const memoryOn = this._mineSwitch(s, "memory_on", this._memoryOn);
+    const memoryAllowed = this._mineSwitch(s, "memory_allowed", this._memoryAllowed);
+    const memory = !sharedScreen() && memoryAllowed && memoryOn !== undefined
+      ? memoryRow(memoryOn, confirmArmed(s, "memory_off")) : "";
     const row = (iconName, label, value) =>
       `<div class="row srow"><span>${label}</span>${value}</div>`;
     // A two-tap "forget", armed or not (confirmTap).
@@ -257,12 +262,14 @@ class HatchPetCardStatus extends HatchPetCardMoment {
     // sets where shared screens open (the household's). An older server sends neither.
     const petName = escape(this._linkName(s));
     const several = (this._slides || []).filter((x) => x.ids && !x.empty).length > 1;
-    const openRow = (cls, label, on) =>
-      row(null, label, `<span><button class="bell ${cls}" aria-label="${spoken(label)}" aria-pressed="${on}">${on ? "on" : "off"}</button></span>`);
+    // The spoken label is made from the copy with a stand-in, then the name goes in as it is:
+    // spoken() would strip a "~", a "*" or an emoji from the pet's name.
+    const openRow = (cls, copy, on) =>
+      row(null, copy(petName), `<span><button class="bell ${cls}" aria-label="${spoken(copy("{}")).replace("{}", () => petName)}" aria-pressed="${on}">${on ? "on" : "off"}</button></span>`);
     const openOn = !several || sharedScreen() || typeof s.mine?.open_on !== "boolean" ? ""
-      : openRow("openon", OPEN_ON_COPY.mine(petName), s.mine.open_on)
+      : openRow("openon", OPEN_ON_COPY.mine, s.mine.open_on)
         + (this._hass.user?.is_admin && typeof s.mine.house_open_on === "boolean"
-          ? openRow("openhouse", OPEN_ON_COPY.house(petName), s.mine.house_open_on) : "");
+          ? openRow("openhouse", OPEN_ON_COPY.house, s.mine.house_open_on) : "");
     // Who each part changes: the pet (everyone), the viewer (follows their login),
     // or this browser.
     const html = `
@@ -283,6 +290,7 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       ${sharedScreen() ? "" : row(null, "notify me", `<span><button class="bell notify" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
       ${bond && myDay === undefined ? row(null, "my day", `<span>…</span>`) : ""}
       ${bond && myDay !== undefined ? row(null, "my day", `<span><button class="bell myday" aria-label="my day: let the pet notice your steps, sleep, alarm and trips" aria-pressed="${!!myDay}">${myDay ? "on" : "off"}</button></span>`) : ""}
+      ${memory}
       ${birthdayKept && !sharedScreen() ? row(null, "my birthday", forgetButton("forgetbday", "forget_birthday", "forget my birthday")) +
         row(null, "birthday on my phone", `<span><button class="bell bdayphone" aria-label="birthday on my phone: a happy birthday message on your phone on the day" aria-pressed="${!!birthdayPhone}">${birthdayPhone ? "on" : "off"}</button></span>`) : ""}
       ${sharedScreen() ? "" : row(null, "baby talk", `<span><button class="bell babytalk" aria-label="baby talk: simpler words while a pet is a baby or child" aria-pressed="${babyTalk(this._hass.user?.id)}">${babyTalk(this._hass.user?.id) ? "on" : "off"}</button></span>`)}
@@ -482,6 +490,15 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       this._setBabyTalk(s, button.getAttribute("aria-pressed") !== "true", button);
     });
     const redrawStatus = () => this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+    s.status.querySelector(".bell.memory")?.addEventListener("click", (e) => {
+      e.stopPropagation(); // the screen behind would close the status
+      const button = e.currentTarget;
+      if (button.classList.contains("pending")) return; // a call is in flight (F3)
+      this._tapped(button);
+      const enabled = button.getAttribute("aria-pressed") !== "true"; // its value now, not at draw
+      if (!enabled && !this._confirmed(s, "memory_off", button, redrawStatus)) return; // off erases
+      this._setMemory(s, enabled, button);
+    });
     s.status.querySelector(".bell.forgetbday")?.addEventListener("click", (e) => {
       e.stopPropagation();
       this._tapped(e.currentTarget);
@@ -513,7 +530,8 @@ class HatchPetCardStatus extends HatchPetCardMoment {
           this._myDay = false;
           this._birthdayKept = false;
           this._birthdayPhone = false;
-          for (const key of ["my_day", "baby_talk", "birthday_kept", "birthday_phone", "open_on"]) this._setMine(key, false);
+          this._memoryOn = false; // memory went with the rest (plan M1a)
+          for (const key of ["my_day", "baby_talk", "birthday_kept", "birthday_phone", "memory_on", "open_on"]) this._setMine(key, false);
           for (const key of ["fav_weather", "fav_season", "fav_visitor"]) this._setMine(key, null); // M0-c's, gone too
           this._openOnSync(); // the heart and the copy of the pet their card opened on
           for (const slide of this._slides || []) { // lines told only to them

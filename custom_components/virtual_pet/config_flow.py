@@ -49,6 +49,7 @@ from .const import (
     CONF_HOUSE_WORDS_PRIVATE,
     CONF_INDOOR_TEMP,
     CONF_LUX,
+    CONF_MEMORY,
     CONF_MOON_ALTITUDE,
     CONF_MOON_ILLUMINATION,
     CONF_MOON_PHASE,
@@ -76,6 +77,7 @@ from .const import (
 from .defaults import default_weather
 from .model import parse_hhmm
 from .names import clear_device_name, name_taken, pet_name
+from .people import async_erase_unless_allowed
 from .species import load_catalog
 from .topics import TOPICS
 from .watcher import is_temperature
@@ -378,6 +380,7 @@ class PetOptionsFlow(OptionsFlowWithReload):
             CONF_SITTER_SETTLES: (BooleanSelector(), True),
             CONF_PRIVACY: (BooleanSelector(), True),
             CONF_HOUSE_WORDS_PRIVATE: (BooleanSelector(), False),
+            CONF_MEMORY: (BooleanSelector(), True),
             CONF_HEATING: (
                 _entities(["climate", "switch", "input_boolean"], True),
                 None,
@@ -519,6 +522,14 @@ class PetOptionsFlow(OptionsFlowWithReload):
             new = self._merge(topic, entered)
             errors = self._errors(topic, new)
             if not errors:
+                if self.config_entry.options.get(CONF_MEMORY, True) and not new.get(
+                    CONF_MEMORY, True
+                ):
+                    # Memory off here: off on every pet erases everyone's, before
+                    # the save (memory plan section 5). Never on a reload.
+                    await async_erase_unless_allowed(
+                        self.hass, self.config_entry.entry_id
+                    )
                 return self.async_create_entry(data=new)
             current = entered  # an error: keep what was entered, in the user's unit
         else:

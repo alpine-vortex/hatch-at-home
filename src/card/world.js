@@ -475,6 +475,22 @@ function shelfWrite(ids, index) {
     // no storage: the place is not kept
   }
 }
+// A swipe in this browser session (sessionStorage: the tab's life, not a reload's). The favourite
+// opens the card only while there is none; after one, the shelf's place wins (FM, audit s2748).
+function shelfMark(ids) {
+  try {
+    sessionStorage.setItem(`${shelfKey(ids)}-swiped`, "1");
+  } catch (err) {
+    // no storage: the favourite keeps opening the card
+  }
+}
+function shelfSwiped(devices) {
+  try {
+    return sessionStorage.getItem(`${shelfKey(devices)}-swiped`) === "1";
+  } catch (err) {
+    return false;
+  }
+}
 // The pet this person's card opens on (the favourite, plan favourite-resting §5.3), by its
 // device: a copy of the server's, so a page load opens there before the channel speaks. A
 // shared screen keeps the household's default instead (no person). Every snapshot refreshes it.

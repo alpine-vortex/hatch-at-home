@@ -1963,7 +1963,7 @@ async function main() {
   await page.waitForTimeout(800);
   // A shared screen shows nothing personal: no bond row, no "my day", no visit,
   // a greeting without a name.
-  const PERSONAL_BELLS = [".bell.notify", ".bell.myday", ".bell.babytalk", ".bell.forgetme", ".bell.forgetbday", ".bell.bdayphone", ".bell.askagain"]
+  const PERSONAL_BELLS = [".bell.notify", ".bell.myday", ".bell.babytalk", ".bell.forgetme", ".bell.forgetbday", ".bell.bdayphone", ".bell.askagain", ".bell.memory"]
     .map((q) => `.status ${q}`).join(", ");
   const personalSheet = await cur().evaluate((sl) => !!sl.querySelector(".status .bell.notify") &&
     !!sl.querySelector(".status .bell.myday"));
@@ -3279,9 +3279,11 @@ async function main() {
   // What the pet tells only you: a friendship month, last night's tuck-in, a
   // busy day; a record and a goodnight, to their person only. (A real push may
   // have replaced the close bond set above.)
-  await mineFor({ bond: { level: 8, nickname: "sunbeam" } });
+  // The close bond is set inside the same evaluate: a live push of the server's `mine` (no
+  // nickname) between two calls replaced it in CI (2026-11-03) and the tuck-in thanked "Dev".
   const secret = await page.locator("hatch-pet-card").evaluate((el, me) => {
     const s = el._slides[el._index];
+    el._mineFor(s, { ...(s.mine || {}), bond: { level: 8, nickname: "sunbeam" } });
     s.queue = [];
     el._nightLine = () => null; // E4 S-b's callback after a visitor or sunset: checked in moments
     el._note(s, { kind: "friends_for", months: 1 });
@@ -7236,6 +7238,10 @@ async function main() {
           el._greet(s); el._stopTyping(s);
           return s.bubble.textContent;
         },
+        // Why a greeting may not have been said (the card's _greet/_free gates), for a failure's message.
+        why: () => ({ free: el._free(s), heard: el._channelHeard(s), mood: s.moodState, species: !!s.species,
+          status: s.screen.classList.contains("show-status"), game: !!s.game, scene: !!s.scene, calling: !!s.calling,
+          until: ["sayUntil", "poseUntil", "propUntil", "flairUntil", "movingUntil"].filter((k) => s[k] > Date.now()) }),
         moment: (m) => { // what's said now, and what's queued after it
           free();
           s.sayEntry = null;
@@ -7342,7 +7348,7 @@ async function main() {
         out[type] = {};
         for (const r of [0.1, 0.9]) {
           t.random(r);
-          out[type][r] = { greet: t.greet() };
+          out[type][r] = { greet: t.greet(), why: t.why() };
           for (const [key, m] of moments) {
             const said = t.moment(m);
             out[type][r][key] = said.queued.length ? said.queued[0] : { text: said.said, catch: said.saidCatch };
@@ -7364,8 +7370,8 @@ async function main() {
     for (const type of TYPES) {
       const heads = half[type][0.1];
       const tails = half[type][0.9];
-      if (heads.greet !== filled(type, "hello", "Dev")[0]) halfBad.push(`${type} hello: ${heads.greet}`);
-      if (!NORMAL.greet.test(tails.greet)) halfBad.push(`${type} normal hello: ${tails.greet}`);
+      if (heads.greet !== filled(type, "hello", "Dev")[0]) halfBad.push(`${type} hello: ${heads.greet} ${JSON.stringify(heads.why)}`);
+      if (!NORMAL.greet.test(tails.greet)) halfBad.push(`${type} normal hello: ${tails.greet} ${JSON.stringify(tails.why)}`);
       for (const [key] of MOMENTS) {
         if (heads[key].text !== filled(type, key, "hazelnuts")[0]) halfBad.push(`${type} ${key}: ${heads[key].text}`);
         if (!NORMAL[key].test(tails[key].text)) halfBad.push(`${type} normal ${key}: ${tails[key].text}`);
@@ -7798,7 +7804,7 @@ async function main() {
     el._greet(s); // an egg doesn't greet: the flag stays down for the hatch
     out.greetedAfter = s.greeted;
     s.greeted = greeted;
-    s.patAt = 0;
+    s.patAt = 0; s.patRun = null;
     s.sayUntil = 0;
     out.say25 = el._say(s, null, false);
     s.hatchesAt = new Date(Date.now() + 4 * 60000).toISOString();
@@ -8692,6 +8698,64 @@ async function main() {
     await el._hass.callService("virtual_pet", "my_day", { entity_id: s.ids["sensor.life_stage"], enabled: false });
     el._myDay = false;
   });
+  // "remember me" (memory plan M1a; first-mate copy): the person's memory switch, on their
+  // own screen where the pet allows it. On says so; off takes two taps and erases.
+  const memory = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const log = () => el._state(s, "sensor.last_care")?.attributes.log || [];
+    const draw = () => { s.statusHtml = null; s.settings = true; el._renderStatus(s, log()); };
+    const bell = () => s.status.querySelector(".bell.memory");
+    const note = () => s.status.querySelector(".status-feedback")?.textContent || "";
+    for (let i = 0; i < 80 && typeof s.mine?.memory_allowed !== "boolean"; i++) await wait(100);
+    const calls = [];
+    // The connection outlives the hass object (HA hands the card a new one on each change).
+    const conn = el._hass.connection;
+    const realSend = conn.sendMessagePromise;
+    conn.sendMessagePromise = function (msg) { calls.push(msg); return realSend.call(this, msg); };
+    const out = { allowed: s.mine?.memory_allowed };
+    draw();
+    const row = [...s.status.querySelectorAll(".row")].find((r) => /remember me/.test(r.textContent));
+    out.label = row?.querySelector("span")?.textContent;
+    out.start = bell()?.textContent;
+    out.aria = bell()?.getAttribute("aria-label");
+    bell().click();
+    // mine flips at once; the line waits for the server's answer
+    for (let i = 0; i < 40 && !(s.mine?.memory_on && note()); i++) await wait(100);
+    out.on = { mine: s.mine?.memory_on, text: bell()?.textContent, note: note() };
+    draw();
+    bell().click(); // the first tap only arms
+    await wait(700); // past CONFIRM_GAP_MS, or the second tap is the same tap
+    out.armed = { text: bell()?.textContent, aria: bell()?.getAttribute("aria-label"), mine: s.mine?.memory_on };
+    bell().click();
+    for (let i = 0; i < 40 && (s.mine?.memory_on || !/forgotten/.test(note())); i++) await wait(100);
+    out.off = { mine: s.mine?.memory_on, text: bell()?.textContent, note: note() };
+    out.calls = calls.filter((m) => m.type === "virtual_pet/memory").map((m) => `${m.enabled}/${m.shared}`);
+    conn.sendMessagePromise = realSend;
+    const allowed = s.mine.memory_allowed;
+    s.mine.memory_allowed = false; // a pet whose option is off: no row
+    draw();
+    out.notAllowed = !!bell();
+    s.mine.memory_allowed = allowed;
+    localStorage.setItem("hatch-shared-screen", "on"); // a shared screen: no row
+    draw();
+    out.shared = !!bell();
+    localStorage.removeItem("hatch-shared-screen");
+    s.settings = false;
+    s.statusHtml = null;
+    return out;
+  });
+  check("remember me: the row, its aria, on with its line, off after two taps with its line, websocket with shared false",
+    memory.allowed === true && memory.label === "remember me" && memory.start === "off"
+      && memory.aria === "remember me: the pets keep what you tell them, off, change"
+      && memory.on.mine === true && memory.on.text === "on" && memory.on.note === "the pets will remember what you tell them ♪"
+      && memory.armed.text === "sure? tap again" && memory.armed.mine === true
+      && memory.armed.aria === "Sure? Press again to forget what the pets remember about you"
+      && memory.off.mine === false && memory.off.note === "forgotten. the pets keep nothing you told them"
+      && memory.calls.join() === "true/false,false/false",
+    JSON.stringify(memory));
+  check("remember me has no row where the pet doesn't allow it, nor on a shared screen",
+    !memory.notAllowed && !memory.shared, JSON.stringify(memory));
   // Quiet samples: _mayPlay's rules, and the tap still unlocks audio.
   const samples = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -9605,7 +9669,7 @@ async function main() {
   const patReset = () => card.evaluate((el) => {
     const s = el._slides[el._index];
     if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
-    Object.assign(s, { patAt: 0, queue: [], sayUntil: 0, sayClass: 0 });
+    Object.assign(s, { patAt: 0, patRun: null, queue: [], sayUntil: 0, sayClass: 0 });
     s.bubble.textContent = "";
     s.pat.hidden = !el._patOn(s);
   });
@@ -9615,9 +9679,9 @@ async function main() {
     await page.mouse.click(r.x + r.width * fx, r.y + r.height * fy);
     await page.waitForTimeout(150);
   };
-  const tapPet = async () => {
+  const tapPet = async () => { // the head (care reactions C: the top 40% of the box; the body wiggles instead)
     const r = await cur().locator(".pat").boundingBox();
-    await page.mouse.click(r.x + r.width / 2, r.y + r.height * 0.6);
+    await page.mouse.click(r.x + r.width / 2, r.y + r.height * 0.2);
     await page.waitForTimeout(150);
   };
   const PAT = { content: "hehe ♥", excited: "hehe! ♪", sleepy: "mmm...", sick: "thanks... ♥" };
@@ -9741,7 +9805,7 @@ async function main() {
         return key === "sensor.life_stage" && st ? { ...st, state: "teen" } : st;
       };
       const pat = () => {
-        Object.assign(s, { patAt: 0, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+        Object.assign(s, { patAt: 0, patRun: null, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
         s.pet.classList.remove("greethop");
         el._pat(s, { detail: 0, stopPropagation() {} });
       };
@@ -9764,7 +9828,7 @@ async function main() {
         Object.assign(el, { _line: real.line, _persona: real.persona, _state: real.state });
         Math.random = () => 0.9;
         s.moodState = real.mood;
-        Object.assign(s, { patAt: 0, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+        Object.assign(s, { patAt: 0, patRun: null, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
       }
       return out;
     }, { own });
@@ -9892,7 +9956,7 @@ async function main() {
     const n = await card.evaluate((el) => {
       const i = (el._index + 1) % el._slides.length;
       const s = el._slides[i];
-      s.patAt = 0;
+      s.patAt = 0; s.patRun = null;
       s.bubble.textContent = "";
       s.sayUntil = Date.now() + 60000; // its own chatter held, so a line would be the pat's
       let stopped = false;
@@ -9938,6 +10002,84 @@ async function main() {
     delete el.__calls;
     if (window.__patRandom) Math.random = window.__patRandom;
   });
+  // Care reactions C, touch (plan 5.4): where the tap lands, the lean, the ladder, saturation.
+  await patReset();
+  const touch = async (fx, fy) => {
+    const r = await cur().locator(".pat").boundingBox();
+    await page.mouse.click(r.x + r.width * fx, r.y + r.height * fy);
+    await page.waitForTimeout(80);
+  };
+  const petClasses = () => card.evaluate((el) => [...el._slides[el._index].pet.classList]);
+  await card.evaluate((el) => { const s = el._slides[el._index]; s.pet.classList.remove("look"); });
+  await touch(0.2, 0.15);
+  const headL = await petClasses();
+  await page.waitForTimeout(1300);
+  const leanGone = await petClasses();
+  await patReset();
+  await touch(0.8, 0.15);
+  const headR = await petClasses();
+  check("touch: a tap on the head's left leans the pet left, on the right to the right, and the lean lets go",
+    headL.includes("lean-l") && !headL.includes("lean-r") && headR.includes("lean-r") && !leanGone.some((c) => c.startsWith("lean-l")),
+    JSON.stringify({ headL, headR, leanGone }));
+  await page.waitForTimeout(1300);
+  await patReset();
+  await touch(0.8, 0.8);
+  const bodyTap = await petClasses();
+  check("touch: a tap on the body wiggles (two rocks) and does not lean",
+    bodyTap.includes("rock2") && !bodyTap.some((c) => c.startsWith("lean-")), JSON.stringify(bodyTap));
+  await page.waitForTimeout(1400);
+  const ladder = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    Object.assign(s, { patAt: 0, patRun: null, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+    s.pet.classList.remove("look", "rock2", "lean-l", "lean-r");
+    const ev = { detail: 0, stopPropagation() {} };
+    const out = { ns: [], flop: null, soft: [], noLine: true };
+    const quiet = () => [...s.pet.classList].filter((c) => c !== "pat-soft").sort().join();
+    for (let i = 1; i <= 12; i++) {
+      s.patAt = 0; // each pat is past the line cooldown; the ladder alone decides
+      const before = quiet();
+      const said = s.bubble.textContent;
+      el._pat(s, ev);
+      out.ns.push(s.patRun.n);
+      if (i === 10) out.flop = { src: s.pet.getAttribute("src"), quietFor: s.patRun.quietUntil - Date.now(), pose: s.poseUntil - Date.now() };
+      if (i > 10) {
+        out.soft.push(s.pet.classList.contains("pat-soft"));
+        if (quiet() !== before || s.bubble.textContent !== said) out.noLine = false;
+      }
+      await wait(60);
+    }
+    await wait(120);
+    out.kept = s.pet.getAttribute("src");
+    s.patRun.quietUntil = Date.now() - 1; // the quiet over: the first pat is a new run at 1
+    el._pat(s, ev);
+    out.again = s.patRun.n;
+    return out;
+  });
+  check("touch: ten pats count to 10, the tenth flops (the cozy frame kept for the quiet) and 11 and 12 are pat-soft only, no class churn, no line",
+    ladder.ns.slice(0, 10).join() === "1,2,3,4,5,6,7,8,9,11" && ladder.flop?.src?.includes("cozy") && ladder.flop.quietFor > 6000 &&
+      ladder.flop.pose > 5000 && ladder.soft.every(Boolean) && ladder.noLine && ladder.kept?.includes("cozy") && ladder.again === 1,
+    JSON.stringify(ladder));
+  const asleepEgg = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const ev = { detail: 0, stopPropagation() {} };
+    const reset = () => { Object.assign(s, { patAt: 0, patRun: null, poseUntil: 0, queue: [], sayUntil: 0, sayClass: 0 }); s.pet.classList.remove("look", "rock", "rock2", "pat-slow"); };
+    const out = {};
+    reset(); s.asleep = true;
+    for (let i = 0; i < 3; i++) { el._pat(s, ev); await wait(40); }
+    out.stir = { src: s.pet.getAttribute("src"), asleep: s.asleep, until: s.poseUntil - Date.now() };
+    s.asleep = false; reset(); s.egg = true;
+    const seen = [];
+    for (let i = 0; i < 3; i++) { el._pat(s, ev); seen.push(s.pet.classList.contains("rock2") ? "rock2" : s.pet.classList.contains("rock") ? "rock" : ""); await wait(40); }
+    out.egg = seen;
+    s.egg = false; reset();
+    return out;
+  });
+  check("touch: an asleep pet stirs on the third pat (the sleepy face, still asleep); an egg's third pat is a double rock",
+    asleepEgg.stir.src.includes("sleepy") && asleepEgg.stir.asleep && asleepEgg.stir.until > 0 && asleepEgg.egg.join() === "rock,rock,rock2",
+    JSON.stringify(asleepEgg));
+  await patReset();
   // Motion ship 1 (CSS-first wins), on the awake pet. A wander left turns first: `look` goes on
   // with `wander-l` and both go off on the one timer; a wander right never turns. The call icon
   // pops (`.arrive`) once, when a call comes, not on a redraw; the pet settles as it falls asleep.
@@ -9976,7 +10118,10 @@ async function main() {
     force["binary_sensor.calling"] = "off";
     await redraw();
     out.poppedOff = s.attention.classList.contains("arrive");
-    // Falling asleep seen live.
+    // Falling asleep seen live. The ten-pat flop before this check (care reactions C) set a 2.5 s timer
+    // that takes `settle` off the pet; fired inside the window below it strips the settle seen here.
+    // Let it run out first (here, not at the top: an idle wander would then start under the first check).
+    await wait(2600);
     force["binary_sensor.asleep"] = "off";
     await redraw();
     s.pet.classList.remove("settle");
@@ -10205,14 +10350,14 @@ async function main() {
     // A pat during a reaction speaks and keeps the reaction's move.
     const pat = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
-      Object.assign(s, { patAt: 0, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+      Object.assign(s, { patAt: 0, patRun: null, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
       s.pinVariant = { praise: "hearts" };
       el._react(s, { action: "praise", result: "ok", at: Date.now() / 1000 });
       s.sayUntil = 0; s.queue = []; s.sayClass = 0;
       s.pet.classList.remove("perk");
       el._pat(s, { detail: 0, stopPropagation() {} });
       const out = { cls: [...s.pet.classList], said: s.bubble.textContent, live: s.poseUntil > Date.now() };
-      s.patAt = 0;
+      s.patAt = 0; s.patRun = null;
       return out;
     });
     check(`react: ${stage} a pat during a reaction speaks, keeps its move, adds no perk`,
@@ -10306,7 +10451,7 @@ async function main() {
       const sp0 = s.species;
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       const reset = () => {
-        Object.assign(s, { poseUntil: 0, patPoseUntil: 0, patAt: 0, movingUntil: 0, queue: [], sayUntil: 0, sayClass: 0, game: null, calling: false });
+        Object.assign(s, { poseUntil: 0, patPoseUntil: 0, patAt: 0, patRun: null, movingUntil: 0, queue: [], sayUntil: 0, sayClass: 0, game: null, calling: false });
         s.pet.classList.remove("look", "settle", "munch", "pat-soft", "perk");
       };
       const src = () => s.pet.getAttribute("src") || "";

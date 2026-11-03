@@ -744,6 +744,40 @@ false; B's data is untouched.
   "backups", "shared login", "downgrade", "debug logging", "children", "never typed",
   the dream-pick carve-out and `memory_asked`'s line.
 
+**M1a shipped: notes for M1b** (s2747, 2026-11-02; branch
+`crew/hatch-at-home-s2747-memory-m1a-record-switch-optio`).
+- **Names as built** (`people.py`): `memory(user)`, `memory_on(user)`, `set_memory(user,
+  on, today)`, `remember(user, kind, entry)` (`kind` is `"tags"` or a picks list),
+  `forget_item(user, kind, day, tag_kind=None)` (async, saves at once), `forget_memory`,
+  `forget_all_memory`, `memory_said` / `mark_memory_said`, and the module function
+  `async_erase_unless_allowed(hass, leaving_entry_id)` used by the options flow and
+  `async_remove_entry`. Tag keys are `work_thing` and `something_else` (underscores);
+  `MEMORY_PICKS` maps each picks list to its field (`pick`, or `ask` for `great`).
+- **Door notes**: `_notes` may yield `("memory", "<door key>", "<day>", note)`; the
+  visit's mark step sends that scope to `mark_memory_said`, never `people.mark`
+  (tested with a patched `_notes`). Door keys must match `door1`-`door12`, plus
+  `door6_fav_weather` / `door6_fav_season`.
+- **Picks are wired but dark**: `async_answer(..., private=)` remembers dream, guess and
+  game picks only with `shared: false`, and no card sends that yet. M1b's
+  `_keepAnswer` / `_sendFollow` change turns it on. `since_told` is not written yet
+  (M1b); `async_ask_again` already pops it and `door6_<kind>`.
+- **Already in M1a for the ask**: `"memory"` in `QUESTION_KINDS`; `memory_asked` and
+  `memory_chosen_days` (at most 7 ISO days) in `_PERSON_KEYS`; `People.forget` keeps both
+  with `birthday_skipped`.
+- **Card**: the settings row "remember me" (first-mate copy, 2026-11-02) beside "my day",
+  personal screens only and hidden unless `memory_allowed`; off is a two-tap confirm
+  (`memory_off`). `memoryRow` (ui-copy) draws it, `_setMemory` (card-sheets) sends
+  `virtual_pet/memory` with `shared: false`. Its two status lines sit in `SETTINGS_AGAIN`
+  beside `forgotMe` (over the fresh block's 40 characters, and "forgotten"). The card
+  reads `memory_on` and `memory_allowed` from the visit reply too, and the forget-me
+  reset clears `memory_on`. The docs test's strings are `GUIDE_STRINGS` in
+  `tests/test_memory.py`.
+- **Remainder (erase race)**: the options-save erase runs just before
+  `async_create_entry`. A "memory on" tapped during the erase's save `await`, before HA
+  stores the new options, could leave one record on with no pet allowing it. Nothing
+  can write to it (every write checks this pet's option), but only "forget my data" or
+  another off-save clears it. Small window; not fixed in M1a.
+
 **M1b (tier 2): the ask and the doors.**
 - The ask as section 5, with its three guards (not in `ONCE_KINDS`, the `shown` write,
   the 3-day stale-card bound) and the answer guards. **Held while `baby_talk` is on**

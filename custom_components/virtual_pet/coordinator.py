@@ -67,6 +67,7 @@ from .const import (
     CONF_HOUSE_WORDS_PRIVATE,
     CONF_INDOOR_TEMP,
     CONF_LUX,
+    CONF_MEMORY,
     CONF_MOON_ALTITUDE,
     CONF_MOON_ILLUMINATION,
     CONF_MOON_PHASE,
@@ -427,6 +428,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         """Keep the house's words (news headlines, react's custom text) off the
         sensor: said live on the card only (default off; owner Q-A)."""
         return bool(self.config_entry.options.get(CONF_HOUSE_WORDS_PRIVATE, False))
+
+    @property
+    def memory_allowed(self) -> bool:
+        """This pet may keep, say and ask for people's memory (memory plan M1a;
+        the household's option, per pet, default on). Read live: an options save
+        reloads the pet."""
+        return bool(self.config_entry.options.get(CONF_MEMORY, True))
 
     def current_mood(self) -> tuple[str, list[str], str]:
         """(mood, flags, reason) as shown anywhere outside the pet's own file."""
@@ -1746,6 +1754,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     noted[kind] = key
                     if note["kind"] == "birthday_friends":
                         noted["friends"] = key
+                elif scope == "memory":
+                    # A memory door's line (memory plan M1 S2): marked in their
+                    # memory only, never `noted`, so "off" leaves no trace.
+                    self.people.mark_memory_said(user, kind, key)
                 else:
                     self.people.mark(user, kind, key)
                 if kind == "guess":
@@ -1774,6 +1786,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "birthday_kept": bool(fresh.get("birthday")),
             "birthday_phone": bool(fresh.get("birthday_phone")),
             "baby_talk": self.people.baby_talk(user),
+            # Memory (plan M1a, S7): two booleans, never what is kept.
+            "memory_on": self.people.memory_on(user),
+            "memory_allowed": self.memory_allowed,
             "follow": 1,  # follow-ups (F1): the card may send a typed text, and fetch
         }
 
@@ -2123,11 +2138,17 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         answer: str,
         text: Any = None,
         day: Any = None,
+        private: bool = False,
     ) -> dict[str, Any] | None:
         """A remembered answer: a favourite, tonight's dream, a guess, its
         catchphrase, or a follow-up's (F1: a tough day's softer morning, a big
-        day's "yes" with its optional text). Nothing here is logged."""
+        day's "yes" with its optional text). Nothing here is logged.
+
+        private: the card said it isn't a shared screen (`shared: false`). Only
+        then may a pick also go to the person's memory (memory plan R3, M1 B1),
+        if it's on and this pet allows it; else the answer is kept as ever."""
         assert self.state is not None
+        keep = private and self.memory_allowed
         if question in P.LATER_CHECKED:
             if answer not in P.ANSWERS.get(question, ()):
                 raise ValueError("Not an answer the pet keeps")
@@ -2144,6 +2165,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     self.people.open_follow(
                         user, "game", today, choice=answer, pet=self.pet_id
                     )
+                    if keep:
+                        self.people.remember(
+                            user, "game", {"day": today, "pick": answer}
+                        )
                 elif question == "trick" and answer == "yes":
                     self.people.open_follow(user, "trick", today, pet=self.pet_id)
                 elif question == "big_day" and answer == "yes":
@@ -2219,9 +2244,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             person.setdefault("likes", {})[question] = answer
         elif question == "guess":
             person["guess"] = {"day": P.tomorrow(today), "guess": answer}
+            if keep:
+                self.people.remember(user, "guess", {"day": today, "pick": answer})
         elif question == "dream":
             model.pick_dream(self.state, user, answer, self._now())
             self._save()
+            if keep:
+                self.people.remember(user, "dream", {"day": today, "pick": answer})
         self.people.save()
         self._push_everywhere()  # a birthday kept
 
@@ -2275,9 +2304,31 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             tries = f"fav_visitor_{self.world}" if kind == "fav_visitor" else kind
             gone = (person.get("likes") or {}).pop(key, None)
             (person.get("likes_asked") or {}).pop(tries, None)
+            # Un-told, so its memory goes too, this pet's option or not (an erase):
+            # the day it was told, and door 6's one-shot, re-armed for a new answer.
+            memory = person.get("memory")
+            if isinstance(memory, dict):
+                told = (memory.get("since_told") or {}).pop(key, None)
+                said = (memory.get("said") or {}).pop(f"door6_{kind}", None)
+                gone = gone if gone is not None else told or said
             if gone is not None:
                 await self.people.async_save_now()
         self._push_everywhere()  # their mine
+
+    async def async_set_memory(self, user: str, enabled: bool) -> None:
+        """Memory on or off for this person (memory plan M1a), one switch for every
+        pet. On only where this pet allows it (ValueError); off always, and it
+        erases: popped first, then saved at once, so an answer landing during the
+        save finds no memory (R7, review S6)."""
+        if enabled and not self.memory_allowed:
+            raise ValueError("Not on this pet")
+        async with self.people.lock(user):
+            if enabled:
+                if self.people.set_memory(user, True, self._today(self._now())[0]):
+                    self.people.save()
+            else:
+                await self.people.forget_memory(user)
+        self._push_everywhere()  # their mine.memory_on
 
     async def async_set_my_day(self, user: str, enabled: bool) -> None:
         """Let the pets notice this person's day (steps, sleep, where they've
@@ -2317,9 +2368,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     def _birthday_morning(self) -> None:
         """A friend's birthday: their phone hears it with the first morning of
         any hatched pet at home that notifies them, from the one they're
-        closest to (or their card's pet, if it's home and hatched), once a year. Their nickname, never their name. Only if
-        they turned "birthday on my phone" on (off by default: the message is
-        in HA's history, which admins can read)."""
+        closest to (or their card's pet, if it's home and hatched), once a
+        year. Their nickname, never their name. Only if they turned "birthday
+        on my phone" on (off by default: the message is in HA's history, which
+        admins can read)."""
         state = self.state
         if state is None or state.away or model.life_stage(state) == "egg":
             return
@@ -2646,6 +2698,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "wish_for_you": wish is not None and wish.get("for") == user,
             "my_day": self.people.my_day(user),
             "baby_talk": self.people.baby_talk(user),
+            # Memory (plan M1a, R3): whether it is on, and whether this pet allows
+            # it; never what is kept (only a memory command fetches that).
+            "memory_on": self.people.memory_on(user),
+            "memory_allowed": self.memory_allowed,
             "birthday_phone": bool(person.get("birthday_phone")),
             "birthday_kept": bool(person.get("birthday")),
             # Their card opens on this pet (the favourite, §5.3): only theirs, never

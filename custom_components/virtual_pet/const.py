@@ -72,6 +72,10 @@ CONF_PRIVACY = "privacy"
 # Keep house words (share_news's headline, react's custom text) off the sensor:
 # on, they're said live on the card only (ha-signals H8, owner Q-A). Per pet.
 CONF_HOUSE_WORDS_PRIVATE = "house_words_private"
+# Pets may remember what people tell them (memory plan M1a): the household's allow,
+# per pet entry, default on; each person still turns it on for themselves. Off on
+# every pet erases everyone's memory.
+CONF_MEMORY = "memory"
 # What the house was doing, not how the pet is: what's on and who's home.
 PRIVATE_READINGS = {
     "company",

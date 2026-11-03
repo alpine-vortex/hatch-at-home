@@ -306,7 +306,7 @@ def test_only_events_are_saved_and_the_ask_record_is_checked():
 # --- The store -------------------------------------------------------------------
 
 
-async def test_text_and_mood_live_in_memory_only(hass: HomeAssistant):
+async def test_text_and_mood_live_in_memory_only(hass: HomeAssistant, now: float):
     people = People(hass)
     people.person("u1")["asked"] = {"day": "2026-11-01", "later_kind": "big_day"}
     people.open_follow("u1", "big_day", "2026-11-01", SECRET)

@@ -374,7 +374,7 @@ class HatchPetCardBase extends HTMLElement {
       && Date.now() - this._openFrom < OPEN_ON_WAIT_MS) {
       this._openedOn = true;
       const i = this._slides.indexOf(on);
-      if (i >= 0 && i !== this._index) this._go(i);
+      if (i >= 0 && i !== this._index) this._go(i, true);
     }
   }
 

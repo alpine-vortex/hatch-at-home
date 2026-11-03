@@ -70,12 +70,12 @@ test("the label goes where the sitter's sign isn't", () => {
 test("the settings row: a switch at home, its state only on a shared screen", () => {
   const own = restRow(true, false, "Pip");
   assert.match(own, /<button class="bell resting"[^>]*aria-pressed="true"[^>]*>on<\/button>/);
-  assert.match(own, /Pip stays content with no calls and no hungry tummy, and doesn't grow up until it's back\. Visit any time\./);
+  assert.match(own, /Pip won't get any hungrier, and doesn't grow up until it's back\. Visit any time\./);
   const shared = restRow(false, true, "Pip");
   assert.doesNotMatch(shared, /<button/);
   assert.match(shared, /<span class="restro">off<\/span>/);
   assert.match(shared, /Visit any time\./);
-  assert.match(restRow(true, true, "<b>"), /&#60;b&#62; stays content/); // the name is escaped
+  assert.match(restRow(true, true, "<b>"), /&#60;b&#62; won't get any hungrier/); // the name is escaped
 });
 
 test("rest_ended has a moment case and a class; the row calls the websocket", () => {

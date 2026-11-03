@@ -638,6 +638,38 @@ const PRESETS = {
     }
     return out;
   },
+  // Care reactions ship C, touch (docs/plan-2026-11-02-care-reactions.md 5.4 and 13): the ladder
+  // n = 1, 3, 5, 8, 10, 12 on the head (left) and the body, for an adult (fox, the species' own acts)
+  // and a child (fox with its own praise pose, rung 1; bird on its mood frame, rung 3), at 330 and
+  // 300; then sick, asleep (the third pat), the egg (the third), a resting row and reduced motion.
+  touch() {
+    const out = [];
+    const who = [["adult", "fox", "adult"], ["child1", "fox", "child"], ["child3", "bird", "child"]];
+    const at = { 1: 150, 3: 150, 5: 400, 8: 400, 10: 400, 12: 400 };
+    for (const [id, species, stage] of who) {
+      for (const width of [330, 300]) {
+        for (const [zone, side] of [["head", "left"], ["body", "right"]]) {
+          for (const n of [1, 3, 5, 8, 10, 12]) {
+            if (width === 300 && !(zone === "head" || n === 3)) continue;
+            out.push({ name: `touch/${id}-${width}/${zone}-${n}`, group: `touch-${id}-${width}`, label: `${zone} n=${n}`,
+              species, stage, world: worldOf(species), width, patTap: { n, zone, side, at: at[n] }, patBox: n === 1, clip: "screen", say: "" });
+          }
+        }
+      }
+    }
+    const one = (name, label, extra) => out.push({ name: `touch/${name}`, group: "touch-states", label, species: "fox",
+      stage: "adult", world: worldOf("fox"), width: 330, clip: "screen", say: "", ...extra });
+    one("head-right", "head, right side", { patTap: { n: 2, zone: "head", side: "right", at: 150 } });
+    one("sick-lean", "sick: a slower lean", { mood: "sick", patTap: { n: 1, zone: "head", side: "left" } });
+    one("asleep-3", "asleep, the third pat: the stir", { scene: "dim", mood: "asleep", patTap: { n: 3, zone: "head", side: "left", at: 200 } });
+    one("egg-3", "egg, the third pat: a double rock", { stage: "egg", patTap: { n: 3, zone: "head", gap: 500, at: 300 } });
+    one("resting-lean", "resting: the lean over the label", { pet: { resting: true }, patTap: { n: 2, zone: "head", side: "left" } });
+    one("resting-flop", "resting: the flop", { pet: { resting: true }, patTap: { n: 10, zone: "body", side: "right", at: 400 } });
+    for (const [zone, side, n] of [["head", "left", 3], ["body", "right", 3], ["head", "left", 5], ["body", "right", 10]]) {
+      one(`calm-${zone}-${n}`, `reduced motion ${zone} n=${n}`, { motion: "reduce", patTap: { n, zone, side } });
+    }
+    return out;
+  },
   // Care B1, the bowl clip (plan care-reactions 5.1): every species' feed bowl on the floor at
   // full, 2/3, 1/3 and gone (step 3: the food above the rim), at 330 and 420, day and night,
   // one sheet per world and scene, a close-up of the bowl. A species with no "bowl_rim" is shown at its BOWL_CANDIDATES rim (so

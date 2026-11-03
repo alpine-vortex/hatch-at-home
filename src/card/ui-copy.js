@@ -14,6 +14,10 @@ const SETTINGS_AGAIN = {
   forgotBirthday: "ok, forgotten. i won't ask ♪",
   forgotMe: "forgotten. we'll start fresh ♥",
   askAgain: "ask me again", // the favourites' button (memory plan M0-c, label DRAFT)
+  // Memory's switch (memory plan M1a; first-mate copy 2026-11-02, exact). Here with the
+  // other erase lines, not the scanned fresh block: over its 40 characters, and "forgotten".
+  memoryOn: "the pets will remember what you tell them ♪",
+  memoryOff: "forgotten. the pets keep nothing you told them",
 };
 const HOUSE_REQUEST = { blanket: "heating", fan: "cooling" }; // the request the house answered
 // The house moment's categories (H8; const.py HOUSE_CATEGORIES, card-check holds the two
@@ -395,6 +399,46 @@ const PAT_SPOT_ODDS = 1 / 12; // a spoken pat's chance of the sweet spot (fresh-
 const PAT_COOLDOWN_MS = 4000; // a pat in this time after a spoken one wiggles, no line
 const PAT_MS = 2500;
 const EGG_PAT_LINE = "♪"; // an egg's pat: the one sound it makes (UX fix 4, F2)
+// Touch (care reactions ship C, docs/plan-2026-11-02-care-reactions.md 5.4). A run is the pats within
+// PAT_RUN_GAP_MS of each other, at most PAT_RUN_MAX_MS from its first; the PAT_FLOP_AT-th flops, and
+// the PAT_QUIET_MS after it are soft pats that do not count. The head is the top PAT_HEAD of the box.
+const PAT_RUN_GAP_MS = 5000;
+const PAT_RUN_MAX_MS = 30000;
+const PAT_QUIET_MS = 8000;
+const PAT_FLOP_AT = 10;
+const PAT_HEAD = 0.4;
+const PAT_LEAN_DEG = 5;
+// A lean is let go this long after the last pat (a longer one at n 2-3).
+const PAT_LEAN_MS = 900;
+const PAT_LEAN_LONG_MS = 1500;
+// The sweet spot stays out of the ladder from the fourth pat.
+const PAT_SPOT_MAX_N = 3;
+
+// Where a tap landed: { zone: "head" | "body", side: "l" | "r" | null }. `rect` is the pat box read at
+// the tap. A keyboard pat (detail 0), a missing or non-finite point and a box with no size are the
+// head with no side: never NaN (a bench or card-check pat passes only `detail: 0`).
+function patZone(rect, x, y, detail) {
+  const head = { zone: "head", side: null };
+  if (detail === 0 || !rect || !(rect.width > 0) || !(rect.height > 0) || !Number.isFinite(x) || !Number.isFinite(y)) return head;
+  const fy = (y - rect.top) / rect.height;
+  const fx = (x - rect.left) / rect.width;
+  return { zone: fy < PAT_HEAD ? "head" : "body", side: fx < 0.5 ? "l" : "r" };
+}
+
+// The run after a pat at `now`, from the run before it (null: none). Pure; the card stores the result
+// in s.patRun. Returns { run, n, flop, quiet }: n is this pat's place in its run (11 inside the quiet).
+//  - inside the quiet a pat is soft: it does not count and does not extend it;
+//  - the first pat after the quiet, a gap over PAT_RUN_GAP_MS, or a run older than PAT_RUN_MAX_MS
+//    starts a new run at 1;
+//  - the PAT_FLOP_AT-th flops, and the run becomes { n: 11, quietUntil }.
+function patStep(run, now) {
+  if (run && run.quietUntil > now) return { run, n: PAT_FLOP_AT + 1, flop: false, quiet: true };
+  const fresh = !run || run.quietUntil || now - run.at > PAT_RUN_GAP_MS || now - run.start > PAT_RUN_MAX_MS;
+  const n = fresh ? 1 : run.n + 1;
+  const start = fresh ? now : run.start;
+  if (n >= PAT_FLOP_AT) return { run: { n: PAT_FLOP_AT + 1, at: now, start, quietUntil: now + PAT_QUIET_MS }, n: PAT_FLOP_AT, flop: true, quiet: false };
+  return { run: { n, at: now, start, quietUntil: 0 }, n, flop: false, quiet: false };
+}
 // Reactions to care at baby, teen and adult (PR 3c, O02): the stage's own mood frames
 // (no new art) and a bounded CSS move, for one length at every stage.
 const REACT_MS = 2500;
@@ -410,6 +454,11 @@ const REACTIONS = {
   scolded: { mood: "bored", move: "startle", ms: 1200 },
   aired: { mood: "cozy", move: "lean", ms: 2600 },
   played: { mood: "excited", move: "perk", ms: 600 },
+  // Ship C, touch (plan 5.4): a purr (the pat act held, else the cozy frame), the tenth pat's flop (the
+  // cozy frame, kept for the quiet by _patFlop) and the body's third pat, a giggle (the excited frame).
+  patted: { mood: "cozy", move: "settle", ms: 2000 },
+  flopped: { mood: "cozy", move: "settle", ms: 2500 },
+  tickled: { mood: "excited", move: "rock2", ms: 1250 },
   // Only with the species' own act (STAGE_POSES): without it these do nothing (R2).
   lost: { mood: "content", move: "settle", ms: 1200 }, // a good sport (acts.aww, else content frames: UX fix 6, F5); the log can land before the game closes
   ready: { mood: "content", move: null, ms: 1200, poseOnly: true }, // a game just began
@@ -418,7 +467,7 @@ const READY_MS = 1200;
 const PAT_POSE_MS = 900; // acts.pat on a pat; apart from poseUntil so the next pat's `reacting` is unchanged
 // Which species.json "acts" pose a reaction plays at baby, teen and adult (R1, R2).
 // refused and lost: the act, else the mood frame; ready: the act, else nothing (the game perks instead).
-const STAGE_POSES = { fed: "eat", praised: "cheer", greet: "cheer", refused: "refuse", lost: "aww", ready: "ready", scolded: "refuse", played: "cheer" };
+const STAGE_POSES = { fed: "eat", praised: "cheer", greet: "cheer", refused: "refuse", lost: "aww", ready: "ready", scolded: "refuse", played: "cheer", patted: "pat" };
 // Idle manner (P3): the copies of moves each type adds to _idle's list, in the
 // plan's order (docs/plan-2026-10-28-personality-types.md, "Idle manner"). Only
 // existing moves, reweighted. Bouncy's hop is on even when content.
@@ -474,7 +523,7 @@ const MOMENT_CLASS = {
 // shows the sitter's sign, and asleep, sick and egg poses win.
 const REST_LABEL = "resting ☁";
 const REST_DAYDREAM_ODDS = 0.25; // a resting pet's hello is "i was just daydreaming" this often
-const REST_HELP = (name) => `${name} stays content with no calls and no hungry tummy, and doesn't grow up until it's back. Visit any time.`;
+const REST_HELP = (name) => `${name} won't get any hungrier, and doesn't grow up until it's back. Visit any time.`;
 function restLabel(flags, { away = false, asleep = false, egg = false } = {}) {
   if (!Array.isArray(flags) || !flags.includes("resting") || away || asleep || egg) return "";
   return flags.includes("sick") || flags.includes("away") ? "" : REST_LABEL;
@@ -492,6 +541,13 @@ function restRow(on, shared, name) {
     : `<span><button class="bell resting" aria-label="resting: ${on ? "on" : "off"}, change" aria-pressed="${on}">${on ? "on" : "off"}</button></span>`;
   return `<div class="row srow restrow"><span>resting</span>${value}</div>
       <div class="shellnote restnote">${REST_HELP(escape(name))}</div>`;
+}
+// "remember me" (memory plan M1a; first-mate copy 2026-11-02): the person's memory switch,
+// on their own screen only. Off erases, so it takes the two-tap confirm (armed: "sure?").
+function memoryRow(on, armed) {
+  const aria = armed ? CONFIRM_ARIA.memory_off : `remember me: the pets keep what you tell them, ${on ? "on" : "off"}, change`;
+  const text = armed ? "sure? tap again" : on ? "on" : "off";
+  return `<div class="row srow memoryrow"><span>remember me</span><span><button class="bell memory" aria-label="${aria}" aria-pressed="${!!on}">${text}</button></span></div>`;
 }
 // Kept moments the catch-up leaves out: the look welcomes a friend home itself,
 // and a thank-you for the tuck-in reads oddly the next morning (first mate, 2026-10-31).
@@ -588,6 +644,7 @@ const CONFIRM_ARIA = {
   lay_egg: "Sure? Press again to lay an egg",
   forget_birthday: "Sure? Press again to forget my birthday",
   forget_me: "Sure? Press again to forget my data",
+  memory_off: "Sure? Press again to forget what the pets remember about you",
   ask_again_fav_weather: "Sure? Press again to be asked about your favourite weather",
   ask_again_fav_season: "Sure? Press again to be asked about your favourite season",
   ask_again_fav_visitor: "Sure? Press again to be asked about your favourite visitor",

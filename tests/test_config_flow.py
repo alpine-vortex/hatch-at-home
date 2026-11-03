@@ -178,6 +178,7 @@ FULL = {
     "sitter_settles": False,
     "privacy": True,
     "house_words_private": True,
+    "memory": True,
     "rain": "sensor.rain",
     "weather": "weather.home",
     "indoor_temperature": "sensor.living_temp",
@@ -364,6 +365,7 @@ async def test_an_entry_with_empty_options_gets_only_the_opened_topics_defaults(
         "sitter_settles": True,
         "privacy": True,
         "house_words_private": False,
+        "memory": True,  # memory plan M1a: the household allows it by default
     }
 
 

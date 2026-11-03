@@ -22,6 +22,7 @@ from .const import (
     CONF_HOUSE_WORDS_PRIVATE,
     CONF_INDOOR_TEMP,
     CONF_LUX,
+    CONF_MEMORY,
     CONF_MOON_ALTITUDE,
     CONF_MOON_ILLUMINATION,
     CONF_MOON_PHASE,
@@ -50,6 +51,7 @@ TOPICS: dict[str, tuple[str, ...]] = {
         CONF_SITTER_SETTLES,
         CONF_PRIVACY,
         CONF_HOUSE_WORDS_PRIVATE,
+        CONF_MEMORY,
     ),
     "weather": (
         CONF_RAIN,

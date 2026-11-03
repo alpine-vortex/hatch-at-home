@@ -19,15 +19,21 @@ const method = (name) => grab(new RegExp(`\\n  ${name}\\([^)]*\\) \\{[\\s\\S]*?\
 // The card's own code, run on a fake browser.
 function load() {
   const store = new Map();
+  const session = new Map();
   const ctx = {
     localStorage: {
       getItem: (k) => (store.has(k) ? store.get(k) : null),
       setItem: (k, v) => store.set(k, String(v)),
       removeItem: (k) => store.delete(k),
     },
+    sessionStorage: {
+      getItem: (k) => (session.has(k) ? session.get(k) : null),
+      setItem: (k, v) => session.set(k, String(v)),
+    },
     clock: { now: 0 },
   };
   ctx.Date = { now: () => ctx.clock.now };
+  const go = grab(/    if \(this\._shelfRestored && this\._shelfDevices\) \{\n      shelfWrite[\s\S]*?\n    \}\n/).replace(/\bto\b/, "index");
   const restore = grab(/if \(!this\._shelfRestored\) \{[\s\S]*?\n {4}\}\n/);
   vm.runInNewContext([
     grab(/\nconst SHARED_KEY = [^\n]*\n/),
@@ -39,6 +45,8 @@ function load() {
     grab(/\nfunction shelfKey\([\s\S]*?\n\}\n/),
     grab(/\nfunction shelfRead\([\s\S]*?\n\}\n/),
     grab(/\nfunction shelfWrite\([\s\S]*?\n\}\n/),
+    grab(/\nfunction shelfMark\([\s\S]*?\n\}\n/),
+    grab(/\nfunction shelfSwiped\([\s\S]*?\n\}\n/),
     // A card with the methods this needs: its first draw, a swipe, and the channel's sync.
     `function makeCard(user, devices) {
       const card = {
@@ -46,10 +54,10 @@ function load() {
         _index: 0,
         _slides: devices.map((device) => ({ ids: { device } })),
         _restore(devices) { ${restore} },
-        _go(index) {
+        _go(index, auto = false) {
           this._userMoved = true;
           this._index = index;
-          if (this._shelfRestored && this._shelfDevices) shelfWrite(this._shelfDevices, index);
+          ${go}
         },
         ${method("_openKey")},
         ${method("_openOnSync")},
@@ -72,7 +80,7 @@ function load() {
     Object.assign(card._slides[i], { subscribed: true }, view);
     card._openOnSync();
   };
-  return { store, ctx, open, hear, openOnKey };
+  return { store, session, ctx, open, hear, openOnKey };
 }
 
 const PETS = ["dev-pip", "dev-bo", "dev-moss"];
@@ -96,15 +104,36 @@ test("with no choice, the shelf; with neither, the first", () => {
   assert.strictEqual(open("u1", PETS)._index, 1);
 });
 
-test("a swipe holds till the next load, which opens on the choice again", () => {
-  const { store, open, hear } = load();
+test("a swipe holds against the snapshots, and a new browser session opens on the choice again", () => {
+  const { store, session, open, hear } = load();
   store.set("hatch-open-u1", "dev-bo");
   const card = open("u1", PETS);
   card._go(2);
   hear(card, 1, { mine: { open_on: true } }); // the snapshot doesn't move it back
   assert.strictEqual(card._index, 2);
   assert.strictEqual(store.get("hatch-shelf-dev-pip"), "dev-moss");
+  session.clear(); // a new session (the swipe flag is the session's)
   assert.strictEqual(open("u1", PETS)._index, 1);
+});
+
+test("after a swipe in this browser session, the shelf wins over the choice (FM, audit s2748)", () => {
+  const { store, session, open, hear } = load();
+  store.set("hatch-open-u1", "dev-bo");
+  const card = open("u1", PETS);
+  assert.strictEqual(card._index, 1); // no swipe yet: the choice
+  card._go(2);
+  assert.strictEqual(session.get("hatch-shelf-dev-pip-swiped"), "1");
+  // The card is made again (a view switch): back where they swiped, not on the choice.
+  assert.strictEqual(open("u1", PETS)._index, 2);
+  // A new session (the flag gone) opens on the choice again.
+  session.clear();
+  assert.strictEqual(open("u1", PETS)._index, 1);
+  // The opening pet's own late move is not a swipe.
+  const { ctx, session: s2, open: open2, hear: hear2 } = load();
+  ctx.clock.now = 10000;
+  const late = open2("u1", PETS);
+  late._go(2, true);
+  assert.strictEqual(s2.size, 0);
 });
 
 test("the first time, the channel moves the card only early and before a swipe", () => {
@@ -198,6 +227,12 @@ test("no heart on a shared screen or with one pet; the row needs two pets", () =
   const two = ctx.out.rows(card(2, false), s);
   assert.match(two, /<span>♥ open on Pip<\/span>/);
   assert.match(two, /class="bell openon" aria-label="open on Pip" aria-pressed="true">on</);
+  // The pet's own name is spoken as it is: a "~", a "*" or an emoji in it is not stripped.
+  const odd = ctx.out.rows(Object.assign(card(2, true), { _linkName: () => "~Pip*🐣" }), s);
+  assert.match(odd, /aria-label="open on ~Pip\*🐣"/);
+  assert.match(odd, /aria-label="shared screens open on ~Pip\*🐣"/);
+  // The dot says which pet the card opens on (FM copy), for the one only.
+  assert.match(src, /\$\{opens \? ", your card opens here" : ""\}/);
   assert.doesNotMatch(two, /shared screens open on/); // not an admin
   const admin = ctx.out.rows(card(2, true), s);
   assert.match(admin, /<span>shared screens open on Pip<\/span>/);
