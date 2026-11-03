@@ -153,7 +153,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
             <div class="breeze"><span></span><span></span><span></span></div>
             <div class="lcd"></div>
             <div class="glow"></div>
-            <i class="hw glass" aria-hidden="true"><b></b><b></b><b></b><b></b><b></b></i>
+            <i class="hw glass" aria-hidden="true"><b></b><b></b><b></b><b></b><b></b><b></b><b></b></i>
             <img class="attention" alt="wants attention">
             <div class="bubble"></div>
             <div class="sr" role="status"></div>
@@ -778,7 +778,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     s.dirRecent = null;
     s.dirEffect = 0;
     s.glass?.classList.remove(...HATCH_DEVICE_FX.CLASSES_BY_LAYER.ambient, ...HATCH_DEVICE_FX.CLASSES);
-    s.rim?.classList.remove(...HATCH_DEVICE_FX.RIM_CLASSES);
+    s.rim?.classList.remove(...HATCH_DEVICE_FX.RIM_CLASSES, ...HATCH_DEVICE_FX.CLASSES_BY_LAYER.rimAmbient);
     this._layDrop(s); // a lay waited for belongs to the last pet
     this._clearNameTimers(s);
     s.nameFrom = null;

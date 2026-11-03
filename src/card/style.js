@@ -936,6 +936,26 @@ const STYLE = `
       radial-gradient(circle at 86% 13%, rgba(255,246,208,.9) 0 calc(var(--b) * 3), rgba(255,246,208,.4) calc(var(--b) * 3) calc(var(--b) * 6), rgba(255,246,208,.14) calc(var(--b) * 6) calc(var(--b) * 10), transparent calc(var(--b) * 10)); }
     .hw.glass.dir-newmoon b:nth-child(5) { opacity: 1; background:
       radial-gradient(circle at 86% 13%, rgba(14,20,40,.62) 0 calc(var(--b) * 3), rgba(190,206,255,.34) calc(var(--b) * 3) calc(var(--b) * 4), transparent calc(var(--b) * 4)); }
+    /* The room on the glass (slice 4D, plan 6.6): music's bars (6) and the tv's reflection (7), the same
+       way as the weather: still at rest (a class on the glass), an onset the layer's own animation to or
+       from its resting look, the lease's clock the glass's dir-glass-life. Quiet: a few bars in the
+       bottom corner; a faint rectangle of colour at the screen's lower edge. */
+    .hw.glass b:nth-child(6) { background:
+      linear-gradient(rgba(206,232,255,.8), rgba(206,232,255,.8)) 90% 96% / calc(var(--b) * 2) calc(var(--b) * 4) no-repeat,
+      linear-gradient(rgba(206,232,255,.8), rgba(206,232,255,.8)) 93% 96% / calc(var(--b) * 2) calc(var(--b) * 7) no-repeat,
+      linear-gradient(rgba(206,232,255,.8), rgba(206,232,255,.8)) 96% 96% / calc(var(--b) * 2) calc(var(--b) * 5) no-repeat; }
+    .hw.glass.dir-bars b:nth-child(6) { opacity: .75; }
+    .hw.glass.dir-bars-up b:nth-child(6) { animation: dir-layer-in 1.8s steps(6) both; }
+    .hw.glass.dir-bars-down b:nth-child(6) { animation: dir-layer-in 1.8s steps(6) reverse both; }
+    .hw.glass b:nth-child(7) { background:
+      linear-gradient(rgba(172,206,255,.75), rgba(172,206,255,.75)) 50% 100% / 46% calc(var(--b) * 3) no-repeat,
+      linear-gradient(180deg, transparent 66%, rgba(150,190,255,.24)); }
+    .hw.glass.dir-tv b:nth-child(7) { opacity: .8; }
+    .hw.glass.dir-tv-on b:nth-child(7) { animation: dir-layer-in 1.8s ease-in-out both; }
+    .hw.glass.dir-tv-off b:nth-child(7) { animation: dir-layer-in 1.8s ease-in-out reverse both; }
+    .hw.glass.dir-bars-up, .hw.glass.dir-bars-down, .hw.glass.dir-tv-on, .hw.glass.dir-tv-off { animation: dir-glass-life 1.8s linear both; }
+    .hw.glass.dir-echo.dir-bars-up, .hw.glass.dir-echo.dir-bars-down, .hw.glass.dir-echo.dir-tv-on, .hw.glass.dir-echo.dir-tv-off,
+    .hw.glass.dir-echo.dir-bars-up b, .hw.glass.dir-echo.dir-bars-down b, .hw.glass.dir-echo.dir-tv-on b, .hw.glass.dir-echo.dir-tv-off b { animation-duration: .9s; }
     /* Reduced motion: the still looks only; an onset is a move, so there is none (the card never starts
        one, and the global rule above also stops the animation and the transition). */
     @media (prefers-reduced-motion: reduce) { .hw.glass.dir-drop::after, .hw.glass.dir-clear::before { display: none; } }
@@ -976,10 +996,87 @@ const STYLE = `
     .hw.rim.dir-tuck b:nth-child(1) { left: 38%; }
     .hw.rim.dir-tuck b:nth-child(2) { left: 48%; animation-delay: .45s; }
     .hw.rim.dir-tuck b:nth-child(3) { left: 58%; animation-delay: .9s; }
+    /* The room on the rim (slice 4D, plan 6.6, 6.6a). Two kinds of thing share this layer, and never the
+       same classes. The AMBIENCE is a still glow on the plastic, a class on the rim (dir-rim-*) painted by
+       the adapter from the house's 'current': ::before is the room's (the lights lit or dimmed, the
+       fireplace's warm rim; the fireplace over the lights), ::after the climate's tint (warm for the
+       heating, cool for the cooling). A transition on opacity at most, no animation, and reduced motion
+       keeps it. The lights' glow steps aside for the backlight (the player's own light is its own, the
+       ambient is never over '.lit'). The CUES are one-shots on the same three amber lamps as the care cues
+       (opacity and 'left' only, the rim's 'dir-rim-life' the lease's clock): the lights' and the
+       fireplace's onsets from the wire, the doorbell's chime, the appliance's tick, the vacuum's rotor and
+       the heating's wash from the moments (one per event). --lit sets a lamp's colour. */
+    .hw.rim::before, .hw.rim::after { content: ""; position: absolute; inset: 0; opacity: 0; pointer-events: none;
+      transition: opacity .8s ease-out; }
+    .hw.rim::before { box-shadow: inset 0 0 0 calc(var(--b) * 2) var(--rim-glow, transparent), inset 0 0 calc(var(--b) * 6) var(--rim-glow, transparent); }
+    .hw.rim::after { box-shadow: inset 0 0 0 calc(var(--b) * 2) var(--rim-tint, transparent), inset 0 0 calc(var(--b) * 5) var(--rim-tint, transparent); }
+    .hw.rim.dir-rim-lit::before { --rim-glow: rgba(255, 226, 160, .55); opacity: 1; }
+    .hw.rim.dir-rim-dim::before { --rim-glow: rgba(10, 12, 24, .5); opacity: 1; }
+    .hw.rim.dir-rim-fire::before { --rim-glow: rgba(255, 96, 24, .75); opacity: 1; }
+    .bezel:has(.screen.lit) .hw.rim.dir-rim-lit::before, .bezel:has(.screen.lit) .hw.rim.dir-rim-dim::before { opacity: 0; }
+    .hw.rim.dir-rim-warm::after { --rim-tint: rgba(255, 170, 60, .6); opacity: 1; }
+    .hw.rim.dir-rim-cool::after { --rim-tint: rgba(110, 176, 255, .4); opacity: 1; }
+    .hw.rim.dir-lamp-on, .hw.rim.dir-lamp-off, .hw.rim.dir-ember-in, .hw.rim.dir-ember-out { animation: dir-rim-life 1.5s linear both; }
+    .hw.rim.dir-chime { animation: dir-rim-life 1.2s linear both; }
+    .hw.rim.dir-tick-l, .hw.rim.dir-tick-m, .hw.rim.dir-tick-r { animation: dir-rim-life .9s linear both; }
+    .hw.rim.dir-wash-warm, .hw.rim.dir-wash-cool { animation: dir-rim-life 1.3s linear both; }
+    .hw.rim.dir-rotor-out { animation: dir-rim-life 1.1s linear both; }
+    .hw.rim.dir-rotor-home { animation: dir-rim-life 2.2s linear both; }
+    /* Lights on: the top lamps come on in turn and stay lit to the end; off: they dim in turn, last first. */
+    .hw.rim.dir-lamp-on b, .hw.rim.dir-lamp-off b { top: calc(var(--b) / 2); }
+    .hw.rim.dir-lamp-on b { animation: dir-rim-rise .5s steps(5) both; }
+    .hw.rim.dir-lamp-off b { animation: dir-rim-dim .6s steps(6) both; }
+    .hw.rim.dir-lamp-on b:nth-child(1), .hw.rim.dir-lamp-off b:nth-child(3) { left: 38%; }
+    .hw.rim.dir-lamp-on b:nth-child(2), .hw.rim.dir-lamp-off b:nth-child(2) { left: 48%; animation-delay: .45s; }
+    .hw.rim.dir-lamp-on b:nth-child(3), .hw.rim.dir-lamp-off b:nth-child(1) { left: 58%; animation-delay: .9s; }
+    .hw.rim.dir-lamp-off b:nth-child(3) { animation-delay: 0s; }
+    /* The fireplace: three embers along the bottom edge, lit in turn (and, at its end, set in turn). */
+    .hw.rim.dir-ember-in, .hw.rim.dir-ember-out { --lit: #ff5a14; }
+    .hw.rim.dir-ember-in b, .hw.rim.dir-ember-out b { bottom: calc(var(--b) / 2); }
+    .hw.rim.dir-ember-in b { animation: dir-rim-rise .5s steps(5) both; }
+    .hw.rim.dir-ember-out b { animation: dir-rim-dim .6s steps(6) both; }
+    .hw.rim.dir-ember-in b:nth-child(1), .hw.rim.dir-ember-out b:nth-child(3) { left: 36%; }
+    .hw.rim.dir-ember-in b:nth-child(2), .hw.rim.dir-ember-out b:nth-child(2) { left: 48%; animation-delay: .45s; }
+    .hw.rim.dir-ember-in b:nth-child(3), .hw.rim.dir-ember-out b:nth-child(1) { left: 60%; animation-delay: .9s; }
+    .hw.rim.dir-ember-out b:nth-child(3) { animation-delay: 0s; }
+    /* The doorbell: two notes, a lamp each along the top edge, the second a beat after. */
+    .hw.rim.dir-chime b:nth-child(2) { display: none; }
+    .hw.rim.dir-chime b { top: calc(var(--b) / 2); animation: dir-rim-blip .5s steps(5) both; }
+    .hw.rim.dir-chime b:nth-child(1) { left: 42%; }
+    .hw.rim.dir-chime b:nth-child(3) { left: 54%; animation-delay: .5s; }
+    /* The appliance: one lamp, one tick, at the bottom edge: left for the washer, middle for the dryer and any
+       other machine, right for the dishwasher. */
+    .hw.rim.dir-tick-l b:nth-child(1), .hw.rim.dir-tick-l b:nth-child(3), .hw.rim.dir-tick-m b:nth-child(1), .hw.rim.dir-tick-m b:nth-child(3),
+    .hw.rim.dir-tick-r b:nth-child(1), .hw.rim.dir-tick-r b:nth-child(3) { display: none; }
+    .hw.rim.dir-tick-l b:nth-child(2), .hw.rim.dir-tick-m b:nth-child(2), .hw.rim.dir-tick-r b:nth-child(2) { bottom: calc(var(--b) / 2); animation: dir-rim-blip .6s steps(6) both; }
+    .hw.rim.dir-tick-l b:nth-child(2) { left: 22%; }
+    .hw.rim.dir-tick-m b:nth-child(2) { left: 47%; }
+    .hw.rim.dir-tick-r b:nth-child(2) { left: 72%; }
+    /* The heating or the cooling coming on for the pet: one wash along the top edge, warm or cool. */
+    .hw.rim.dir-wash-warm { --lit: #ff8a3c; }
+    .hw.rim.dir-wash-cool { --lit: #6fb4ff; }
+    .hw.rim.dir-wash-warm b:nth-child(1), .hw.rim.dir-wash-warm b:nth-child(3), .hw.rim.dir-wash-cool b:nth-child(1), .hw.rim.dir-wash-cool b:nth-child(3) { display: none; }
+    .hw.rim.dir-wash-warm b:nth-child(2), .hw.rim.dir-wash-cool b:nth-child(2) { top: calc(var(--b) / 2); width: calc(var(--b) * 12); animation: dir-rim-sweep 1.2s steps(12) both; }
+    /* The vacuum: a rotor of three lamps (the left side, the top, the right side) lit in turn. Out: one quick
+       turn. Home: the same turn, slower, and it ends. */
+    .hw.rim.dir-rotor-out b, .hw.rim.dir-rotor-home b { width: calc(var(--b) * 3); height: calc(var(--b) * 7); top: 40%; }
+    .hw.rim.dir-rotor-out b:nth-child(1), .hw.rim.dir-rotor-home b:nth-child(1) { left: calc(var(--b) / 2); }
+    .hw.rim.dir-rotor-out b:nth-child(2), .hw.rim.dir-rotor-home b:nth-child(2) { top: calc(var(--b) / 2); left: 48%; width: calc(var(--b) * 7); height: calc(var(--b) * 3); }
+    .hw.rim.dir-rotor-out b:nth-child(3), .hw.rim.dir-rotor-home b:nth-child(3) { right: calc(var(--b) / 2); }
+    .hw.rim.dir-rotor-out b { animation: dir-rim-blip .4s steps(4) both; }
+    .hw.rim.dir-rotor-out b:nth-child(2) { animation-delay: .25s; }
+    .hw.rim.dir-rotor-out b:nth-child(3) { animation-delay: .5s; }
+    .hw.rim.dir-rotor-home b { animation: dir-rim-blip .8s steps(8) both; }
+    .hw.rim.dir-rotor-home b:nth-child(2) { animation-delay: .6s; }
+    .hw.rim.dir-rotor-home b:nth-child(3) { animation-delay: 1.2s; }
+    /* An echo (the first view soon after): the same, shorter, the lamps together. */
+    .hw.rim.dir-rim-echo { animation-duration: .7s; }
+    .hw.rim.dir-rim-echo b:nth-child(n) { animation-duration: .4s; animation-delay: 0s; }
+    @keyframes dir-rim-rise { 0% { opacity: 0; } 30%, 100% { opacity: 1; } }
     @keyframes dir-rim-blip { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
     @keyframes dir-rim-sweep { 0% { left: 12%; opacity: 0; } 15%, 85% { opacity: 1; } 100% { left: 78%; opacity: 0; } }
     @keyframes dir-rim-dim { 0% { opacity: 0; } 15%, 40% { opacity: 1; } 100% { opacity: 0; } }
-    @media (prefers-reduced-motion: reduce) { .hw.rim { display: none !important; } }
+    @media (prefers-reduced-motion: reduce) { .hw.rim b { display: none !important; } } /* the lamps are cues, and none is offered; the still glow stays */
   }
   .compact .egg .hw.light { display: none; } /* no margin left beside a narrow egg's screen */
   /* Clear: the board behind the screen, seen through the plastic round the bezel,

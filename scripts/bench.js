@@ -172,6 +172,67 @@ const PRESETS = {
     }
     weather("storm", "rain", "lightning-rainy: rain and storm together", { deviceFx: { current: { rain: true, storm: true } } });
     weather("snow", "wind", "snow and wind together", { deviceFx: { current: { snow: true, wind: true } } });
+    // Device-alive slice 4D: the room's keys (the 4C rows) and the moments' rim cues. Lights and the fireplace paint
+    // and cue on the rim (the bezel's plastic: clip the device), music and the tv on the glass (clip the screen),
+    // heating and cooling are the rim's tint only (no onset, no echo). A row is the house's `current`, the wire kinds
+    // if they are not `<key>_started`/`_stopped`, the layer's clip and the length of its onset. A new key is a row here.
+    const ROOM_LOOKS = {
+      lights: { current: { lights: "on" }, off: { lights: "off" }, kinds: ["lights_on", "lights_off"], clip: "device", frames: [300, 800, 1300] },
+      fireplace: { current: { fireplace: true }, kinds: null, clip: "device", frames: [300, 800, 1300] },
+      tv: { current: { tv: true }, kinds: null, clip: "screen", frames: [500, 1100, 1700] },
+      music: { current: { music: true }, kinds: null, clip: "screen", frames: [500, 1100, 1700] },
+    };
+    const room = (key, name, label, extra) => {
+      for (const width of [420, 300]) {
+        out.push({ name: `alive/${key}-${width}-${name}`, group: `alive-${key}-${width}`, label, world: "woodland", width,
+          clip: ROOM_LOOKS[key]?.clip || "device", ...extra });
+      }
+    };
+    for (const [key, look] of Object.entries(ROOM_LOOKS)) {
+      const fx = (more, current = look.current) => ({ deviceFx: { key, current, ...(look.kinds ? { kinds: look.kinds } : {}), ...more } });
+      const off = look.off || { [key]: false };
+      room(key, "off-state", `${key} ${look.off ? "off (the dimmed rim)" : "false (nothing)"}`, fx({}, off));
+      room(key, "rest", `${key} at rest`, fx({}));
+      look.frames.forEach((at, i) => room(key, `onset-${i + 1}`, `${key} onset, ${at} ms in`, fx({ onset: "start", at })));
+      room(key, "echo", `${key} echo (first view 20 s on), 300 ms in`, fx({ echo: "start", at: 300 }));
+      room(key, "end", `${key} ended, 700 ms in`, fx({ onset: "end", at: 700 }, off));
+      room(key, "dark", `${key} on a dark shell`, { ...fx({ onset: "start", at: look.frames[1] }), shell: { finish: "smoke" }, scene: "night" });
+      room(key, "reduce", `${key}, reduced motion (the still look; no onset)`, { ...fx({ onset: "start", at: 600 }), motion: "reduce" });
+      room(key, "off", `${key}, screen effects off (nothing)`, { ...fx({ onset: "start", at: 600 }), lcd: "off" });
+    }
+    room("lights", "lit", "lights on, the backlight on (the rim steps aside)", { deviceFx: { key: "lights", current: { lights: "on" } }, scene: "night", classes: ["lit"] });
+    room("lights", "dim-lit", "lights off, the backlight on (the rim steps aside)", { deviceFx: { key: "lights", current: { lights: "off" } }, scene: "night", classes: ["lit"] });
+    room("heating", "rest", "heating: the warm tint", { deviceFx: { key: "heating", current: { heating: true } } });
+    room("heating", "dark", "heating on a dark shell", { deviceFx: { key: "heating", current: { heating: true } }, shell: { finish: "smoke" }, scene: "night" });
+    room("heating", "reduce", "heating, reduced motion (the tint stays)", { deviceFx: { key: "heating", current: { heating: true } }, motion: "reduce" });
+    room("heating", "off", "heating, screen effects off (nothing)", { deviceFx: { key: "heating", current: { heating: true } }, lcd: "off" });
+    room("cooling", "rest", "cooling: the cool tint", { deviceFx: { key: "cooling", current: { cooling: true } } });
+    room("cooling", "dark", "cooling on a dark shell", { deviceFx: { key: "cooling", current: { cooling: true } }, shell: { finish: "smoke" }, scene: "night" });
+    room("fireplace", "heating", "fireplace and heating together (the warm rim and the tint)", { deviceFx: { key: "fireplace", current: { fireplace: true, heating: true } } });
+    // The moments' rim cues, one shot per cue mid-flight (clip: the device), against a light and a dark shell, then
+    // the protected states: reduced motion (nothing), the switch off (nothing). `at` is ms into the cue.
+    const MOMENT_LOOKS = [
+      ["doorbell", "doorbell_live", undefined, "the chime: two notes", [300, 800]],
+      ["washer", "appliance_done", "washer", "the washer's tick (left)", [300]],
+      ["dryer", "appliance_done", "dryer", "the dryer's tick (middle)", [300]],
+      ["dishwasher", "appliance_done", "dishwasher", "the dishwasher's tick (right)", [300]],
+      ["machine", "appliance_done", "machine", "an unknown machine: the middle tick", [300]],
+      ["heat", "house_answered", "heating", "the heating's wash (warm)", [400, 800]],
+      ["cool", "house_answered", "cooling", "the cooling's wash (cool)", [400, 800]],
+      ["rotor-out", "robot_out", undefined, "the vacuum out: the rotor turns", [150, 350, 650]],
+      ["rotor-home", "robot_home", undefined, "the vacuum home: the rotor slows", [300, 900, 1500]],
+    ];
+    const momentShot = (name, label, extra) => {
+      for (const width of [420, 300]) {
+        out.push({ name: `alive/moment-${width}-${name}`, group: `alive-moment-${width}`, label, world: "woodland", width, clip: "device", ...extra });
+      }
+    };
+    for (const [name, moment, variant, label, frames] of MOMENT_LOOKS) {
+      frames.forEach((at, i) => momentShot(frames.length > 1 ? `${name}-${i + 1}` : name, `${label}, ${at} ms in`, { momentCue: { moment, variant, at } }));
+      momentShot(`${name}-dark`, `${label}, on a dark shell`, { momentCue: { moment, variant, at: frames[0] }, shell: { finish: "smoke" } });
+    }
+    momentShot("reduce", "the chime, reduced motion (nothing)", { momentCue: { moment: "doorbell_live", at: 300 }, motion: "reduce" });
+    momentShot("off", "the chime, screen effects off (nothing)", { momentCue: { moment: "doorbell_live", at: 300 }, lcd: "off" });
     // The moon (FM11), off the wire: a full and a new day, with a house that has no device_fx at all.
     for (const [name, moon, extra] of [["full", "full", {}], ["new", "new", {}], ["full-dark", "full", { shell: { finish: "smoke" }, scene: "night" }],
       ["full-reduce", "full", { motion: "reduce" }], ["full-off", "full", { lcd: "off" }]]) {
@@ -1309,7 +1370,7 @@ async function runShots(browser, base, shots, outDir, workers) {
           }, shot.lines);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(n));
         }
-        if (shot.costume || shot.deviceFx || shot.gift || shot.look || shot.care || shot.lightsAlign || shot.view === "board" || shot.view === "games") {
+        if (shot.costume || shot.deviceFx || shot.momentCue || shot.gift || shot.look || shot.care || shot.lightsAlign || shot.view === "board" || shot.view === "games") {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
         }

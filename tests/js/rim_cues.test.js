@@ -240,7 +240,8 @@ test("rule: no rim rule touches .cap, .toy, .pet or .device; only transform-free
   for (const m of css.matchAll(/@keyframes dir-[a-z-]+ \{([^@]*?)\}\s*(?=\n)/g)) {
     assert.doesNotMatch(m[1].replace(/\{[^}]*\}/g, (b) => b.replace(/opacity|left/g, "")), /[a-z-]+\s*:/, m[0]);
   }
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.hw\.rim \{ display: none !important; \} \}/);
+  // reduced motion: the lamps (the cues) are hidden, the layer stays so the still glow (4D's ambience) shows
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.hw\.rim b \{ display: none !important; \} \}/);
   // the classes the recipes put on the rim are the ones the CSS answers
   for (const cls of F.RIM_CLASSES) assert.match(css, new RegExp(`\\.hw\\.rim\\.${cls}`), cls);
   // slice 2's rules on the cap and the toy name no dir- or rim
@@ -257,17 +258,19 @@ test("the cue's life: the rim's own animation is the lease's clock, and its end 
     assert.strictEqual(Math.round(parseFloat(m[1]) * 1000), cue.ms, `${cls}: the CSS length is the lease's`);
   }
   assert.match(src, /s\.rim\.addEventListener\("animationend", \(e\) => \{\s*if \(e\.target === s\.rim && e\.animationName === "dir-rim-life" && s\.dirEffect\) this\._director\?\.release\(s, s\.dirEffect\);/);
-  assert.match(src, /s\.rim\?\.classList\.remove\(\.\.\.HATCH_DEVICE_FX\.RIM_CLASSES\)/); // _forget
+  assert.match(src, /s\.rim\?\.classList\.remove\(\.\.\.HATCH_DEVICE_FX\.RIM_CLASSES, \.\.\.HATCH_DEVICE_FX\.CLASSES_BY_LAYER\.rimAmbient\)/); // _forget: the cues and the glow
 });
 
 test("the part: no fx- class, rim classes all dir-, the rim recipes ride the director's shell track", () => {
   assert.ok(!/\bfx-/.test(part));
+  const houseKinds = new Set(Object.values(F.HOUSE_RIM).flatMap((e) => (e.by ? Object.values(e.by) : [e])).map((c) => c.kind));
   for (const [kind, r] of Object.entries(F.RECIPES)) {
-    if (Object.keys(F.WEATHER).includes(kind)) continue;
+    if (kind in F.ROWS) continue; // a key's recipe (the weather, the room: the wire's)
     assert.strictEqual(r.track, "shellImpulse", kind);
-    assert.strictEqual(r.priority, D.PRIORITY.care, kind);
+    assert.strictEqual(r.priority, houseKinds.has(kind) ? D.PRIORITY.house : D.PRIORITY.care, kind); // a press stays over a house cue
   }
-  assert.deepStrictEqual(Object.keys(F.RECIPES).sort(), [...Object.keys(F.WEATHER), "rimClean", "rimFeed", "rimPlay", "rimTuck"].sort());
+  const keyed = Object.keys(F.ROWS).filter((k) => F.ROWS[k].kinds === undefined || F.ROWS[k].kinds.length > 0);
+  assert.deepStrictEqual(Object.keys(F.RECIPES).sort(), [...keyed, ...houseKinds, "rimClean", "rimFeed", "rimPlay", "rimTuck"].sort());
 });
 
 // ---- the card's method, on a stub card ----

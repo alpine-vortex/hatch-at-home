@@ -687,6 +687,17 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     HATCH_DEVICE_FX.rim(this._director, s, action, `rim-${this._rimSeq}`, this._dirEnv());
   }
 
+  // A rim cue for a moment the card has just handled (slice 4D; plan 6.6c): the doorbell, the appliance's tick (the
+  // kind says the lamp), the vacuum's rotor, the heating's or the cooling's wash. Called from the same callback as the
+  // moment's own screen effect (the _houseFx or _robotFx call it sits beside), never on its own and never from the idle
+  // _robotFx: one cue per event. A game (the handler breaks before both) and a catch-up (no callback) never reach it.
+  // A moment on a slide that is not on show has no cue to play later. No sound, no haptic.
+  _momentCue(s, moment, variant) {
+    if (!s || !this._director || !this._dirShown(s)) return;
+    this._rimSeq = (this._rimSeq || 0) + 1;
+    HATCH_DEVICE_FX.offerMoment(this._director, s, moment, `moment-${this._rimSeq}`, this._dirEnv(), variant);
+  }
+
   _sparkle(s) {
     const ring = document.createElement("span");
     ring.className = "burst big";
