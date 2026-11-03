@@ -11,7 +11,10 @@ reviewed again before it started (the s2811 adversarial review, findings B1-B4, 
 m1-m8, cited as B#, M#, m#); section 13 folds it in and splits slice 3 into 3A, 3B and 3C.
 Slice 4 was reviewed before it started (s2818, findings F1-F17 and owner questions Q1-Q5,
 cited as F#; the numbers repeat the first review's): section 13 folds it in and splits slice 4
-into 4A-4D (FM9); 4C and 4D wait for the owner's privacy answers (section 17).
+into 4A-4D (FM9). The owner answered the privacy questions Q1-Q4 on 2026-11-03 and, later the same day,
+replaced the privacy limits with one household rule (section 6.6a, "Owner privacy rule");
+the s2823 review (findings F1-F18) is applied here under that rule, so 4C is startable
+after 4A and 4D after 4B and 4C. 4A is built (section 6.3, "As built in 4A").
 
 The goal: the device reads as a small physical object that notices the house. The order
 of value is (1) real Home Assistant changes show on the shell and glass, (2) the
@@ -35,9 +38,10 @@ delays care, navigation, dialogue, questions or games.
 | FM6 | **Press feel details** (first mate, 2026-11-03, reversible): no minimum pending time (a fast reply may never show it, fine); a refusal gets no cap cue (the care scenes already push away); the nav arrows are out of scope; snack, scold and praise get the default rebound. |
 | FM7 | **Slice 3 decisions** (first mate, 2026-11-03, from the slice-3 review; reversible). **B1:** `occurred_at` is the server pass time, not the sensor's time (section 6.4). **B2:** leading-edge accept, plus "a reverse is blocked for N s, then re-evaluated", run by an explicit `async_call_later` timer; the onset latency is given as a number (section 6.4, 6.5). **B3:** unknown is its own state, not dry: no onset into or out of unknown (section 6.2, 6.5). **M3:** no visual quiet hours; a silent rain drop may play at night; reduced motion = static ambience, no onset and no echo motion; the "screen effects here" switch off = nothing drawn (section 6.7, case 12). **m1:** slice 3 ships only a `rain` boolean on the wire; the schema example is cut to `rain` (section 6.2). **M7:** a reconnect snapshot on an already-viewed slide never echoes (section 6.7). |
 | FM8 | Order 3A (server) then 3B (client rain adapter) then 3C (rim cues, which use 3B's adapter). The rain reverse block is N = 45 s. (First mate, 2026-11-03, reversible.) |
-| FM9 | **Slice 4 is four PRs** (first mate, 2026-11-03, from the slice-4 review s2818, F8; reversible): **4A** weather server, **4B** weather client (and the client-computed moon, FM11), **4C** activity server, **4D** activity client plus moment-driven rim cues. 4A and 4B start now. **4C and 4D wait for the owner's privacy answers (section 17, Q1-Q4)** and are not startable until the first mate records them here. Section 13 has the rows and the slice 4 acceptance table. |
+| FM9 | **Slice 4 is four PRs** (first mate, 2026-11-03, from the slice-4 review s2818, F8; reversible): **4A** weather server, **4B** weather client (and the client-computed moon, FM11), **4C** activity server, **4D** activity client plus moment-driven rim cues. 4A and 4B start now. **4C and 4D waited for the owner's privacy answers (Q1-Q4); the owner answered on 2026-11-03** (section 6.6a, section 17), so 4C is startable after 4A and 4D after 4B and 4C. Section 13 has the rows and the slice 4 acceptance table. |
 | FM10 | **`_houseFx`/`_robotFx` do not move in slice 4** (first mate, 2026-11-03, from s2818 F10; reversible). This closes FM4's open question. **One cue per event:** where a moment already drives an `fx-*` cue, a rim cue for the same event is offered from **the same card handler at the same instant** (client-only), never from a second server edge a debounce later. No recipe in `device-fx.js` names an `fx-` class (source test, section 13). |
 | FM11 | **The moon is client-computed and off the wire; arrival is cut** (first mate, 2026-11-03, from s2818 F5 and Q5, FM side; reversible). `moon_date` always falls back to the date (`watcher.py:438-442`), so a moon key would put `device_fx` in every house and void case 16; the client computes full/new from `serverNow()`. Arrival is presence (section 3) and its own matrix echo was "arrival only". |
+| FM15 | **The vacuum is client-only** (first mate, 2026-11-03, from s2823 F11; the owner never answered it; reversible). Onset from the `robot_out` moment, end from `robot_home`, **no echo, no server key, no wire**; slice 4D. The idle `_robotFx` in `card-tick.js` is not an event and does not cue the rim. (FM12-FM14 are not in this plan.) |
 
 Consequences: the first four slices need no art. The plan has no new player copy; any
 wording a slice finds it needs goes to the first mate as a DRAFT question, not into the
@@ -71,9 +75,11 @@ The motion for them is care-reactions §22; the art is its own ship.
   the status view, a game or a focus ring.
 - **Quiet by default.** No automatic audio. Haptic only from the user's own gesture
   (`_tapped` already vibrates on every click, `card-actions.js:20`); never from the house.
-- **Privacy.** A whitelisted enum payload; no entity id, media title, name, camera or
-  precise presence; shared screens get nothing a personal one would add. No unbounded HA
-  subscription.
+- **Privacy (owner rule, 2026-11-03, section 6.6a).** Hatch is a game inside one
+  household's own Home Assistant: the concerns are only what leaves the household and
+  sharing free-text answers; anything HA already shows the household is fair game for the
+  card, echoes included. `device_fx` is still a whitelisted bool-or-enum payload (a design
+  rule: no cue needs an entity id, a title or a name). No unbounded HA subscription.
 - **No new stats, currency, reward, failure state or save field.** `PetState` is
   untouched; the ring is in memory. A recorded week must equal main (as in
   favourite-resting §9).
@@ -303,14 +309,15 @@ weather change. So the detector is a new `custom_components/virtual_pet/device_f
 that reads **`Readings` directly** (`home.py:49-86`: fireplace, music, tv, heating_on,
 cooling_on, room_light_level, condition and wind; the `SNOWY/FOGGY/STORMY/WINDY` sets at
 `home.py:105-113`), not the speech-gated moments. Doorbell, robot and appliance edges
-already exist (`doorbell_live`, `robot_*`, `appliance_done`, `house_*`). Whether
-`device_fx` takes those as post-gate moment events, or detects them a second time from
-raw readings (a doorbell is not in `Readings` at all), is **open**: the weather keys of
-slice 4A need no answer, and the doorbell, robot and appliance rows wait for Q2-Q3
-(section 6.6a, section 17). The reading of F3/F10 to carry into any answer: a moment that
-the card already receives is not detected a second time on the server (FM10). Moments are
-also gated by `awake` and by cooldowns (`rates.py:304,341,342`); a row that is public only
-because it was gated must not bypass that gate (s2818 F16).
+already exist (`doorbell_live`, `robot_*`, `appliance_done`, `house_*`). **Decided (FM10,
+FM15; owner Q2, Q3; s2823 F2, F11):** `device_fx` does not take them at all, from the
+moments or from raw readings. The doorbell, the appliance tick and the vacuum are
+client-only cues offered from the existing moment handlers (slice 4D) and add no server
+code, no key and no wire. The reason is technical (one cue per event, and the moments'
+own gates), not privacy; the owner's household rule of 2026-11-03 does not move it. A moment that the card already receives is not detected a second time on the server
+(FM10). Moments are also gated by `awake` and by cooldowns (`rates.py:304,341,342`); a row
+that is public only because it was gated must not bypass that gate (s2818 F16), which is
+one more reason these stay on the moments.
 
 ### 6.2 Schema and the signal map
 
@@ -328,16 +335,28 @@ Slice 3 ships the rain row and nothing else on the wire (m1):
 }
 ```
 
+A second shape, from slice 4C: a fireplace onset is a ring entry like the ones above
+(`kind: "fireplace_started"`), and `current` gains the activity keys:
+
+```json
+{ "device_fx": { "version": 1,
+                 "current": { "rain": true, "lights": "on", "heating": true,
+                              "fireplace": true } } }
+```
+
 A proposed schema. `current` is whitelisted booleans and enums, never an HA string (section
 6.2a). Later slices add keys one row at a time; slice 3 sends only `rain`, slice 4A adds
-`snow`, `fog`, `storm` and `wind`, and the activity keys (lights, fireplace, TV, music,
-heating, cooling, vacuum) wait for the owner (FM9, section 6.6a). Room-light and
-fireplace state with timestamps on a **shared** wall tablet is presence-adjacent (section
-3). `night` in `Readings` is the bedtime window (`home.py:50`), not dawn or dusk, and
+`snow`, `fog`, `storm` and `wind`, and slice 4C adds six activity keys (section 6.6a):
+`lights` (enum `off|on`), `fireplace`, `tv` and `music` (bool, with `x_started`/`x_stopped`
+onsets and echoes like the weather), and `heating` and `cooling` (bool, **ambience only**:
+no kinds, because their wash comes from the `house_answered` moment, F9). The vacuum, the
+doorbell and the appliance tick are **not keys** (FM15, FM10). `night` in `Readings` is the bedtime window (`home.py:50`), not dawn or dusk, and
 **dawn/dusk has no wire key**: `sun_up` already gives the `sunrise`/`sunset` moments, and a
 dawn/dusk rim, if it ships, is client-side. A new key is additive: **no `version` bump**
 (an unknown `version` is ignored by the client, so a bump would drop rain and every other
-key on a newer server). Rain adds nothing new
+key on a newer server). A new **enum** (`lights`) is additive too. A later member of an
+enum (for example `dim`) is a wire change that an old card must ignore (`ambientOf` rejects
+an unknown member, section 6.6c), so it is not added without a card release. Rain adds nothing new
 publicly: `flags` already carries it. Timestamps are UTC ISO from `dt_util.utcnow()`, like
 the rest of the channel (`coordinator.py:1190,2913`), not a local offset (m3).
 `occurred_at` is the server pass time (B1, FM7; section 6.4).
@@ -378,10 +397,24 @@ and changed value); never known; first reading after a restart.
 `assert KINDS == ("rain_started","rain_stopped")` (`test_device_fx.py:103-107`) into a map,
 and the recipe half is JS, which pytest cannot see. So, exactly:
 
-1. `DEVICE_SIGNAL_MAP` in `device_fx.py` is the one source. Per key it holds
-   `{type: "bool" | the enum's members, kinds: (started, stopped), block_s, echo: bool,
-   echo_ttl_s, echo_rank}`; `KINDS` and the `view()` whitelist are **derived** from it, and
-   so is the per-key table of section 6.5.
+1. `DEVICE_SIGNAL_MAP` in `device_fx.py` is the one source. 4A built each row as a frozen
+   `Signal`: `{type: "bool" | the enum's members, kinds: (started, stopped), block_s,
+   echo: bool, echo_ttl_s, echo_rank}` (the six the card reads, exported) plus the server's
+   `read`, `sources` and `supersedes`; `KINDS` and the `view()` whitelist are **derived**
+   from it, and so is the per-key table of section 6.5. **Slice 4C needs no new column**
+   (no row is "live but not in the ring", section 6.6a). It does need two row shapes 4A did
+   not build, and a `Signal` for each:
+   - **an enum with onsets** (`lights`, `("off", "on")`, `kinds=("lights_on", "lights_off")`):
+     4A's `_add` returns early for a non-bool (`device_fx.py`, `if spec.type != "bool"`),
+     so 4C teaches it the two-member enum (`on` is the `kinds[0]` edge), and `observe`'s
+     `starts(key)` (`bool(value)`, true for the string `"off"`) must read the enum's `on`;
+   - **an ambient-only row** (`heating`, `cooling`: bool, `kinds=()`, `echo=False`): no
+     onset, because their cue is the `house_answered` wash (F9, section 6.6a). `observe`
+     picks onsets only from rows that have kinds; such a row is accepted, its block armed
+     and `current` updated, and `_add` is not called (it must not index an empty `kinds`).
+     `KINDS` stays derived from the rows' kinds, so it needs no change.
+   Invariants for the pytest: every row with `echo` has kinds; `KINDS` derives from the
+   kinds; the JSON export is in sync.
 2. `tests/js/device_signal_map.json` is a committed export of that map. A pytest rebuilds
    it in memory and **fails on a diff**, with an `--update` hint in the message. A node test
    loads the JSON and asserts: every wire kind has a `HATCH_DEVICE_FX.KINDS` entry and a
@@ -410,23 +443,26 @@ and it is what these rules police.
 1. **Wire values are a bool or a closed enum declared in `DEVICE_SIGNAL_MAP`.** The
    serializer drops any other type and any member outside the enum. `current` is
    **rebuilt from the map**, never copied from a reading.
-2. **Forbidden on the wire, for good:** entity ids; friendly names; titles, artist, series;
-   media app; room or area names; device counts or any "how many" (lights on, pets, people);
+2. **Not sent, because no cue needs it** (a design rule; the household privacy rule of
+   section 6.6a does not forbid it, and a later row may ask): entity ids; friendly names;
+   titles, artist, series; media app; room or area names; device counts or any "how many";
    brightness numbers or lux; temperatures; presence, `company`, motion, arrival; user ids;
-   an appliance kind (unless the owner says so, Q3); any timestamp finer than a 90 s ring
-   entry's (`occurred_at` stays the pass time, section 6.4, not the sensor's).
-3. **A key with an onset and an echo ships only when its edge is not an activity log.**
-   The weather keys (`rain`, `snow`, `fog`, `storm`, `wind`) qualify: their state is already
-   in `flags` and the edge is the sky's. Every activity key (lights, fireplace, TV, music,
-   heating, cooling, and doorbell and appliance as rows) is **pending the owner's privacy
-   answer (Q1-Q4, section 6.6a)**: a state already being in `flags` is necessary, and is
-   not enough.
+   an appliance kind (the moment carries it already, section 6.6a); any timestamp finer
+   than a 90 s ring entry's (`occurred_at` stays the pass time, section 6.4, not the
+   sensor's). **No `device_fx` entry exists for a doorbell, a vacuum or an appliance**:
+   those three are client-only cues off the moments (FM10, FM15).
+3. **A key's onset and echo are the cue design's choice.** The weather keys (`rain`,
+   `snow`, `fog`, `storm`, `wind`) and the activity keys with kinds (`lights`, `fireplace`,
+   `tv`, `music`) send an onset and an echo from the ring. Anything HA already shows the
+   household is fair game for the card (section 6.6a, owner privacy rule); what stays
+   out of `device_fx` is anything leaving the household and free-text answers.
 4. **The canary test is built from the map.** `test_public.py` today hardcodes `{"rain"}`
    and `kind.startswith("rain_")` (lines 473, 481, 484). It builds its whitelist **from
    `DEVICE_SIGNAL_MAP`** instead, and a fuzz case sets every mapped source to a string
    canary (`"Zebulon"`, a `media_title`, an entity id) and asserts the canary appears in no
    message, no snapshot and not in `device_fx_recent`, on a shared channel and a private
-   one. A new key therefore gets the audit with no test edit.
+   one. A new key therefore gets the audit with no test edit. The canary stays as 4A built it
+   (a test with no claim beyond the whitelist); it covers each new key with no edit.
 
 **A key is present only when its source is mapped and known (F5).** `_fx_mapped()` is
 weather-or-rain only today (`coordinator.py:2890-2895`) and gates `_house_view`, the ring
@@ -435,7 +471,10 @@ and `observe_rain`; slice 4A makes it **per key**. A key is present in `current`
 known-guard), and it is omitted, not `false`, until then. `device_fx` is omitted when no key
 could ever be present. Case 16 ("a house with nothing mapped equals main") is restated per
 key: a house mapping only a snow source has only `snow`, and a house with no source has no
-`device_fx`. This is why the moon is not a key (FM11): its date fallback is always known.
+`device_fx`. 4C makes the six new keys the same way, one source option each through the
+row's `sources` (`CONF_ROOM_LIGHTS`, `CONF_FIREPLACE`, `CONF_TV`, `CONF_MUSIC`,
+`CONF_HEATING`, `CONF_COOLING`), as 4A did for the weather keys. This is why the moon is
+not a key (FM11): its date fallback is always known.
 
 **Compound weather (F7).** `condition` is one string, so `lightning-rainy` is both rainy and
 stormy (`home.py:109-112`), and `windy` is also set from `wind_kmh`/`gust_kmh`
@@ -444,8 +483,8 @@ rain sensor alone does not make snow "dry"); `wind` is known iff `condition`, `w
 `gust_kmh` is not None. **When one pass produces several onsets** (a `condition` change
 giving `rain_started` and `storm_started`), they would contend for the one `shellImpulse`
 track (`REPLACES_EQUAL`, `interaction-director.js:26`) and the later wins within a frame.
-The rule: **one onset per pass; storm supersedes rain**, otherwise the higher echo rank
-of section 6.7. The superseded onset gets no ring entry and no live message; `current`
+The rule: **one onset per pass; storm supersedes rain**, otherwise the lower onset rank
+number of section 6.7. The superseded onset gets no ring entry and no live message; `current`
 still carries every key's truth, so the ambience is right and the echo shows one kind.
 
 ### 6.3 Delivery on the real channel (F5, B4, M1)
@@ -597,34 +636,72 @@ dwell has no pass at 45 s and would fire at the next tick, up to 5 min late, out
    that settles on the reverse (one onset at N + 0-10 s), unload cancelling the timers,
    unknown arriving during a block (the block is dropped, section 6.2), first-known-silent
    and a restart. Plus one test that **two keys are blocked at once and both held reverses
-   are delivered**.
+   are delivered**; from 4C the pair includes an ambient-only key (`heating`)
+   (4A's per-key timer dict is inherited as it is).
 
 **The per-key table (F6, F7, F9).** One row per key, kept in `DEVICE_SIGNAL_MAP` (section
 6.2) and exported to `tests/js/device_signal_map.json`. `echo_rank` follows section 6.7
-(1 doorbell and appliance, 2 weather, 3 lights/fire/heating, 4 media, 5 astronomy).
+as the **onset rank** (s2823 F12), for contention on the one `shellImpulse` track:
+1 doorbell and appliance (house moments, client-side), 2 weather, 3 fireplace and lights
+(the heating wash and the vacuum with 3), 4 TV and music. Ambient-only rows (the heating
+and cooling tint) have no rank. Astronomy is client-side (FM11).
 
-| key | type | source reader | known-guard | `block_s` | echo | `echo_ttl_s` | `echo_rank` | PR |
+| key | type | source reader | known-guard | `block_s` | echo | `echo_ttl_s` | rank | PR |
 |---|---|---|---|---|---|---|---|---|
 | `rain` | bool | `is_raining(r)`: rain sensor, else condition | `rain_rate is not None or condition is not None` | 45 | yes | 90 | 2 | 3A (built) |
-| `snow` | bool | `condition` in `SNOWY` | `condition is not None` | 45 | yes | 90 | 2 | 4A |
-| `fog` | bool | `condition` in `FOGGY` | `condition is not None` | 45 | yes | 90 | 2 | 4A |
-| `storm` | bool | `condition` in `STORMY` | `condition is not None` | 45 | yes | 90 | 2 | 4A |
-| `wind` | bool | `condition` in `WINDY`, or `wind_kmh`/`gust_kmh` over their thresholds | `condition`, `wind_kmh` or `gust_kmh` is not None | 45 | yes | 90 | 2 | 4A |
-| lights, fireplace, TV, music, heating, cooling, vacuum | pending | pending | pending | pending | pending | pending | 3 / 4 | 4C, **pending owner privacy answer (Q1-Q4)** |
+| `snow` | bool | `condition` in `SNOWY` | `condition is not None` | 45 | yes | 90 | 2 | 4A (built) |
+| `fog` | bool | `condition` in `FOGGY` | `condition is not None` | 45 | yes | 90 | 2 | 4A (built) |
+| `storm` | bool | `condition` in `STORMY` | `condition is not None` | 45 | yes | 90 | 2 | 4A (built) |
+| `wind` | bool | `condition` in `WINDY`, or `wind_kmh`/`gust_kmh` over their thresholds | `condition`, `wind_kmh` or `gust_kmh` is not None | 45 | yes | 90 | 2 | 4A (built) |
+| `lights` | enum `off\|on`, kinds `lights_on`/`lights_off` | `room_light_level`: `on` iff `> LIGHTS_ON_LEVEL` (0.0) | `room_light_level is not None` (already Optional: no `Watcher.known`) | 45 | yes | 90 | 3 | 4C |
+| `heating` | bool, **no kinds** | `r.heating_on` | `Watcher.known("heating")` | 120 | no (ambient only) | n/a | none | 4C |
+| `cooling` | bool, **no kinds** | `r.cooling_on` | `Watcher.known("cooling")` | 120 | no (ambient only) | n/a | none | 4C |
+| `fireplace` | bool | `r.fireplace` | `Watcher.known("fireplace")` | 45 | yes | 90 | 3 | 4C |
+| `tv` | bool | `r.tv` | `Watcher.known("tv")` | 45 | yes | 90 | 4 | 4C |
+| `music` | bool | `r.music` (`playing`, not video) | `Watcher.known("music")` | 60 (owner: at least 45) | yes | 90 | 4 | 4C |
+
+The 4C numbers are starting values, tuned on the device (as the weather's 45 s was); every
+`block_s` is for the leading-edge-then-hold-reverse rule above. Why these readers:
+`_light_level` returns `None` for no lights, which is the Optional float being its own
+guard (`watcher.py:514-516`). `_lit` returns `False` for a missing state and
+`heating_on`, `cooling_on`, `music` and `tv` are `any(...)` over `_all`, which is `False`
+when nothing answers, so all four read "off" during an outage and need
+`Watcher.known(key)`: a method that does not exist yet and that 4C adds, a pure read of
+`_all`/`_one` ("at least one mapped entity of this key currently yields a state"), with no
+change to `Readings`. **Heating and cooling hold 120 s, not the review's 10 min** (s2823):
+the owner wants the tint "while running", a longer block would keep a stale tint after the
+furnace stops, and 120 s (more than one 10 s debounce) still cuts short flaps; thermostats
+on `hvac_action` cycle in minutes (`watcher.py:84-100`), and a `climate` with no
+`hvac_action` compares temperatures and flickers around its target, which the 120 s also
+absorbs. **Heating and cooling have no kinds and no echo for a technical reason, not a
+privacy one** (F9): their wash is the `house_answered` moment, which fires on **on** only,
+so a server edge would be a second cue for one event (FM10). **Lights: `off|on`, no `dim`**
+(owner, Q1; `dim` is no longer a privacy question, but it is a wire change that needs a card
+release, section 6.2): `on` is any mapped light on at any brightness (`room_light_level >
+0`; `_light_level` gives `1.0` for a light with no brightness and `0.0` when every light
+is off). It does not reuse `HOME_DIM_LEVEL` (0.35) or `HOME_BRIGHT_LEVEL` (0.5,
+`rates.py:249-251`), which drive the time-gated `dim` and `too_bright` flags.
+`LIGHTS_ON_LEVEL = 0.0` is a named constant in `device_fx.py`, not a float on the wire.
+Test: dimming from 100% to 1% stays `on`; 100% to off is `off` after the pass; a fade
+that crosses 0 and back inside 45 s sends one diff and at most one onset. **Music (owner,
+Q1; s2823 F7):** `playing` only, `block_s` 60. The reader already is `playing` and
+`media_content_type` not a video type (`watcher.py:403-408`); `paused`, `idle` and
+`buffering` are "not playing", so the leading edge accepts `started`, a track gap or a
+pause inside 60 s is blocked, and the timer's recheck sees `playing` again and sends
+nothing. A client `cooldownMs` per kind (music and TV 5 min, fireplace 60 s) stops a
+"started" for every song. Title and artist are not sent because no cue uses them.
 
 The weather `block_s` is **45 s, the same as rain** (FM8): the s2818 review gives no reason
 for another number, the same debouncer and the same `condition` updates drive all five,
 and one constant is one thing to tune on the device (a starting value inside the 30-60 s
-range, as for rain). The four new weather rows need no new known-guard machinery: their
+range, as for rain). The four weather rows need no new known-guard machinery: their
 readings are already `Optional`. A key whose reading is a plain `bool` in `Readings`
 (`fireplace`, `music`, `tv`, `heating_on`, `cooling_on`, `robot_cleaning`, `home.py:68-72`)
 **cannot express unknown**: `Watcher._get` returns `None` after the 10 min hold and
 `any([])` is `False`, so an 11-minute outage would read as "ended" and the recovery as
-"started", the bug B3 fixed for rain. For 4C the mechanism is **`Watcher.known(key)`** ("at
-least one mapped entity of this key currently yields a state"), used as the known-guard;
-`Readings` and its consumers do not change (the s2818 option (b), chosen over a tri-state
-`Readings`, which touches `evaluate()`). The activity rows' own numbers wait for the owner
-(section 6.6a).
+"started", the bug B3 fixed for rain. For 4C the mechanism is **`Watcher.known(key)`**,
+used as the known-guard (the s2818 option (b), chosen over a tri-state `Readings`, which
+touches `evaluate()`). `robot_cleaning` has no row: the vacuum is client-only (FM15).
 
 Unknown/unavailable and an HA reconnect invent no onset, into or out of unknown
 (section 6.2, B3, FM7); the last accepted state holds.
@@ -646,15 +723,15 @@ screen glow, shell-only.
 | Storm arrives / ends | **non-flashing** dim shiver / release | cooler tint | yes, subtle | 4A server, 4B client |
 | Fog begins / clears | rim fog and clearing | soft diffusion | yes | 4A server, 4B client |
 | Dawn / dusk | rim palette settles cool to warm or back | day/night rim | none (no wire key) | later (not slice 4); client-side off `sunrise`/`sunset` if it ships |
-| Lights on / off / dim | rim brightens / dims | dimmed rim, never over `.lit` | yes | owner answered, section 6.6a |
-| Heating / cooling | warm / cool wash along the rim | faint tint | yes | owner answered, section 6.6a |
-| Fireplace on / off | ember rim lights / sets | warm rim | yes | owner answered, section 6.6a |
-| Music begins / ends | a few bars rise / fall | quiet bars glyph | yes | owner answered, section 6.6a |
-| TV starts / ends | reflected rectangle at the screen edge | faint colour reflection | yes | owner answered, section 6.6a |
+| Lights on / off (`off\|on` only, no dim) | rim brightens / dims | dimmed rim, never over `.lit` | yes | 4C server + 4D client |
+| Heating / cooling | warm / cool wash along the rim, **only where `house_answered` fires** (the heating or cooling coming on for the pet; the tint covers every other switch, off included; section 6.6a, F9) | faint tint while running | none (the wash is a moment, not a server edge; F9) | 4C server (`current` only) + 4D client |
+| Fireplace on / off | ember rim lights / sets | warm rim | yes | 4C server + 4D client |
+| Music begins / ends | a few bars rise / fall | quiet bars glyph | yes | 4C server + 4D client |
+| TV starts / ends | reflected rectangle at the screen edge | faint colour reflection | yes | 4C server + 4D client |
 | Arrival | one welcoming rim pulse | none | arrival only | **cut** (FM11: presence) |
-| Vacuum starts / ends | small rotor turns once / slows | none | yes | 4C/4D, after the owner's answers; its state is already in `flags`, and its onset comes from the `robot_out` handler (FM10) |
-| Doorbell | rim chime mark | none | yes, short TTL | owner answered, section 6.6a |
-| Appliance cycle done | small tick mark | none | yes | owner answered, section 6.6a |
+| Vacuum starts / ends | small rotor turns once (from `robot_out`) / slows (from `robot_home`: docked and done, not each pause) | none | none (FM15) | 4D, client only (FM15; no server key) |
+| Doorbell | rim chime mark | none | none (a moment the card already receives is not detected twice, FM10) | 4D, client only (`doorbell_live`) |
+| Appliance cycle done | small tick mark, one per `appliance_done` moment, lamp by kind (section 6.6a) | none | none (FM10) | 4D, client only (`appliance_done`) |
 | Full / new moon | halo aligns | static halo | none (client-computed, no edge; FM11) | 4B, client only |
 | Season, first snow, first frost | short themed pulse | seasonal rim | yes | later (not slice 4) |
 | Unknown, unavailable, reconnect | **none** | last accepted state | no | every slice |
@@ -680,57 +757,89 @@ dry while the glass is wet, or the reverse. Rule: `current.rain` is derived from
 screen by the block of section 6.5; it is never ahead of a reversal the screen has not
 shown. Case 11 checks that an echo is dropped when the two disagree.
 
-### 6.6a Rows pending the owner's privacy answers (Q1-Q4)
+### 6.6a Rows the owner answered (Q1-Q4)
 
-**Owner answers (2026-11-03). These decide 4C and 4D; they override the "decides nothing" text and the quoted recommendations below.**
+**Owner privacy rule (2026-11-03).** Hatch is a game inside one household's own Home
+Assistant. The privacy concerns are **only** (a) anything that leaves the household
+(network, push text off the box, logs shipped out, public art and commits) and (b) sharing
+free-text answers. Anything HA already shows the household is fair game for the card,
+echoes included. This **supersedes the privacy limits of the Q1-Q4 answers below**: the
+"no ring entry, no echo" for lights, fireplace, TV and music, the "never cue" reading of
+the 6.2a forbidden list, and the shared-screen reasoning. What the rule does **not** move
+(technical limits, not privacy): **F9** (the heating and cooling wash is `house_answered`,
+which fires on **on** only) and **FM15** (the vacuum is client-only), and FM10's one cue per
+event, which keeps the doorbell and the appliance tick on their moments. The rest of this
+section keeps the answers as the owner gave them, with each lifted limit marked.
 
-| Q | Owner answer |
+| Q | Owner answer (2026-11-03) |
 |---|---|
-| Q1 lights | **Ambience only**: a derived `off|on` enum with named thresholds (no float, no `dim` unless a later answer adds it), a steady look, **no onset, no ring entry, no echo**. |
-| Q1 fireplace, TV, music | **Live onset only**: a cue to screens open at the edge, **no ring entry, no echo** for a later viewer. Music counts `playing` only, with a block of at least 45 s; no track metadata ever. |
-| Q2 doorbell | **Live only**: a client-side rim chime mark off the existing `doorbell_live` moment, no ring, no echo, no server, no wire (the 2026-11-01 rule holds). |
-| Q3 appliance | **A tick per machine**: `washer`, `dryer`, `dishwasher` may cross as a closed enum (already public on the bus). Oven, coffee, EV, timer and delivery **never** get a device cue. The onset comes from the existing `appliance_done` handler (FM10). |
-| Q4 heating / cooling | **Tint while running plus a live cue at the switch**: a faint warm/cool tint as ambience, and a live rim wash when it switches on or off, **no ring entry, no echo**. One cue per event (FM10): the live wash is offered from the `house_answered` handler where that moment fires, not from a second server edge. |
+| Q1 lights | Ambience only: a derived `off|on` enum with named thresholds (no float, no `dim` unless a later answer adds it), a steady look. *The "no onset, no ring entry, no echo" limit is lifted by the privacy rule: lights get the rim onset and the echo the matrix proposed (kinds `lights_on`/`lights_off`). The `off|on` enum, the threshold and the missing `dim` stay as the cue design.* |
+| Q1 fireplace, TV, music | Live onset only. *Lifted: "no ring entry, no echo". They send an onset and an echo like the weather.* Music counts `playing` only, with a block of at least 45 s (a behaviour rule, it stays); no track metadata ever *(stays as a design choice: no cue uses it)*. |
+| Q2 doorbell | A client-side rim chime mark off the existing `doorbell_live` moment, no server, no wire. *Stays client-only for FM10 (the moment already drives the startle and the chime) and because `_doorbell_pressed` skips `_advance/_save/_publish` to keep a press out of the recorder and diagnostics (`coordinator.py:837-848`); the privacy rule does not make that a reason to change it.* |
+| Q3 appliance | A tick per machine: `washer`, `dryer`, `dishwasher` (already public on the bus). Oven, coffee, EV, timer and delivery never get a device cue (they are channel-only categories, `const.py:169-175`). The onset comes from the existing `appliance_done` handler (FM10). *Reading (s2823 F6): the kind is already on the moment, so nothing about it needs to cross on `device_fx`.* |
+| Q4 heating / cooling | A faint warm/cool tint as ambience, and a live rim wash at the switch. One cue per event (FM10): the wash is offered from the `house_answered` handler where that moment fires, not from a second server edge. *"No ring entry, no echo" for the wash is now a technical fact, not a privacy limit (F9, below).* |
 
+**Owner follow-up (F9), 2026-11-03.** Heating and cooling get the rim wash **only where
+`house_answered` fires** (heating or cooling coming **on** for the pet). The tint covers
+every other switch, off included. Heating and cooling therefore need **no server kinds**
+(`kinds=()`: the `current.heating`/`current.cooling` tint is their whole server side). Why
+the wording "on or off" could not be met: `house_answered` fires only for an off-to-on
+change, only when the pet is chilly (or warm) with an indoor temperature out of range,
+awake and not already satisfied, and at most `HOUSE_ANSWERS_PER_DAY = 2` (`home.py:467-502`,
+`rates.py:338-340`); it never fires on off. The live wash sits in the same `speak(..., fx)`
+callback as `_houseFx` (`card-moment.js:185-193`), so a dropped or late FLAVOUR line drops
+or delays both (`FLAVOUR_WAIT_MS`), which is "one cue per event" literally; `capture`
+(catch-up) runs no callback, so a catch-up never cues.
 
-Slice 4C and 4D wait on these (FM9; section 17). The plan **decides nothing** for them.
-The state of fireplace, TV, music and vacuum is already public in `flags`; what the wire
-would add is the edge with a timestamp, replayed for 90 s to the next viewer of a shared
-tablet, and, for heating, cooling and lights, a reading `flags` does not carry. The review's
-recommendations, quoted as input to the owner and not as decisions:
+**The rows, server and client.** Server work is slice 4C; client work is slice 4D.
+
+| Row | Server (4C) | Client (4D) |
+|---|---|---|
+| lights | `current.lights` enum `off\|on`; kinds `lights_on`/`lights_off`, ring and live | steady rim look; onset and echo on the rim |
+| fireplace, TV, music | `current` bool; kinds `x_started`/`x_stopped`, ring and live | ambience (warm rim, bars, reflection); onset and echo |
+| heating, cooling | `current.heating`/`cooling` bool only; no kinds | tint from `current`; wash from the `house_answered` handler |
+| doorbell | **nothing** | rim chime in the `doorbell_live` handler |
+| appliance | **nothing** (the kind is on the moment) | rim tick in the `appliance_done` handler |
+| vacuum (FM15) | **nothing** | rim rotor in the `robot_out` handler, slow in `robot_home`; no echo |
+
+So 4C is **six server keys**: `lights`, `fireplace`, `tv`, `music` (with onsets and
+echoes) and `heating`, `cooling` (ambient only). The doorbell, the appliance tick and the
+vacuum add no server code.
+
+**An appliance tick (Q3, F6).** "A tick per machine" is **one tick per `appliance_done`
+moment**, with the lamp position by kind (washer left, dryer middle, dishwasher right,
+`machine` middle) and no kind-specific art. The handler reduces the moment's `kind` to
+washer, dishwasher, dryer or `machine` (`card-moment.js:204-212`); an oven, a coffee
+machine, an EV, a timer or a delivery is a `CHANNEL_CATEGORIES` entry and never reaches it
+(`const.py:169-175`). With `kind: "oven"` or any unknown value the handler falls to
+`machine` and the cue is the middle tick, never a new recipe: the 4D source test asserts
+the cue table has exactly those four keys.
+
+**Review input, superseded.** The text from here to the end of this section is what the
+s2818 review gave the owner to answer; it decides nothing now.
 
 - **Q1, lights, fireplace, TV, music.** Options: (a) ambience only, no onset, no echo;
   (b) onset live only, no ring entry, no echo; (c) full, as the matrix. Review
-  recommendation: **(a) for lights** ("whole-house 'brightest room', strongest presence
-  signal; or drop lights entirely"; `room_light_level` is the max over every mapped light,
-  `watcher.py:514-522`, and a float, so only a derived enum `off|on` with named thresholds
-  could ever cross) and **(b) for fireplace, TV and music** (music is `state == playing`
-  and flips on every pause, so it needs a block of at least 45 s and `playing` only; `tv`
-  counts `on` or `playing`, `watcher.py:407`).
-- **Q2, doorbell.** Review recommendation: a **client-only rim cue off the existing
-  `doorbell_live`** moment (`card-moment.js:196-222`), `presentation:"onset"`, **no ring
-  entry and no echo**, no server, no wire. The matrix's "yes, short TTL" would put a press
-  into `snapshot.device_fx_recent` for a later subscriber for up to 90 s, which the
-  2026-11-01 decision forbids (`const.py:173-175`; `_doorbell_pressed` deliberately skips
-  `_advance/_save/_publish`, `coordinator.py:837-848`) and would need a `_push_watchers()`
-  call it avoids. The doorbell never rides the ring in this recommendation.
-- **Q3, appliance.** Review recommendation: **one generic "done" tick with no `kind`**.
-  Washer, dryer and dishwasher kinds are public on the bus today, but oven, coffee, EV,
-  timer and delivery are channel-only (`const.py:169`) and must never get a device cue
-  either way. Robot start and appliance done may ride the ring if the owner wants an echo
-  (their moments are public already); the doorbell does not.
+  recommendation: (a) for lights and (b) for the others, on shared-tablet privacy grounds
+  that the household rule has since lifted; the other part still stands (`room_light_level`
+  is a max over every mapped light and a float, so only a derived enum should cross;
+  music is `state == playing` and flips on every pause, so it needs a block of at least
+  45 s; `tv` counts `on` or `playing`, `watcher.py:407`).
+- **Q2, doorbell.** A client-only rim cue off the existing `doorbell_live`
+  (`card-moment.js:214-222`). The matrix's old "yes, short TTL" would have put a press
+  into `snapshot.device_fx_recent`, which the 2026-11-01 decision forbids
+  (`const.py:173-175`; `_doorbell_pressed` skips `_advance/_save/_publish` and never calls
+  `_push_watchers`, `coordinator.py:837-848`).
+- **Q3, appliance.** One generic "done" tick; became "a tick per machine" with the kind
+  read from the moment.
 - **Q4, heating and cooling.** Raw `heating_on`/`cooling_on` is not in `flags` (only
-  `cozy`/`cool`, which need an out-of-range indoor temperature). Review recommendation:
-  **ambience tint only, a long block (at least 10 min, thermostats cycle on `hvac_action`),
-  no echo**, or leave it off the wire. The onset wash would come from `house_answered`
-  (`card-moment.js:186-193`), one cue per event (FM10).
+  `cozy`/`cool`, which need an out-of-range indoor temperature). Tint with a long block;
+  the wash from `house_answered` (`card-moment.js:185-193`), one cue per event (FM10).
 
-Numbers the review gave for the other rows, to be set only after the answers: lights hold
-at least one debounce (for example 45 s), a vacuum block like rain's and "slows" meaning
-docked and done, not each pause (`robot_cleaning` toggles on pause, resume and error,
-`watcher.py:430`), and the 3-per-day and `robot_seen` limits of `HouseMoments`
-(`home.py:517-534`) which a raw-reading detector would bypass. Each such row gets its line
-in the section 6.5 table when its PR is released.
+The numbers for each row are in the section 6.5 table (the review's "at least 10 min" for
+heating is 120 s there, and why). The 3-per-day and `robot_seen` limits of `HouseMoments`
+(`home.py:517-534`) are why the vacuum stays on the `robot_out` moment: a raw-reading
+detector would bypass them (FM15, section 6.6c).
 
 ### 6.6b Client rules for slice 4B (s2818 F11, F12)
 
@@ -761,8 +870,8 @@ settling) would release whatever effect is current, including a running rim cue.
 - `shellImpulse` is `REPLACES_EQUAL`, so two house onsets of equal priority replace each
   other mid-flight, which is chatter by another name. Each kind carries a per-kind
   `cooldownMs` (the director supports it, `interaction-director.js:188-210`), and the
-  ranks match section 6.7's echo rank; both are columns of `DEVICE_SIGNAL_MAP` and the
-  JSON export.
+  ranks match section 6.7's onset rank; the rank is a column of `DEVICE_SIGNAL_MAP` and
+  the JSON export, the cooldown a column of the JS table.
 - 4D recipes reuse 3C's rim-lamp vocabulary (three amber `<b>` lamps; opacity and `left`
   only) for position, colour custom property, count and duration, rather than adding new
   shapes.
@@ -770,6 +879,64 @@ settling) would release whatever effect is current, including a running rim cue.
 **Storm is non-flashing, and checkable.** A CSS source test: no `opacity` swing above a
 stated threshold and no `animation` faster than 3 Hz in a storm rule; reduced motion keeps
 the still ambience and plays no onset or echo (FM7/M3).
+
+### 6.6c Client rules for slice 4D (s2823 F10, F11, F12, F13, F16)
+
+**Moment-driven cues sit with their sibling `fx-*` call (F10, FM10).** `doorbell_live` runs
+its startle and `fx-chime` in `now()`, outside the line (`card-moment.js:214-222`);
+`appliance_done`, `house_answered` and `robot_out` run their `fx` inside the `speak`
+callback (`:189-192`, `:199-200`, `:208-210`). The rim cue goes where the sibling
+`_houseFx`/`_robotFx` call is: `now()` for the doorbell, the `speak` callback for the
+other three, **never in its own call**. A moment that arrives with `s.game` set breaks
+before both (`:187,:196,:206,:218`): a game suppresses the rim cue too (case 9). A source
+test checks that, for each of the four handlers, the rim call and the `fx-*` call sit in
+the same callback body.
+
+**Which moments cue, and when they stay silent.**
+
+- **Doorbell.** The server drops a press for the pet's 30-minute cooldown and while the
+  pet is asleep (`home.py:507-514`), so the rim chime is silent then too. No ring, no wire
+  (Q2, FM10, section 6.6a); a server pytest asserts that a press produces **no** `fx`, no
+  `device_fx_recent` entry and no `_push_watchers` call (`coordinator.py:837-848` keeps its
+  skip of `_advance/_save/_publish`, which keeps a press out of the recorder).
+- **Appliance.** One tick per `appliance_done` moment, lamp by kind (section 6.6a).
+- **Heating, cooling.** The wash from `house_answered` only (F9, section 6.6a).
+- **Vacuum (FM15).** Onset (the rotor turns once) from `robot_out`, end (the rotor slows)
+  from `robot_home`, **no echo, no server key**. The limits that a raw-reading detector
+  would have bypassed are kept because the cue rides the moments: `robot_out` needs an
+  awake pet, 3 a day and sets `robot_seen`, and `robot_home` needs a seen run and
+  `robot_docked` (`home.py:517-534`, `rates.py:341`), so "slows" means docked and done, not
+  each pause. The idle `_robotFx` in `card-tick.js` (a pet idle move while `vroom`) is not
+  an event and **must not cue the rim**.
+- A catch-up (`capture`) runs no callback and so never cues; reduced motion paints the tint
+  and offers no cue; the "screen effects here" switch off draws nothing (section 6.7).
+
+**What 4D needs from 4B's adapter (F16).** 4B turns `device-fx.js` into a table. So 4D can
+add rows without a second refactor, 4B (s2822) is asked to land the following; whatever it
+does not land, 4D adds, with `rim()` and `rimRecipe` (3C code) left alone where it can:
+
+1. `KINDS` and `RECIPES` keyed by the JSON export's rows (`type`, `kinds`, `echo`); a row
+   with no kinds (`heating`, `cooling`) is ambient only and has no `RECIPES` entry of its
+   own kind; `ambientOf` and `paint` handle an enum row (`lights`).
+2. **A moment-driven entry point beside `rim`**, for example `offerMoment(dir, slide, kind,
+   id, env)`. `rim` (`device-fx.js:117-123`) hardcodes `origin:"user"` and the `care`
+   priority through `rimRecipe` (`:97-98`); a house cue needs `origin:"house"`,
+   `PRIORITY.house`, an id from the moment (`m.at` plus its type, or a card sequence like
+   `_rimSeq`) and the same `calm`/`busy` gates. A second `rimRecipe(cue, priority)` or a
+   second factory is the shape.
+3. `CLASSES_BY_LAYER.rim` generated from the user cues and the house cues, with the
+   `.hw.rim.dir-*` source test (section 6.6b). The rim `animationend` filter
+   (`card-build.js:199-200`, target plus `dir-rim-life`) is already correct; house rim cues
+   reuse the same `dir-rim-life` clock, the three amber `<b>` lamps and only `opacity` and
+   `left`.
+4. `paint` handles several ambient keys (glass layer or rim layer per key) and enum values
+   (`lights`), under the `lcdOn`/`calm` gates; `ambientOf` rejects an unknown enum member
+   (asserted in the table test).
+5. `env.calm` refuses an onset rim cue and still paints an ambient tint (section 6.7).
+   `_dirEnv()` already provides `lcdOn`, `calm` and `clockKnown` (`card-visit.js:632-634`);
+   a moment cue has no clock dependence (no `occurredAt`), so it is **not** gated on
+   `clockKnown`.
+6. A `cooldownMs` per kind (section 6.6b) which the 4D rows fill in.
 
 ### 6.7 Client algorithm
 
@@ -825,8 +992,11 @@ compares an old ambient. Test: an echo with the ambient flipped does not play (c
 Reconnect: snapshot and delta share one dedup path in either order. Each card dedups for
 itself; with N pets sharing one weather entity, N identical onsets go to N slides: the
 non-selected ones get `pending` (`canRender` false), only the selected plays (case 8).
-Echo rank: doorbell and appliance done, weather onset, lights/fire/heating, media,
-astronomy; ties by recency.
+**Onset rank (s2823 F12).** The rank orders onsets that contend for the one `shellImpulse`
+track (`REPLACES_EQUAL`, `interaction-director.js:26`): 1 doorbell and appliance (house
+moments), 2 weather, 3 fireplace and lights (the heating wash and the vacuum with 3), 4 TV
+and music; ties by recency. The heating and cooling tint has no rank. Each new kind carries its own `cooldownMs`
+(section 6.5, music).
 
 ### 6.8 Acceptance cases (kept intact from the first plan)
 
@@ -985,8 +1155,8 @@ art. **Do not run two workers on the card chain or `manifest.txt` at once.**
 | 3C | **Rim cues from section 7** (from slice 2, FM5): feed's delivery glow, play's two-point pulse, clean's one sweep, the tuck's lamps dimming once confirmed, as `shellImpulse` leases through the director, gated by `canRender` (a press with screen effects off still has its cap feel from slice 2; only the rim cue goes). They key off the toy's `data-action` that slice 2 already sets (`feed`, `play`, `clean`, `medicine`, `lights`; snack, scold and praise have none and get no rim cue, as FM6 gave them the default), fire from `_tapped` or the scene's own beat and never from the cap's classes, and add no `transform`, `animation` or `filter` to `.cap` or `.toy` (slice 2 owns the cap's `translate`, `filter` and transition; a rim cue lives on the rim layer, `dir-*`). Needs only the adapter, no wire, no server; **3B landed first, so 3C reuses what it built**: the director on the card (`this._director`, created in `_build`), `s.glass` is the rain's layer and not the rim's (the rim cue gets its own `dir-*` element or the toy's rim; it must not reuse `.hw.glass`), `canRender` (`lcdOn()` and the slide's `_dirShown`), `s.statusOpen`, the `animationend` release (the card's one listener on the slide's screen releases `s.dirEffect`; 3C leases need their own effect id field or the same one, one effect per track), `serverClockKnown()`, `device-fx.js` (a rim recipe is a new entry in the card's `recipes`, passed to `create`), the TDZ card-check case and the `devicefx` section (3C adds its own section or extends `devicefx`, and names its methods in the comment, `pick-sections` finds a section by mention), and the `device-fx` AGENTS.md row (3C adds a part, or its rim recipes to `device-fx.js`, and a row). Reduced motion: no cue (it is an onset). | 1 | S-M | `gate --auto` plus the `devicefx` section if it is the first adapter | Press feed, play, clean and the lights toy; each cue once against each finish; the cue with the switch off (none); the cue with a care scene running (scene wins). |
 | 4A | **Weather keys: server** (FM9). Generalise `DeviceFx` to a keyed table from `DEVICE_SIGNAL_MAP` (section 6.2, F9); one timer per key (section 6.5, F6); per-key known-guards and `_fx_mapped` per key (section 6.2a, F5); keys `snow`, `fog`, `storm`, `wind` (all already in `flags`: no privacy change), `block_s` 45 each; one onset per pass, storm over rain; `test_public`/`test_channel`/`test_device_fx` parametrised over the map; the `tests/js/device_signal_map.json` export and its pytest. No version bump. | 1 | M | `scripts/ci-gate` **plus a privacy review of its PR** (as 3A; pick-sections prints `all` for non-test `.py`) | Nothing visible changes (4A has no client): the card loads; flip dev's `input_select.fake_weather` through snow, fog, storm, windy and rain, and restart HA in each: no console error. Dev config has fakes for weather and rain rate only. |
 | 4B | **Weather keys: client** (FM9, FM11). `device-fx.js` becomes a table (section 6.6b, F12): `ambientOf`/`cueOf`/`paint`/`sync` driven by a JS map, no hardcoded `rain`; recipes for snow (frost), fog, storm (non-flashing) and wind on `.hw.glass`; the glass `animationend` filter, `CLASSES_BY_LAYER` and per-kind cooldowns (F11); the **client-computed moon** (static halo, full/new from `serverNow()`, no onset, no wire, no echo); the node parity test on `device_signal_map.json`; bench `alive` shots per key; `devicefx` card-check extended. Drives `_channel` with a fake wire shaped by 4A, as 3B did. | 1 | M | `gate --auto` plus the extended `devicefx` section | Each weather look once on the phone and the wall tablet, against a light and a dark finish (frost, fog, wind and the storm shiver: is it quiet, is it **not a flash**); storm with reduced motion on (still tint, nothing moves); the switch off (nothing drawn); the moon on a full and a new day; a flap in snow (the 45-55 s held reverse); the drop for rain unchanged. |
-| 4C | **Activity keys: server. Owner answered Q1-Q4 (section 6.6a, 2026-11-03); startable after 4A** (FM9). The lights/fireplace/TV/music/heating/cooling/vacuum keys, per the owner's answers (section 6.6a) and the section 6.5 table, with `Watcher.known(key)` as the known-guard for the plain-bool readings; dev config gains `input_boolean`s (and templates) for fireplace, heating, cooling and vacuum, none of which has a fake today. | 1 | M | `scripts/ci-gate` plus a privacy review | With the dev fakes: flip each activity fake on a shared and a private view; confirm what the owner allowed crosses and nothing else. Without the fakes the first real flip is the owner's. |
-| 4D | **Activity: client, and moment-driven rim cues. Pending owner privacy answer (Q1-Q4); not startable** (FM9, FM10). Recipes for the 4C keys; rim cues for doorbell, robot and appliance offered **from the existing moment handlers** (`card-moment.js:186-222`: `robot_out`, `appliance_done`, `doorbell_live`, `house_answered`) as `presentation:"onset"` with no second server edge; the 4D recipes reuse 3C's rim lamps. `_houseFx`/`_robotFx` do not move (FM10). | 1 | M | `gate --auto` | Each row once on the phone: lights, fireplace, heating, doorbell, a storm with reduced motion on; the rim cue and the `fx-*` cue for one event fire together, once. |
+| 4C | **Activity keys: server** (FM9; startable after 4A, which is built; the owner's rule of 2026-11-03, section 6.6a, lifts the privacy limits, so **no privacy review is required** and 4C is tier 1 like 4A). **Scope:** six keys and nothing else: `lights` (enum `off\|on`, kinds `lights_on`/`lights_off`), `fireplace`, `tv`, `music` (bool, kinds `x_started`/`x_stopped`): each with an onset, a ring entry and an echo like the weather; `heating`, `cooling` (bool): **ambient only**, `kinds=()`, no onset and no echo (F9: their wash is the `house_answered` moment, client-side). No key, kind or wire for the doorbell, the appliance tick or the vacuum (FM10, FM15), nor arrival or the moon (FM11). **Work, in order:** (1) the two row shapes 4A did not build (section 6.2 item 1): an enum with onsets (`_add` learns the two-member enum) and an ambient-only row (`observe` picks onsets only from rows with kinds, `_add` is not called for it); no new `Signal` column; regenerate `tests/js/device_signal_map.json`; (2) `Watcher.known(key)` for the four plain-bool readings, lights using `room_light_level is not None` (section 6.5); (3) the six rows with the numbers of the section 6.5 table, each with its `sources` (`CONF_ROOM_LIGHTS`, `CONF_FIREPLACE`, `CONF_TV`, `CONF_MUSIC`, `CONF_HEATING`, `CONF_COOLING`), constants named in `device_fx.py` (`LIGHTS_ON_LEVEL = 0.0`), music `playing` only with `block_s` 60; (4) the dev config: `input_boolean`s for fireplace, heating and cooling (none exists; there is no vacuum key) and a light for `CONF_ROOM_LIGHTS` (`dev/config/configuration.yaml` has template lights over `fake_lamp_level` and `fake_bedroom_level`, `fake_music` and `fake_tv`: check they map, or add one); (5) the tests of the acceptance table. The onset rank is the table's (section 6.5). No client work (4D); a card ignores the new keys until 4D (a kind with no recipe is ignored). No version bump. | 1 | M | `scripts/ci-gate` (pick-sections prints `all` for non-test `.py`) | With the dev fakes: flip each activity fake and restart HA in each state: the card loads, no console error, nothing new on screen. Without the fakes the first real flip is the owner's. |
+| 4D | **Activity: client, and moment-driven rim cues** (FM9, FM10, FM15; startable after **4B and 4C**). **Scope:** (1) recipes for the 4C keys, as the matrix (section 6.6) wants them: the **ambience** from `current` (lights: the dimmed or lit rim, never over `.lit`; fireplace: the warm rim; music: the quiet bars; TV: the faint colour reflection; heating and cooling: the warm and cool tint), with persistent classes and custom properties and no finite animation (section 6.6b); the **onset and the echo** for lights, fireplace, music and TV from the `fx` entry and the ring (ember, bars, reflection, rim brightening), using 3C's three-lamp vocabulary, each kind with its `cooldownMs` and onset rank (section 6.5); (2) **moment-driven rim cues, client only, no server, no wire**: `doorbell_live` (chime mark), `appliance_done` (one tick per moment, lamp by kind, the middle tick for an unknown kind), `robot_out` (rotor turns) and `robot_home` (rotor slows) (FM15), and `house_answered` for the heating or cooling wash (**on only**, section 6.6a, F9), each offered as `presentation:"onset"`, `origin:"house"` from the same callback as its sibling `fx-*` call (section 6.6c: `now()` for the doorbell, the `speak` callback for the rest), no `clockKnown` gate, a game suppresses it, a catch-up never cues, the idle `_robotFx` does not cue; (3) what the adapter must offer first is in section 6.6c (the moment entry point beside `rim`, ambient-only rows, enum rows, `ambientOf` strictness): confirm 4B landed it, or add it with `rim()` untouched. `_houseFx`/`_robotFx` do not move (FM10). Bench `alive` shots per key, `devicefx` card-check extended with a fireplace flip and a lights flip over the 4C dev fakes. | 1 | M | `gate --auto` plus the extended `devicefx` section | Each row once on the phone: lights, fireplace, music, heating (the wash on `house_answered`, the tint on every other switch), doorbell, appliance, the vacuum, and a storm with reduced motion on; the rim cue and the `fx-*` cue for one event fire together, once; open at 20 s and at 3 min after a fireplace flip (echo, then ambience only); the doorbell is silent in its cooldown and asleep. |
 | 5 | **Idle delta**: section 8's three rows, only if N4 leaves them open. | 1 | S-M | `gate --auto` | A ten-minute idle watch on the phone; a game then idle. |
 | 6 | **Rare glass**: section 9. | 1 | S | `gate --auto` | A long idle watch; confirm it is rare and never over a control. |
 | 7 | **Screen morphs**, last, optional: section 10. | 1 | L | `gate --auto` | The flagship morph, then navigating fast through it; the Hop board and a question open. |
@@ -1135,8 +1305,8 @@ at once**.
 |---|---|
 | 4A | pytest, per key of the map: leading edge, the block, the timer, the unload cancel, unknown (into and out of), first-known-silent, restart; two keys blocked at once, both held reverses delivered (F6); one onset per pass, storm over rain; 17 or more entries in one pass keep every fresh live entry (ring `maxlen`, `take_fresh`); the shared-screen **canary built from the map** (section 6.2a); case 16 per key (a week equals main; a house mapping only a snow source has only `snow`; no source, no `device_fx`); the JSON export in sync (section 6.2) |
 | 4B | node: the parity test (every wire kind has `KINDS` and `RECIPES` entries, every ambient key is read and painted, no JS kind outside the JSON, a bench shot per key); an echo with the ambient flipped does not play, per key; the glass `animationend` of an ambience animation does not release a running rim cue (F11); `CLASSES_BY_LAYER` against `style.js`; per-kind `cooldownMs`; CSS source test: the storm has no `opacity` swing above the threshold and no `animation` above 3 Hz; reduced motion is still ambience; a kind with no recipe is ignored; the moon is computed with no wire key and `device_fx` absent in a house with no source; the 3B rain tests pass in table form; card-check `devicefx` |
-| 4C | as 4A for each activity key the owner allows, plus the canary for every one of them; the "nothing the owner did not allow" case (a key the answers exclude is absent from the map and the wire) |
-| 4D | as 4B for the 4C keys, plus: source test, no recipe in `device-fx.js` names an `fx-` class and the `_houseFx` call sites are unchanged (extend the m5 test, FM10); a moment's rim cue and its `fx-*` cue come from one handler at one instant, with no second wire edge; a doorbell never has a ring entry (if Q2 is as recommended) |
+| 4C | pytest, all parametrised over the map where the map allows. Each key gets the 4A cases (leading edge, block, timer, unload cancel, unknown into and out of, first-known-silent, restart), plus one test of two keys blocked at once with both held reverses delivered, one of them an ambient-only key (`heating`). **lights:** `off`/`on` only; one flip inside 45 s sends one diff and at most one `lights_on`/`lights_off`; dimming 100% to 1% stays `on`; unavailable 11 min then back: no diff and no onset; an echo in the ring for 90 s. **fireplace, tv, music:** an edge sends one `x_started`/`x_stopped` live and one ring entry, with the same id in the snapshot; music: pause 30 s then play sends nothing, pause 90 s then play sends one `music_started`. **heating, cooling:** `current.heating`/`cooling` bool only; no kind, no ring entry, no `fx` message; a flip sends only a `house` diff; an 11 min outage reads as unknown, not off. **`Watcher.known`** unit tests per key (unmapped; mapped and answering; mapped and unavailable under and over the 10 min hold). **Map:** `KINDS` derives from the rows' kinds, a row with kinds has `echo` where the table says so, the JSON export is in sync, one onset per pass picks by the rank of section 6.5 (a fireplace and a TV change in one pass send the fireplace). **Case 16 per key:** a week equals main; a house with only a fireplace has only `fireplace`; no source, no `device_fx`. **The vacuum, the doorbell and the appliance are not in the map** (no key named `doorbell`, `appliance`, `vacuum`, `robot`, `moon` or `arrival`), and a doorbell press produces no `fx`, no `device_fx_recent` entry and no `_push_watchers` call. The canary built from the map (section 6.2a) covers every new key with no edit; 17 or more entries in one pass still keep every fresh live entry. |
+| 4D | node unless noted. The table parity test covers the 4C rows (every kind has a `KINDS` and a `RECIPES` entry; an ambient-only row has none); `ambientOf` rejects an unknown enum member; an echo with the ambient flipped does not play, per key; each house rim cue calls `offer` with `origin:"house"`, `presentation:"onset"`; a doorbell, appliance, vacuum or heating moment under `capture` produces no cue; a game running suppresses the cue; reduced motion paints the tints and offers no cue; the switch off draws nothing; the source test: no recipe in `device-fx.js` names an `fx-` class and the `_houseFx` call sites are unchanged (extend the m5 test, FM10); for each of `doorbell_live`, `appliance_done`, `house_answered` and `robot_out` the rim call and the `fx-*` call sit in the same callback body; one cue per event: dispatching `house_answered` counts one rim offer plus one `_houseFx`; the idle `_robotFx` path (`card-tick.js`) offers no rim cue; `robot_out` turns the rotor and `robot_home` slows it, with no echo and no server key; `appliance_done` with an unknown kind (`oven`) uses the middle tick and the cue table has exactly four keys; the CSS source test for the tints (no finite animation; motion rule); a per-kind `cooldownMs` holds. Card-check `devicefx`: a fireplace flip and a lights flip over the dev fakes. |
 
 **Slice 1 acceptance** (each checked by `node --test` or a source test; none needs a
 device, card-check or the bench):
@@ -1163,7 +1333,7 @@ adapter (3B or 3C).
 Whether slice 5 ships at all is the owner's call after N4. Slice 6 depends on slice 3B's
 glass layer, not on slice 7. The full gate is the first mate's, once per merged batch;
 3A is the only slice-3 PR that needs `scripts/ci-gate` at once (and its PR gets the
-privacy review); in slice 4 that is 4A and 4C.
+privacy review); in slice 4 that is 4A and 4C (4A is merged; 4C needs no privacy review, section 6.6a).
 
 **In flight:** Hop 3a/3b touch `card-board.js` and `card-games.js` (3a saves `hop_day`,
 tier 2); slice 1 may land at any time: it touches no file they touch, and a
@@ -1221,22 +1391,23 @@ first mate, is FM3. The two non-privacy questions of the slice-4 review are FM9 
 weather first) and FM10 (`_houseFx`/`_robotFx` stay). Arrival cut and the moon off the
 wire are FM11, which the owner may reverse.
 
-**Open: the owner's privacy questions.** They gate 4C and 4D (FM9) and nothing else; 4A and
-4B do not wait. They are cited as Q1-Q4 here and in section 6.6a, which holds the review's
-recommendation for each; section 1's Q1-Q5 are a different list (already decided). Privacy
-ones first, as the review asked: Q1, then Q2, then Q3.
+**Answered (2026-11-03): the owner's privacy questions.** They gated 4C and 4D (FM9); the
+answers are in section 6.6a, and the s2823 review applied them to this plan. The same day
+the owner replaced the privacy limits with one household rule (section 6.6a, "Owner privacy
+rule"), which lifts the no-echo limits below. The questions are kept for the trail, cited
+as Q1-Q4 here and in section 6.6a; section 1's Q1-Q5 are a different list (already decided).
 
 1. **Q1: lights, fireplace, TV, music on a shared wall tablet.** May their on/off *edges*
-   (with the 90 s echo) cross the wire? The states are already in `flags`; the edge with a
-   timestamp is new. (a) ambience only, no onset, no echo; (b) onset live only, no ring
-   entry, no echo; (c) full, as the matrix. Review recommendation: (a) for lights, or drop
-   lights entirely; (b) for fireplace, TV and music.
-2. **Q2: doorbell.** A live-only rim mark off the existing `doorbell_live`, no ring entry,
-   no echo (recommended; it matches the 2026-11-01 decision that a doorbell is "said live
-   and kept nowhere"), or an echo for up to N s?
-3. **Q3: appliance.** One generic "done" tick with no kind (recommended), or washer, dryer
-   and dishwasher kinds on the wire? Confirm oven, coffee, EV, timer and delivery never get
-   a device cue.
-4. **Q4: heating and cooling.** Raw `heating_on`/`cooling_on` is not in `flags` today (only
-   `cozy`/`cool`). Ambience tint only, a long block, no echo (recommended), or leave it off
-   the wire?
+   (with the 90 s echo) cross the wire? **Answer:** lights ambience only (`off|on`);
+   fireplace, TV and music live onsets only; music is `playing` only with a block of at
+   least 45 s. **Then lifted by the household rule:** all four get an onset and an echo.
+2. **Q2: doorbell.** **Answer:** a client-side rim mark off `doorbell_live`; no server, no
+   wire (still so: FM10).
+3. **Q3: appliance.** **Answer:** a tick per machine (washer, dryer, dishwasher), from the
+   existing `appliance_done` handler; oven, coffee, EV, timer and delivery never get a
+   device cue.
+4. **Q4: heating and cooling.** **Answer:** a faint tint while running and a rim wash at the
+   switch; the wash comes from `house_answered`, which fires on **on** only (owner follow-up
+   F9, section 6.6a): the tint covers every other switch.
+
+The vacuum was never asked: it is client-only (FM15).
