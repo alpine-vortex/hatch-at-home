@@ -38,7 +38,7 @@ from custom_components.virtual_pet.const import (
 )
 from custom_components.virtual_pet.device_fx import DEVICE_SIGNAL_MAP, KINDS
 
-from .test_channel import FX_ON, fx_key
+from .test_channel import RIGS, fx_key, kind_of
 from .test_init import STORE_KEY, hatched_pet, settle, setup, setup_with_house
 
 LEVELS = model.R.BOND_LEVELS
@@ -452,8 +452,13 @@ async def test_a_shared_screens_device_fx_is_the_whitelist_and_nothing_else(
     title, and no more than a personal screen's (the same house view). The
     whitelist is built from DEVICE_SIGNAL_MAP, so a new key gets this audit."""
     hass_storage[STORE_KEY] = hatched_pet(now)
-    hass.states.async_set("weather.garden_of_zebulon", "sunny")
-    await setup_with_house(hass, weather="weather.garden_of_zebulon")
+    rig = RIGS[key]
+    entity = f"{rig.entity.split('.')[0]}.garden_of_zebulon"
+    rig.put(hass, rig.off, entity)
+    await setup_with_house(
+        hass,
+        **{option: entity for option in rig.options},  # (one entity, by id)
+    )
     pet = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
     client = await hass_ws_client(hass)
     await client.send_json_auto_id(
@@ -465,15 +470,18 @@ async def test_a_shared_screens_device_fx_is_the_whitelist_and_nothing_else(
     )
     assert (await client.receive_json())["success"]
     heard: list[dict[str, Any]] = [(await client.receive_json())["event"]]
-    for state in (FX_ON[key], "sunny"):  # an onset, and (after its block) its end
-        hass.states.async_set("weather.garden_of_zebulon", state)
-        await settle(hass, freezer, 60)
+    for state in (rig.on, rig.off):  # an onset, and (after its block) its end
+        rig.put(hass, state, entity)
+        await settle(hass, freezer, 75)  # past the block (music: 60 s), in the ring
         await client.send_json_auto_id({"type": "ping"})
         while (msg := await client.receive_json())["type"] != "pong":
             heard.append(msg["event"])
-    assert pet.device_fx.recent(pet._now())
+    recent = bool(kind_of(key, True))  # an ambient-only key has no ring entry
+    assert bool(pet.device_fx.recent(pet._now())) == recent
     assert audit_device_fx(heard) == set(DEVICE_SIGNAL_MAP[key].kinds)
-    assert pet.device_fx.recent(pet._now())  # (the audit changed nothing)
+    assert (
+        bool(pet.device_fx.recent(pet._now())) == recent
+    )  # (the audit changed nothing)
     text = json.dumps(heard)
     for leak in ("weather.", "zebulon", "garden", hass_admin_user.id, "Zeb", "user"):
         assert leak.lower() not in text.lower(), leak
@@ -529,8 +537,8 @@ async def test_a_canary_in_every_mapped_source_reaches_no_screen(
     }
     assert set(options) == {s for v in DEVICE_SIGNAL_MAP.values() for s in v.sources}
 
-    def poison(state: str) -> None:
-        for entity_id in options.values():
+    def poison(state: str, only: tuple[str, ...] | None = None) -> None:
+        for entity_id in (options[o] for o in (only or options)):
             hass.states.async_set(
                 entity_id,
                 state,
@@ -560,10 +568,14 @@ async def test_a_canary_in_every_mapped_source_reaches_no_screen(
         )
         assert (await client.receive_json())["success"]
         heard[name].append((await client.receive_json())["event"])
-    # The canary as every kind of reading, then the real weather over it, so
-    # every key has a turn at an onset while its source holds a canary.
-    for state in (canary, *FX_ON.values(), canary, "sunny", canary):
-        poison(state)
+    # The canary as every kind of reading, then each key's own "on" over it, one key
+    # at a time (one onset a pass), so every key has a turn at an onset while the
+    # other sources hold canaries; and the real "off" over all of them.
+    steps = [(canary, None)]
+    steps += [(RIGS[k].on, DEVICE_SIGNAL_MAP[k].sources) for k in DEVICE_SIGNAL_MAP]
+    steps += [(canary, None), ("sunny", None), (canary, None)]
+    for state, only in steps:
+        poison(state, only)
         await settle(hass, freezer, 60)
         for name, client in (("shared", shared), ("private", private)):
             await client.send_json_auto_id({"type": "ping"})
@@ -573,8 +585,20 @@ async def test_a_canary_in_every_mapped_source_reaches_no_screen(
     for name, messages in heard.items():
         sent = audit_device_fx(messages)
         # Every key had an onset to leak, on both channels.
-        assert {s.kinds[0] for s in DEVICE_SIGNAL_MAP.values()} <= sent, name
-        text = json.dumps(messages)
+        assert {s.kinds[0] for s in DEVICE_SIGNAL_MAP.values() if s.kinds} <= sent, name
+        # What the bridge sent. (Not the whole message: a TV mapped to a source with
+        # a title is the existing `house.media`, which names what the pet watched
+        # and is not the bridge's; it is the one place a title may already be.)
+        text = json.dumps(
+            [
+                [
+                    (m.get("house") or {}).get("device_fx"),
+                    m.get("device_fx_recent"),
+                    m.get("fx"),
+                ]
+                for m in messages
+            ]
+        )
         for leak in (canary, *options.values(), hass_admin_user.id):
             assert leak.lower() not in text.lower(), (name, leak)
         assert "media_title" not in text, name
