@@ -12695,13 +12695,16 @@ async function main() {
     s.sayUntil = 0; s.flairUntil = 0; s.nextVisitCheck = 0;
     el._seasonVisitor(s, season);
     const gap = s.nextVisitCheck - s.flairUntil;
-    await new Promise((r) => setTimeout(r, 1800));
+    // Each beat is polled for (8 s ceiling), not slept for at a fixed 1.8 s / 3.7 s: a loaded runner
+    // runs the card's timers late, and a fixed sample would miss the 1.8 s the "oh!" is up.
+    const until = async (f, ms = 8000) => { const t0 = Date.now(); while (!f() && Date.now() - t0 < ms) await new Promise((r) => setTimeout(r, 25)); };
+    await until(() => s.bubble.textContent === "oh!");
     const walker = !!s.seasonBox.querySelector(".snowhare.walk.flap");
     // Motion 1: a hare coming from the left is faced (the art faces right); one from the right is not.
     const fromLeft = !!s.seasonBox.querySelector(".snowhare.ltr");
     const faced = s.pet.classList.contains("look");
     const startle = s.bubble.textContent;
-    await new Promise((r) => setTimeout(r, 1900));
+    await until(() => s.bubble.textContent === "hi, little hare!");
     const greet = s.bubble.textContent;
     el._react(s, { action: "snack", result: "ok", at: Date.now() / 1000 });
     return { walker, fromLeft, faced, startle, greet, gap, prop: s.prop.getAttribute("src") || "" };
