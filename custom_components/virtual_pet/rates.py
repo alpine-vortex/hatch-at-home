@@ -109,6 +109,13 @@ DIG_WIN_AT = 5
 DIG_WIN_HAPPINESS = 23.0
 GAME_IDLE_MINUTES = 3  # an unfinished game is dropped after this
 OPENING_KEEP_MINUTES = 30  # a dropped Higher or Lower opening is shown again
+# Hop of the Day (hop.py; plan 2026-11-02-hop-of-the-day): a settle's move
+# list is capped; the generator draws at most HOP_CANDIDATES boards before the
+# hand-made fallback stands in, and drops one whose solve passes HOP_STATE_CAP
+# states (the hint's search, ship 5, has the same cap).
+HOP_MAX_MOVES = 200
+HOP_CANDIDATES = 60
+HOP_STATE_CAP = 100_000
 
 # --- Chores: a done to-do item earns the pet a treat --------------------------
 
