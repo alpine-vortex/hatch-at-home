@@ -48,6 +48,7 @@ delays care, navigation, dialogue, questions or games.
 | FM13 | **Slice 6 is generic marks only; rare; after 4B** (first mate, 2026-11-03, from the s2824 review, slice 6; owner may override; reversible). **Marks:** paw print, smudge, rim shadow, in every world (FM1); **no leaf** (it is Woodland-flavoured; a world flavour can come later). **Rarity:** one mark per about 20 minutes of *viewed* time, per pet, in memory only (no saved field), **no night rule** (M3: no visual quiet hours). **Order:** starts only after 4B has merged, because 4B puts snow, fog, storm and wind on the same `.hw.glass` and the same `s.dirEffect`; slice 6 gets its own layer, scheduler and acceptance (section 9, section 13), and a card-check `elementFromPoint` assertion that the mark is never over a control. |
 | FM14 | **Slice 7 (screen morphs) is parked like section 11** (first mate, 2026-11-03, from the s2824 review, slice 7; owner may override; reversible). It stays as a paragraph in section 10 and is not a slice. It is re-planned only when the owner asks, after seeing slice 6. This narrows Q5 ("last, optional") to "parked". |
 | FM15 | **The vacuum is client-only** (first mate, 2026-11-03, from s2823 F11; the owner never answered it; reversible). Onset from the `robot_out` moment, end from `robot_home`, **no echo, no server key, no wire**; slice 4D. The idle `_robotFx` in `card-tick.js` is not an event and does not cue the rim. |
+| FM16 | **Slice 6 mark lifetime: one mark at a time, on screen 20 s, 2 s fade-out, then removed** (first mate, 2026-11-03, from s2834 finding 8; owner may override; reversible). Section 9 and "Slice 6 acceptance" use these numbers. |
 
 Consequences: the first four slices need no art. The plan has no new player copy; any
 wording a slice finds it needs goes to the first mate as a DRAFT question, not into the
@@ -1118,51 +1119,104 @@ separate decision for after N4 (it would be art).
 ## 9. Rare glass moments (after 4B, FM13)
 
 A **generic** mark on the glass, rare, with no reward and no requirement. The marks are a
-**paw print**, a **smudge** and a **rim shadow**, the same in every world (FM1). There is
-no leaf: it is Woodland-flavoured, and a world flavour can come later as its own decision.
-No labels. Clipped to the shell, `pointer-events:none`, and never over a button
-affordance.
+**paw print**, a **smudge** and an **edge shadow** (FM13 calls it "rim shadow"; it is renamed
+because `.hw.rim` is the bezel layer, `style.js:970`, outside the screen, and a mark put there
+would trip the layers-disjoint test, `device_fx_room.test.js:563-567`), the same in every world
+(FM1). There is no leaf: it is Woodland-flavoured, and a world flavour can come later as its own
+decision. No labels. Clipped to the shell, `pointer-events:none`, and never over a button
+affordance (Placement, below).
 
 **Starts only after 4B has merged (FM13).** 3B's glass is built (`<i class="hw glass">`,
 `card-build.js:156`; its rules in `style.js` hide it until `ha-card.lcd-on` and under
-`.screen.show-status`), and rain already uses both pseudo-elements (`::before` sheen,
-`::after` drop) and the slide's single `s.dirEffect`, which the glass's `animationend`
-releases (`card-build.js:194`). 4B puts snow, fog, storm and wind on the same glass and
-adds `CLASSES_BY_LAYER`, the glass `animationend` filter and per-kind cooldowns (F11, FM9).
-A mark written before 4B would fight the same two pseudo-elements, the same effect field
+`.screen.show-status`, `style.js:849-851`), and rain already uses both pseudo-elements
+(`::before` sheen, `::after` drop) and the slide's single `s.dirEffect`, which the glass's
+`animationend` releases (`card-build.js:197`). 4B puts snow, fog, storm and wind on the same
+glass and adds `CLASSES_BY_LAYER`, the glass `animationend` filter and per-kind cooldowns (F11,
+FM9). A mark written before 4B would fight the same two pseudo-elements, the same effect field
 and the same filter, and be reworked. Read 4B's built CSS and `CLASSES_BY_LAYER` first.
 
-**Its own layer.** The mark is its own element (a child of the glass, as the rim's lamps
-are, or a third layer), **never `::before` or `::after`**, so persistent ambience (the wet
-sheen, frost, fog) can sit under it. It adds its own entry to `CLASSES_BY_LAYER`, and 4B's
-`animationend` filter ignores it: **a mark ending must not release a running rain or
-weather lease**, and a weather animation ending must not clear a mark. It does not touch
-`s.dirEffect` unless it takes the lease (priority idle, the lowest: any house onset
-wins, which is correct). It uses `dir-*` classes only, no `fx-*`, no `filter` or `blur`.
+**Its own element (s2834 F1, F10).** The glass has seven `<b>` children and all seven are
+taken (frost, fog, storm, wind, moon, bars, tv: `card-build.js:156`, `style.js:880-955`);
+`.hw.glass b` gives every `<b>` `inset:0; opacity:0` and the weather transition, and
+`device_fx_room.test.js:572` asserts exactly seven. So the mark is **one new element after the
+seventh `<b>`, of a different tag (`<u class="mark">`)**, which `.hw.glass b` and
+`b:nth-child(n)` do not reach. The same PR updates `card-build.js:156` and changes the `{7}`
+test to the new markup. Its rules are `.hw.glass .mark...`. It is **never `::before` or
+`::after`**, so persistent ambience (the wet sheen, frost, fog) can sit under it. Its classes
+are on that element only, never on `.hw.glass`: `CLASSES_BY_LAYER` (`device-fx.js:122-127`)
+gets a **fifth key, `mark`**, and the disjoint test and the `style.js` scan of `.hw.glass.dir-*`
+rules (`device_fx_room.test.js:496-519`) are extended to it. The glass `animationend` filter
+needs no change (`e.target === s.glass` already ignores a child's end, `card-build.js:197`); the
+proof is a test that dispatches a mark's `animationend` on the child and sees no release.
+**A mark ending must not release a running rain or weather lease**, and a weather animation
+ending must not clear a mark. `dir-mark-*` classes only, no `fx-*`, no `filter` or `blur`.
 
-**Its scheduler.** No new `setInterval` (section 3): `_tick` calls a `_rareGlass(s)` gate.
+**No lease (s2834 F3, F4).** The mark never writes `s.dirEffect` and offers nothing to the
+director: `s.dirEffect` is one field (`device-fx.js:194,223`) and a mark on `shellImpulse` would
+share the track with the rim cues and need its own `animationName` to release. The mark ends on
+its own CSS animation (`dir-mark-life`, on the mark element only) with a timer as the backstop.
+The idle origin (`PRIORITY.idle`, `lastMicroBeat`) is not used. The gate reads
+`this._director.inspect(s)` (null means none) for `tracks.shellImpulse` (an onset or echo is
+running on the glass or the rim; `interaction-director.js:377`) and `this._director.isBusy(s)`
+for the busy owners (`:373`); it adds no field to the director. A house or care cue that starts
+while a mark is showing leaves the mark alone (it is on the glass for its own few seconds).
 
-- **Viewed time** is a counter that advances only while the slide is on show, the page is
-  visible (`document.hidden` freezes it), `lcdOn()` is true, the status sheet is closed and
-  `BUSY_OWNERS` is clear. Off-slide or hidden time does not count.
+**Lifetime (FM16, s2834 F8).** One mark on screen at a time. It appears (a still: one `steps()`
+or an opacity transition, not a keyframed swing), stays 20 s, fades out over 2 s, and is then
+removed (class off). The animation is a one-shot, never an infinite loop (`AGENTS.md`, motion
+rule). Under reduced motion nothing is drawn at all (`calm()`, `prefs.js:188`).
+
+**Placement (s2834 F2, F8).** A mark is placed only in the screen's own margin band (a fixed
+inset zone: the outer `calc(var(--b)*N)` ring and the lower corners, named in CSS), chosen from
+a short list of fixed spots, never random over the whole screen. Spots are in percentages or
+`--b` units, so a resize (`_lcdPitch`'s ResizeObserver, `card-build.js:206`) keeps the mark in
+its spot; no pixel position is stored. A mark never overlaps the pet's box at placement; if the
+pet wanders under it, it stays (it is on the glass). The caps and toys are on the shell outside
+the screen, so they are never under the glass; devicefx 14 already proves the glass is deaf, z 0
+and before the bubble, status and game in the DOM (`card-check.js:10056-10071`).
+`elementFromPoint` skips `pointer-events:none`, so it cannot return the mark whatever the
+placement: "never over a control" is a placement claim, proved by geometry (slice 6 acceptance).
+
+**Its scheduler.** No new `setInterval` (section 3): `_tick` (a 700 ms interval,
+`card-base.js:134`) calls a `_rareGlass(s, now)` gate. The clock is a parameter (`now`) and the
+random is a parameter (`pick`), so tests do not wait.
+
+- **Viewed time (s2834 F6).** `_rareGlass(s, now)` adds `min(now - s.glassAt, 2000)` ms to
+  `s.glassViewed` only on a tick where the gate's own conditions hold, then sets
+  `s.glassAt = now`. A gap over 2 s is not credited (a throttled or suspended timer would
+  otherwise pay out the 20 minutes in one tick). The conditions: the slide is the selected one
+  (`this._index`, not `seen` in `_tick`: peeking neighbours are not on show), the page is visible
+  (`_tick` already returns on `!this._visible || document.hidden`, `card-tick.js:3`), `lcdOn()`
+  is true, the status sheet is closed and `BUSY_OWNERS` is clear. Off-slide or hidden time does
+  not count.
 - **Default (FM13): one mark per about 20 minutes of viewed time, per pet**, kept in memory
-  on the slide. No saved field, no `PetState`, nothing on the wire (section 3). The counter
-  starts at zero on card load and on the first view; a mark is never drawn on the first
-  view. Never the same mark twice in a row.
-- **Eligibility when it comes due:** on-show, `lcdOn()`, no busy owner, `!calm()` (reduced
-  motion: no mark, it is decoration), and no *onset or echo* lease on the glass or the rim.
-  Persistent weather ambience does not block it (the mark is a separate element, so a paw
-  on a wet window is allowed); if the bench shows it reads as dirt, the first mate may flip
-  this to blocked. The "screen effects here" switch off means nothing is drawn.
-- **No night rule (FM13, M3):** no visual quiet hours.
-- Injected clock, so tests do not wait.
+  on the slide (`s.glassViewed`, `s.glassAt`, the mark element). No saved field, no `PetState`,
+  nothing on the wire (section 3). The counter starts at zero on card load and on the first
+  view; a mark is never drawn on the first view. Never the same mark twice in a row.
+- **Per slide (s2834 F8).** With several pets in the card each slide has its own counter and
+  only the selected slide's runs, so a household with three pets sees at most one mark per 20
+  minutes on the pet on show; it is not 20 minutes per card.
+- **Eligibility when it comes due:** on show, `lcdOn()`, no busy owner, `!calm()` (reduced
+  motion: no mark, it is decoration), no mark already showing, and no `shellImpulse` track (an
+  onset or echo on the glass or the rim). Persistent weather ambience does not block it (the
+  mark is a separate element, so a paw on a wet window is allowed); if the bench shows it reads
+  as dirt, the first mate may flip this to blocked. The "screen effects here" switch off means
+  nothing is drawn.
+- **Reset points (s2834 F5).** `_forget` (`card-build.js:744-781`) clears the mark and zeroes
+  `s.glassViewed`, `s.glassAt` and the "first view" flag, or another pet on the same slide
+  inherits the counter and a mark. `_dirSwitch` (`card-visit.js:672-677`) clears the mark when
+  `lcdOn()` goes false (`_dirPause` cancels `shellImpulse` only and does not touch the mark). A
+  slide swipe (`_go`, `card-build.js:924`) hides the mark on the slide that goes (it is not
+  shown) and its counter stops (off-slide). `calm` draws nothing.
+- **No clock-based quiet hours (FM13, M3).** The counter does not run while the pet is asleep,
+  because `asleep` is a `BUSY_OWNERS` owner (`interaction-director.js:43-59`, with `pose` and
+  `power`); that is the pet's state, not a night rule.
 
-**Verification the worker can do.** Node tests for the gate and the CSS source test
-(section 13, "Slice 6 acceptance"), bench stills at 420 and 330 px on a clear, a dark and a
-glitter shell, and a card-check `elementFromPoint` assertion. **Whether a mark reads as
-charming or dirty, and whether 20 minutes feels rare, only a long idle watch on a device
-can say**; that stays the owner's queue, and the number to react to is 20 minutes of viewed
-time.
+**Verification the worker can do.** Node tests for the gate, the reset points and the CSS source
+test (section 13, "Slice 6 acceptance"), bench stills at 420 and 330 px on a clear, a dark and a
+glitter shell, and a card-check geometry assertion. **Whether a mark reads as charming or dirty,
+and whether 20 minutes feels rare, only a long idle watch on a device can say**; that stays the
+owner's queue, and the number to react to is 20 minutes of viewed time.
 
 ## 10. Parked: screen morphs (Q5, FM14)
 
@@ -1237,7 +1291,7 @@ art. **Do not run two workers on the card chain or `manifest.txt` at once.**
 | 4C | **Activity keys: server** (FM9; startable after 4A, which is built; the owner's rule of 2026-11-03, section 6.6a, lifts the privacy limits, so **no privacy review is required** and 4C is tier 1 like 4A). **Scope:** six keys and nothing else: `lights` (enum `off\|on`, kinds `lights_on`/`lights_off`), `fireplace`, `tv`, `music` (bool, kinds `x_started`/`x_stopped`): each with an onset, a ring entry and an echo like the weather; `heating`, `cooling` (bool): **ambient only**, `kinds=()`, no onset and no echo (F9: their wash is the `house_answered` moment, client-side). No key, kind or wire for the doorbell, the appliance tick or the vacuum (FM10, FM15), nor arrival or the moon (FM11). **Work, in order:** (1) the two row shapes 4A did not build (section 6.2 item 1): an enum with onsets (`_add` learns the two-member enum) and an ambient-only row (`observe` picks onsets only from rows with kinds, `_add` is not called for it); no new `Signal` column; regenerate `tests/js/device_signal_map.json`; (2) `Watcher.known(key)` for the four plain-bool readings, lights using `room_light_level is not None` (section 6.5); (3) the six rows with the numbers of the section 6.5 table, each with its `sources` (`CONF_ROOM_LIGHTS`, `CONF_FIREPLACE`, `CONF_TV`, `CONF_MUSIC`, `CONF_HEATING`, `CONF_COOLING`), constants named in `device_fx.py` (`LIGHTS_ON_LEVEL = 0.0`), music `playing` only with `block_s` 60; (4) the dev config: `input_boolean`s for fireplace, heating and cooling (none exists; there is no vacuum key) and a light for `CONF_ROOM_LIGHTS` (`dev/config/configuration.yaml` has template lights over `fake_lamp_level` and `fake_bedroom_level`, `fake_music` and `fake_tv`: check they map, or add one); (5) the tests of the acceptance table. The onset rank is the table's (section 6.5). No client work (4D); a card ignores the new keys until 4D (a kind with no recipe is ignored). No version bump. | 1 | M | `scripts/ci-gate` (pick-sections prints `all` for non-test `.py`) | With the dev fakes: flip each activity fake and restart HA in each state: the card loads, no console error, nothing new on screen. Without the fakes the first real flip is the owner's. |
 | 4D | **Activity: client, and moment-driven rim cues** (FM9, FM10, FM15; startable after **4B and 4C**). **Scope:** (1) recipes for the 4C keys, as the matrix (section 6.6) wants them: the **ambience** from `current` (lights: the dimmed or lit rim, never over `.lit`; fireplace: the warm rim; music: the quiet bars; TV: the faint colour reflection; heating and cooling: the warm and cool tint), with persistent classes and custom properties and no finite animation (section 6.6b); the **onset and the echo** for lights, fireplace, music and TV from the `fx` entry and the ring (ember, bars, reflection, rim brightening), using 3C's three-lamp vocabulary, each kind with its `cooldownMs` and onset rank (section 6.5); (2) **moment-driven rim cues, client only, no server, no wire**: `doorbell_live` (chime mark), `appliance_done` (one tick per moment, lamp by kind, the middle tick for an unknown kind), `robot_out` (rotor turns) and `robot_home` (rotor slows) (FM15), and `house_answered` for the heating or cooling wash (**on only**, section 6.6a, F9), each offered as `presentation:"onset"`, `origin:"house"` from the same callback as its sibling `fx-*` call (section 6.6c: `now()` for the doorbell, the `speak` callback for the rest), no `clockKnown` gate, a game suppresses it, a catch-up never cues, the idle `_robotFx` does not cue; (3) what the adapter must offer first is in section 6.6c (the moment entry point beside `rim`, ambient-only rows, enum rows, `ambientOf` strictness): confirm 4B landed it, or add it with `rim()` untouched. `_houseFx`/`_robotFx` do not move (FM10). Bench `alive` shots per key, `devicefx` card-check extended with a fireplace flip and a lights flip over the 4C dev fakes. | 1 | M | `gate --auto` plus the extended `devicefx` section | Each row once on the phone: lights, fireplace, music, heating (the wash on `house_answered`, the tint on every other switch), doorbell, appliance, the vacuum, and a storm with reduced motion on; the rim cue and the `fx-*` cue for one event fire together, once; open at 20 s and at 3 min after a fireplace flip (echo, then ambience only); the doorbell is silent in its cooldown and asleep. |
 | 5 | **Idle delta: parked until species N4's art merges, then re-scoped; not startable** (FM12). Glass curiosity is dropped; what may remain is section 8's post-play settle and link-port curiosity, with the "Slice 5 acceptance, for the re-scope" below. | 1 | S-M | `gate --auto` | After the re-scope: a game then idle; a link then idle; a ten-minute idle watch on the phone (subjective: the owner's call). |
-| 6 | **Rare glass: generic marks, after 4B merges** (FM13; section 9). Paw print, smudge, rim shadow (no leaf); its own element and `CLASSES_BY_LAYER` entry, not the glass pseudo-elements; a `_rareGlass` gate in `_tick` on an injected clock, with a viewed-time counter (about 20 min per pet, in memory, no night rule); `dir-*` only. **Not startable before 4B has merged.** Acceptance below, including a card-check `elementFromPoint` assertion. | 1 | S | `gate --auto` plus the extended `devicefx` section (the assertion needs real Chromium) | A long idle watch on the phone and the wall tablet: is a mark charming or dirty, and is one per about 20 minutes of viewed time rare enough; never over a control; the switch off (nothing); reduced motion (nothing). The bench stills are the worker's, the watch is the owner's. |
+| 6 | **Rare glass: generic marks, after 4B merges** (FM13, FM16; section 9). Paw print, smudge, edge shadow (no leaf; FM13's "rim shadow"); its own `<u class="mark">` after the glass's seventh `<b>` (not a `<b>`, not the pseudo-elements; `card-build.js:156` and the `{7}` test at `device_fx_room.test.js:572` change with it) and a fifth `mark` key in `CLASSES_BY_LAYER`; **no lease** (never writes `s.dirEffect`; it ends on `dir-mark-life` with a timer backstop, and is skipped while `inspect(s).tracks.shellImpulse` exists); a `_rareGlass(s, now)` gate in `_tick` with an injected clock and `pick`, a viewed-time counter (about 20 min per slide, each tick credited at most 2 s, in memory, no clock-based quiet hours), one mark at a time, 20 s on screen and a 2 s fade (FM16), fixed margin-band spots, reset in `_forget`, `_dirSwitch` and `_go`; `dir-mark-*` only. **Not startable before 4B has merged.** Acceptance below, including a card-check geometry assertion. | 1 | S | `gate --auto` plus the extended `devicefx` section (the geometry check needs real Chromium) | A long idle watch on the phone and the wall tablet: is a mark charming or dirty, and is one per about 20 minutes of viewed time rare enough; never over a control; the switch off (nothing); reduced motion (nothing). The bench stills are the worker's, the watch is the owner's. |
 | 7 | **Screen morphs: parked, not a slice** (FM14; section 10). Re-planned only if the owner asks after slice 6. | n/a | n/a | n/a | none |
 
 **Slice 3 is three PRs (s2811 review).** Order: **3A, then 3C or 3B, then the other.**
@@ -1387,21 +1441,26 @@ at once**.
 | 4C | pytest, all parametrised over the map where the map allows. Each key gets the 4A cases (leading edge, block, timer, unload cancel, unknown into and out of, first-known-silent, restart), plus one test of two keys blocked at once with both held reverses delivered, one of them an ambient-only key (`heating`). **lights:** `off`/`on` only; one flip inside 45 s sends one diff and at most one `lights_on`/`lights_off`; dimming 100% to 1% stays `on`; unavailable 11 min then back: no diff and no onset; an echo in the ring for 90 s. **fireplace, tv, music:** an edge sends one `x_started`/`x_stopped` live and one ring entry, with the same id in the snapshot; music: pause 30 s then play sends nothing, pause 90 s then play sends one `music_started`. **heating, cooling:** `current.heating`/`cooling` bool only; no kind, no ring entry, no `fx` message; a flip sends only a `house` diff; an 11 min outage reads as unknown, not off. **`Watcher.known`** unit tests per key (unmapped; mapped and answering; mapped and unavailable under and over the 10 min hold). **Map:** `KINDS` derives from the rows' kinds, a row with kinds has `echo` where the table says so, the JSON export is in sync, one onset per pass picks by the rank of section 6.5 (a fireplace and a TV change in one pass send the fireplace). **Case 16 per key:** a week equals main; a house with only a fireplace has only `fireplace`; no source, no `device_fx`. **The vacuum, the doorbell and the appliance are not in the map** (no key named `doorbell`, `appliance`, `vacuum`, `robot`, `moon` or `arrival`), and a doorbell press produces no `fx`, no `device_fx_recent` entry and no `_push_watchers` call. The canary built from the map (section 6.2a) covers every new key with no edit; 17 or more entries in one pass still keep every fresh live entry. |
 | 4D | node unless noted. The table parity test covers the 4C rows (every kind has a `KINDS` and a `RECIPES` entry; an ambient-only row has none); `ambientOf` rejects an unknown enum member; an echo with the ambient flipped does not play, per key; each house rim cue calls `offer` with `origin:"house"`, `presentation:"onset"`; a doorbell, appliance, vacuum or heating moment under `capture` produces no cue; a game running suppresses the cue; reduced motion paints the tints and offers no cue; the switch off draws nothing; the source test: no recipe in `device-fx.js` names an `fx-` class and the `_houseFx` call sites are unchanged (extend the m5 test, FM10); for each of `doorbell_live`, `appliance_done`, `house_answered` and `robot_out` the rim call and the `fx-*` call sit in the same callback body; one cue per event: dispatching `house_answered` counts one rim offer plus one `_houseFx`; the idle `_robotFx` path (`card-tick.js`) offers no rim cue; `robot_out` turns the rotor and `robot_home` slows it, with no echo and no server key; `appliance_done` with an unknown kind (`oven`) uses the middle tick and the cue table has exactly four keys; the CSS source test for the tints (no finite animation; motion rule); a per-kind `cooldownMs` holds. Card-check `devicefx`: a fireplace flip and a lights flip over the dev fakes. |
 
-**Slice 6 acceptance** (FM13). Everything except the last row is provable without a device.
+**Slice 6 acceptance** (FM13, FM16; s2834). Everything except the last row is provable without a device.
 
 | Case | Proof |
 |---|---|
-| gate | node, injected clock: no mark before the viewed-time threshold; one mark at it; the next not before another full threshold; never the same mark twice in a row; never on the first view |
-| hidden / off-slide | node: `document.hidden`, an off-slide pet and the status sheet open freeze the counter (time spent there does not count) |
+| gate | node, injected clock and `pick`: no mark before the viewed-time threshold; one mark at it; the next not before another full threshold; never the same mark twice in a row; never on the first view; one mark at a time |
+| clamp | node: `_rareGlass` credits at most 2 s per call; a 10-minute gap between two ticks adds 2 s, not 10 minutes |
+| hidden / off-slide | node: `document.hidden`, an off-slide pet (a peeking neighbour, not `this._index`) and the status sheet open freeze the counter (time spent there does not count) |
+| asleep | node: a sleeping pet freezes the counter (`asleep` is a `BUSY_OWNERS` owner; the pet's state, not a night rule) |
 | switch off, reduced motion | node: "screen effects here" off draws nothing; `calm()` draws nothing (decoration, not an onset) |
 | busy owner | node: any `BUSY_OWNERS` owner (a care scene, a game, a question, a visit) draws nothing and the counter does not run |
-| ambience / onset | node: an onset or echo lease on the glass or rim blocks the mark; persistent weather ambience does not (section 9); a mark never changes `s.dirEffect` unless it takes the lease, and then loses to any house onset |
-| no release | node: a mark's `animationend` does not release a running rain or weather lease, and a weather animation ending does not clear a mark (4B's `animationend` filter and `CLASSES_BY_LAYER` cover the new layer) |
+| ambience / onset | node: `tracks.shellImpulse` (an onset or echo on the glass or the rim) blocks the mark; persistent weather ambience does not (section 9); a mark never writes `s.dirEffect` and offers nothing to the director; a house or care cue that starts mid-mark leaves it showing |
+| lifetime | node: the mark is gone after 22 s (20 s on screen, 2 s fade, FM16) and `s.glassViewed` restarts at zero |
+| reset points | node: `_forget` mid-mark clears the mark, the counter and the first-view flag; the switch off mid-mark clears it; a swipe away mid-mark hides it and stops the counter |
+| no release | node: a mark's `animationend`, dispatched on the child, does not release a running rain or weather lease, and a weather animation ending does not clear a mark (the glass filter, `e.target === s.glass`, `card-build.js:197`; `CLASSES_BY_LAYER.mark` covers the new layer) |
 | memory only | source test: the gate reads no save field, writes no `PetState`, no `localStorage`, nothing on the wire; the counter lives on the slide `s` |
-| CSS source | source test: the mark's rules have `pointer-events:none`, use `dir-*` only, no `fx-*`, no `filter`/`blur`, no `transform`, `animation` or `filter` on `.cap` or `.toy`, and do not use the glass's `::before`/`::after` |
+| markup and layers | source test: the glass is the seven `<b>` plus one `<u class="mark">` (the `{7}` test at `device_fx_room.test.js:572` is updated); the layers-disjoint test and the `style.js` scan (`device_fx_room.test.js:496-519,563-567`) cover the `mark` key; no mark class on `.hw.glass` or `.hw.rim` |
+| CSS source | source test: the mark's rules are `.hw.glass .mark...` with `pointer-events:none`, use `dir-mark-*` only, no `fx-*`, no `filter`/`blur`, no infinite animation, no `transform`, `animation` or `filter` on `.cap` or `.toy`, and do not use the glass's `::before`/`::after` |
 | motion rule | `motion_rule.test.js` passes untouched (the glass, not `.pet`; no new `.pet.<cls>`) |
 | bench | stills of each mark at 420 and 330 px on a clear, a dark and a glitter shell, in at least two worlds (generic: the same marks) |
-| **card-check** | `devicefx` extended (name `_rareGlass` in its comment so `pick-sections` finds it): force one mark through the real gate with a stubbed clock and random, then `document.elementFromPoint` at the mark's centre and at the nearest cap and toy returns the control (or the screen), never the glass or the mark. Real Chromium, not a device. |
+| **card-check** | inside the existing `devicefx` section (it needs `pinAwake`, `setLcd(true)` and the glass setup there, `card-check.js:9928-9929`; not a new section); name `_rareGlass` in its comment so `pick-sections` finds it. Force each fixed spot through the real gate with a stubbed clock and `pick`, then, at 420 and 330 px, `getBoundingClientRect` of the mark does not intersect `.attention`, `.bubble`, `.pat`, `.request`, `.basket` or the game box at their shown size, nor the pet's box at placement. `elementFromPoint` at the mark's centre stays only as the cheap `pointer-events` check (it cannot fail on the mark: it skips `pointer-events:none`). Real Chromium, not a device. |
 | device (owner) | a long idle watch: charming or dirty, and whether one per about 20 min of viewed time is rare enough. Not provable by the worker. |
 
 **Slice 5 acceptance, for the re-scope** (FM12; it holds only after N4's art has merged and
