@@ -614,3 +614,39 @@ test("feed's refuseAt: a full that came after a hold is refused at the gate, bef
   sc.answerAt = 700;
   assert.strictEqual(feed.refuseAt(f.s, sc, sc.gate + 10), sc.bites[0].at + sc.bites[0].len);
 });
+
+test("_animate: one timer per element and class; a re-add keeps the class to the second timer's end", () => {
+  const timers = [];
+  let id = 0;
+  const ctx = {
+    WeakMap, Map,
+    setTimeout: (fn, ms) => { timers.push({ id: ++id, fn, ms }); return id; },
+    clearTimeout: (i) => { const k = timers.findIndex((t) => t.id === i); if (k >= 0) timers.splice(k, 1); },
+  };
+  vm.runInNewContext(`${konst("ANIMATE_TIMERS")}\nthis.api = {${method("_animate")}};`, ctx);
+  const classes = new Set();
+  const el = { offsetWidth: 0, classList: { add: (c) => classes.add(c), remove: (c) => classes.delete(c) } };
+  ctx.api._animate({}, el, "chomp", 280);
+  assert.ok(classes.has("chomp"));
+  const first = timers[0];
+  ctx.api._animate({}, el, "chomp", 280); // variant C: the next chomp, 250 ms on
+  assert.strictEqual(timers.length, 1, "the first timer is cleared");
+  assert.notStrictEqual(timers[0], first);
+  assert.ok(classes.has("chomp"));
+  timers.shift().fn(); // it fires, and is gone
+  assert.ok(!classes.has("chomp"));
+  // Another class, or another element, keeps its own.
+  ctx.api._animate({}, el, "chomp", 280);
+  ctx.api._animate({}, el, "perk", 320);
+  assert.strictEqual(timers.length, 2);
+});
+
+test("a gobble's chomps are not cut: variant C's second chomp outlives the first one's timer", () => {
+  // C's bites are 250 ms (x pace) apart and a chomp runs 280 ms: the beat's own _animate call.
+  const feed = feedEntry();
+  const f = feedSlide({ hunger: "20" });
+  f.s.pinVariant = { feed: "C" };
+  const sc = f.setup(feed);
+  assert.ok(sc.bites[1].at - sc.bites[0].at < 280, "the bites are closer than a chomp is long");
+  assert.match(src, /this\._animate\(s, s\.pet, "chomp", 280\)/);
+});

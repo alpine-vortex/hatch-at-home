@@ -1,3 +1,6 @@
+// element -> Map(class -> its one pending timer), for _animate
+const ANIMATE_TIMERS = new WeakMap();
+
 class HatchPetCardVisit extends HatchPetCardLooks {
   // The kept moments since said that this look should catch up: [line, at],
   // oldest first, the newest room of them. The public list, and on a personal
@@ -524,11 +527,18 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     return all.length > 1 && calm() ? all.slice(0, 1) : all; // calm: a still picture
   }
 
+  // One timer per element and class, cleared when the class is added again: an earlier timer
+  // must not take the class off the restarted animation (B2: a snack's chews come 300 ms apart).
   _animate(s, el, cls, ms) {
     el.classList.remove(cls);
     void el.offsetWidth; // restart the animation
     el.classList.add(cls);
-    setTimeout(() => el.classList.remove(cls), ms);
+    const timers = ANIMATE_TIMERS.get(el) || ANIMATE_TIMERS.set(el, new Map()).get(el);
+    clearTimeout(timers.get(cls));
+    timers.set(cls, setTimeout(() => {
+      timers.delete(cls);
+      el.classList.remove(cls);
+    }, ms));
   }
 
   // A chirp, if this device turned sounds on and the pet is up at a sane hour.
