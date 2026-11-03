@@ -26,7 +26,7 @@ stand-in. **not built** = planned, nothing in the code.
 
 | Feature | What the player sees or does | Where | Switches | State |
 |---|---|---|---|---|
-| Eight toy buttons | feed, snack, play, clean, meds, scold, praise, sleep/wake. Each button sinks and a ring pops, then the real reaction follows. A rejected press shakes. | card `ACTIONS`, `_press`; `button.py` | none | live |
+| Eight toy buttons | feed, snack, play, clean, meds, scold, praise, sleep/wake. Each button sinks and a ring pops, then the real reaction follows. The cap springs back up with its own bounce per care, dims while the press is in flight, and returns dull on a rejected press (CSS on the cap, `--rebound`; bench `--preset alive`). | card `ACTIONS`, `_press`; `button.py` | none | live |
 | Button glow when needed | Feed glows when hungry, play when bored, and so on. Meds is greyed unless the pet is sick (entity unavailable). | card `_renderSlide` | none | live |
 | Refusals | "i'm full!", "i'm not sick", and so on, in the bubble | card `REFUSALS`; model `_do_action` | none | live |
 | Care scenes | medicine and clean play a short scene; feeding shows a bowl prop | card `_sceneStart`, `SCENE_PROPS` | none | live |

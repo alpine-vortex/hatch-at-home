@@ -364,7 +364,7 @@ up to four parts, in this order:
   younger and older readers.
 - Every tap answers straight away: the button sinks, a ring pops out, the pet perks up
   and phones give a tiny vibration. Then the real reaction follows (a food bowl, a
-  sparkle, or a refusal like "i'm full!"). If HA rejects the press, the button shakes
+  sparkle, or a refusal like "i'm full!"). If HA rejects the press, the button goes dull for a moment
   and the pet says so.
 - The toy buttons press the pet's button entities, so anything you do here works
   from automations and voice too. A button glows when the pet needs it, for example
@@ -400,6 +400,10 @@ pet; it's only how the screen looks.
   dashes aside in a game. Only on the pet you're looking at, and
   never with reduced motion. The same "screen effects here" switch turns it off.
   It's off on a mono screen ("mono screen" in the settings), which keeps the grid.
+- **The press.** A toy button's cap sinks when you press it and springs back up a
+  little (each care has its own bounce), dims while the press is on its way to Home
+  Assistant, and returns dull if the press is rejected. With reduced motion on, it
+  only dims and sinks, without the spring.
 - **The backlight.** Every device has a little button on its shell: a nub on the
   egg's shoulder, the tank lid's right grip, a lamp on the house's chimney, the
   porthole's top-right rivet, a dewdrop on the lily pad's rim and a star on the

@@ -336,6 +336,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     for (const action of ACTIONS) {
       const b = document.createElement("button");
       b.className = "toy";
+      b.dataset.action = action.key; // the cap's rebound curve (style.js)
       b.innerHTML = `<span class="cap">${pixelIcon(ACTION_ICONS[action.key])}</span><span>${action.label}</span>`;
       if (action.aria) b.setAttribute("aria-label", action.aria);
       b.addEventListener("click", () =>
@@ -345,6 +346,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     }
     const lights = document.createElement("button");
     lights.className = "toy";
+    lights.dataset.action = "lights";
     lights.innerHTML = `<span class="cap"></span><span class="lbl"></span>`;
     lights.addEventListener("click", () => this._toggleLights(s));
     box.append(lights);
