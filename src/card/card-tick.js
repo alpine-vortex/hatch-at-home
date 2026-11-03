@@ -53,6 +53,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
         this._linkTick(s);
         this._visitorTick(s);
       }
+      if (s === this._slides[this._index]) this._rareGlass(s, Date.now()); // the rare glass mark's gate (slice 6)
       if (!s.sayUntil && s.species && !s.reloading && !s.empty) {
         const mood = this._state(s, "sensor.mood");
         // A game waiting on a guess asks again (a care line said over it is done).

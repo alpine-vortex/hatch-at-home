@@ -408,9 +408,9 @@ test("the moon sits beside weather: a rainy full moon is both", () => {
   assert.deepStrictEqual(s.glass.names(), ["dir-moon", "dir-wet"]);
 });
 
-test("the card hands the part the server's now, and the markup has the seven layers (five weather and moon, then music and the tv)", () => {
+test("the card hands the part the server's now, and the markup has the seven layers (five weather and moon, then music and the tv) and then the rare glass mark (a <u>, slice 6)", () => {
   assert.match(src, /return \{ lcdOn: lcdOn\(\), calm: calm\(\), clockKnown: serverClockKnown\(\), now: serverNow\(\) \};/);
-  assert.match(src, /<i class="hw glass" aria-hidden="true"><b><\/b><b><\/b><b><\/b><b><\/b><b><\/b><b><\/b><b><\/b><\/i>/);
+  assert.match(src, /<i class="hw glass" aria-hidden="true"><b><\/b><b><\/b><b><\/b><b><\/b><b><\/b><b><\/b><b><\/b><u class="mark"><\/u><\/i>/);
   // _forget clears every glass class, the ambient set too
   assert.match(src, /s\.glass\?\.classList\.remove\(\.\.\.HATCH_DEVICE_FX\.CLASSES_BY_LAYER\.ambient, \.\.\.HATCH_DEVICE_FX\.CLASSES\);/);
 });

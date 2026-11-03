@@ -10296,6 +10296,81 @@ async function main() {
   check("devicefx 4D: heating is a still tint with no onset; the doorbell moment is one rim chime beside the screen's fx-chime, and a game has neither",
     bell.tint === "dir-rim-warm" && bell.noKind === "dir-rim-warm" && bell.gameRim === "dir-rim-warm" && !bell.gameScreen && bell.chime === "dir-chime,dir-rim-warm" && bell.screen, JSON.stringify(bell));
 
+  // 6 (slice 6, plan section 9 and "Slice 6 acceptance"): the rare glass mark, _rareGlass, through the real gate with a
+  // stubbed clock and pick, and its geometry on the real CSS at 420 and 330. Names _rareGlass, _markClear, _markEnd and the
+  // part's MARK, markDraw, markStart so scripts/pick-sections finds this section (the card's module keeps them out of reach: it goes through _rareGlass). It is placement proved by geometry
+  // (elementFromPoint skips pointer-events:none, so it only proves the mark is deaf): at each width every fixed spot,
+  // for every kind, is measured against the pet and the things read or pressed, each forced to its shown size.
+  // The pet is awake (pinAwake), the switch on, no game, no sheet.
+  const markRun = (width) => fx(`
+    // The card's module keeps HATCH_DEVICE_FX to itself: everything goes through the real gate. A spot is forced by
+    // answering the gate's own question (_markClear) for that spot only; the geometry is measured here, apart from it.
+    const KINDS = ["paw", "smudge", "edge"], SPOTS = ["bl", "br", "ml", "mr"];
+    const box = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? r : null; };
+    const hit = (a, b) => a && b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    const marks = () => [...s.mark.classList].filter((c) => c.startsWith("dir-mark-")).join();
+    // show what the screen can show, at its own size: a long line, the wish, the pat box, the basket, the request
+    const kept = [s.attention, s.bubble, s.pat, s.basket, s.request].map((e) => [e, e.hidden, e.style.cssText, e.className, e.textContent]);
+    s.attention.style.display = "block"; if (!s.attention.getAttribute("src")) s.attention.alt = "wants attention";
+    s.bubble.textContent = "a long line the pet is saying, long enough to fill the bubble to its widest, so it reaches as far as it ever does";
+    s.pat.hidden = false; s.pat.style.display = "block";
+    s.basket.hidden = false; s.basket.style.display = "block"; s.basket.classList.add("idle");
+    s.request.classList.add("show");
+    const things = { attention: s.attention, bubble: s.bubble, pat: s.pat, request: s.request, basket: s.basket, pet: s.pet };
+    const out = { width: ${width}, screen: s.screen.clientWidth, spots: {}, bad: [], seen: [] };
+    const realClear = el._markClear;
+    let asked = null;
+    const scr = s.screen.getBoundingClientRect();
+    for (const kind of KINDS) for (const spot of SPOTS) {
+      const key = kind + "/" + spot;
+      el._markEnd(s, true);
+      el._markClear = function (sl, k, c) { const r = realClear.call(this, sl, k, c); if (c === "dir-mark-" + spot) asked = r; return c === "dir-mark-" + spot; };
+      asked = null;
+      const t0 = Date.now();
+      s.glassSeen = true; s.glassViewed = 3600000; s.glassAt = t0 - 700;
+      el._rareGlass(s, t0, (l) => l.find((c) => c === "dir-mark-" + kind) || l[0]);
+      delete el._markClear;
+      const m = box(s.mark);
+      if (!m || !s.markUntil) { out.bad.push(key + ": not drawn " + marks()); continue; }
+      if (marks() !== "dir-mark-" + kind + ",dir-mark-" + spot + ",dir-mark-on" && marks() !== "dir-mark-" + spot + ",dir-mark-" + kind + ",dir-mark-on") out.bad.push(key + ": classes " + marks());
+      if (m.left < scr.left - 1 || m.right > scr.right + 1 || m.top < scr.top - 1 || m.bottom > scr.bottom + 1) out.bad.push(key + ": outside the screen");
+      out.spots[key] = [m.left, m.top, m.right, m.bottom].map(Math.round).join(",");
+      const over = Object.entries(things).filter(([, e]) => hit(m, box(e))).map(([n]) => n);
+      if (asked !== (over.length === 0)) out.bad.push(key + ": the gate says " + asked + ", the geometry says " + over.join("+"));
+      out.seen.push(key + (over.length ? "!" + over.join("+") : ""));
+      if (key === "paw/bl") {
+        // deaf to the pointer: the cheap check (elementFromPoint skips pointer-events:none, so it can only pass)
+        const under = document.elementFromPoint(m.left + m.width / 2, m.top + m.height / 2);
+        out.deaf = getComputedStyle(s.mark).pointerEvents === "none" && under !== s.mark;
+        out.life = getComputedStyle(s.mark).animationName + " " + getComputedStyle(s.mark).animationDuration + " " + getComputedStyle(s.mark).animationIterationCount;
+        out.dirEffect = s.dirEffect || 0; out.glass = cls();
+      }
+    }
+    for (const [e, h, css, cn, text] of kept) { e.hidden = h; e.style.cssText = css; e.className = cn; e.textContent = text; }
+    // the real gate, no forcing: nothing on the first view, one mark when due
+    el._markEnd(s, true);
+    const t1 = Date.now();
+    el._rareGlass(s, t1, (l) => l[1]);
+    out.first = marks();
+    s.glassViewed = 3600000;
+    el._rareGlass(s, t1 + 700, (l) => l[1]);
+    out.drawn = marks();
+    el._markEnd(s, true);
+    out.gone = marks();
+    return out;`);
+  for (const width of [420, 330]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.waitForTimeout(500);
+    const mk = await markRun(width);
+    check("devicefx 6 (_rareGlass) at " + width + ": every kind at every fixed spot is inside the screen, measured clear of the pet and the shown line, wish, pat box, basket and request, and the gate agrees with the geometry",
+      mk.bad.length === 0 && Object.keys(mk.spots).length === 12 && mk.deaf, JSON.stringify(mk));
+    check("devicefx 6 (_rareGlass) at " + width + ": the real gate draws nothing on the first view and one mark when due (kind, spot, on), with dir-mark-life 22 s, once, no lease and no glass class",
+      mk.first === "" && /^dir-mark-(paw|smudge|edge),dir-mark-(bl|br|ml|mr),dir-mark-on$|^dir-mark-(bl|br|ml|mr),dir-mark-(paw|smudge|edge),dir-mark-on$/.test(mk.drawn)
+        && mk.life === "dir-mark-life 22s 1" && mk.dirEffect === 0 && !/dir-mark/.test(mk.glass) && mk.gone === "", JSON.stringify(mk));
+  }
+  await page.setViewportSize({ width: 420, height: 860 });
+  await page.waitForTimeout(300);
+
   // Put everything back.
   await fx(`await quiet();
     el._director.cancel(s, "check");

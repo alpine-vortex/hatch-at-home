@@ -959,6 +959,34 @@ const STYLE = `
     /* Reduced motion: the still looks only; an onset is a move, so there is none (the card never starts
        one, and the global rule above also stops the animation and the transition). */
     @media (prefers-reduced-motion: reduce) { .hw.glass.dir-drop::after, .hw.glass.dir-clear::before { display: none; } }
+    /* The rare glass mark (device-alive slice 6, plan section 9): one element after the seven layers (a <u>, so
+       none of the b rules above reach it), drawn about once in 20 minutes of viewed time. A generic paw, smudge or
+       edge shadow at one of four fixed spots in the screen's margin band (percentages of the glass, so a resize
+       keeps the spot; --edge, the porthole's round corners, moves the lower and side spots in). Its own classes (dir-mark-*) are on this element only, never on .hw.glass, and it uses
+       neither pseudo-element, so the wet sheen and the frost sit under it. No lease: dir-mark-life is the clock
+       (20 s on, a 2 s fade: 22 s in all), a one-shot, opacity only. Deaf to the pointer. */
+    .hw.glass .mark { position: absolute; display: block; opacity: 0; pointer-events: none; }
+    .hw.glass .mark.dir-mark-on { animation: dir-mark-life 22s linear both; }
+    .hw.glass .mark.dir-mark-bl { left: calc(3% + var(--edge, 0%)); top: 70%; }
+    .hw.glass .mark.dir-mark-br { right: calc(3% + var(--edge, 0%)); top: 70%; }
+    .hw.glass .mark.dir-mark-ml { left: calc(2% + var(--edge, 0%) * .25); top: 36%; }
+    .hw.glass .mark.dir-mark-mr { right: calc(2% + var(--edge, 0%) * .25); top: 36%; }
+    .hw.glass .mark.dir-mark-paw { width: 9%; aspect-ratio: 1; rotate: -14deg;
+      background:
+        radial-gradient(ellipse 15% 13% at 18% 36%, rgba(30,22,14,.5) 55%, transparent 100%),
+        radial-gradient(ellipse 15% 14% at 39% 17%, rgba(30,22,14,.5) 55%, transparent 100%),
+        radial-gradient(ellipse 15% 14% at 61% 17%, rgba(30,22,14,.5) 55%, transparent 100%),
+        radial-gradient(ellipse 15% 13% at 82% 36%, rgba(30,22,14,.5) 55%, transparent 100%),
+        radial-gradient(ellipse 32% 26% at 50% 67%, rgba(30,22,14,.5) 60%, transparent 100%); }
+    .hw.glass .mark.dir-mark-br.dir-mark-paw, .hw.glass .mark.dir-mark-mr.dir-mark-paw { rotate: 12deg; }
+    .hw.glass .mark.dir-mark-smudge { width: 15%; aspect-ratio: 1.7; border-radius: 50%;
+      background: radial-gradient(ellipse 50% 50% at 46% 52%, rgba(255,255,255,.5), rgba(255,255,255,.24) 55%, transparent 100%); }
+    .hw.glass .mark.dir-mark-edge { width: 10%; height: 38%; }
+    .hw.glass .mark.dir-mark-edge.dir-mark-bl, .hw.glass .mark.dir-mark-edge.dir-mark-br { top: 58%; }
+    .hw.glass .mark.dir-mark-edge.dir-mark-bl, .hw.glass .mark.dir-mark-edge.dir-mark-ml { left: 0; background: linear-gradient(90deg, rgba(10,8,6,.62), rgba(10,8,6,.26) 45%, transparent); }
+    .hw.glass .mark.dir-mark-edge.dir-mark-br, .hw.glass .mark.dir-mark-edge.dir-mark-mr { right: 0; background: linear-gradient(270deg, rgba(10,8,6,.62), rgba(10,8,6,.26) 45%, transparent); }
+    @keyframes dir-mark-life { 0% { opacity: 0; } 0.5% { opacity: 1; } 90.9% { opacity: 1; } 100% { opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .hw.glass .mark { display: none; } }
   }
   /* The rim cues (device-alive 3C, plan section 7): a press's one pulse on the bezel's plastic, on its
      own layer (.hw.rim, in the bezel, under the screen, deaf to the pointer, never over a control: it

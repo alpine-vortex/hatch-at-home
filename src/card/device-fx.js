@@ -110,6 +110,20 @@ const HATCH_DEVICE_FX = Object.freeze(
     const houseCues = Object.freeze(
       [...new Map(Object.values(HOUSE_RIM).flatMap((e) => (e.by ? Object.values(e.by) : [e])).map((c) => [c.kind, c])).values()]
     );
+    // The rare glass mark (slice 6; plan section 9): one element (`slide.mark`, a `<u class="mark">` after the glass's
+    // seven `<b>`), a generic paw, smudge or edge shadow at one of four fixed spots in the screen's margin band. It is
+    // no lease and no track: it never writes `s.dirEffect`, it ends on its own `dir-mark-life` animation (the card's
+    // timer is the backstop), and its classes are on that element only, never on the glass. Timings are FM16's; the
+    // rarity (FM13) is viewed time, credited at most `creditMs` a tick.
+    const MARK = Object.freeze({
+      kinds: Object.freeze(["dir-mark-paw", "dir-mark-smudge", "dir-mark-edge"]),
+      spots: Object.freeze(["dir-mark-bl", "dir-mark-br", "dir-mark-ml", "dir-mark-mr"]),
+      on: "dir-mark-on",
+      everyMs: 20 * 60 * 1000, // about one per 20 minutes of viewed time, per pet
+      creditMs: 2000, // a tick is credited at most this much: a throttled timer cannot pay out the wait
+      showMs: 20000, // on screen
+      fadeMs: 2000, // then the fade; the mark is removed after both
+    });
     const USER_RIM_CLASSES = ["dir-feed", "dir-play", "dir-clean", "dir-tuck"];
     const layerKeys = (layer) => EDGE_KEYS.filter((key) => ROWS[key].layer === layer);
     // Every class a recipe or the paint may set, by layer (F11): each recipe's start clears its layer's
@@ -124,6 +138,7 @@ const HATCH_DEVICE_FX = Object.freeze(
       ambient: Object.freeze(ambientsOn("glass").concat(Object.values(MOON))),
       rim: Object.freeze(USER_RIM_CLASSES.concat(houseCues.map((c) => c.cls), onsetsOn("rim"), "dir-rim-echo")),
       rimAmbient: Object.freeze(ambientsOn("rim")),
+      mark: Object.freeze(MARK.kinds.concat(MARK.spots, MARK.on)),
     });
     const CLASSES = CLASSES_BY_LAYER.glass;
     const RIM_CLASSES = CLASSES_BY_LAYER.rim;
@@ -330,6 +345,20 @@ const HATCH_DEVICE_FX = Object.freeze(
       return dir.enterView(slide, ringOf(recent), env.clockKnown === true);
     };
 
-    return { RECIPES, KINDS, WEATHER, ROOM, ROWS, CLASSES, CLASSES_BY_LAYER, RIM, HOUSE_RIM, RIM_CLASSES, moonOf, ambientOf, cueOf, ringOf, paint, sync, live, enter, rim, offerMoment };
+    // Draw one mark: its kind and spot, then `dir-mark-on` (which starts `dir-mark-life`). The caller has measured
+    // the spot before this (placement); `markClear` takes every mark class off, the animation with it.
+    const markDraw = (slide, kind, spot) => {
+      const el = slide && slide.mark;
+      if (!el || !MARK.kinds.includes(kind) || !MARK.spots.includes(spot)) return false;
+      el.classList.remove(...CLASSES_BY_LAYER.mark);
+      el.classList.add(kind, spot);
+      return true;
+    };
+    const markStart = (slide) => slide && slide.mark && (slide.mark.classList.add(MARK.on), true);
+    const markClear = (slide) => {
+      if (slide && slide.mark) slide.mark.classList.remove(...CLASSES_BY_LAYER.mark);
+    };
+
+    return { MARK, markDraw, markStart, markClear, RECIPES, KINDS, WEATHER, ROOM, ROWS, CLASSES, CLASSES_BY_LAYER, RIM, HOUSE_RIM, RIM_CLASSES, moonOf, ambientOf, cueOf, ringOf, paint, sync, live, enter, rim, offerMoment };
   })()
 );

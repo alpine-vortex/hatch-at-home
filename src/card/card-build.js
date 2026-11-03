@@ -153,7 +153,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
             <div class="breeze"><span></span><span></span><span></span></div>
             <div class="lcd"></div>
             <div class="glow"></div>
-            <i class="hw glass" aria-hidden="true"><b></b><b></b><b></b><b></b><b></b><b></b><b></b></i>
+            <i class="hw glass" aria-hidden="true"><b></b><b></b><b></b><b></b><b></b><b></b><b></b><u class="mark"></u></i>
             <img class="attention" alt="wants attention">
             <div class="bubble"></div>
             <div class="sr" role="status"></div>
@@ -187,7 +187,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
       propEl: q(".gprop"), live: q(".sr[role=status]"), seasonBox: q(".season"),
-      basket: q(".basket"), glass: q(".glass"), rim: q(".rim"),
+      basket: q(".basket"), glass: q(".glass"), mark: q(".glass .mark"), rim: q(".rim"),
     };
     // The glass effect ends with its own clock, the glass's `dir-glass-life` (the director's watchdog is
     // the backstop). The listener filters (F11): `animationend` bubbles, and the layers inside the glass
@@ -195,6 +195,11 @@ class HatchPetCardBuild extends HatchPetCardBase {
     // releases. The token is the one the recipe's start left on the slide, so a stale end does nothing.
     s.glass.addEventListener("animationend", (e) => {
       if (e.target === s.glass && e.animationName === "dir-glass-life" && s.dirEffect) this._director?.release(s, s.dirEffect);
+    });
+    // The rare glass mark (slice 6) ends on its own clock, `dir-mark-life` on the mark element. It is no lease,
+    // so a mark ending releases nothing, and the glass listener above (e.target === s.glass) never hears it.
+    s.mark.addEventListener("animationend", (e) => {
+      if (e.target === s.mark && e.animationName === "dir-mark-life") this._markEnd(s);
     });
     // The rim cue (3C) ends the same way, on its own layer's clock: the rim's `dir-rim-life` runs as long
     // as the lease, and the lamps inside it are shorter, so their ends (which bubble) do not release it.
@@ -778,6 +783,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     s.dirRecent = null;
     s.dirEffect = 0;
     s.glass?.classList.remove(...HATCH_DEVICE_FX.CLASSES_BY_LAYER.ambient, ...HATCH_DEVICE_FX.CLASSES);
+    this._markEnd(s, true); // the rare glass mark, its counter and its first view are not this pet's
     s.rim?.classList.remove(...HATCH_DEVICE_FX.RIM_CLASSES, ...HATCH_DEVICE_FX.CLASSES_BY_LAYER.rimAmbient);
     this._layDrop(s); // a lay waited for belongs to the last pet
     this._clearNameTimers(s);
@@ -948,7 +954,12 @@ class HatchPetCardBuild extends HatchPetCardBase {
     });
     this._linkEnd(); // a swipe ends the visit at once
     this._index = to;
-    this._slides.forEach((x, i) => { if (i !== to) this._director?.cancel(x, "left", ["shellImpulse"]); });
+    this._slides.forEach((x, i) => {
+      if (i !== to) {
+        this._director?.cancel(x, "left", ["shellImpulse"]);
+        this._markEnd(x); // a rare glass mark is not shown on a slide that is not on show; its counter stops (off-slide)
+      }
+    });
     this._dirView(this._slides[to]); // the glass on the slide that comes forward, and its first view's echo
     if (this._shelfRestored && this._shelfDevices) {
       shelfWrite(this._shelfDevices, to);

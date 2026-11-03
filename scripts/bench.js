@@ -172,6 +172,31 @@ const PRESETS = {
     }
     weather("storm", "rain", "lightning-rainy: rain and storm together", { deviceFx: { current: { rain: true, storm: true } } });
     weather("snow", "wind", "snow and wind together", { deviceFx: { current: { snow: true, wind: true } } });
+    // Device-alive slice 6: the rare glass marks (paw, smudge, edge shadow), generic in every world. Each mark at the gate's
+    // own spot and at each fixed spot, at 420 and 330, on a clear, a dark (smoke, night) and a glitter shell, in two worlds
+    // (woodland and tidepool), then the protected states: reduced motion (nothing), the switch off (nothing), a mark late in its
+    // fade, a mark over the rain's sheen. The shot is the device, whole (the shell shows). `at` is ms into dir-mark-life.
+    const mark = (name, label, extra, widths = [420, 330]) => {
+      for (const width of widths) {
+        out.push({ name: `alive/mark-${width}-${name}`, group: `alive-mark-${width}`, label, world: "woodland", width, clip: "device", ...extra });
+      }
+    };
+    const SHELLS = [["clear", { finish: "clear" }, "day"], ["dark", { finish: "smoke" }, "night"], ["glitter", { finish: "glitter" }, "day"]];
+    for (const kind of ["paw", "smudge", "edge"]) {
+      for (const [shellName, shell, scene] of SHELLS) {
+        mark(`${kind}-${shellName}`, `${kind} on a ${shellName} shell (the gate's spot)`, { glassMark: { kind }, shell, scene });
+      }
+      for (const world of ["tidepool"]) {
+        mark(`${kind}-${world}`, `${kind} in the ${world} world`, { glassMark: { kind }, world });
+      }
+      for (const spot of ["bl", "br", "ml", "mr"]) {
+        mark(`${kind}-at-${spot}`, `${kind} at the ${spot} spot`, { glassMark: { kind, spot } });
+      }
+    }
+    mark("paw-fade", "paw, 21 s in (the fade)", { glassMark: { kind: "paw", at: 21000 } });
+    mark("paw-rain", "paw on the wet sheen", { glassMark: { kind: "paw" }, deviceFx: { rain: true } });
+    mark("paw-reduce", "reduced motion (nothing)", { glassMark: { kind: "paw" }, motion: "reduce" });
+    mark("paw-off", "screen effects off (nothing)", { glassMark: { kind: "paw" }, lcd: "off" });
     // Device-alive slice 4D: the room's keys (the 4C rows) and the moments' rim cues. Lights and the fireplace paint
     // and cue on the rim (the bezel's plastic: clip the device), music and the tv on the glass (clip the screen),
     // heating and cooling are the rim's tint only (no onset, no echo). A row is the house's `current`, the wire kinds
@@ -1370,7 +1395,7 @@ async function runShots(browser, base, shots, outDir, workers) {
           }, shot.lines);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(n));
         }
-        if (shot.costume || shot.deviceFx || shot.momentCue || shot.gift || shot.look || shot.care || shot.lightsAlign || shot.view === "board" || shot.view === "games") {
+        if (shot.costume || shot.deviceFx || shot.glassMark || shot.momentCue || shot.gift || shot.look || shot.care || shot.lightsAlign || shot.view === "board" || shot.view === "games") {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
         }
