@@ -1963,7 +1963,7 @@ async function main() {
   await page.waitForTimeout(800);
   // A shared screen shows nothing personal: no bond row, no "my day", no visit,
   // a greeting without a name.
-  const PERSONAL_BELLS = [".bell.notify", ".bell.myday", ".bell.babytalk", ".bell.forgetme", ".bell.forgetbday", ".bell.bdayphone", ".bell.askagain"]
+  const PERSONAL_BELLS = [".bell.notify", ".bell.myday", ".bell.babytalk", ".bell.forgetme", ".bell.forgetbday", ".bell.bdayphone", ".bell.askagain", ".bell.memory"]
     .map((q) => `.status ${q}`).join(", ");
   const personalSheet = await cur().evaluate((sl) => !!sl.querySelector(".status .bell.notify") &&
     !!sl.querySelector(".status .bell.myday"));
@@ -8690,6 +8690,64 @@ async function main() {
     await el._hass.callService("virtual_pet", "my_day", { entity_id: s.ids["sensor.life_stage"], enabled: false });
     el._myDay = false;
   });
+  // "remember me" (memory plan M1a; first-mate copy): the person's memory switch, on their
+  // own screen where the pet allows it. On says so; off takes two taps and erases.
+  const memory = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const log = () => el._state(s, "sensor.last_care")?.attributes.log || [];
+    const draw = () => { s.statusHtml = null; s.settings = true; el._renderStatus(s, log()); };
+    const bell = () => s.status.querySelector(".bell.memory");
+    const note = () => s.status.querySelector(".status-feedback")?.textContent || "";
+    for (let i = 0; i < 80 && typeof s.mine?.memory_allowed !== "boolean"; i++) await wait(100);
+    const calls = [];
+    // The connection outlives the hass object (HA hands the card a new one on each change).
+    const conn = el._hass.connection;
+    const realSend = conn.sendMessagePromise;
+    conn.sendMessagePromise = function (msg) { calls.push(msg); return realSend.call(this, msg); };
+    const out = { allowed: s.mine?.memory_allowed };
+    draw();
+    const row = [...s.status.querySelectorAll(".row")].find((r) => /remember me/.test(r.textContent));
+    out.label = row?.querySelector("span")?.textContent;
+    out.start = bell()?.textContent;
+    out.aria = bell()?.getAttribute("aria-label");
+    bell().click();
+    // mine flips at once; the line waits for the server's answer
+    for (let i = 0; i < 40 && !(s.mine?.memory_on && note()); i++) await wait(100);
+    out.on = { mine: s.mine?.memory_on, text: bell()?.textContent, note: note() };
+    draw();
+    bell().click(); // the first tap only arms
+    await wait(700); // past CONFIRM_GAP_MS, or the second tap is the same tap
+    out.armed = { text: bell()?.textContent, aria: bell()?.getAttribute("aria-label"), mine: s.mine?.memory_on };
+    bell().click();
+    for (let i = 0; i < 40 && (s.mine?.memory_on || !/forgotten/.test(note())); i++) await wait(100);
+    out.off = { mine: s.mine?.memory_on, text: bell()?.textContent, note: note() };
+    out.calls = calls.filter((m) => m.type === "virtual_pet/memory").map((m) => `${m.enabled}/${m.shared}`);
+    conn.sendMessagePromise = realSend;
+    const allowed = s.mine.memory_allowed;
+    s.mine.memory_allowed = false; // a pet whose option is off: no row
+    draw();
+    out.notAllowed = !!bell();
+    s.mine.memory_allowed = allowed;
+    localStorage.setItem("hatch-shared-screen", "on"); // a shared screen: no row
+    draw();
+    out.shared = !!bell();
+    localStorage.removeItem("hatch-shared-screen");
+    s.settings = false;
+    s.statusHtml = null;
+    return out;
+  });
+  check("remember me: the row, its aria, on with its line, off after two taps with its line, websocket with shared false",
+    memory.allowed === true && memory.label === "remember me" && memory.start === "off"
+      && memory.aria === "remember me: the pets keep what you tell them, off, change"
+      && memory.on.mine === true && memory.on.text === "on" && memory.on.note === "the pets will remember what you tell them ♪"
+      && memory.armed.text === "sure? tap again" && memory.armed.mine === true
+      && memory.armed.aria === "Sure? Press again to forget what the pets remember about you"
+      && memory.off.mine === false && memory.off.note === "forgotten. the pets keep nothing you told them"
+      && memory.calls.join() === "true/false,false/false",
+    JSON.stringify(memory));
+  check("remember me has no row where the pet doesn't allow it, nor on a shared screen",
+    !memory.notAllowed && !memory.shared, JSON.stringify(memory));
   // Quiet samples: _mayPlay's rules, and the tap still unlocks audio.
   const samples = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));

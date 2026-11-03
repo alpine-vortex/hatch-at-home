@@ -570,6 +570,32 @@ class HatchPetCardSheets extends HatchPetCardStatus {
     }
   }
 
+  // Memory (plan M1a) is the person's, for every pet: a websocket command only (never a
+  // service: who turned it on would be recorded), and only from their own screen.
+  async _setMemory(s, enabled, button) {
+    const id = s.ids?.["sensor.life_stage"];
+    if (!id || sharedScreen()) return;
+    const show = (on) => {
+      button.setAttribute("aria-pressed", String(on));
+      button.setAttribute("aria-label", `remember me: the pets keep what you tell them, ${on ? "on" : "off"}, change`);
+      button.textContent = on ? "on" : "off";
+    };
+    button.classList.add("pending");
+    show(enabled);
+    this._setMine("memory_on", enabled); // at once, so a redraw before the push keeps it
+    try {
+      await this._hass.callWS({ type: "virtual_pet/memory", entity_id: id, enabled, shared: false });
+      this._memoryOn = enabled; // one switch per person, for every pet
+      this._statusMessage(s, enabled ? SETTINGS_AGAIN.memoryOn : SETTINGS_AGAIN.memoryOff);
+    } catch (err) {
+      this._setMine("memory_on", !enabled);
+      show(!enabled);
+      this._statusMessage(s, SETTINGS_AGAIN.failed);
+    } finally {
+      button.classList.remove("pending");
+    }
+  }
+
   // Baby talk is the person's, for every pet and device: kept on the server
   // (a websocket command, off the event bus), cached here by user ID.
   async _setBabyTalk(s, enabled, button) {

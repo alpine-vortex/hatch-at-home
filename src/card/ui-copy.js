@@ -14,6 +14,10 @@ const SETTINGS_AGAIN = {
   forgotBirthday: "ok, forgotten. i won't ask ♪",
   forgotMe: "forgotten. we'll start fresh ♥",
   askAgain: "ask me again", // the favourites' button (memory plan M0-c, label DRAFT)
+  // Memory's switch (memory plan M1a; first-mate copy 2026-11-02, exact). Here with the
+  // other erase lines, not the scanned fresh block: over its 40 characters, and "forgotten".
+  memoryOn: "the pets will remember what you tell them ♪",
+  memoryOff: "forgotten. the pets keep nothing you told them",
 };
 const HOUSE_REQUEST = { blanket: "heating", fan: "cooling" }; // the request the house answered
 // The house moment's categories (H8; const.py HOUSE_CATEGORIES, card-check holds the two
@@ -489,6 +493,13 @@ function restRow(on, shared, name) {
   return `<div class="row srow restrow"><span>resting</span>${value}</div>
       <div class="shellnote restnote">${REST_HELP(escape(name))}</div>`;
 }
+// "remember me" (memory plan M1a; first-mate copy 2026-11-02): the person's memory switch,
+// on their own screen only. Off erases, so it takes the two-tap confirm (armed: "sure?").
+function memoryRow(on, armed) {
+  const aria = armed ? CONFIRM_ARIA.memory_off : `remember me: the pets keep what you tell them, ${on ? "on" : "off"}, change`;
+  const text = armed ? "sure? tap again" : on ? "on" : "off";
+  return `<div class="row srow memoryrow"><span>remember me</span><span><button class="bell memory" aria-label="${aria}" aria-pressed="${!!on}">${text}</button></span></div>`;
+}
 // Kept moments the catch-up leaves out: the look welcomes a friend home itself,
 // and a thank-you for the tuck-in reads oddly the next morning (first mate, 2026-10-31).
 const CATCHUP_SKIP = new Set(["friend_home", "tucked_in"]);
@@ -584,6 +595,7 @@ const CONFIRM_ARIA = {
   lay_egg: "Sure? Press again to lay an egg",
   forget_birthday: "Sure? Press again to forget my birthday",
   forget_me: "Sure? Press again to forget my data",
+  memory_off: "Sure? Press again to forget what the pets remember about you",
   ask_again_fav_weather: "Sure? Press again to be asked about your favourite weather",
   ask_again_fav_season: "Sure? Press again to be asked about your favourite season",
   ask_again_fav_visitor: "Sure? Press again to be asked about your favourite visitor",

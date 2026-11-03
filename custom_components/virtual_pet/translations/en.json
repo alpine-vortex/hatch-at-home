@@ -91,14 +91,16 @@
           "away_after": "Off to the sitter's after",
           "sitter_settles": "The sitter calms a fussy pet",
           "privacy": "Keep presence private",
-          "house_words_private": "Keep house words off sensors"
+          "house_words_private": "Keep house words off sensors",
+          "memory": "Pets may remember what people tell them"
         },
         "data_description": {
           "zone": "The pet counts the people in this zone. Only people tracked in Home Assistant count.",
           "away_after": "How long the house has to be empty first.",
           "sitter_settles": "On: if the pet was fussing for attention when it left (not a real need), the sitter settles it, so it comes home happy. Off: the fussing waits for you. Real needs, like hunger, always wait.",
           "privacy": "On: an empty house shows the pet napping, never at the sitter's, and the pet never names anyone on sensors. For a wall tablet, also turn on \"shared screen\" in the card's settings.",
-          "house_words_private": "On: news headlines and a house moment's own words are said on the card only, never kept on the pet's sensors (automations still get a headline). Off: they sit on the last-care sensor for a while, like the pet's other moments."
+          "house_words_private": "On: news headlines and a house moment's own words are said on the card only, never kept on the pet's sensors (automations still get a headline). Off: they sit on the last-care sensor for a while, like the pet's other moments.",
+          "memory": "On: each person may turn memory on for themselves, on their own screen, and this pet keeps their picks and tags (dates and fixed choices, never typed words or names) until they forget them. Off: this pet keeps and says nothing from memory. Off on every pet erases what everyone told their pets."
         }
       },
       "weather": {

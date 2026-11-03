@@ -308,7 +308,8 @@ up to four parts, in this order:
     voice). Babble waits for "sounds here": with that off its row reads "needs sounds"
     and can't be switched. *look*: screen effects here, holiday names, mono screen and
     big text. These are saved in this browser only.
-  - **for you**: notify me, my day, my birthday, birthday on my phone, baby talk, your
+  - **for you**: notify me, my day, remember me (memory, off until you turn it on; see
+    Privacy), my birthday, birthday on my phone, baby talk, your
     remembered favourites (each with "ask me again"), "♥ open on <pet>" and my data.
     These follow your login. A shared screen doesn't show this part.
     "♥ open on <pet>" (with two or more pets) is the favourite pet: the pet your card
@@ -552,6 +553,7 @@ Who is home decides whether the pet is with you or at the sitter's. The two swit
 | Off to the sitter's after | 2 h | With nobody home this long, the pet is frozen: no hunger, no aging, no calls. | 2 h |
 | The sitter calms a fussy pet | on | If the pet was fussing for attention (not a real need) when it left, the sitter settles it and it comes home happy. Off: the fussing waits for you. Real needs always wait. | on |
 | Keep presence private | on | An empty house shows the pet napping, never at the sitter's (care while it's away is refused as "asleep"), and the pet never says who came or went. For a wall tablet, also turn on "shared screen" in the card's settings. Turn it off to see "at the sitter's". | default |
+| Pets may remember what people tell them | on | Each person may turn memory on for themselves (see "Memory" under Privacy below); this pet then keeps their picks and tags, dates and fixed choices only, until they forget them. Off: this pet keeps, says and asks nothing from memory. Off on every pet, or removing a pet when no other pet allows it, erases everyone's memory. Per pet. | default |
 | Keep house words off sensors | off | Off: a news headline (`virtual_pet.share_news`) and a Custom house moment's own words (`virtual_pet.react`) sit on the pet's last-care sensor for a while, like its other moments, where any dashboard or template can read them. On: the open cards say them live, shared screens too, and they're kept nowhere: not on a sensor, not for a card opened later. The `virtual_pet_news` event keeps its headline either way (it's your automation's own words); `virtual_pet_house_moment` never carries the words while this is on. Per pet. | default |
 
 ### The house helps
@@ -583,20 +585,57 @@ Who is home decides whether the pet is with you or at the sitter's. The two swit
 ### Privacy: what the pets remember
 
 **What the pets remember about you.** Your birthday, your answers to its questions,
-your alarm times, the last zone you came back from (only while "my day" is on), the
-dream you picked for tonight (and, the next morning, that it was your idea), and
+your alarm times, the last zone you came back from (only while "my day" is on),
 your "baby talk", "my day" and "birthday on my phone" switches, and the pet your card
-opens on, are kept for you alone,
-for every pet. They stay
+opens on, are kept for you alone, for every pet, in one place (the people store). The
+dream you picked for tonight (and, the next morning, that it was your idea) is kept in
+each pet's own save, not the people store, for about a day. They stay
 when you remove a pet, even the last one, so they're there if you set it up again.
 **"forget my data"** in settings (the gear on the status screen) (not on a shared screen) erases all of
-that, for you only, at once. Your bond with each pet, its photos and its nickname
+that, for you only, at once; tonight's dream pick goes with "forget my data" on every pet that
+is loaded (a disabled pet's stays in its save until that pet is loaded again and the
+pick has aged out). Your bond with each pet, its photos and its nickname
 for you stay. So does whether you get notifications: turn "notify me" off for that.
-So does a "forget my birthday": the pets still won't ask for it. Messages already sent to your
+So does a "forget my birthday": the pets still won't ask for it. So does your answer to
+"may I remember?", yes or not now: the pets still won't ask whether to remember (your
+memory itself goes). Messages already sent to your
 phone, and switch changes, stay in Home Assistant's history until it clears them.
 The pets start fresh with you, and they note again when you next come home. To
 erase everyone's, an admin can stop Home Assistant and delete
-`.storage/virtual_pet.people` (and any `virtual_pet.people.damaged.*` copies).
+`.storage/virtual_pet.people` (and any `virtual_pet.people.damaged.*` copies, which hold
+everyone's records and memory too).
+
+**Memory (off unless you turn it on).** With memory on, the pets keep a few
+things you told them for longer than a day, so they can bring them up later: the
+picks you made (tonight's dream, a game, a rain-or-sun guess, a great day) and, later,
+which kind of big day or weekend you had, each with its date. Only choices from fixed
+lists and dates: never typed words, never anyone's name, no times or places, and no
+tough days. It is per person and one switch for every pet, kept in the people store,
+until you forget it. Turn it on with "remember me" in settings (the gear on the status
+screen; your own screen only, and only where the pet's option allows it). Turning it off
+(two taps), or "forget my data", erases it at once. Things to know:
+
+- It is in Home Assistant's backups, like the rest of the people store. Turning it off
+  can't reach a backup made before, and restoring one brings it back.
+- A family sharing one Home Assistant login (a shared login) shares one memory, and a
+  tablet signed in as one person remembers for that person, whoever holds it. The
+  card's "shared screen" switch keeps memory off a wall tablet, but it is the
+  browser's own setting, not a lock: a tablet whose setting was cleared counts as
+  personal.
+- With children in the house: each person turns memory on only for themselves, on
+  their own login, so a child with their own account can turn it on for their account;
+  a parent can't turn it on for them, and they can't for a parent. Only picks and dates
+  are kept for anyone. The pets won't ask a person with baby talk on whether to
+  remember. An admin can turn memory off for the house (below).
+- If someone turns on debug logging for `homeassistant.components.websocket_api`, Home
+  Assistant logs every message, the picks sent to the pets included.
+- After a downgrade to a version without memory, the record stays on disk, unread and
+  no longer capped, until "forget my data" or a newer version.
+- **For admins:** "Pets may remember what people tell them" in each pet's People and
+  privacy options (on by default) lets that pet keep, say and ask about memory. Off on
+  one pet only quiets that pet. Off on every pet erases everyone's memory at once,
+  and so does removing a pet when no other pet allows it. A disabled pet's option still counts,
+  so turn it off there too.
 
 **Follow-ups.** Answer "tough" to "how was your day?" and the pet keeps only the
 date, in memory, to be a little softer the next morning on your own screen; a restart
