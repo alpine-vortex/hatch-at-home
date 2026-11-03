@@ -20,9 +20,7 @@ const REFUSALS = {
 const PROP_FOR = { game: "play", chore_treat: "snack" };
 // Sol's shared props, for every species that has no own ("../ui/" leaves sprites/).
 const FALLBACK_PROPS = { scold: "../ui/prop_scold", praise: "../ui/prop_praise", fan: "../ui/prop_fan" };
-// Care scenes (_sceneStart): how long each plays, in ms from the tap.
-const SCENE_MS = { medicine: 2200, clean: 2300 };
-// Their props, two frames each (art/props/cut_clean_props.py). A species may bring
+// Care scenes (SCENES, card-care.js): their props, two frames each (art/props/cut_clean_props.py). A species may bring
 // its own in species.json "props" under the same key.
 const SCENE_PROPS = {
   broom: ["../ui/prop_broom_1", "../ui/prop_broom_2"],
