@@ -9946,7 +9946,9 @@ async function main() {
   }, me);
   const fx = (body) => card.evaluate(new Function("el", `const F = window.__fx; const s = el._slides[el._index]; const me = F.me;
     const glass = s.glass; const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-    const iso = (ago) => new Date(Date.now() - ago).toISOString();
+    // The server's clock, as the card reads it (the entries are the server's stamps): the page's own Date.now() can be
+    // off it by whatever an earlier section's fake-clock skip left, and an echo is judged against the server's now.
+    const iso = (ago) => new Date(el._dirEnv().now - ago).toISOString();
     const cls = () => [...glass.classList].filter((c) => c.startsWith("dir-") && !/^dir-(moon|newmoon)$/.test(c)).sort().join(); // the moon is the date's, not the test's
     // A kind's cooldown (20 s, slice 4B) outlasts the checks' quick succession; production's onset after an onset is
     // a held reverse 45 s on. cool() drops the slide's director state (cooldowns, seen ids) and paints the ambience again.
@@ -9993,7 +9995,7 @@ async function main() {
     s.dirViewed = false; s.dirRecent = [ent("rain_started", 180000, "cc-3")];
     el._dirView(s);
     return { at20, at3min: cls(), viewed: s.dirViewed, recent: s.dirRecent,
-      why: { env: el._dirEnv(), shown: el._dirShown(s), busy: el._director.busyOwners(s), sub: s.subscribed } };`);
+      why: { skew: el._dirEnv().now - Date.now(), env: el._dirEnv(), shown: el._dirShown(s), busy: el._director.busyOwners(s), sub: s.subscribed } };`);
   check("devicefx 2: a first view 20 s after the change plays one echo, on the wet sheen",
     echo.at20 === "dir-drop,dir-echo,dir-wet", JSON.stringify(echo));
   check("devicefx 3: a first view 3 min after the change is the sheen only", echo.at3min === "dir-wet" && echo.viewed === true && echo.recent === null, JSON.stringify(echo));
@@ -10002,7 +10004,7 @@ async function main() {
   const dedup = await fx(`
     cool();
     s.dirViewed = false;
-    const snap = (ring) => ({ moments: [], mine: s.mine, house: rainHouse(true), device_fx_recent: ring, now: new Date().toISOString() });
+    const snap = (ring) => ({ moments: [], mine: s.mine, house: rainHouse(true), device_fx_recent: ring, now: iso(0) });
     el._channel(s, snap([ent("rain_started", 15000, "cc-4")]), me);
     const first = cls(); const effect = s.dirEffect;
     el._channel(s, { fx: ent("rain_started", 15000, "cc-4") }, me);
