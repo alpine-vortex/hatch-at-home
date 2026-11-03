@@ -269,14 +269,7 @@
     }
   }
 
-  // A care scene seeked on the bench's own clock, so a shot is the same every run (plan
-  // care-reactions 4.1). The card's rAF loop is stopped (it would end the scene on real time),
-  // and the scene is played from 0 to `careAt` in 10 ms steps with the page's timers on a
-  // virtual clock: a beat's setTimeout (a class taken off, a prop's leave) runs at its scene
-  // time or not at all, and a CSS animation a beat starts is paused at `careAt` minus the
-  // step it began on. Timers still pending at `careAt` are dropped.
-  // The scene's own prop is decoded first: the card measures it at the tap, and an image
-  // still loading has no width (a first tap in a browser can differ; the bench must not).
+  // Care B2 (the snack catch sheet): the snack's centre and the pet's opaque box on screen, for the pass rule.
   async function snackBox(cur, sc) {
     const img = cur.pet;
     await img.decode().catch(() => {}); // the beat's frame may have just been set
@@ -307,10 +300,22 @@
     return { cx: s.left + s.width / 2, cy: s.top + s.height / 2, box: [left, r.top + y0 * sy, right, r.top + (y1 + 1) * sy], head: cur.species?.head?.[cur.drawn] || null };
   }
 
+  // A care scene seeked on the bench's own clock, so a shot is the same every run (plan
+  // care-reactions 4.1). The card's rAF loop is stopped (it would end the scene on real time),
+  // and the scene is played from 0 to `careAt` in 10 ms steps with the page's timers on a
+  // virtual clock: a beat's setTimeout (a class taken off, a prop's leave) runs at its scene
+  // time or not at all, and a CSS animation a beat starts is paused at `careAt` minus the
+  // step it began on. Timers still pending at `careAt` are dropped.
+  // The scene's own prop is decoded first: the card measures it at the tap, and an image
+  // still loading has no width (a first tap in a browser can differ; the bench must not).
   async function careSeek(card, cur, shot) {
     const at = shot.careAt ?? 1500;
-    const own = { medicine: cur.species?.props?.medicine || "bird/medicine", feed: cur.species?.props?.feed || "bird/bowl_food",
-      snack: cur.species?.props?.snack || "snack" }[shot.care];
+    const own = {
+      medicine: cur.species?.props?.medicine || "bird/medicine",
+      feed: cur.species?.props?.feed || "bird/bowl_food",
+      // B2: snack
+      snack: cur.species?.props?.snack || "snack",
+    }[shot.care];
     if (own) {
       const img = new Image();
       img.src = spriteSrc(cur.speciesId, own);

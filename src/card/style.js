@@ -1328,10 +1328,6 @@ const SCENE_STYLE = `
   .scene-crumb { position: absolute; width: 2.4%; aspect-ratio: 1; opacity: 0; pointer-events: none; z-index: 1; }
   .scene-crumb.dust { background: #d8c8a8; }
   .scene-crumb.bubble { width: 3%; border-radius: 50%; background: #cfeefa; box-shadow: inset -1px -1px 0 #7ab8d0; }
-  /* Snack (plan 5.2): positioned by the scene from the screen's top left (translate, rotate). */
-  .screen img.scene-snack { left: 0; top: 0; bottom: auto; transform-origin: 50% 50%; z-index: 2; opacity: 0; }
-  .pet.puff { animation: puff .45s ease-in-out; } /* the stash: the cheeks fill */
-  @keyframes puff { 50% { transform: scale(1.06, .97); } }
   .pet.chomp { animation: munch .28s ease-in-out; }
   .pet.breath { animation: settle 1s ease-in-out; }
   .pet.breath-long { animation: settle 1.6s ease-in-out; }
@@ -1341,5 +1337,11 @@ const SCENE_STYLE = `
   .scene-spark { position: absolute; width: 6%; aspect-ratio: 1; opacity: 0; pointer-events: none;
     background: #fff6c8; filter: drop-shadow(0 0 2px #ffd76a);
     clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
+
+  /* --- Care B2, snack (plan 5.2): its own block --- */
+  /* Snack (plan 5.2): positioned by the scene from the screen's top left (translate, rotate). */
+  .screen img.scene-snack { left: 0; top: 0; bottom: auto; transform-origin: 50% 50%; z-index: 2; opacity: 0; }
+  .pet.puff { animation: puff .45s ease-in-out; } /* the stash: the cheeks fill */
+  @keyframes puff { 50% { transform: scale(1.06, .97); } }
 `;
 
