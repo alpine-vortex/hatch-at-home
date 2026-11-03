@@ -716,6 +716,11 @@ class HatchPetCardBuild extends HatchPetCardBase {
     if (s.game) this._endGame(s, null);
     this._sceneEnd(s, { quiet: true });
     s.sceneOwes = s.sceneFade = null;
+    // The last pet's blanket: a landing timer must not draw it on this one, and a stale want must not
+    // make a pet already tucked fall in on first sight.
+    this._drapeStop(s);
+    this._drapeHide(s);
+    s.wasDrape = undefined;
     this._powerEnd(s);
     s.powerPending = null;
     this._stopTyping(s);

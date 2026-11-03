@@ -664,7 +664,8 @@ const SCENES = {
 
 const LIGHTS_TIRED_AT = 95; // under this energy the card expects a tuck to work (the server's nap rule is wider)
 const LIGHTS_QUIET_MS = 600; // the call is back and nothing changed this long after: the tap did nothing (4.3b)
-const DRAPE_ART = { ok: undefined, asked: new Set() }; // false once a drape file fails to load: no blanket then
+const DRAPE_RETRY_MS = 60000; // a drape file that failed before any loaded is tried again after this long
+const DRAPE_ART = { ok: undefined, at: 0, asked: new Set() }; // ok false: none has loaded and one failed (at): no blanket until the retry
 const FEED_GOBBLE = 30; // under this hunger the feed may be a gobble (variant C)
 const FEED_MAX_MS = 3200; // a feed scene never runs longer, whatever the pace (plan 8)
 const FEED_EXTRA_ODDS = 0.25; // a heart, a lick or a burp at the end of a meal
@@ -762,11 +763,14 @@ class HatchPetCardCare extends HatchPetCardActions {
   }
 
   // The unheld sleep state: what the server says now, not what a running scene holds (4.3b).
+  // Each is true, false, or null when the entity is unavailable, unknown or missing (an integration
+  // reload between the tap and the answer): that is no reading, not an off.
   _lightsLive(s) {
-    return {
-      asleep: this._hass.states[s.ids?.["binary_sensor.asleep"]]?.state === "on",
-      lights: this._hass.states[s.ids?.["switch.lights_out"]]?.state === "on",
+    const read = (id) => {
+      const st = this._hass.states[s.ids?.[id]]?.state;
+      return st === "on" ? true : st === "off" ? false : null;
     };
+    return { asleep: read("binary_sensor.asleep"), lights: read("switch.lights_out") };
   }
 
   // The answer to a lights scene, read on every hass update (_layout) and every frame of the scene
@@ -779,7 +783,7 @@ class HatchPetCardCare extends HatchPetCardActions {
     if (sc?.kind !== "lights" || sc.failAt != null || sc.answerAt != null || sc.refuseAt != null) return;
     const live = this._lightsLive(s);
     const was = sc.start0;
-    const changed = sc.wake ? !live.asleep && !live.lights && (was.asleep || was.lights) : live.asleep && !was.asleep;
+    const changed = sc.wake ? live.asleep === false && live.lights === false && (was.asleep || was.lights) : live.asleep === true && !was.asleep;
     const at = this._sceneNow(sc);
     if (changed) {
       this._sceneAnswer(s, "ok", at);
@@ -813,10 +817,12 @@ class HatchPetCardCare extends HatchPetCardActions {
     s.pet.style.transition = t >= 100 && t < 450 ? "rotate .2s ease-out" : "none";
     s.pet.classList.toggle("look", flip);
     s.pet.style.rotate = t < 100 ? `${4 * (ease(0, 50) - ease(60, 100))}deg` : "";
-    if (sc.night && t >= 150 && once("night")) this._lightsSay(s, "night");
+    // Past the gate (a held scene's clock sits on it, so only a later beat waits for the answer): the
+    // look round is said as the pet settles, and not at all for a tap that is then refused.
+    if (sc.night && t > sc.gate && once("night")) this._lightsSay(s, "night");
     // The lie-down: a 300 ms squash, the asleep frame swapped in at its bottom. The scene owns the
     // sleep transition (4.9), so the layout's own settle does not run a second time at its end.
-    if (t >= 400 && once("lie")) this._animate(s, s.pet, "lie", 300);
+    if (t > sc.gate && once("lie")) this._animate(s, s.pet, "lie", 300);
     if (t >= 550 && once("down")) s.wasAsleep = true;
     // The blanket falls over the lower body (3 steps), two press-ins on its edge (or, for C, two
     // wiggles under it). No art, or none for this species: these beats are skipped, the rest plays.
@@ -839,7 +845,7 @@ class HatchPetCardCare extends HatchPetCardActions {
     if (t >= 1800 && once("sigh")) {
       this._animate(s, s.pet, "sigh", 600);
       s.tuckedAt = Date.now();
-      if (sc.result === "ok") this._lightsSay(s, v === "C" ? "sigh" : this._tuckLine(s));
+      if (sc.result === "ok") this._lightsSay(s, sc.thanks ?? (v === "C" ? "sigh" : this._tuckLine(s)));
     }
     if (v === "B" && t >= 2400 && once("peek")) this._lightsSay(s, "peek");
     if (t < 100) return sc.sleepy;
@@ -851,11 +857,12 @@ class HatchPetCardCare extends HatchPetCardActions {
   _lightsWake(s, sc, t) {
     const once = (key) => !sc.fired.has(key) && sc.fired.add(key);
     // The light comes up in three steps, the dusk reversed: the lit art under .3, then .15, then none.
-    if (t >= 300 && once("lit")) {
+    // The first is past the gate: nothing plays while the scene holds for the answer.
+    if (t > sc.gate && once("lit")) {
       s.bg.style.transition = "none";
       this._bgApply(s, sc.lit);
     }
-    sc.dusk.style.opacity = t >= 700 ? "0" : t >= 500 ? ".15" : t >= 300 ? ".3" : "0";
+    sc.dusk.style.opacity = t >= 700 ? "0" : t >= 500 ? ".15" : t > sc.gate ? ".3" : "0";
     // The blink (asleep, sleepy, asleep, sleepy; 150 ms each); the scene owns the sleep transition (4.9).
     if (t >= 700 && once("awake")) {
       s.wasAsleep = false;
@@ -882,7 +889,12 @@ class HatchPetCardCare extends HatchPetCardActions {
   // with the body (the settle, a pat, the scene's tilt). A lights scene draws it itself.
 
   _drapeInfo(s) {
-    return DRAPE_ART.ok === false ? null : drapeOf(s.speciesId, s.drawn);
+    if (DRAPE_ART.ok === false) {
+      if (Date.now() - DRAPE_ART.at < DRAPE_RETRY_MS) return null;
+      DRAPE_ART.ok = undefined; // time to look again
+      DRAPE_ART.asked.clear();
+    }
+    return drapeOf(s.speciesId, s.drawn);
   }
 
   _drapeSrc(size, n) {
@@ -912,8 +924,15 @@ class HatchPetCardCare extends HatchPetCardActions {
     const img = s.drapeImg;
     if (!img.onerror) {
       img.onload = () => { DRAPE_ART.ok = true; };
-      img.onerror = () => { // no art on disk: the no-blanket path from now on
-        DRAPE_ART.ok = false;
+      img.onerror = () => {
+        // No file has loaded yet: no art on disk, the no-blanket path (until the retry). One that has
+        // loaded before means a dropped fetch: this blanket goes, the next tuck asks again.
+        if (DRAPE_ART.ok !== true) {
+          DRAPE_ART.ok = false;
+          DRAPE_ART.at = Date.now();
+        }
+        DRAPE_ART.asked.clear();
+        img.removeAttribute("src");
         this._drapeStop(s);
         this._drapeHide(s);
       };

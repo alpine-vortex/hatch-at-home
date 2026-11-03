@@ -1545,3 +1545,23 @@ Names win over lines.
 - The bench's `live` draws the slide through `_renderSlide` directly, not `set hass` and `_update` (which awaits worlds.json): the read path
   `_lightsWatch` is the card's own, the async update around it is not run.
 - `LIGHTS_TIRED_AT` 95 is plan 4.2's "energy < 95" for the tuck's prediction; the server's nap rule is wider (a stale card gets the quiet exit).
+
+## 23. The care D audit (s2767) and its fixes (s2769)
+
+The tier-2 audit of the whole care effort (A, B1, B2, C, D) read `origin/main` d14730d2. Tally: **care D audit: player-impact 2, nits 9.**
+No stuck scene, no drape on an awake pet and no leaked timer was found. Fixes, one commit each (JS tests in `tests/js/care_reactions.test.js`):
+
+- **P1** The `tucked_in` thanks was cut and repeated around the scene's goodnight. While this card's tuck scene has not yet sighed, `_moment`
+  hands the thanks to the scene (`sc.thanks`), and the sigh beat says it in place of the goodnight (variant C's too). After the sigh, or with no
+  scene, it is said as before.
+- **P2** One failed drape PNG no longer turns blankets off for the session: `DRAPE_ART.ok` goes false only while none has loaded, and only for
+  `DRAPE_RETRY_MS` (60 s). A dropped fetch after one has loaded hides that blanket and the next tuck asks again.
+- **N1, N5** The beats after the gate (the lie-down squash, the lit art and its dusk, the night creature's look) use `t > sc.gate`, so nothing
+  plays while the scene holds for the answer.
+- **N2** `_forget` stops the drape timers, hides it and clears `wasDrape`. **N9** `disconnectedCallback` ends a live scene and the drape timers.
+- **N3** `_animate` restarts the blanket with the pet (the lie squash excepted); `startle`, `jig`, `droop` and `sulk` share the pet's rules.
+- **N4** No "...so sleepy" `woke_up` night line while a lights scene lives or just ended (the scene's groggy line is the one).
+- **N6** An unavailable, unknown or missing asleep or lights entity reads as no reading (`_lightsLive` gives null), never as an answer.
+- **N7** `.resting` is dropped for the length of a lights scene.
+- **N8 (accepted, not fixed):** a backgrounded tab freezes the scene's rAF, and on return the pet is tucked or woken with no line or stretch.
+  Cosmetic and rare; the redraw still plays the settle.

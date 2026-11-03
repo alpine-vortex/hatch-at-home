@@ -574,7 +574,7 @@ class HatchPetCardLayout extends HatchPetCardBuild {
       // the idle pose; asleep, sick and the egg win (restLabel).
       const rest = restLabel(flags, { away, asleep, egg: s.egg });
       s.awaylabel.textContent = rest;
-      s.pet.classList.toggle("resting", !!rest);
+      s.pet.classList.toggle("resting", !!rest && !lightsScene); // not breathing through a tuck or a wake
       s.frames = this._petFrames(sp, stage, mood?.state, calling, this._eggMinutes(stageState), flags);
       const key = s.frames.join(",");
       if (calm() && s.framesKey !== key) s.frame = 0; // a new mood or stage: its first frame

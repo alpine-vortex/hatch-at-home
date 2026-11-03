@@ -88,6 +88,8 @@ class HatchPetCardMoment extends HatchPetCardVisit {
           say(this._wakeLine(s), 4500, () => this._animate(s, s.pet, "stretch", 1100));
           if (!capture) this._newLook([s]); // up for the day, seen live: the morning's look begins (fresh-moment 1)
         } else if (m.how === "night") {
+          // A wake scene in the sleep window says its own groggy line: not this one before it, nor after.
+          if (!capture && (s.scene?.kind === "lights" || Date.now() - (s.stretched || 0) < WAKE_STRETCH_MS)) break;
           say("...so sleepy");
         } else if (m.how === "lights") {
           // lights on: a stretch, no line (plan 5.5); not while a wake scene plays, nor two after one (its own stretch)
@@ -311,7 +313,15 @@ class HatchPetCardMoment extends HatchPetCardVisit {
           this._hass.user?.name?.trim().split(/\s+/)[0], 16);
         // Instead of the plain goodnight just said (or waiting), not after it.
         if (!capture && s.queue) s.queue = s.queue.filter((q) => q.type !== "fell_asleep");
-        line(withName(this._lines(s, "tucked_in", "thank you for tucking me in ♥").text, name), 4000);
+        const thanks = withName(this._lines(s, "tucked_in", "thank you for tucking me in ♥").text, name);
+        // This card's own tuck scene, before its sigh: the thanks is the scene's line (it says it there),
+        // not a second one around the goodnight.
+        const sc = s.scene;
+        if (!capture && sc?.kind === "lights" && !sc.wake && !sc.fired.has("sigh")) {
+          sc.thanks = { text: thanks, ms: 4000 };
+          break;
+        }
+        line(thanks, 4000);
         break;
       }
       case "bond_favourite":

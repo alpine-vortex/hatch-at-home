@@ -181,6 +181,8 @@ class HatchPetCardBase extends HTMLElement {
     // does a line typing out, and the private channel.
     for (const s of this._slides || []) {
       if (s.game) this._endGame(s, null);
+      this._sceneEnd(s, { quiet: true }); // a care scene's rAF and its blanket's timers go with the card
+      this._drapeStop(s);
       this._stopTyping(s);
       this._powerEnd(s);
       s.powerPending = null;

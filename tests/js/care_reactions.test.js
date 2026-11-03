@@ -952,14 +952,14 @@ function lightsCard({ calm = false, energy = "60", asleep = false, lights = fals
   const el = () => {
     const cls = new Set();
     return { style: {}, hidden: false, className: "", remove() {}, classList: { toggle: (c, on) => (on ? cls.add(c) : cls.delete(c)), add: (c) => cls.add(c), remove: (c) => cls.delete(c),
-      contains: (c) => cls.has(c), [Symbol.iterator]: () => cls[Symbol.iterator]() }, setAttribute(k, v) { this[k] = v; }, getAttribute(k) { return this[k] ?? null; } };
+      contains: (c) => cls.has(c), [Symbol.iterator]: () => cls[Symbol.iterator]() }, setAttribute(k, v) { this[k] = v; }, getAttribute(k) { return this[k] ?? null; }, removeAttribute(k) { delete this[k]; } };
   };
   const FakeDate = class extends Date { static now() { return 1e12 + clock.now; } };
   const ctx = { calm: () => calm, performance: { now: () => clock.now }, Date: FakeDate, Math, Number, Array, Set, Promise, document: { createElement: () => el() },
     setTimeout: (fn, ms) => log.timers.push([fn, ms]), clearTimeout() {}, requestAnimationFrame: () => 1, cancelAnimationFrame() {},
     BASE: "/f", VERSION: "t", MINE: 4, MINE_MS: 3000, MINE_MATCH_MS: 10000, pick: (l) => l[0], REFUSALS: { not_sleepy: "not sleepy yet" }, Image: class { set src(v) { this.s = v; } } };
   const consts = ["SCENE_KIND_OF", "sceneKind", "SCENE_HOLD_MS", "SCENE_EXIT_MS", "SCENE_OWE_MS", "SPOILED_BY", "isYes", "LIGHTS_TIRED_AT", "LIGHTS_QUIET_MS",
-    "DRAPE_FALL_MS", "DRAPE_SLIDE_PX", "WAKE_STRETCH_MS", "DRAPE_ART", "DRAPE_ART_BOX", "LIGHTS_NIGHT_ODDS"].map((n) => src.match(new RegExp(`\\nconst ${n} = [^\\n]*`))[0]);
+    "DRAPE_FALL_MS", "DRAPE_SLIDE_PX", "WAKE_STRETCH_MS", "DRAPE_RETRY_MS", "DRAPE_ART", "DRAPE_ART_BOX", "LIGHTS_NIGHT_ODDS"].map((n) => src.match(new RegExp(`\\nconst ${n} = [^\\n]*`))[0]);
   const fn = (name) => src.match(new RegExp(`\\nfunction ${name}\\([\\s\\S]*?\\n\\}\\n`))[0];
   const block = src.slice(src.indexOf("const SCENES = {"), src.indexOf("\n};\n", src.indexOf("const SCENES = {")) + 4);
   const methods = ["_sceneClock", "_sceneOver", "_sceneAnswer", "_sceneFail", "_sceneNow", "_sceneOffer", "_sceneEnd", "_sceneRefusalLine", "_toggleLights", "_lightsLive",
@@ -1230,6 +1230,11 @@ test("the woke_up lights moment does not stretch twice, nor say a tuck line the 
   assert.deepStrictEqual(plain(run({ asleep: false, scene: null, stretched: Date.now() - 1000 }, { type: "woke_up", how: "lights" }).animated), [], "just after a wake scene's stretch");
   assert.deepStrictEqual(plain(run({ asleep: false, scene: { kind: "lights" } }, { type: "woke_up", how: "lights" }).animated), []);
   assert.deepStrictEqual(plain(run({ scene: { kind: "lights" } }, { type: "fell_asleep", how: "lights" }).lines), [], "the scene says its own");
+  // N4: a hand wake at night is the scene's groggy line, not "...so sleepy" first.
+  const night = { type: "woke_up", how: "night" };
+  assert.deepStrictEqual(plain(run({ scene: { kind: "lights" } }, night).lines), [], "while a lights scene lives");
+  assert.deepStrictEqual(plain(run({ scene: null, stretched: Date.now() - 500 }, night).lines), [], "just after one");
+  assert.deepStrictEqual(plain(run({ scene: null }, night).lines), ["...so sleepy"], "a wake from elsewhere is today's");
   assert.deepStrictEqual(plain(run({ scene: null, tuckedAt: Date.now() - 500 }, { type: "fell_asleep", how: "lights" }).lines), []);
   assert.deepStrictEqual(plain(run({ scene: null }, { type: "fell_asleep", how: "lights" }).lines), ["night night..."], "a tuck seen from elsewhere is today's");
   assert.deepStrictEqual(plain(run({ scene: { kind: "lights" } }, { type: "fell_asleep", how: "house" }).lines), ["night night..."], "only a lights tuck is the scene's");
@@ -1271,6 +1276,7 @@ test("the drape: others' tuck falls in DRAPE_FALL_MS, a wake slides off in two s
   assert.strictEqual(bat.s.drapeFrame ?? 0, 0);
   const none = lightsCard();
   none.ctx.DRAPE_ART.ok = false;
+  none.ctx.DRAPE_ART.at = 1e12;
   none.self._drapeSync(none.s, true);
   assert.strictEqual(none.s.drapeFrame ?? 0, 0);
 });
@@ -1293,4 +1299,154 @@ test("lights, reduced motion: no scene, the pose only (sleepy for a tuck, conten
   f.ctx.SCENES.lights.calm.call(f.self, f.s);
   assert.deepStrictEqual(plain(f.s.poseFrames), ["adult_content_1", "adult_content_2"]);
   assert.match(method("_sceneStart"), /s\.sceneFade = \{ kind, until: Date\.now\(\) \+ 10000 \};[^\n]*\n\s+entry\.calm\?\.call\(this, s\);/);
+});
+
+// --- Care D audit fixes (the tier-2 audit, 2026-11-02) ------------------------------------------
+test("audit P1: the tucked_in thanks is the scene's sigh line, not a second one around the goodnight", () => {
+  const m = method("_moment");
+  const ctx = { Date, calm: () => false, MOMENT_CLASS: {}, FLAVOUR: 1, KEPT: 3, sharedScreen: () => false, withName: (t) => t, short: (t) => t, BOND: { nickname: 3 }, pick: (l) => l[0] };
+  vm.runInNewContext(`const o = {${m}}; this.moment = o._moment;`, ctx);
+  const run = (s, moment, capture = null) => {
+    const lines = [];
+    const self = { _line: (_s, _c, text) => lines.push(text), _bond: () => null, _hass: { user: { name: "Dev" } }, _lines: (_s, _k, text) => ({ text }) };
+    ctx.moment.call(self, s, moment, capture);
+    return lines;
+  };
+  const tucked = { type: "tucked_in" };
+  // Before the sigh, a tuck scene keeps the thanks for its own line: nothing said now.
+  const s = { scene: { kind: "lights", wake: false, fired: new Set(["lie"]) } };
+  assert.deepStrictEqual(plain(run(s, tucked)), []);
+  assert.deepStrictEqual(plain(s.scene.thanks), { text: "thank you for tucking me in ♥", ms: 4000 });
+  // The sigh beat says it in place of the goodnight (variant C's too).
+  const f = lightsCard();
+  lightsTap(f);
+  const sc = f.s.scene;
+  sc.thanks = { text: "thank you for tucking me in ♥", ms: 4000 };
+  sc.result = "ok";
+  sc.dusk = f.s.pet; sc.asleep = []; sc.sleepy = [];
+  const opts = { ramp: () => 0, ease: () => 0 };
+  f.self._lightsTuck(f.s, sc, 1800, opts);
+  assert.deepStrictEqual(plain(f.log.lines), ["thank you for tucking me in ♥"]);
+  // After the sigh (or with no scene), it is said as before; a wake scene or the catch-up keep today's.
+  assert.deepStrictEqual(plain(run({ scene: { kind: "lights", wake: false, fired: new Set(["sigh"]) } }, tucked)), ["thank you for tucking me in ♥"]);
+  assert.deepStrictEqual(plain(run({ scene: null }, tucked)), ["thank you for tucking me in ♥"]);
+  assert.deepStrictEqual(plain(run({ scene: { kind: "lights", wake: true, fired: new Set() } }, tucked)), ["thank you for tucking me in ♥"]);
+  assert.deepStrictEqual(plain(run({ scene: { kind: "lights", wake: false, fired: new Set() } }, tucked, [])), []);
+});
+
+test("audit P2: one failed drape load disables the blanket only if none ever loaded, and then for 60 s", () => {
+  // A file loaded before: a dropped fetch hides this blanket, and the next tuck shows one.
+  const a = lightsCard();
+  a.self._drapeShow(a.s, 3);
+  a.s.drapeImg.onload();
+  a.s.drapeImg.onerror();
+  assert.strictEqual(a.ctx.DRAPE_ART.ok, true);
+  assert.strictEqual(a.s.drape.hidden, true);
+  assert.strictEqual(a.s.drapeImg.getAttribute("src"), null, "the broken src is dropped so a show asks again");
+  assert.strictEqual(a.self._drapeShow(a.s, 3), true);
+  assert.match(a.s.drapeImg.src, /drape_l_3\.png/);
+  // None ever loaded: no blanket for DRAPE_RETRY_MS, then it looks again.
+  const b = lightsCard();
+  b.self._drapeShow(b.s, 3);
+  b.s.drapeImg.onerror();
+  assert.strictEqual(b.ctx.DRAPE_ART.ok, false);
+  assert.strictEqual(b.self._drapeInfo(b.s), null);
+  b.clock.now = 59999;
+  assert.strictEqual(b.self._drapeInfo(b.s), null);
+  b.clock.now = 60000;
+  assert.strictEqual(b.self._drapeInfo(b.s).size, "l");
+  assert.strictEqual(b.ctx.DRAPE_ART.ok, undefined);
+});
+
+test("audit N1/N5: nothing past the gate plays while the scene holds on it: lie, lit, dusk, the night look", () => {
+  const opts = { ramp: () => 0, ease: () => 0 };
+  const tuck = lightsCard();
+  lightsTap(tuck);
+  const sc = tuck.s.scene;
+  Object.assign(sc, { dusk: tuck.s.pet, asleep: [], sleepy: [], night: true });
+  assert.strictEqual(sc.gate, 400);
+  assert.strictEqual(tuck.self._sceneClock(sc, 1000).te, 400, "held at the gate");
+  tuck.self._lightsTuck(tuck.s, sc, 400, opts);
+  assert.deepStrictEqual(plain(tuck.log.animated), [], "no squash at the gate");
+  assert.deepStrictEqual(plain(tuck.log.lines), [], "no look-round line at the gate");
+  tuck.self._lightsTuck(tuck.s, sc, 400.01, opts);
+  assert.deepStrictEqual(plain(tuck.log.animated), ["lie"]);
+  assert.strictEqual(tuck.log.lines.length, 1, "the look-round line comes after the gate");
+  const wake = lightsCard({ asleep: true, lights: true });
+  lightsTap(wake);
+  const w = wake.s.scene;
+  Object.assign(w, { dusk: wake.s.pet, asleep: [], sleepy: [], content: [], lit: "day" });
+  assert.strictEqual(w.gate, 300);
+  wake.self._lightsWake(wake.s, w, 300);
+  assert.deepStrictEqual(plain(wake.log.bg), [], "the room stays dim at the gate");
+  assert.strictEqual(w.dusk.style.opacity, "0");
+  wake.self._lightsWake(wake.s, w, 300.01);
+  assert.deepStrictEqual(plain(wake.log.bg), ["day"]);
+  assert.strictEqual(w.dusk.style.opacity, ".3");
+});
+
+test("audit N6: an unavailable, unknown or missing asleep entity is no change, not an answer", () => {
+  for (const bad of ["unavailable", "unknown", undefined]) {
+    const f = lightsCard({ asleep: true, lights: true });
+    lightsTap(f);
+    const sc = f.s.scene;
+    assert.strictEqual(sc.wake, true);
+    f.states["binary_sensor.asleep"] = bad === undefined ? undefined : { state: bad };
+    f.states["switch.lights_out"] = { state: "off" };
+    sc.at = 100;
+    f.self._lightsWatch(f.s);
+    assert.strictEqual(sc.answerAt, null, `a wake with asleep ${bad}`);
+    flipLive(f, false); // the entities are back, the pet is awake: now it is the answer
+    sc.at = 200;
+    f.self._lightsWatch(f.s);
+    assert.strictEqual(sc.result, "ok");
+  }
+  const t = lightsCard();
+  lightsTap(t);
+  t.states["binary_sensor.asleep"] = { state: "unavailable" };
+  t.s.scene.at = 100;
+  t.self._lightsWatch(t.s);
+  assert.strictEqual(t.s.scene.answerAt, null, "a tuck is not answered by an unavailable one either");
+  assert.deepStrictEqual(plain(t.self._lightsLive(t.s)), { asleep: null, lights: false });
+});
+
+test("audit N2, N7, N9: _forget clears the drape, a lights scene drops .resting, disconnect ends scene and drape timers", () => {
+  const forget = method("_forget");
+  assert.match(forget, /this\._drapeStop\(s\);\s+this\._drapeHide\(s\);\s+s\.wasDrape = undefined;/);
+  assert.match(src, /toggle\("resting", !!rest && !lightsScene\)/);
+  const bye = src.match(/\n  disconnectedCallback\(\) \{[\s\S]*?\n  \}\n/)[0];
+  assert.match(bye, /this\._sceneEnd\(s, \{ quiet: true \}\);/);
+  assert.match(bye, /this\._drapeStop\(s\);/);
+  // And what the clear does: a landing timer is cancelled and the blanket is down.
+  const f = lightsCard();
+  f.self._drapeSync(f.s, false);
+  f.self._drapeSync(f.s, true);
+  assert.strictEqual(f.s.drapeAnim, true);
+  f.self._drapeStop(f.s);
+  f.self._drapeHide(f.s);
+  assert.deepStrictEqual([f.s.drapeAnim, f.s.drape.hidden, f.s.drapeFrame, plain(f.s.drapeTimers)], [false, true, 0, []]);
+});
+
+test("audit N3: _animate restarts the blanket with the pet (not the lie squash); startle, jig, droop, sulk share the drape's rules", () => {
+  const ops = [];
+  const ctx = { WeakMap, Map, setTimeout: () => 1, clearTimeout() {} };
+  vm.runInNewContext(`${konst("ANIMATE_TIMERS")}\nthis.api = {${method("_animate")}};`, ctx);
+  const el = (name) => ({ get offsetWidth() { ops.push(`${name}:reflow`); return 0; }, hidden: false, classList: { add: (c) => ops.push(`${name}+${c}`), remove: (c) => ops.push(`${name}-${c}`) } });
+  const pet = el("pet");
+  const drape = el("drape");
+  ctx.api._animate({ pet, drape }, pet, "perk", 320);
+  assert.deepStrictEqual(ops, ["pet-perk", "drape-perk", "pet:reflow", "pet+perk", "drape+perk"], "removed from both, one reflow, added to both");
+  ops.length = 0;
+  ctx.api._animate({ pet, drape }, pet, "lie", 300);
+  assert.deepStrictEqual(ops, ["pet-lie", "pet:reflow", "pet+lie"], "the squash is the pet's alone");
+  ops.length = 0;
+  ctx.api._animate({ pet, drape: Object.assign(el("drape"), { hidden: true }) }, pet, "perk", 320);
+  assert.ok(!ops.some((o) => o.startsWith("drape")), "a hidden blanket is left alone");
+  ops.length = 0;
+  ctx.api._animate({ pet, drape }, el("prop"), "perk", 320);
+  assert.ok(!ops.some((o) => o.startsWith("drape")), "only the pet's own element");
+  for (const c of ["startle", "jig", "droop", "sulk"]) {
+    assert.match(src, new RegExp(`\\.pet\\.${c}, \\.drape\\.${c} \\{`), c);
+  }
+  assert.match(src, /\.pet\.droop, \.drape\.droop \{ transform: translateY\(4px\)/, "reduced motion holds the sag on both");
 });
