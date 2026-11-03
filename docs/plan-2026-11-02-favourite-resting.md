@@ -6,9 +6,11 @@ scout was re-read against `origin/main` at `60ebf751`; they held (the card ones 
 with the card split: `src/card/<part>.js`, see §10 for the few the scout got loosely).
 Line numbers are from `60ebf751`; names win over numbers. **Revised (s2725)** after the
 adversarial review s2724, every finding checked against the code at `9cdc5824` (the
-review's tags B1-B3, S1-S14 appear in brackets where a rule came from one). Every player line and label
+review's tags B1-B3, S1-S14 appear in brackets where a rule came from one). **R3 folded
+(s2788)** from review s2787, checked against `ce4f3c8a` (§6, tests 29-31, §9 R3, and the
+list at the end of the file). Every player line and label
 is **DRAFT** until the first mate approves it (decisions 2026-10-28, "How the crew
-works"). Build ships are **tier 2** (model/decay behaviour, people-store data).
+works"); the offer's copy (§6.1) is approved. Build ships are **tier 2** (model/decay behaviour, people-store data).
 
 ## 0. Summary
 
@@ -27,7 +29,7 @@ Two separate things, built apart, that change nothing until someone uses them:
 |---|---|---|---|---|
 | R1 | Resting: model, switch, settings row, card label, events | L | **2** | `model.py`, `rates.py`, `coordinator.py` (incl. `MOMENTS`), `switch.py`, `__init__.py` (ws), `notify.py`, `intent.py`, `sensor.py`, `strings.json`, `icons.json`, card (`card-status`, `card-layout`, `card-tick`, `card-moment`, `lines`), guide, features |
 | R2 | Favourite: people store, card opens on it, heart, phone voice | M | **2** | `people.py`, `coordinator.py`, `__init__.py` (ws, remove), `channel` snapshot, card (`card-base`, `card-build`, `card-layout`, `card-status`), guide, features |
-| R3 | The offer: "let the others rest?" after a favourite is picked | S | 2 | `people.py` (one key), card (`card-status`) |
+| R3 | The offer: "let the others rest?" after a favourite is picked | S | 2 | `people.py` (one key), `coordinator.py` (`async_set_rest_offer`, `_mine`), `__init__.py` (one ws command), card (`card-status`, `card-sheets`, `ui-copy`), guide, features (full list: §6.6) |
 
 Build order is the table order. R2 and R1 touch no common code, so they can run side by
 side; R3 needs both. R3 adds no server rule: it only calls R1's switch for the other
@@ -61,6 +63,23 @@ Recorded as given in the brief; not up for review in this plan.
   **at most once per 12 h** (`last_rest_refill_at`, §3.3). A rest inside the window only
   pauses: no refill, an open call and the misses held. Every copy about resting (§4.3's
   helper, §6's offer) must promise no refill, no "content" and no "no calls".
+
+- **FM (2026-11-03, review s2787; the offer, §6):**
+  1. **Leaving the sheet without a button is not an answer.** Only "rest them" and "not
+     now" mark the person (`rest_offer`); leaving clears the card's in-memory offer (Q1).
+  2. **The edge is person-level**: the offer comes when no pet was marked before the call.
+     Moving the favourite from one pet to another never offers (Q2).
+  3. **"The others" are this card's slides**, not the household's; a card limited to some
+     pets rests only those (Q3).
+  4. **Answered if at least one rest call succeeded.** Any failure shows
+     `SETTINGS_AGAIN.failed`; no retry (Q4).
+  5. **Not shown and not marked when no other pet can rest**, so the offer appears at a
+     later first pick, e.g. once a new pet has hatched (Q5).
+  6. **After "rest them" the row just goes**; no new line (Q6).
+  7. **The helper is aligned with the live `REST_HELP`**: "Resting pets won't get any
+     hungrier, and don't grow up until they're back. Visit any time." (Q7). The row title
+     "Let the others rest?", "rest them", "not now" and the helper are approved; the
+     `aria-label`s are `spoken()` of the same text.
 
 Earlier rules this plan keeps: no ranking, no guilt or nagging, wishes credit nobody
 (decisions 2026-10-28:50-53); nothing from the people store on a state attribute or the
@@ -443,54 +462,157 @@ pet, because the previous choice's `mine` changed too.
 
 ## 6. The offer
 
-After a person turns their favourite (`open_on`) **on** with 2+ pets that are not eggs, the settings
-sheet shows one inline row under the toggle (no modal, nothing blocks):
+**Folded (s2788)** from review s2787 on the FM's answers of 2026-11-03 (§1). Names win over
+line numbers; every code name below was checked on `origin/main` at `ce4f3c8a`.
 
-- "Let the others rest?" with two buttons, "rest them" and "not now". Helper (DRAFT, same
-  rule as §4.3: no refill promised): "Resting pets won't get any hungrier and don't grow
-  up, for everyone at home. Wake them any time."
-- **"rest them"** calls `virtual_pet/rest` for each other pet that is not an egg and
-  not already resting. It flips switches and does nothing else: no favourite change, no
-  server rule, no automation.
-- Either button sets `people[user]["rest_offer"] = true`
-  (`isinstance(v, bool)` in `_PERSON_KEYS`), and the offer is **never repeated** for that
-  person. "Forget my data" erases the key, so a person who forgot may see it once more
-  (that is a fresh start; a refusal that must survive is the birthday's special case
-  only).
-- Not shown on a shared screen (there is no person), nor when every other pet is an egg
-  or already resting.
+After a person turns their favourite (`open_on`) **on** for the first time and there is at
+least one other pet on the card that can rest, the settings sheet shows one inline row
+under the toggle (no modal, nothing blocks).
+
+### 6.1 The row and its copy
+
+All **FM approved 2026-11-03** (review s2787 Q7 and the brief):
+
+- Row title: "Let the others rest?". Buttons: "rest them" and "not now".
+- Helper: "Resting pets won't get any hungrier, and don't grow up until they're back. Visit any
+  time." It is `REST_HELP` (ui-copy.js) in the plural, so it keeps R2's audit fix and
+  promises no refill, no "content" and no "no calls" (§1, owner R1-1). The row title, the
+  buttons and the helper are the whole of the new copy, except as below.
+- `aria-label`s are `spoken()` of the same text (§5.3): the row's is the title and the helper,
+  each button's is its label. There is no pet name in any of them, so the stand-in trick of
+  the open-on rows is not needed.
+- **Pending:** while the calls run, both buttons carry the `pending` class (as `_setResting`
+  does) and ignore taps.
+- **After "rest them":** no new line. The row just goes. The pets' "resting ☁" labels (§4.4)
+  and each sheet's resting row are the confirmation.
+- **Failure:** `SETTINGS_AGAIN.failed` ("hm, that didn't work. try again soon") through
+  `_statusMessage`, on any failed call. No retry button: each pet's own sheet has its resting
+  row.
+- **Placement:** directly under the `openon` row in the sheet's "for {pet}" section, never
+  under the `openhouse` row. It sits in the sheet of the pet that was just picked.
+- **Not scanned:** `scripts/copy-scan.js` (`COPY_TABLES`) covers the pet's lines only, not
+  settings strings, so nothing scans these. The worker checks by eye that no line promises a
+  refill, "content" or "no calls", and uses no ranking word (checklist, Card). "The others" is
+  owner-drafted (§1) and stays.
+- **Guide / features.md** (**FM approved 2026-11-03**; it promises only what §6.2-6.4 build
+  and what R1 does): "The first time you pick which pet your card opens on, and you have other
+  pets that can rest, the settings sheet asks whether to rest them. \"rest them\" switches
+  resting on for the other pets on that card; \"not now\" leaves them as they are. It asks
+  until you answer, then not again (\"Forget my data\" starts it fresh). Resting pets won't
+  get any hungrier and don't grow up until they're back, and anyone can wake one from its own
+  settings." One line in the guide's resting section, one in features.md.
+
+### 6.2 State on the card, and when the row shows
+
+The offer is **card-instance state**: `this._restOffer = {device}` (the picked slide's
+`s.ids.device`). It is not saved and not in the channel. `mine.rest_offer` says only "already
+answered"; it never says "show now". The settings render reads both: the row shows while
+
+1. `this._restOffer` is set and its `device` is the shown slide's, and
+2. `s.mine.rest_offer === false` (a boolean: an older server sends none, so no offer, as the
+   resting row skips an older server), and
+3. not `sharedScreen()`, and the scope was `me`, and
+4. **the others can rest** (one rule, replacing "2+ pets that are not eggs"): among the
+   card's slides other than `s` that have `ids` and are not `empty`, at least one has
+   `sensor.life_stage` **known** (not `unavailable`/`unknown`, which would only draw an `egg`
+   or `no_pet` error) and not `egg`, and `switch.resting` not `on`. The favourite itself may
+   be an egg or resting. The toggle's own gate (`several`, card-status.js) counts eggs and is
+   left as it is.
+
+**"The others" are this card's slides** (`_devices()` honours `config.devices`): a card
+limited to two of three pets rests only those two. A hidden third pet is not rested. The
+helper is true of the pets it names. (FM, review s2787 Q3.)
+
+**It clears** (set to `null`): a button; the sheet's back or close; a swipe to another pet;
+turning the toggle off; forget; and a render that finds rule 2 or 4 false (a push made the
+others eggs or resting, or `mine.rest_offer` true from another device or slide). The render
+may drop it; it must not leave a stale row. Because the state is read at each render, a
+channel push, which redraws the sheet (`s.statusHtml = null`, card-base.js), does not lose
+the row, and `_setStatus` skips unchanged HTML.
+
+### 6.3 The edge, and what answers it
+
+- **The edge is per person, not per pet** (FM, review s2787 Q2). In `_setOpenOn`, on scope
+  `me`, `enabled` true, with no slide having had `mine.open_on === true` before the call (the
+  `before` array it already takes), `mine.rest_offer` not true, and not shared: set
+  `this._restOffer` **after the call succeeds** (a failure reverts the toggle and offers
+  nothing). Moving the favourite from pet A to pet B is on→on for the person, so **it never
+  offers**. Never for scope `house` (branch on `scope === "me"` first, before anything else
+  in the offer), never from `_openOnSync`'s late move.
+- **Only the buttons answer** (Q1). Leaving the sheet without a button is not an answer: it
+  clears the in-memory offer and nothing is saved, so the offer comes at the next first pick
+  (turn off, then on; or a new page load and a first pick).
+- **Not shown and not marked** when no other pet can rest (rule 4; Q5): it appears at a later
+  first pick, when a new pet has hatched or been added.
+- **"not now"** calls `virtual_pet/rest_offer` and flips nothing. It is as permanent as
+  "rest them".
+- **"rest them"** runs `virtual_pet/rest {entity_id, enabled: true}` for each other slide that
+  passes rule 4's per-pet test (known, not an egg, not resting; a pet that is **away** is
+  included: resting while away is allowed, §3.4), with `Promise.allSettled`, then
+  `virtual_pet/rest_offer` for the person. It flips switches only: no favourite change, no
+  server rule, no automation, and it touches no `open_on`.
+- **Answered** if at least one rest call succeeded (Q4). Any rejection shows
+  `SETTINGS_AGAIN.failed`. No retry. If **all** calls failed, the person is not marked and
+  the row clears; they see the offer at the next first pick.
+- The two methods are named and extractable by `tests/js/open_on.test.js`'s loader, which
+  takes methods by name: `_offerRest` (the edge, called from `_setOpenOn`) and
+  `_answerRestOffer(s, rest, button)` (the buttons). The render is a small named helper
+  (`_restOfferRow`) so a JS test can run it.
 
 The offer is the only place the favourite and resting meet. Neither reads the other.
 
-**R3 corrections from the R2 audit (s2748)**, to build as written:
+### 6.4 The server
 
-1. **API.** `people[user]["rest_offer"] = true` needs a transport. Add a websocket command
-   `virtual_pet/rest_offer {entity_id, shared}` with the `shared` fail-closed guard of
-   `open_on` and `ask_again`; `mine.rest_offer: bool` in `_mine`; `"rest_offer"` in
-   `_PERSON_KEYS` (bool); the key in the forget handler's list in the card
-   (`card-status.js`, the `_setMine` list R2 extended); and `async_set_rest_offer`, which
-   takes the person lock and calls `_push_everywhere`, like `async_set_open_on`.
-2. **Helper copy.** The offer's helper promises no refill (see above). The card knows
-   nothing of `last_rest_refill_at` and must not: it is not exposed on an attribute, and
+1. **Websocket** `virtual_pet/rest_offer {entity_id, shared}`, registered in `async_setup`
+   next to `websocket_open_on`. It copies `websocket_open_on`'s guard: `vol.Required("shared"):
+   bool`, refused unless `False`, error code `shared` ("fail closed", the owner's rule for
+   `open_on` and `ask_again`); a missing pet is `no_pet`. It takes **no `enabled`**: it only
+   sets true. Clearing is forget.
+2. **`async_set_rest_offer(user)`** takes `people.lock(user)`, sets
+   `people[user]["rest_offer"] = True`, **`await self.people.async_save_now()`** and then
+   `_push_everywhere()`. It differs from `async_set_open_on` on purpose: that one saves with
+   `people.save()` (a 60 s delay, `SAVE_DELAY`) on enable and `async_save_now()` only on a
+   clear. `rest_offer` is a once-only answer, so a crash must not bring the offer back.
+3. **People store:** `"rest_offer"` in `_PERSON_KEYS` with `isinstance(v, bool)` (a wrong type
+   is dropped by `_clean`); not in `_FORGET_KEEPS`, so `People.forget` erases it and the offer
+   can return once (a fresh start; the birthday's `memory_asked` survives, this does not).
+   An older build keeps the unknown key. The people store keeps its version.
+4. **Channel:** `mine.rest_offer: bool` in `_mine`, pushed to **every** pet by
+   `_push_everywhere`, so a second slide's sheet does not offer again. Shared screens get
+   `mine = null`, `house` never gets the key, and it is on no state attribute, bus event or
+   diagnostics (people.py:1-12).
+5. **Card, forget:** `"rest_offer"` goes in the forget handler's key list in `card-status.js`
+   (the `_setMine(key, false)` list that has `open_on`), and the handler clears
+   `this._restOffer`.
+6. **No pet-save change; no `strings.json`** (no service).
+
+**Rest N times, not once.** "rest them" is N independent `virtual_pet/rest` calls, each with
+R1's own 12 h refill cooldown (§3.3). A pet rested within 12 h only pauses (no refill), and
+the offer does not override that. The offer never reads `last_rest_refill_at` and must not
+(§6.5 point 2).
+
+### 6.5 Corrections kept from the R2 audit (s2748)
+
+1. **API:** §6.4.
+2. **Helper copy:** promises no refill; the card knows nothing of `last_rest_refill_at`, and
    the copy stays neutral rather than putting a boolean on `mine` or `house`.
-3. **Trigger.** The offer fires only on the off→on edge of scope `me` in `_setOpenOn`:
-   never for `house`, never from `_openOnSync`'s late move. Count non-egg pets from
-   `sensor.life_stage`; "already resting" is the `resting` flag in the `mood_keyed` flags,
-   so a pet that stays resting is excluded.
-4. **"Rest them" is N independent `virtual_pet/rest` calls**, each with its own cooldown.
-   A pet rested within 12 h only pauses (no refill), and the offer does not override
-   this. Test: offer, "rest them", wake, "rest them" again inside 12 h: no second refill.
-5. **Forget and restart.** `forget_me` clears `rest_offer`, as it clears `open_on`: the
-   offer can return once after a forget (test it). The key must survive a restart:
-   `SAVE_DELAY` is 60 s, so the button saves at once (`async_save_now`), or a loss on a
-   crash is accepted and said.
+3. **Trigger:** §6.3 (reworded: person-level; "already resting" is `switch.resting`, the same
+   source as the settings row, not the mood flags).
+4. **Cooldown:** §6.4's last paragraph.
+5. **Forget and restart:** §6.4 points 2-3 and 5.
 
-**Who sees it** [S10]. "rest them" freezes pets that other people may open on or hear
-from. Nothing is sent to them and rest events don't notify (§4.5), so a phone-only
-person simply stops getting calls from those pets and sees the "resting ☁" label only
-when they open the card. The only signals are that label, the helper text ("for everyone
-at home") and the guide. Whether anyone else should be told is an open question for the
-owner (Open questions); until it is answered, none is sent.
+**Who sees it** [S10]. "rest them" freezes pets that other people may open on or hear from.
+Nothing is sent to them and rest events don't notify (§4.5), so a phone-only person simply
+stops getting calls from those pets and sees the "resting ☁" label only when they open the
+card. The only signals are that label, the helper text and the guide. **Decided (FM,
+2026-11-02, Open questions item 3):** no push, nobody else is told.
+
+### 6.6 Touch list
+
+`people.py` (`_PERSON_KEYS`), `coordinator.py` (`async_set_rest_offer`, `_mine`),
+`__init__.py` (the ws command and its registration), `card-status.js` (the row, the handlers,
+the forget key list), `card-sheets.js` (`_offerRest`, `_answerRestOffer`, the call in
+`_setOpenOn`), `ui-copy.js` (the copy), the guide and features.md. Not `strings.json`.
 
 ## 7. Save impact
 
@@ -623,26 +745,75 @@ Pytest unless noted. Names are suggestions; `tests/test_resting.py` and
     `hatch-open-house`), or the shelf; no heart on a shared screen; no toggle for one
     pet.
 
-**R3, the offer (`test_people.py`, JS):**
+**R3, the offer (pytest in `tests/test_people.py` and `tests/test_open_on.py`; JS in a new
+`tests/js/rest_offer.test.js`, in the style of `tests/js/open_on.test.js`, which pulls card
+methods out by name):**
 
-29. Shown once after a choice is set with 2+ non-egg pets; not shown on a shared
-    screen, with one pet, or after either button; "rest them" flips exactly the others
-    that are not eggs and not resting, and touches no `open_on`; "not now" flips nothing.
-30. `rest_offer` is erased by forget (the offer can then return once) and survives a
-    restart (saved at once, §6 correction 5).
-31. "Rest them", wake, "rest them" again inside 12 h: no second refill (§6 correction 4).
-    The offer fires on the off→on edge of scope `me` only: not for `house`, not from the
-    late move (§6 correction 3).
+29. **The offer (JS).** With a fake `hass` and three slides (A the favourite, B and C):
+    a. First pick (no slide had `mine.open_on`, `mine.rest_offer` false), scope `me`: after
+       the call resolves, `this._restOffer` is set and the settings render of A has the row,
+       with the title, the helper and both buttons, each with its `aria-label` =
+       `spoken()` of the text.
+    b. The row survives a redraw: a channel push for A (`statusHtml = null`) and a second
+       render still show it.
+    c. Not offered: scope `house`; a shared screen (`sharedScreen()`); one pet; every other
+       pet an egg, resting or with `life_stage` `unavailable`/`unknown`; `mine.rest_offer`
+       true on any slide; an older server (`mine.rest_offer` not a boolean); the late move of
+       `_openOnSync`; **moving the favourite from A to B** (a slide had `open_on` before);
+       a failed `open_on` call (the toggle reverts, no row).
+    d. Gate edge cases: the favourite itself an egg or resting still offers if one other pet
+       can rest; a card with `config.devices` of two pets counts only those two.
+    e. The row clears on: either button, back/close, a swipe to another pet, the toggle off,
+       forget, and a push that makes the rule false; and it is absent on the other pets'
+       sheets and on the `openhouse` row.
+    f. **"rest them"** calls `virtual_pet/rest {enabled: true}` once for each other slide
+       that is known, not an egg, not resting (an **away** one included), and for no other;
+       then `virtual_pet/rest_offer {entity_id, shared: false}` once; **no `open_on` call.**
+       Both buttons are `pending` until all calls settle, and a second tap sends nothing.
+       No text follows; the row is gone.
+    g. **"not now"** sends `virtual_pet/rest_offer` and no `rest` call.
+    h. **Failure:** with one of two `rest` calls rejected, `rest_offer` is still sent and
+       `SETTINGS_AGAIN.failed` shows once; with both rejected, no `rest_offer` is sent, the
+       message shows, the row clears, and a later first pick offers again; with
+       `rest_offer` itself rejected, the message shows. There is no retry button.
+    i. **Leaving is not an answer:** close the sheet without a button: no `rest_offer` call,
+       and turning the toggle off and on again offers again.
+30. **The server and the store (pytest).**
+    a. `virtual_pet/rest_offer` with `shared: true` answers `shared` and changes nothing;
+       an unknown entity answers `no_pet`; a call with `enabled` is refused by the schema.
+    b. `async_set_rest_offer` sets `rest_offer` true, **saves at once** (a Store reloaded
+       straight after, with no 60 s wait, still has it, as `test_open_on.py` reloads), and
+       pushes `mine.rest_offer` true to **every** pet's channel (a second slide's sheet does
+       not offer again).
+    c. A wrong-typed `rest_offer` is dropped on load; one an older build kept is kept by
+       this one; it is not in `_FORGET_KEEPS`.
+    d. `forget_me` erases it (the offer can then return once; JS: the forget handler sets
+       `mine.rest_offer` false and clears `this._restOffer`); it survives a restart.
+    e. **Privacy** (extend the sweep in `test_public.py`): `rest_offer` is on no state
+       attribute, bus event or diagnostics, no shared snapshot (`mine = null`) and not on
+       `house`.
+31. **Rest N times, not the model.** "rest them" is N separate `virtual_pet/rest` calls
+    (JS, 29f). The 12 h refill cooldown itself is **R1's** test (§3.3; R1 test 2,
+    `test_2_the_refill_comes_at_most_once_in_twelve_hours` in `tests/test_resting.py`), reused, not re-tested here: R3's own check is that the offer sends one call per
+    pet and never reads or sets `last_rest_refill_at`. The offer's edge conditions are test
+    29c.
+
+**Where R3's looks are checked.** No bench preset: the offer's visibility depends on card
+state after a click (`this._restOffer`), and the bench has no click steps and no `mine` flag
+for it. The JS tests render the row from the card's own code (29a-e). The row's wording and
+fit are read by the owner on a phone (§9 R3 device queue). The `resting` preset (R1) exists.
+Card-check: no new section; `scripts/pick-sections` chooses from the diff (the forget and
+settings sections drive `forget_me` and the sheet already).
 
 ## 9. Ships, acceptance criteria, device queue
 
 Gates as AGENTS.md: ship workers run `scripts/gate --auto`; the full gate is the first
 mate's once per merged batch. R1 and R2 touch server code, so `pick-sections` is likely
-to pick `all` and `scripts/ci-gate` is the route. Bench presets to **add** (neither
-exists today): `resting` (label, pose, settings row, sheet at 420/330/300, day/night,
-mono, big text, baby, shared screen read-only) and, for R2/R3, `open_on` (dots with a
-heart, the toggle, the house row, the offer row). The bench pins them through the fake
-`hass`; no real HA is needed for looks. Each criterion below is a test number or a named
+to pick `all` and `scripts/ci-gate` is the route. Bench presets: `resting` (R1) exists on `origin/main` (label, pose, settings row at
+420/330/300, night, mono, big text, shared read-only); R2 **adds** `open_on` (dots with a
+heart, the toggle, the house row; no preset exists today). The offer row is not on the
+bench (§8, "Where R3's looks are checked"). The bench pins states through the fake `hass`;
+no real HA is needed for looks. Each criterion below is a test number or a named
 command; a device item is a look, never a gate.
 
 ### R1, Resting (tier 2)
@@ -707,12 +878,25 @@ Device queue:
 
 ### R3, The offer (tier 2, small)
 
-Acceptance: tests 29-31; the offer reads as §6 with its audit corrections (API,
-neutral helper, trigger, cooldown, save); it appears once per person.
+Acceptance:
+
+- Tests 29-31 pass (29a-i the card, 30a-e the server and the store, 31 the N calls).
+- The offer reads as §6.1 (approved copy, `aria-label`s, pending, failure, no line after
+  "rest them"), sits under the toggle, and follows §6.2-6.4: card-instance state, the
+  person-level edge, "the others" = the card's slides, answered by a button only, answered if
+  one rest call succeeded, not shown and not marked when no other pet can rest.
+- It appears once per person (until "Forget my data"), never on a shared screen, `house`
+  or a move of the favourite.
+- Saves at once (`async_save_now`); `rest_offer` is on no attribute, event, diagnostic or
+  shared snapshot (30e).
+- Guide (the sentence in §6.1) and features.md.
+- Card-check sections from `scripts/pick-sections`; no new section.
 
 Device queue: pick a favourite on a phone with three pets, see the offer, tap "rest
 them": the two others rest and the favourite doesn't; pick another favourite later: no
-second offer.
+second offer. Then, as a second person with an unanswered offer: pick, leave the sheet
+without a button, pick again later: the offer comes again. Read the row at 420/330/300 and
+in mono and big text.
 
 ## 10. Checked, and what is still to read
 
@@ -757,7 +941,7 @@ Fixed by s2752 on the FM's decisions of 2026-11-02:
 - Nit 7: three new save keys in §7, §8 test 1 and the checklist; the over-long docstring
   at `coordinator.py` `_birthday_morning` is wrapped. The recorded-run compare of §8 test 1
   is still not in `tests/test_recorded.py` (see the note there).
-- The report's R3 corrections are folded into §6, tests 29-31 and §9 R3.
+- The report's R3 corrections are folded into §6, tests 29-31 and §9 R3 (reworked by s2788, below).
 
 **Known remainders, not fixed (out of scope for s2752):**
 
@@ -772,6 +956,26 @@ Fixed by s2752 on the FM's decisions of 2026-11-02:
 - Nit 6: `websocket_forget_me` has no `shared` guard (`__init__.py`), unlike `open_on` and
   `ask_again`. Older than R2; the card hides the row and the call only touches the
   caller's own record.
+
+## R3 review (s2787): 12 problems, folded by s2788
+
+Each checked against `origin/main` at `ce4f3c8a` first; all held.
+
+1. Where the offer lives: §6.2 (`this._restOffer`, read at each render; every clear path).
+2. "Edge" for moving the favourite: §6.3 (person-level), FM Q2 in §1.
+3. "2+ pets that are not eggs": §6.2 rule 4 (known life stage, not egg, not resting).
+4. "The others": §6.2 (the card's slides), FM Q3 in §1.
+5. Partial failure, in-flight, permanence: §6.3 (`allSettled`, answered if one call
+   succeeded, `SETTINGS_AGAIN.failed`, pending), FM Q4 in §1.
+6. Save timing: §6.4 point 2 (`async_save_now`, unlike `async_set_open_on`).
+7. The ws command: §6.4 point 1 (`shared` guard, `no_pet`, no `enabled`, registration).
+8. Stale "open question" text: §6.5 ("Who sees it", decided no push).
+9. Incomplete copy: §6.1 (aria-labels, after-text, pending, failure, placement, guide
+   sentence, copy-scan note), FM Q6-Q7 in §1.
+10. Unbuildable acceptance: §8 "Where R3's looks are checked" and §9 (no bench preset for the
+    offer; JS tests; no new card-check section; `resting` preset exists, `open_on` is R2's).
+11. Tests 29-31: §8, expanded to 29a-i, 30a-e, 31.
+12. Touch list: §0 table and §6.6.
 
 ## Open questions: decided (first mate, 2026-11-02)
 
@@ -867,7 +1071,13 @@ For the reviewer (tier 2: at least one pass before each ship merges). The first 
 **Offer**
 - [ ] "rest them" flips switches only; it can't be triggered twice, shown twice, or
       shown to a person who cannot see more than one pet.
-- [ ] Declining is as easy as accepting and equally permanent.
+- [ ] Declining is as easy as accepting and equally permanent; leaving without a button
+      is not an answer and saves nothing.
+- [ ] The row is card state read at each render (survives a push), clears on every
+      path in §6.2, and is never built from `house`, a shared screen or the late move.
+- [ ] `async_set_rest_offer` saves at once; the ws has the `shared` guard and no `enabled`.
+- [ ] The copy promises no refill, no "content", no "no calls" (copy-scan does not scan
+      settings strings; read it).
 
 **Docs and gates**
 - [ ] Guide, features.md, events list, Assist words and the settings chapter match the
