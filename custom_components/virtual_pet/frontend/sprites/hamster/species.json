@@ -11,6 +11,7 @@
   "words": {"food": "seeds", "home": "nest"},
   "voice": { "sound": "peep", "catchphrase": "cheeks full", "pitch": 1150, "pace": 45, "likes": ["sunflower seeds", "pumpkin seeds", "peanuts"] },
   "nature": { "clock": "night", "sky": "fire", "company": "solo", "habit": "hoarder" },
+  "field_note": "livelier after dark · snug in a warm spot · fills its cheeks",
   "reactions": {"feed": "cheeks", "snack": "cheeks", "play": "wheel", "won": "wheel", "scold": "stand_up"},
   "head": {"baby": [158, 100], "child": [160, 72], "teen": [166, 48], "adult": [194, 72]},
   "hat": {

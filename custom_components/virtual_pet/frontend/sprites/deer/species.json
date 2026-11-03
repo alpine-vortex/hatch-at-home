@@ -32,6 +32,7 @@
   "words": { "food": "acorns", "home": "thicket" },
   "voice": { "sound": "mew", "catchphrase": "mm-hm", "pitch": 620, "pace": 30, "likes": ["acorns", "apples", "clover"] },
   "nature": { "clock": "dusk", "sky": "fog", "company": "social", "habit": "watcher" },
+  "field_note": "livelier at dusk · goes quiet in fog · watches closely",
   "reactions": { "feed": "nibble", "snack": "nibble", "chore_treat": "nibble", "won": "pronk", "scold": "flag" },
   "head": { "baby": [162, 84], "child": [178, 60], "teen": [202, 28], "adult": [152, 28] },
   "hat": {

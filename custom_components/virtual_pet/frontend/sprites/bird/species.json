@@ -31,6 +31,7 @@
   "words": { "food": "berries", "home": "nest" },
   "voice": { "sound": "tweet", "catchphrase": "tra la", "pitch": 1100, "pace": 42, "likes": ["berries", "sunflower seeds", "mealworms"] },
   "nature": { "clock": "day", "sky": "sun", "company": "social", "habit": "performer" },
+  "field_note": "up with the day · warms up in sun · hums and twirls",
   "reactions": { "play": "birdwatch", "won": "birdwatch" },
   "head": { "baby": [148, 72], "child": [158, 44], "teen": [170, 12], "adult": [200, 56] },
   "hat": {

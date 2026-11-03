@@ -12,6 +12,7 @@
   "words": {"food": "snails", "home": "log"},
   "voice": { "sound": "plip", "catchphrase": "sunny rock", "pitch": 420, "pace": 26, "likes": ["duckweed", "snails", "earthworms"] },
   "nature": { "clock": "day", "sky": "sun", "company": "solo", "habit": "basker" },
+  "field_note": "up with the day · warms up in sun · basks on a log",
   "reactions": {"play": "swim", "won": "swim", "praise": "bask", "scold": "tuck"},
   "head": {"baby": [176, 148], "child": [184, 128], "teen": [196, 112], "adult": [208, 132]},
   "murk": "treefrog/murk",

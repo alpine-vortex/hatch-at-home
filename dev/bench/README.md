@@ -15,7 +15,7 @@ The repo has no `node_modules`; point `NODE_PATH` at a checkout with Playwright
 export NODE_PATH=/home/poe/github/relink/node_modules
 node scripts/bench.js --preset shells     # 144 shots, ~8 s
 node scripts/bench.js --preset species    # 1230 shots, ~35 s
-node scripts/bench.js --preset nature     # species nature N1: each sky's reaction line (both lines, 330 and 300, calm), the sunset and morning lines per clock, a baby and a child with none; **N2** adds 39 shots: an idle species line per habit and the two glow cells (330 and 300, calm so the line is the shot), a solo, a social watcher's and a social explorer's visitor greeting, a builder host's link line, the longest lines in mono and big text, a baby and a child with none
+node scripts/bench.js --preset nature     # species nature N1: each sky's reaction line (both lines, 330 and 300, calm), the sunset and morning lines per clock, a baby and a child with none; **N2** adds 39 shots: an idle species line per habit and the two glow cells (330 and 300, calm so the line is the shot), a solo, a social watcher's and a social explorer's visitor greeting, a builder host's link line, the longest lines in mono and big text, a baby and a child with none; **N3** adds 34 shots (`--only nature/note-`): the status page's "nature" row (the longest note per world at 420, 330, 300, big text and the porthole; a teen, a child, a baby, and an egg with no row)
 node scripts/bench.js --preset ui         # status, game picker, bubble
 node scripts/bench.js --preset finishes   # 576 shots: every shell finish, every world
 node scripts/bench.js --preset settings         # the gear's sheet, 420/330, day/night
@@ -77,6 +77,7 @@ A shot (all optional):
 | `shellOptions`, `shellFinish`, `shellLocked` | the lead pet's `shell_finish_options` (finish keys it may wear), `shell_finish` (its pick, default none: the world's own) and `shell_locked` (`{key: stage}`). Without `shellOptions` the card has no shell row, as with an older server |
 | `preview` | in the picker, the tile tapped: that finish on the live shell, unsaved (`""` is the world's own) |
 | `scroll` | a selector in the status box brought into view (the picker scrolls), e.g. `.tile.now` or `.sec[data-group="specials"]` (its top just under the back row) |
+| `lines` | a selector in the card: how many lines its text wraps to, written to the shot's `.json` as `{lines}` (N3's note-length measure, e.g. `.naturerow > span:last-child`) |
 | `journal` | `true` (`--journal`, which also sets `view: "journal"`) or an object over the journal attributes the card reads (`raised`, `journal`, `generation`, `traits`, `memories`) |
 | `mine` | `true` (`--mine`) or an object over it: the viewer's own view the private channel would send (a bond, notify me, my day, my birthday kept), so `you two` and the sheet's personal rows show. An array gives each pet its own (`[{open_on: true}, {}]`: the favourite's heart on the first pet's dot only) |
 | `power` | the low-battery gag pinned mid-play: `battery` (one bar, first line) or `line` (full battery, second line) |

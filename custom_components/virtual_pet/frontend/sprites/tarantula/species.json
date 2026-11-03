@@ -33,6 +33,7 @@
   "words": { "food": "crickets", "home": "burrow" },
   "voice": { "sound": "fuzz", "catchphrase": "tippy-toes", "pitch": 400, "pace": 26, "likes": ["crickets", "mealworms", "waxworms"] },
   "nature": { "clock": "night", "sky": "fire", "company": "solo", "habit": "builder" },
+  "field_note": "livelier after dark · snug in a warm spot · digs a burrow",
   "reactions": { "won": "wave", "praise": "wave", "scold": "hair_flick" },
   "head": { "baby": [101, 130], "child": [96, 116], "teen": [90, 88], "adult": [80, 96] },
   "face": {"baby": [141, 175, 56], "child": [153, 175, 64], "teen": [175, 148, 72], "adult": [161, 183, 72]},

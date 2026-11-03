@@ -71,6 +71,7 @@
   },
   "voice": { "sound": "quack", "catchphrase": "waddle waddle", "pitch": 1050, "pace": 42, "likes": ["peas", "oats", "water bugs"] },
   "nature": { "clock": "day", "sky": "rain", "company": "social", "habit": "explorer" },
+  "field_note": "up with the day · perks up in rain · paddles about",
   "reactions": {
     "play": "bottoms_up",
     "won": "quack",

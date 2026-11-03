@@ -71,6 +71,7 @@
   },
   "voice": { "sound": "clack", "catchphrase": "cozy shell", "pitch": 720, "pace": 30, "likes": ["seaweed", "sea lettuce", "shrimp"] },
   "nature": { "clock": "night", "sky": "rain", "company": "social", "habit": "hoarder" },
+  "field_note": "livelier after dark · perks up in rain · keeps a stash",
   "reactions": {
     "play": "shell_try",
     "won": "claw_wave",

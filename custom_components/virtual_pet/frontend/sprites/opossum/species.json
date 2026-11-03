@@ -71,6 +71,7 @@
   },
   "voice": { "sound": "click", "catchphrase": "hang in there", "pitch": 600, "pace": 31, "likes": ["persimmons", "ripe pears", "snails"] },
   "nature": { "clock": "night", "sky": "fire", "company": "solo", "habit": "builder" },
+  "field_note": "livelier after dark · snug in a warm spot · makes a hollow",
   "reactions": {
     "play": "tail_curl",
     "won": "play_dead",

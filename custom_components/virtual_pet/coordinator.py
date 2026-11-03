@@ -279,6 +279,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # Each ready creature's favourite-snack choices, and the stages with
         # food words of their own (a moth: no snacks there).
         self.likes: dict[str, list[str]] = {}
+        # How each kind of creature is built (species.json `field_note`), a
+        # derived copy for the Assist status; any species in the catalog, not
+        # only this world's roster.
+        self.species_notes: dict[str, str] = {}
         self.own_food_stages: dict[str, set[str]] = {}
         self.catchphrases: dict[str, str] = {}  # each creature's own
         self.state: model.PetState | None = None
@@ -506,6 +510,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 if isinstance(likes, list)
                 else []
             )
+            note = data.get("field_note")
+            if isinstance(note, str) and note:
+                self.species_notes[key] = note
             words = data.get("words") if isinstance(data.get("words"), dict) else {}
             self.own_food_stages[key] = {
                 stage

@@ -35,6 +35,7 @@
   "words": { "food": "flies", "home": "lily pad" },
   "voice": { "sound": "ribbit", "catchphrase": "hoppity", "pitch": 520, "pace": 34, "likes": ["flies", "crickets", "beetles"] },
   "nature": { "clock": "night", "sky": "rain", "company": "social", "habit": "performer" },
+  "field_note": "livelier after dark · perks up in rain · hums and twirls",
   "reactions": { "feed": "tongue", "snack": "tongue", "won": "croak", "praise": "croak" },
   "head": { "baby": [160, 148], "child": [154, 116], "teen": [168, 72], "adult": [182, 96] },
   "hat": {

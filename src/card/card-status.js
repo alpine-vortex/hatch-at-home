@@ -130,6 +130,9 @@ class HatchPetCardStatus extends HatchPetCardMoment {
     const nameRow = (isEgg || this._state(s, "sensor.life_stage")?.state === "baby") && petName
       ? row(null, SETUP_COPY.nameRow, `<span class="nameval"><span class="nm">${escape(petName)}</span>` +
         `<button class="bell namechange">${SETUP_COPY.nameChange}</button></span>`) : "";
+    // How that kind of creature is built (species.json `field_note`): a species fact, so every
+    // hatched stage, never the egg (its `s.species` is the world's first, not the egg's own).
+    const fieldNote = !isEgg && typeof s.species?.field_note === "string" ? s.species.field_note : "";
     const html = isEgg ? `
       ${band}
       ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
@@ -157,6 +160,7 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
       ${isEgg ? "" : misses}
       ${stageAttrs.personality && teenOrAdult ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}
+      ${fieldNote ? row(null, "nature", `<span>${escape(fieldNote)}</span>`).replace('class="row"', 'class="row naturerow"') : ""}
       ${nextStage ? row(null, nextStage[0], `<span>${nextStage[1]}</span>`) : ""}
       ${nextEgg ? row(null, "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       ${nameRow}

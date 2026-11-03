@@ -32,6 +32,7 @@
   "words": { "food": "hay", "home": "hutch" },
   "voice": { "sound": "snuf", "catchphrase": "nibble", "pitch": 700, "pace": 36, "likes": ["hay", "carrot tops", "dandelions"] },
   "nature": { "clock": "dusk", "sky": "fire", "company": "social", "habit": "groomer" },
+  "field_note": "livelier at dusk · snug in a warm spot · grooms its ears",
   "reactions": { "play": "binky", "won": "binky", "praise": "flop", "scold": "thump" },
   "head": { "baby": [148, 84], "child": [148, 76], "teen": [152, 36], "adult": [158, 72] },
   "hat": {

@@ -33,6 +33,7 @@
   "words": { "food": "bloodworms", "home": "pond" },
   "voice": { "sound": "blep", "catchphrase": "smiley", "pitch": 460, "pace": 28, "likes": ["bloodworms", "earthworms", "shrimp"] },
   "nature": { "clock": "night", "sky": "fog", "company": "solo", "habit": "watcher" },
+  "field_note": "livelier after dark · goes quiet in fog · drifts and waits",
   "reactions": { "play": "float", "won": "gill_flutter", "praise": "smile", "snack": "smile" },
   "head": { "baby": [170, 144], "child": [184, 124], "teen": [192, 104], "adult": [226, 140] },
   "hat": {

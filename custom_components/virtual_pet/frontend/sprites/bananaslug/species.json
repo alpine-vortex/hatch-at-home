@@ -71,6 +71,7 @@
   },
   "voice": { "sound": "squish", "catchphrase": "slow and steady", "pitch": 380, "pace": 25, "likes": ["mushrooms", "fallen leaves", "dandelions"] },
   "nature": { "clock": "night", "sky": "rain", "company": "solo", "habit": "explorer" },
+  "field_note": "livelier after dark · perks up in rain · slides about",
   "reactions": {
     "play": "slime_slide",
     "won": "slime_slide",
