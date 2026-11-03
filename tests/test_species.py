@@ -343,3 +343,50 @@ def test_nature_counts_do_not_drift() -> None:
         for s in READY
     )
     assert dict(paces) == {"quick": 10, "steady": 12, "slow": 8}
+
+
+# The bowl clip (card-care.js bowlCuts; plan care-reactions 5.1): a species with "bowl_rim"
+# has a feed bowl whose food reads when clipped from the top in three steps. The same maths
+# as the card: the last cut at the rim (on the 4 px art grid), the two before it where the
+# three bites are most even. Each bite takes at least 8% of the sprite's opaque pixels.
+BOWL_GRID = 4
+BOWL_STEP_MIN = 0.08
+
+
+def bowl_cuts(rows: list[int], rim: float) -> list[int] | None:
+    rim_row = round(rim * len(rows) / BOWL_GRID) * BOWL_GRID
+    up_to = [0]
+    for r in range(rim_row):
+        up_to.append(up_to[-1] + rows[r])
+    best = None
+    for a in range(BOWL_GRID, rim_row, BOWL_GRID):
+        for b in range(a + BOWL_GRID, rim_row, BOWL_GRID):
+            least = min(up_to[a], up_to[b] - up_to[a], up_to[rim_row] - up_to[b])
+            if best is None or least > best[0]:
+                best = (least, [a, b, rim_row])
+    return best[1] if best else None
+
+
+@pytest.mark.parametrize("species", READY)
+def test_bowl_rim_is_where_the_clip_reads(species: str) -> None:
+    sp = json.loads((SPRITES / species / "species.json").read_text())
+    rim = sp.get("bowl_rim")
+    if rim is None:
+        return
+    assert isinstance(rim, (int, float)) and 0 < rim < 1, f"{species} bowl_rim {rim}"
+    feed = sp["props"]["feed"]
+    alpha = np.asarray(Image.open(png(species, feed)).convert("RGBA"))[:, :, 3]
+    rows = [int(n) for n in (alpha > 0).sum(axis=1)]
+    cuts = bowl_cuts(rows, rim)
+    assert cuts, f"{species}: no food above the rim"
+    total = sum(rows)
+    gone = [sum(rows[:c]) for c in cuts]
+    steps = [gone[0] / total, (gone[1] - gone[0]) / total, (gone[2] - gone[1]) / total]
+    assert min(steps) >= BOWL_STEP_MIN, (
+        f"{species} bites {[round(x, 3) for x in steps]}"
+    )
+
+
+def test_bowl_cuts_balance_the_bites() -> None:
+    rows = [0] * 8 + [10] * 24 + [50] * 96  # food rows 8-31, the bowl from 32
+    assert bowl_cuts(rows, 0.25) == [16, 24, 32]

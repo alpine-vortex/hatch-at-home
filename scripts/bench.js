@@ -638,6 +638,28 @@ const PRESETS = {
     }
     return out;
   },
+  // Care B1, the bowl clip (plan care-reactions 5.1): every species' feed bowl on the floor at
+  // full, 2/3, 1/3 and gone (step 3: the food above the rim), at 330 and 420, day and night,
+  // one sheet per world and scene, a close-up of the bowl. A species with no "bowl_rim" is shown at its BOWL_CANDIDATES rim (so
+  // the sheet shows why it has none), labelled "cand". The pass rule is bowlPass's.
+  bowls() {
+    const out = [];
+    for (const species of allSpecies().sort()) {
+      const own = speciesData(species).bowl_rim;
+      const rim = own ?? BOWL_CANDIDATES[species];
+      const world = worldOf(species);
+      for (const scene of ["day", "night"]) {
+        for (const width of [330, 420]) {
+          ["full", "2/3", "1/3", "gone"].forEach((step, i) => {
+            out.push({ name: `bowls/${world}/${species}-${scene}-${width}-${i}`, group: `bowls-${world}-${scene}`,
+              label: `${species}${own ? "" : " cand"} ${rim} ${scene} ${width} ${step}`, species, stage: "adult", world, scene,
+              width, bowlStep: i, bowlRim: rim, mood: "content", clip: "screen", crop: [0.6, 0.62, 0.92, 0.97], dpr: 3, tile: 150, say: "" });
+          });
+        }
+      }
+    }
+    return out;
+  },
   // The same sheet on a shared screen: nothing personal, only this screen's rows.
   "settings-shared"() {
     const out = [];
@@ -650,6 +672,49 @@ const PRESETS = {
     return out;
   },
 };
+
+// The bowl clip's rim for each species with no "bowl_rim" of its own: where its rim (or, with
+// no bowl, the widest row) sits, so the bowls sheet shows what a clip there would do.
+const BOWL_CANDIDATES = {
+  axolotl: 0.375, ballpython: 0.531, bananaslug: 0.5, bat: 0.406, beardeddragon: 0.375, beaver: 0.406, bird: 0.375,
+  bunny: 0.562, duckling: 0.344, hamster: 0.406, ferret: 0.375, firefly: 0.375, gecko: 0.344, hermitcrab: 0.344, lunamoth: 0.5,
+  opossum: 0.375, otter: 0.375, owl: 0.406, pondturtle: 0.344, puffin: 0.406, seal: 0.375, squirrel: 0.531,
+  tarantula: 0.469, tortoise: 0.469, treefrog: 0.375,
+};
+
+// The bowl clip's pass rule (plan care-reactions 5.1), from each sprite through the card's own
+// bowlRows and bowlCuts: each of the 3 steps removes at least BOWL_STEP_MIN of the sprite's
+// opaque pixels, and no cut reaches below the rim (every row under it is the full bowl's).
+// A species with "bowl_rim" that fails it fails the run.
+const BOWL_STEP_MIN = 0.08;
+async function bowlPass(browser, base) {
+  const page = await browser.newPage();
+  await page.goto(`${base}/`);
+  const list = allSpecies().sort().map((id) => {
+    const sp = speciesData(id);
+    return { id, sprite: sp.props?.feed || "bird/bowl_food", own: sp.bowl_rim ?? null, rim: sp.bowl_rim ?? BOWL_CANDIDATES[id] ?? null };
+  });
+  const out = await page.evaluate(async ({ list, min }) => {
+    await customElements.whenDefined("hatch-pet-card");
+    const res = [];
+    for (const b of list) {
+      const img = new Image();
+      img.src = spriteSrc(b.id, b.sprite);
+      await img.decode();
+      const rows = bowlRows(img);
+      const cuts = bowlCuts(rows, b.rim);
+      const total = rows.reduce((x, y) => x + y, 0);
+      const gone = (c) => rows.slice(0, c).reduce((x, y) => x + y, 0);
+      const steps = cuts ? cuts.map((c, i) => (gone(c) - (i ? gone(cuts[i - 1]) : 0)) / total) : [];
+      const rimRow = Math.round((b.rim * rows.length) / 4) * 4;
+      const pass = !!cuts && steps.every((x) => x >= min) && cuts.every((c) => c <= rimRow);
+      res.push({ ...b, cuts, steps: steps.map((x) => Math.round(x * 1000) / 1000), pass });
+    }
+    return res;
+  }, { list, min: BOWL_STEP_MIN });
+  await page.close();
+  return out;
+}
 
 // Presets of what the card's FINDS_SHOWN switch gates: run with it on, whatever the default.
 const FINDS_PRESETS = new Set(["finds", "gifts", "collection"]);
@@ -789,6 +854,11 @@ async function runShots(browser, base, shots, outDir, workers) {
           const b = el.getBoundingClientRect();
           return { x: b.x + scrollX, y: b.y + scrollY, width: b.width, height: b.height };
         }, inCard);
+        if (shot.crop) { // `crop`: [x0, y0, x1, y1], fractions of the clip (a close-up, such as the bowl)
+          const [x0, y0, x1, y1] = shot.crop;
+          Object.assign(clip, { x: clip.x + clip.width * x0, y: clip.y + clip.height * y0,
+            width: clip.width * (x1 - x0), height: clip.height * (y1 - y0) });
+        }
         const png = await page.screenshot({ path: file, clip });
         shot.file = file;
         if (shot.mono) shot.measure = { screen: await page.evaluate(() => window.bench.screenClass), ...await measureMono(page, clip, png) };
@@ -978,7 +1048,7 @@ async function buildSheets(browser, shots, outDir) {
   for (const [key, list] of groups) {
     const tiles = list.map((s) => {
       const data = fs.readFileSync(s.file).toString("base64");
-      return `<figure><img src="data:image/png;base64,${data}" style="width:${Math.round(s.clip === "screen" ? 160 : s.width * 0.5)}px"><figcaption>${s.label || s.name}</figcaption></figure>`;
+      return `<figure><img src="data:image/png;base64,${data}" style="width:${Math.round(s.tile || (s.clip === "screen" ? 160 : s.width * 0.5))}px"><figcaption>${s.label || s.name}</figcaption></figure>`;
     }).join("");
     await page.setContent(`<style>body{margin:0;padding:12px;background:#222;color:#ddd;font:11px system-ui}
       main{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start}figure{margin:0}img{display:block;image-rendering:pixelated}
@@ -1013,6 +1083,18 @@ async function main() {
       const bad = l.share <= MONO_LIT_MIN;
       console.log(`mono backlight ${bad ? "FAIL" : "ok"}: ${l.label} differ on ${(l.share * 100).toFixed(1)}% of pixels (need > ${MONO_LIT_MIN * 100}%)`);
       if (bad) process.exitCode = 1;
+    }
+    if (opts.preset === "bowls") {
+      const bowls = await bowlPass(browser, url);
+      fs.writeFileSync(path.join(opts.out, "bowl-pass.json"), JSON.stringify(bowls, null, 1));
+      const set = bowls.filter((b) => b.own !== null);
+      console.log(`bowl clip pass rule (each step >= ${BOWL_STEP_MIN * 100}% of the opaque pixels, no cut below the rim): ` +
+        `${bowls.filter((b) => b.pass).length} of ${bowls.length} pass at their rim; ${set.length} have bowl_rim`);
+      for (const b of bowls) {
+        const bad = b.own !== null && !b.pass;
+        console.log(`  ${bad ? "FAIL" : b.pass ? "pass" : "  - "} ${b.id.padEnd(14)} ${b.own !== null ? "bowl_rim" : "cand    "} ${b.rim} steps ${b.steps.map((x) => (x * 100).toFixed(1)).join(" / ")}`);
+        if (bad) process.exitCode = 1;
+      }
     }
     if (opts.sheet && opts.preset) {
       for (const f of await buildSheets(browser, shots, opts.out)) console.log(`sheet ${f}`);

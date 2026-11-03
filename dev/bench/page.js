@@ -764,6 +764,15 @@
     }
     // `care`: a care scene started through _sceneStart, paused and seeked to `careAt` ms (careSeek).
     if (shot.care) await careSeek(card, cur, shot);
+    // `bowlStep`: the feed bowl on the floor at step 0 (full) to 3 of its clip, through the card's own
+    // _bowlClip (plan care-reactions 5.1); `bowlRim` stands in for species.json "bowl_rim".
+    if (shot.bowlStep !== undefined) {
+      if (shot.bowlRim !== undefined) cur.species = { ...cur.species, bowl_rim: shot.bowlRim };
+      card._propShow(cur, cur.species.props?.feed || "bird/bowl_food", 1e9);
+      await cur.prop.decode().catch(() => {});
+      for (const a of cur.prop.getAnimations()) a.finish();
+      card._bowlClip(cur, cur.prop, shot.bowlStep);
+    }
     // `reactWait`: ms to let sprite probes (and a failed one's swap back) finish before the shot.
     if (shot.reactWait) await new Promise((r) => setTimeout(r, shot.reactWait));
     // `patTap`: a pat on the pet through the card's own `_pat` (acts.pat shows for ~900 ms).

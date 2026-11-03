@@ -407,3 +407,16 @@ test("no path leaves a scene set: the end clears it, and a tap on another care e
   self._press(s, "medicine"); // medicine's second tap ends it
   assert.strictEqual(s.scene, null);
 });
+
+test("bowlCuts: three even bites on the art grid, the last at the rim; no rim or no food above it: none", () => {
+  const ctx = {};
+  const block = src.slice(src.indexOf("const BOWL_ROWS = new Map()"), src.indexOf("class HatchPetCardCare"));
+  vm.runInNewContext(`${block}\nthis.bowlCuts = bowlCuts;`, ctx);
+  const rows = [...Array(8).fill(0), ...Array(24).fill(10), ...Array(96).fill(50)]; // food rows 8-31, the bowl from 32
+  assert.deepStrictEqual(plain(ctx.bowlCuts(rows, 0.25)), [16, 24, 32]);
+  for (const c of ctx.bowlCuts(rows, 0.25)) assert.strictEqual(c % 4, 0);
+  assert.strictEqual(ctx.bowlCuts(rows, undefined), null);
+  assert.strictEqual(ctx.bowlCuts(rows, 1.2), null);
+  assert.strictEqual(ctx.bowlCuts(Array(128).fill(0), 0.4), null);
+  assert.match(method("_bowlClip"), /inset\(\$\{\(cut \/ img\.naturalHeight\) \* 100\}% 0 0 0\)/);
+});

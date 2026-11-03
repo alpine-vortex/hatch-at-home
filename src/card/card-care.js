@@ -169,7 +169,67 @@ const SCENES = {
   },
 };
 
+// The bowl's food shrinks by a stepped clip from the top (plan care-reactions 5.1): three
+// cuts that take a third, two thirds and all of the food above species.json "bowl_rim" (the
+// rim line, a fraction of the sprite's height). No number: no shrink. Each cut is on the
+// art's grid (4 sprite px), never below the rim, so the bowl itself is never cut.
+const BOWL_ROWS = new Map(); // sprite src -> opaque pixels per row, measured once
+const BOWL_GRID = 4;
+
+// The opaque pixels in each row of a loaded sprite, or null (not loaded, or unreadable).
+function bowlRows(img) {
+  const src = img?.currentSrc || img?.src;
+  if (!src) return null;
+  if (BOWL_ROWS.has(src)) return BOWL_ROWS.get(src);
+  if (!img.complete || !img.naturalWidth) return null;
+  let rows = null;
+  try {
+    const c = document.createElement("canvas");
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height).data;
+    rows = Array.from({ length: c.height }, (_, y) => {
+      let n = 0;
+      for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3]) n++;
+      return n;
+    });
+  } catch (err) {
+    rows = null; // a sprite the canvas can't read: no shrink
+  }
+  BOWL_ROWS.set(src, rows);
+  return rows;
+}
+
+// The three cuts (sprite rows from the top) for a rim at `rim` (0-1), or null: the last at the
+// rim, the two before it on the grid where the three bites are most even (the smallest of
+// them as large as it can be).
+function bowlCuts(rows, rim) {
+  if (!rows?.length || !(rim > 0 && rim < 1)) return null;
+  const rimRow = Math.round((rim * rows.length) / BOWL_GRID) * BOWL_GRID; // the rim, on the grid
+  const upTo = [0];
+  for (let r = 0; r < rimRow; r++) upTo.push(upTo[r] + rows[r]);
+  if (!upTo[rimRow]) return null;
+  let best = null;
+  for (let a = BOWL_GRID; a < rimRow; a += BOWL_GRID) {
+    for (let b = a + BOWL_GRID; b < rimRow; b += BOWL_GRID) {
+      const least = Math.min(upTo[a], upTo[b] - upTo[a], upTo[rimRow] - upTo[b]);
+      if (!best || least > best.least) best = { least, cuts: [a, b, rimRow] };
+    }
+  }
+  return best?.cuts || null;
+}
+
 class HatchPetCardCare extends HatchPetCardActions {
+  // The bowl's food at step 0 (full) to 3 (all of it above the rim gone): a stepped clip.
+  _bowlClip(s, img, step) {
+    const cuts = bowlCuts(bowlRows(img), s.species?.bowl_rim);
+    const cut = step > 0 && cuts ? cuts[Math.min(3, step) - 1] : 0;
+    img.style.clipPath = cut ? `inset(${(cut / img.naturalHeight) * 100}% 0 0 0)` : "";
+    return !!cuts;
+  }
+
   // A species' own care frames, when its art has them: species.json "acts", like
   // {"eat": ["baby", "teen", "adult"], "cheer": true} (true: every stage), drawn as
   // <stage>_eat_1 and <stage>_eat_2. Else null, and the scene uses what all have.
