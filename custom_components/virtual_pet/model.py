@@ -1112,6 +1112,10 @@ def set_resting(state: PetState, on: bool, now: float) -> tuple[str, list[Event]
     state.resting = True
     state.rest_since = now
     last = state.last_rest_refill_at
+    if last is not None and last > now:
+        # A stamp in the future (a clock set back, a damaged save) is now (FM, audit s2748
+        # nit 1), kept so: the wait is at most REST_REFILL_HOURS, not until the clock catches up.
+        last = state.last_rest_refill_at = min(last, now)
     if last is None or now - last >= R.REST_REFILL_HOURS * 3600:
         # The settling, at most once per REST_REFILL_HOURS (owner 2026-11-02,
         # R1-1 from audit s2739): rest and wake can't refill again and again.

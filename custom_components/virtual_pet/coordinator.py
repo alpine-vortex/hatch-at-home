@@ -2368,9 +2368,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     def _birthday_morning(self) -> None:
         """A friend's birthday: their phone hears it with the first morning of
         any hatched pet at home that notifies them, from the one they're
-        closest to (or their card's pet, if it's home and hatched), once a year. Their nickname, never their name. Only if
-        they turned "birthday on my phone" on (off by default: the message is
-        in HA's history, which admins can read)."""
+        closest to (or their card's pet, if it's home and hatched), once a
+        year. Their nickname, never their name. Only if they turned "birthday
+        on my phone" on (off by default: the message is in HA's history, which
+        admins can read)."""
         state = self.state
         if state is None or state.away or model.life_stage(state) == "egg":
             return

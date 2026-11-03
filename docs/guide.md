@@ -313,7 +313,8 @@ up to four parts, in this order:
     remembered favourites (each with "ask me again"), "♥ open on <pet>" and my data.
     These follow your login. A shared screen doesn't show this part.
     "♥ open on <pet>" (with two or more pets) is the favourite pet: the pet your card
-    opens on, on every page load, wherever you last swiped to. Turn it on for the
+    opens on when you open it. Once you've swiped to another pet, it stays there until
+    you close the tab or browser. Turn it on for the
     pet you're looking at; it moves from any other, and off clears it. A small heart
     marks that pet's dot at the foot of the card, on your own screens only; nobody
     else sees it, and it ranks nothing. Your phone's birthday message and send-off

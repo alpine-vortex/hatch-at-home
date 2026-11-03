@@ -262,12 +262,14 @@ class HatchPetCardStatus extends HatchPetCardMoment {
     // sets where shared screens open (the household's). An older server sends neither.
     const petName = escape(this._linkName(s));
     const several = (this._slides || []).filter((x) => x.ids && !x.empty).length > 1;
-    const openRow = (cls, label, on) =>
-      row(null, label, `<span><button class="bell ${cls}" aria-label="${spoken(label)}" aria-pressed="${on}">${on ? "on" : "off"}</button></span>`);
+    // The spoken label is made from the copy with a stand-in, then the name goes in as it is:
+    // spoken() would strip a "~", a "*" or an emoji from the pet's name.
+    const openRow = (cls, copy, on) =>
+      row(null, copy(petName), `<span><button class="bell ${cls}" aria-label="${spoken(copy("{}")).replace("{}", () => petName)}" aria-pressed="${on}">${on ? "on" : "off"}</button></span>`);
     const openOn = !several || sharedScreen() || typeof s.mine?.open_on !== "boolean" ? ""
-      : openRow("openon", OPEN_ON_COPY.mine(petName), s.mine.open_on)
+      : openRow("openon", OPEN_ON_COPY.mine, s.mine.open_on)
         + (this._hass.user?.is_admin && typeof s.mine.house_open_on === "boolean"
-          ? openRow("openhouse", OPEN_ON_COPY.house(petName), s.mine.house_open_on) : "");
+          ? openRow("openhouse", OPEN_ON_COPY.house, s.mine.house_open_on) : "");
     // Who each part changes: the pet (everyone), the viewer (follows their login),
     // or this browser.
     const html = `
