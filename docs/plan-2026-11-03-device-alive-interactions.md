@@ -25,6 +25,7 @@ delays care, navigation, dialogue, questions or games.
 | FM1 | Generic rim/glass treatments are fine in every world for slices 3-4; world flavour can come later (first mate, 2026-11-03, reversible). |
 | FM2 | Rare glass (slice 6) comes before morphs and depends on slice 3's glass layer. |
 | FM3 | No labels: matrix rows stay letterless glyphs; any wording goes to the first mate as a DRAFT question. |
+| FM4 | `_houseFx`/`_robotFx` stay as they are through slice 3. The director leases only the new glass/rim classes (named `dir-*`, never `fx-*`) so it cannot clear a `fx-*` class. Whether `_houseFx` moves under a lease is a slice-4 decision; decide it there with the matrix rows (heat/cool/chime overlap rows). (First mate, 2026-11-03, from the slice-1 review F4; reversible.) |
 
 Consequences: the first four slices need no art. The plan has no new player copy; any
 wording a slice finds it needs goes to the first mate as a DRAFT question, not into the
@@ -120,23 +121,50 @@ one on its own track. **Nothing queues. A missed cue is never owed.**
   not restart a pulse on every redraw), `card-actions.js` (cap), `card-tick.js` (idle
   offers), `card-moment.js` and `card-visit.js` (house cues), `card-base.js` (channel).
   A method stays in one part. There is no `card-interaction.js` chain link.
-- A reorder of the manifest can hit a TDZ that only card-check shows. Slice 1 adds a
-  card-check case for it and a `scripts/pick-sections` mapping for the new file.
+- A reorder of the manifest can hit a TDZ that only card-check shows. Slice 1 adds no
+  card-check case and no `scripts/pick-sections` entry: nothing uses `HATCH_DIRECTOR`
+  yet, so neither could fail, and `gate --auto` picks no section for a new part, a
+  manifest line, `tests/js` and docs (`scripts/pick-sections:96,138-141`). Slice 1's guard
+  is `tests/js/interaction_director.test.js`, copying `hop_engine.test.js:19-31`: in the
+  built card, before `class HatchPetCardBase`; one frozen namespace; the part's only
+  top-level declaration is `const HATCH_DIRECTOR`. The TDZ card-check case and any
+  pick-sections change move to the first slice with an adapter (slice 3).
+- **`_houseFx` / `_robotFx` are not adopted (FM4).** `_houseFx` (`card-visit.js:610-616`)
+  already does the `shellImpulse` job for the `fx-*` screen classes (one class, one
+  2.5 s timer, no busy test); `_robotFx` keeps a second timer (6 s). They stay as they
+  are through slice 3. The director leases only the classes it adds, named `dir-*`, never
+  `fx-*`, so it cannot clear one. The slice-3 rain pulse lands on `.hw`, not on the
+  `.screen` classes `_houseFx` toggles. Whether `_houseFx` moves under a lease is slice
+  4's call, with the heat/cool/chime overlap rows of the matrix.
 - Data stays declarative (section 5.4), with generic fallbacks so a new species, an
   unknown kind or a future shell still works.
 
 ### 5.3 API (illustrative, pure, tested with `node --test`)
 
 ```js
-HATCH_DIRECTOR.create({ now, canRender, recipes })
-  .setAmbient(slideKey, state)       // current normalized state
-  .offer(slideKey, cue)              // -> { accepted, reason, effectId }
-  .enterView(slideKey, recent)       // at most one echo
-  .cancel(slideKey, reason, tracks)
-  .setBusy(slideKey, owners)         // from scene, game, ask, status, power, visitor
-  .detach(slideKey)                  // timers, animations, observers
+HATCH_DIRECTOR.create({ now, trusted, canRender, schedule, recipes })
+  .setAmbient(slide, state)          // current normalized state; stored even when canRender is false
+  .offer(slide, cue)                 // -> { accepted, reason, effectId }
+  .enterView(slide, recent, trusted) // at most one echo
+  .cancel(slide, reason, tracks)
+  .tick(now)                         // expires TTLs; called from the card's existing _tick
+  .detach(slide)                     // timers, animations, observers
   .reset()                           // disconnect
+HATCH_DIRECTOR.BUSY_OWNERS           // the one busy list (below); no setBusy
 ```
+
+Inputs are injected, so the part stays pure:
+
+- `now()` is the server clock the card passes in (`serverNow`, `shell-data.js:293`).
+  `trusted` says whether that clock is trusted (see section 6.7); `enterView` takes it too.
+- `schedule(ms, fn) -> cancel` is the only timer. The director never calls `setTimeout`
+  itself; tests drive it with a fake. There is no new `setInterval` (section 3): `tick(now)`
+  rides the card's existing `_tick`.
+- `canRender(slide)` is `lcdOn() && !calm()` (`prefs.js:251,188`; the Q3 switch) plus
+  on-show and visible. When it is false there is no onset, no echo and no pulse, but
+  `setAmbient` still stores the state so a later switch-on paints it.
+- `slide` is the slide object `s` itself, not a string key. Per-slide state sits in a
+  `WeakMap`, so `_forget` (`card-build.js`) is `detach` and a dropped slide is freed.
 
 A cue carries an id, kind, origin (`user|house|pet|idle`), the server `occurredAt`, a
 presentation (`onset|echo|ambient|interaction`), a TTL and a whitelisted `data`. The
@@ -146,13 +174,53 @@ it declares.
 Per slide, bounded in memory: active tracks, ambient state, `seenFxIds` (about 128), one
 `pendingEcho`, `lastMicroBeat`, a generation. **Every effect has a generation token**; a
 timer or animation callback checks it before it clears a class, so an old timeout cannot
-clear a newer press. Never rely only on `animationend` (a hidden tab may drop it): add a
-bounded watchdog.
+clear a newer press. Never rely only on `animationend` (a hidden tab may drop it): each
+effect also gets a bounded watchdog, a `schedule` call the director cancels with the
+effect.
 
-**Busy owners (F12):** `s.game` (the Hop board's keys live in the `gameBox` overlay),
-`.show-status` (`style.js:674` already hides `.rain`, `.breeze`, `.flash` under it),
-`s.scene`, `s.power`, `s.visitor`, an open question. A bench shot per owner (Hop board
-open; status sheet open).
+**Busy owners (F12): pulled from one named list, not pushed from ~62 call sites.**
+`s.scene` is touched 46 times, `s.power` 14, `s.visitor` 9, across `card-build.js`,
+`card-visitors.js` and `card-actions.js`. A `setBusy` push API would need a hook at every
+set and clear, and one missed path leaves a stale "busy" or a stomp. So there is none.
+The director reads `HATCH_DIRECTOR.BUSY_OWNERS`, a frozen table inside the part, and asks
+`isBusy(slide)` at the moment it offers or paints. The card's adapters set nothing.
+
+Each entry is `{ name, busy(s) }` over plain slide fields, and `busy` is a pure read:
+
+| Owner | Read |
+|---|---|
+| `game` | `s.game` (the Hop board's keys live in the `gameBox` overlay) |
+| `scene` | `s.scene` |
+| `power`, `powerPending` | `s.power`, `s.powerPending` |
+| `visitor` | `s.visitor` |
+| `asking` | `s.asking` (a boolean; `s.ask` is the question itself) |
+| `laySheet`, `picker` | `s.laySheet`, `s.picker` |
+| `linking`, `calling` | `s.linking`, `s.calling` |
+| `asleep` | `s.asleep` |
+| `pose` | `s.poseUntil > now` (`card-layout.js:598`) |
+| `status` | `show-status` is a class, not a field (`style.js:674` already hides `.rain`, `.breeze`, `.flash` under it); the adapter passes it in as `s.statusOpen`, set in `_toggleStatus` only (`card-layout.js:781-786`) |
+
+(The `status` row is the one owner with no field today. Slice 1 only reads
+`s.statusOpen`; the one line in `_toggleStatus` that sets it is an adapter, so it lands
+with the first slice that has adapters (slice 3). Until then the table test sets it by
+hand. No other owner needs one.)
+
+**How slice 1 checks the list is complete** (a source test, no device). The card already
+has two "can the body act" gates, `_freeBody` (`card-tick.js:122`) and `_ghosting`
+(`card-tick.js:70`). The test in `tests/js/interaction_director.test.js`:
+
+1. reads the built card text, takes the `s.<field>` names those two methods test, and
+   fails on any name that is in neither `BUSY_OWNERS` nor the test's short `NOT_BUSY` list
+   with a one-line reason each (`species`, `moodState`, `propUntil`, `flairUntil`,
+   `movingUntil`, `pet`, `screen`: traits, timers or elements, not owners);
+2. fails if a `BUSY_OWNERS` field is never assigned anywhere in `src/card/*.js` (a
+   rename leaves a dead read);
+3. runs `isBusy` over a table: each owner alone makes the slide busy, none makes it free.
+
+A new owner that appears in `_freeBody` or `_ghosting` therefore fails the test until it
+is classed. A field gated elsewhere is not caught by this; that is the stated limit, and
+a later slice that adds a gate adds its field to the table in the same PR. A bench shot
+per owner comes with the adapters (Hop board open; status sheet open), not slice 1.
 
 ### 5.4 Authoring model (from living-device §12)
 
@@ -289,10 +357,14 @@ Per slide: `ambientState`, `seenFxIds`, one `pendingEcho`, `activeFx`, a generat
 Snapshot: paint ambience, collect eligible recents, replay no moment. Live onset on a
 selected, visible, unbusy slide: one pulse now; body busy means shell only. While hidden:
 keep only the newest best candidate. First view (intersection, visibility, slide
-selection, boot end): if within 90 s by `serverNow()` and still true, one shortened
+selection, boot end; the card tracks `this._visible` and the selected slide, not a
+per-slide visibility, so slice 3 adds that hook): if within 90 s by `serverNow()` and still true, one shortened
 echo; mark it seen whether played or skipped. A user action at the same instant drops the
-echo; a game, question or scene updates ambience only. If the server clock is unknown or
-skewed, ambience only. Reconnect: snapshot and delta share one dedup path in either
+echo; a game, question or scene updates ambience only. If the server clock is not
+trusted (`trusted` false), ambience only. Slice 3 adds `serverClockKnown()` to
+`shell-data.js` (true after one accepted reading; `serverNow()` has no "unknown" state
+today, `shell-data.js:288-293`) and passes it as `trusted`; slice 1's `enterView` takes
+the argument. Reconnect: snapshot and delta share one dedup path in either
 order. Each card dedups for itself. Reduced motion: static state, no echo motion, no
 flashing. Echo rank: doorbell and appliance done, weather onset, lights/fire/heating,
 media, astronomy; ties by recency.
@@ -316,7 +388,7 @@ media, astronomy; ties by recency.
 
 Added by the review: 15. a server test beside `tests/test_channel.py` and
 `tests/test_public.py` that audits a shared screen's `device_fx`; 16. a recorded week with
-the bridge on equals main (no save field); 17. a card-check TDZ case for the new part.
+the bridge on equals main (no save field); 17. the card-check TDZ-order case for the director, in the first slice with an adapter (slice 3; slice 1 has none, section 5.2).
 
 ## 7. Press feel: the gaps only (F2, LD section 7)
 
@@ -400,6 +472,7 @@ Deferred by the owner, not a slice. Kept so the idea is not lost.
   existing "screen effects here"; if a second is ever wanted its two-word label goes to
   the first mate as a DRAFT.
 - Rollback is that switch, plus the version field failing closed to the static baseline.
+- Slice 1 adds one row for the new part to AGENTS.md's "Where things live" table.
 - Each slice's PR updates `docs/guide.md` ("The device") and `docs/features.md` where it
   changes what a player sees (the device-charm convention).
 
@@ -412,7 +485,7 @@ art. **Do not run two workers on the card chain or `manifest.txt` at once.**
 | # | Slice | Tier | Size | Route | Device queue (the owner reads these on a phone) |
 |---|---|---|---|---|---|
 | 0 | This rewrite | 0 | M | docs only | none |
-| 1 | **Director core**: pure `interaction-director.js`, track leases, generation tokens, `node --test`; a manifest line, a TDZ card-check case, a `pick-sections` mapping. **No visual change.** | 1 | S-M | `scripts/gate --auto` | none (nothing to see) |
+| 1 | **Director core**: pure `interaction-director.js`, track leases, generation tokens, `BUSY_OWNERS`, injected `schedule`, `node --test`; a manifest line, one AGENTS.md table row. No adapter, no card-check case, no `pick-sections` entry. **No visual change.** Acceptance below. | 1 | S-M | `scripts/gate --auto` (picks no card-check section; the JS tests are the guard) | none (nothing to see) |
 | 2 | **Press release feel**: section 7 only. Rebound, pending, failed, cleanup, per-action character, as classes and custom properties on the cap. Bench `alive` preset. | 1 | S-M | `gate --auto` | Press the four care caps and a nav cap; swipe off a cap; Space on a focused cap; one refusal. |
 | 3 | **Signal bridge, rain**: `device_fx.py` (current, ring, hysteresis), `current` in `_house_view`, the live message, the client `ambient`/`echo`, one glass-drop pulse on the `.hw` family. The 14 cases for the rain row, plus 15-17. No new copy. | 1 (server) | L | `scripts/ci-gate` (pick-sections picks `all`) | Rain on a wall tablet (shared) and a phone; open at 20 s and at 3 min; HA restarted in rain. |
 | 4 | **Expand the matrix**: snow, fog, storm, wind, lights, fireplace, heating/cooling, media, TV, vacuum, appliance, moon, `DEVICE_SIGNAL_MAP` machine-checked. Two PRs. | 1 | M | `ci-gate` for the server half, `gate --auto` for the rest | Each row once on the phone: lights, fireplace, heating, doorbell, a storm with reduced motion on. |
@@ -420,13 +493,35 @@ art. **Do not run two workers on the card chain or `manifest.txt` at once.**
 | 6 | **Rare glass**: section 9. | 1 | S | `gate --auto` | A long idle watch; confirm it is rare and never over a control. |
 | 7 | **Screen morphs**, last, optional: section 10. | 1 | L | `gate --auto` | The flagship morph, then navigating fast through it; the Hop board and a question open. |
 
+**Slice 1 acceptance** (each checked by `node --test` or a source test; none needs a
+device, card-check or the bench):
+
+a. `node --test` covers the section 5.3 methods: track exclusivity, generation tokens
+   (an old timer cannot clear a newer effect), once-only dedup by cue id, TTL expiry on
+   the injected clock via `tick`, opposite-transition collapse, `cancel`, `detach`,
+   `reset`, `enterView` with `trusted` false giving ambience only, `canRender` false
+   storing ambient state with no onset, and `isBusy` over every owner;
+b. the busy-list completeness test of section 5.3;
+c. a source test fails if the part names `document`, `window`, `this`, `Date`,
+   `setTimeout`, `setInterval` or `localStorage`;
+d. the `hop_engine.test.js:19-31` load-order guard for `HATCH_DIRECTOR` (section 5.2);
+e. "no visual change" is mechanical: the diff touches only the new part, `manifest.txt`,
+   the new test, AGENTS.md's "Where things live" (one row) and docs; no other
+   `src/card/*.js`, `style.js` or `bench` file changes, and the built card differs only by
+   the appended part;
+f. `motion_rule.test.js` passes untouched (slice 1 adds no `.pet.<cls>`).
+
+Anything a slice would otherwise check only by eye (the bench shot per owner, a pulse on
+screen) belongs to that slice's device queue and starts with the first slice that has an
+adapter (slice 3).
+
 Whether slice 5 ships at all is the owner's call after N4. Slice 6 depends on slice 3's
 glass layer, not on slice 7. The full gate is the first mate's, once per merged batch;
 slice 3 is the only one that needs `scripts/ci-gate` at once.
 
 **In flight:** Hop 3a/3b touch `card-board.js` and `card-games.js` (3a saves `hop_day`,
-tier 2); slice 1 lands before 3a or after 3b, not between them, to keep the manifest
-quiet. The Hop board stays a protected owner. The bespoke tuck art set is in progress and
+tier 2); slice 1 may land at any time: it touches no file they touch, and a
+`manifest.txt` conflict with 3a/3b is one line. The Hop board stays a protected owner. The bespoke tuck art set is in progress and
 is not a dependency, but no slice touches its beats.
 
 ## 14. Art estimate (CSS-first)
@@ -446,23 +541,23 @@ world-exclusive idle poses. The internals art (parked) is not counted.
 
 ## 15. Tests and bench
 
-- **JS (`node --test`, `tests/js`):** director track exclusivity, generation tokens,
-  once-only dedup, TTL on the server clock, opposite-transition collapse, cancel and
-  detach, signal-map completeness, `motion_rule`.
+- **JS (`node --test`, `tests/js`):** slice 1: the acceptance list in section 13
+  (`interaction_director.test.js`). Later: signal-map completeness (slice 4),
+  `motion_rule`.
 - **Python:** `tests/test_device_fx.py` for hysteresis, ring age, restart with no fake
   onset, the sanitiser, HA-unavailable chatter, and the `_house_view` carry; `test_channel.py`
   and `test_public.py` for the shared screen.
 - **Bench:** a new `alive` preset: rest, pressed, rain current, echo pending, a
   protected state (Hop board open, status open), reduced motion, 420 and 330 px. The
   bench cannot test the channel or a restart (its README Limits).
-- **card-check:** a section for the echo (a fake `device_fx` over the real channel), the
-  TDZ-order case, restart. Use a real HA only for behaviour (AGENTS.md).
+- **card-check:** from slice 3, a section for the echo (a fake `device_fx` over the real
+  channel), the TDZ-order case, restart. Slice 1 has none. Use a real HA only for behaviour (AGENTS.md).
 
 ## 16. Risks
 
 | Risk | Mitigation |
 |---|---|
-| Effects collide with pet transforms, lines, scenes, games, visitors | One pet-body track, busy owners, `ALLOWED` discipline, card-check |
+| Effects collide with pet transforms, lines, scenes, games, visitors | One pet-body track, the `BUSY_OWNERS` table and its completeness test, `dir-*` classes (never `fx-*`), `ALLOWED` discipline, card-check from slice 3 |
 | A stale moment plays as if the house just changed | State/edge/echo split; server `occurred_at`; `current` wins; catch-up never pulses |
 | Sensor noise becomes toy notifications | Hysteresis, one pulse at most, quiet ambience |
 | The detector disagrees with the speech moments | It reads `Readings`, not moments; they may differ on purpose |
