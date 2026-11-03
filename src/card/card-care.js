@@ -664,7 +664,8 @@ const SCENES = {
 
 const LIGHTS_TIRED_AT = 95; // under this energy the card expects a tuck to work (the server's nap rule is wider)
 const LIGHTS_QUIET_MS = 600; // the call is back and nothing changed this long after: the tap did nothing (4.3b)
-const DRAPE_ART = { ok: undefined, asked: new Set() }; // false once a drape file fails to load: no blanket then
+const DRAPE_RETRY_MS = 60000; // a drape file that failed before any loaded is tried again after this long
+const DRAPE_ART = { ok: undefined, at: 0, asked: new Set() }; // ok false: none has loaded and one failed (at): no blanket until the retry
 const FEED_GOBBLE = 30; // under this hunger the feed may be a gobble (variant C)
 const FEED_MAX_MS = 3200; // a feed scene never runs longer, whatever the pace (plan 8)
 const FEED_EXTRA_ODDS = 0.25; // a heart, a lick or a burp at the end of a meal
@@ -882,7 +883,12 @@ class HatchPetCardCare extends HatchPetCardActions {
   // with the body (the settle, a pat, the scene's tilt). A lights scene draws it itself.
 
   _drapeInfo(s) {
-    return DRAPE_ART.ok === false ? null : drapeOf(s.speciesId, s.drawn);
+    if (DRAPE_ART.ok === false) {
+      if (Date.now() - DRAPE_ART.at < DRAPE_RETRY_MS) return null;
+      DRAPE_ART.ok = undefined; // time to look again
+      DRAPE_ART.asked.clear();
+    }
+    return drapeOf(s.speciesId, s.drawn);
   }
 
   _drapeSrc(size, n) {
@@ -912,8 +918,15 @@ class HatchPetCardCare extends HatchPetCardActions {
     const img = s.drapeImg;
     if (!img.onerror) {
       img.onload = () => { DRAPE_ART.ok = true; };
-      img.onerror = () => { // no art on disk: the no-blanket path from now on
-        DRAPE_ART.ok = false;
+      img.onerror = () => {
+        // No file has loaded yet: no art on disk, the no-blanket path (until the retry). One that has
+        // loaded before means a dropped fetch: this blanket goes, the next tuck asks again.
+        if (DRAPE_ART.ok !== true) {
+          DRAPE_ART.ok = false;
+          DRAPE_ART.at = Date.now();
+        }
+        DRAPE_ART.asked.clear();
+        img.removeAttribute("src");
         this._drapeStop(s);
         this._drapeHide(s);
       };

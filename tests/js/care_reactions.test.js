@@ -952,14 +952,14 @@ function lightsCard({ calm = false, energy = "60", asleep = false, lights = fals
   const el = () => {
     const cls = new Set();
     return { style: {}, hidden: false, className: "", remove() {}, classList: { toggle: (c, on) => (on ? cls.add(c) : cls.delete(c)), add: (c) => cls.add(c), remove: (c) => cls.delete(c),
-      contains: (c) => cls.has(c), [Symbol.iterator]: () => cls[Symbol.iterator]() }, setAttribute(k, v) { this[k] = v; }, getAttribute(k) { return this[k] ?? null; } };
+      contains: (c) => cls.has(c), [Symbol.iterator]: () => cls[Symbol.iterator]() }, setAttribute(k, v) { this[k] = v; }, getAttribute(k) { return this[k] ?? null; }, removeAttribute(k) { delete this[k]; } };
   };
   const FakeDate = class extends Date { static now() { return 1e12 + clock.now; } };
   const ctx = { calm: () => calm, performance: { now: () => clock.now }, Date: FakeDate, Math, Number, Array, Set, Promise, document: { createElement: () => el() },
     setTimeout: (fn, ms) => log.timers.push([fn, ms]), clearTimeout() {}, requestAnimationFrame: () => 1, cancelAnimationFrame() {},
     BASE: "/f", VERSION: "t", MINE: 4, MINE_MS: 3000, MINE_MATCH_MS: 10000, pick: (l) => l[0], REFUSALS: { not_sleepy: "not sleepy yet" }, Image: class { set src(v) { this.s = v; } } };
   const consts = ["SCENE_KIND_OF", "sceneKind", "SCENE_HOLD_MS", "SCENE_EXIT_MS", "SCENE_OWE_MS", "SPOILED_BY", "isYes", "LIGHTS_TIRED_AT", "LIGHTS_QUIET_MS",
-    "DRAPE_FALL_MS", "DRAPE_SLIDE_PX", "WAKE_STRETCH_MS", "DRAPE_ART", "DRAPE_ART_BOX", "LIGHTS_NIGHT_ODDS"].map((n) => src.match(new RegExp(`\\nconst ${n} = [^\\n]*`))[0]);
+    "DRAPE_FALL_MS", "DRAPE_SLIDE_PX", "WAKE_STRETCH_MS", "DRAPE_RETRY_MS", "DRAPE_ART", "DRAPE_ART_BOX", "LIGHTS_NIGHT_ODDS"].map((n) => src.match(new RegExp(`\\nconst ${n} = [^\\n]*`))[0]);
   const fn = (name) => src.match(new RegExp(`\\nfunction ${name}\\([\\s\\S]*?\\n\\}\\n`))[0];
   const block = src.slice(src.indexOf("const SCENES = {"), src.indexOf("\n};\n", src.indexOf("const SCENES = {")) + 4);
   const methods = ["_sceneClock", "_sceneOver", "_sceneAnswer", "_sceneFail", "_sceneNow", "_sceneOffer", "_sceneEnd", "_sceneRefusalLine", "_toggleLights", "_lightsLive",
@@ -1271,6 +1271,7 @@ test("the drape: others' tuck falls in DRAPE_FALL_MS, a wake slides off in two s
   assert.strictEqual(bat.s.drapeFrame ?? 0, 0);
   const none = lightsCard();
   none.ctx.DRAPE_ART.ok = false;
+  none.ctx.DRAPE_ART.at = 1e12;
   none.self._drapeSync(none.s, true);
   assert.strictEqual(none.s.drapeFrame ?? 0, 0);
 });
@@ -1326,4 +1327,28 @@ test("audit P1: the tucked_in thanks is the scene's sigh line, not a second one 
   assert.deepStrictEqual(plain(run({ scene: null }, tucked)), ["thank you for tucking me in ♥"]);
   assert.deepStrictEqual(plain(run({ scene: { kind: "lights", wake: true, fired: new Set() } }, tucked)), ["thank you for tucking me in ♥"]);
   assert.deepStrictEqual(plain(run({ scene: { kind: "lights", wake: false, fired: new Set() } }, tucked, [])), []);
+});
+
+test("audit P2: one failed drape load disables the blanket only if none ever loaded, and then for 60 s", () => {
+  // A file loaded before: a dropped fetch hides this blanket, and the next tuck shows one.
+  const a = lightsCard();
+  a.self._drapeShow(a.s, 3);
+  a.s.drapeImg.onload();
+  a.s.drapeImg.onerror();
+  assert.strictEqual(a.ctx.DRAPE_ART.ok, true);
+  assert.strictEqual(a.s.drape.hidden, true);
+  assert.strictEqual(a.s.drapeImg.getAttribute("src"), null, "the broken src is dropped so a show asks again");
+  assert.strictEqual(a.self._drapeShow(a.s, 3), true);
+  assert.match(a.s.drapeImg.src, /drape_l_3\.png/);
+  // None ever loaded: no blanket for DRAPE_RETRY_MS, then it looks again.
+  const b = lightsCard();
+  b.self._drapeShow(b.s, 3);
+  b.s.drapeImg.onerror();
+  assert.strictEqual(b.ctx.DRAPE_ART.ok, false);
+  assert.strictEqual(b.self._drapeInfo(b.s), null);
+  b.clock.now = 59999;
+  assert.strictEqual(b.self._drapeInfo(b.s), null);
+  b.clock.now = 60000;
+  assert.strictEqual(b.self._drapeInfo(b.s).size, "l");
+  assert.strictEqual(b.ctx.DRAPE_ART.ok, undefined);
 });
