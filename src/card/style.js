@@ -875,6 +875,47 @@ const STYLE = `
        one, and the global rule above also stops the animation). */
     @media (prefers-reduced-motion: reduce) { .hw.glass.dir-drop::after, .hw.glass.dir-clear::before { display: none; } }
   }
+  /* The rim cues (device-alive 3C, plan section 7): a press's one pulse on the bezel's plastic, on its
+     own layer (.hw.rim, in the bezel, under the screen, deaf to the pointer, never over a control: it
+     lies in the bezel's padding, and the toys are outside the bezel). Drawn only with "screen effects
+     here" on. The class on it is the director's lease (dir-feed, dir-play, dir-clean, dir-tuck); each
+     lamp (b) moves by opacity or left alone. Nothing here touches .cap or .toy (slice 2 owns them);
+     reduced motion draws none (the card offers none, and this hides the layer as well). */
+  @supports (width: round(1px, 1px)) {
+    .hw.rim { display: none; inset: 0; z-index: -1; background: none; -webkit-mask: none; mask: none;
+      --b: var(--px, 2px); --lit: #ff9f1c; }
+    ha-card.lcd-on .hw.rim { display: block; }
+    .hw.rim b { position: absolute; display: block; width: calc(var(--b) * 6); height: calc(var(--b) * 3);
+      background: var(--lit); box-shadow: 0 0 calc(var(--b) * 2) var(--lit), 0 0 0 calc(var(--b) / 2) rgba(255, 244, 200, .8); opacity: 0; pointer-events: none; }
+    .hw.rim.dir-feed { animation: dir-rim-life 1.3s linear both; }
+    .hw.rim.dir-play { animation: dir-rim-life .9s linear both; }
+    .hw.rim.dir-clean { animation: dir-rim-life 1.1s linear both; }
+    .hw.rim.dir-tuck { animation: dir-rim-life 1.8s linear both; }
+    @keyframes dir-rim-life { from, to { opacity: 1; } }
+    /* Feed: the delivery path, three lamps along the bottom edge lighting in turn. */
+    .hw.rim.dir-feed b { bottom: calc(var(--b) / 2); animation: dir-rim-blip .5s steps(5) both; }
+    .hw.rim.dir-feed b:nth-child(1) { left: 32%; }
+    .hw.rim.dir-feed b:nth-child(2) { left: 46%; animation-delay: .25s; }
+    .hw.rim.dir-feed b:nth-child(3) { left: 60%; animation-delay: .5s; }
+    /* Play: two points, the middle of each side, pulsing twice together. */
+    .hw.rim.dir-play b:nth-child(2) { display: none; }
+    .hw.rim.dir-play b:nth-child(1), .hw.rim.dir-play b:nth-child(3) { top: 40%; width: calc(var(--b) * 3); height: calc(var(--b) * 7);
+      animation: dir-rim-blip .4s steps(4) 2 both; }
+    .hw.rim.dir-play b:nth-child(1) { left: calc(var(--b) / 2); }
+    .hw.rim.dir-play b:nth-child(3) { right: calc(var(--b) / 2); }
+    /* Clean: one sweep along the top edge, left to right. */
+    .hw.rim.dir-clean b:nth-child(1), .hw.rim.dir-clean b:nth-child(3) { display: none; }
+    .hw.rim.dir-clean b:nth-child(2) { top: calc(var(--b) / 2); width: calc(var(--b) * 12); animation: dir-rim-sweep 1s steps(10) both; }
+    /* The tuck, confirmed: three lamps on the top edge, each lit then dimming, one after the other. */
+    .hw.rim.dir-tuck b { top: calc(var(--b) / 2); animation: dir-rim-dim .6s steps(6) both; }
+    .hw.rim.dir-tuck b:nth-child(1) { left: 38%; }
+    .hw.rim.dir-tuck b:nth-child(2) { left: 48%; animation-delay: .45s; }
+    .hw.rim.dir-tuck b:nth-child(3) { left: 58%; animation-delay: .9s; }
+    @keyframes dir-rim-blip { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes dir-rim-sweep { 0% { left: 12%; opacity: 0; } 15%, 85% { opacity: 1; } 100% { left: 78%; opacity: 0; } }
+    @keyframes dir-rim-dim { 0% { opacity: 0; } 15%, 40% { opacity: 1; } 100% { opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .hw.rim { display: none !important; } }
+  }
   .compact .egg .hw.light { display: none; } /* no margin left beside a narrow egg's screen */
   /* Clear: the board behind the screen, seen through the plastic round the bezel,
      and a glare on the plastic. */

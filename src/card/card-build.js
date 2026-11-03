@@ -137,7 +137,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
           <i class="hw flecks a"></i><i class="hw flecks b"></i><i class="hw flecks c"></i>
           <img class="trim-top" alt=""><img class="trim-top2" alt="">
           <span class="label"></span>
-          <div class="bezel"><i class="hw guts"></i><i class="mould"></i><i class="hw stripes"></i><i class="hw light"></i><div class="screen">
+          <div class="bezel"><i class="hw guts"></i><i class="mould"></i><i class="hw stripes"></i><i class="hw light"></i><i class="hw rim" aria-hidden="true"><b></b><b></b><b></b></i><div class="screen">
             <img class="bg" alt="">
             <img class="awaysign" alt=""><div class="awaylabel"></div>
             <div class="season"></div>
@@ -187,12 +187,17 @@ class HatchPetCardBuild extends HatchPetCardBase {
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
       propEl: q(".gprop"), live: q(".sr[role=status]"), seasonBox: q(".season"),
-      basket: q(".basket"), glass: q(".glass"),
+      basket: q(".basket"), glass: q(".glass"), rim: q(".rim"),
     };
     // The glass effect ends with its animation (the director's watchdog is the backstop): the
     // token is the one the recipe's start left on the slide, so a stale end does nothing.
     s.glass.addEventListener("animationend", () => {
       if (s.dirEffect) this._director?.release(s, s.dirEffect);
+    });
+    // The rim cue (3C) ends the same way, on its own layer's clock: the rim's `dir-rim-life` runs as long
+    // as the lease, and the lamps inside it are shorter, so their ends (which bubble) do not release it.
+    s.rim.addEventListener("animationend", (e) => {
+      if (e.target === s.rim && e.animationName === "dir-rim-life" && s.dirEffect) this._director?.release(s, s.dirEffect);
     });
     // The LCD grid: one cell per world art pixel, measured on the screen itself
     // (its width depends on the shell's padding as well as the slide's).
@@ -771,6 +776,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     s.dirRecent = null;
     s.dirEffect = 0;
     s.glass?.classList.remove("dir-wet", ...HATCH_DEVICE_FX.CLASSES);
+    s.rim?.classList.remove(...HATCH_DEVICE_FX.RIM_CLASSES);
     this._layDrop(s); // a lay waited for belongs to the last pet
     this._clearNameTimers(s);
     s.nameFrom = null;

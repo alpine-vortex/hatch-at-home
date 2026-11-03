@@ -245,7 +245,7 @@ function sceneCard({ registry, now = 0 } = {}) {
     _lines: (_s, _key, text) => ({ text }),
     _patSync() {},
     _redraw: () => log.redraws++,
-    _tapped: (_b, _s, o) => log.tapped.push(o?.perk !== false),
+    _rimCue() {}, _tapped: (_b, _s, o) => log.tapped.push(o?.perk !== false),
     _call: () => { log.calls++; return Promise.resolve(true); },
     _layWatch: () => null,
     _toggleStatus() {},
@@ -976,7 +976,7 @@ function lightsCard({ calm = false, energy = "60", asleep = false, lights = fals
   s.screen.classList = Object.assign(s.screen.classList, { contains: () => false });
   const self = Object.assign(Object.create(ctx.api), {
     _hass: { states }, _state: (_s, k) => states[k],
-    _tapped: (_b, _s, o) => log.tapped.push(o?.perk !== false), _careMarks() {},
+    _rimCue() {}, _tapped: (_b, _s, o) => log.tapped.push(o?.perk !== false), _careMarks() {},
     _call: () => { log.calls.push(1); return Promise.resolve(self.callResult ?? true); },
     _line: (_s, _c, text) => log.lines.push(text), _lines: (_s, _k, text) => ({ text }),
     _animate: (_s, _e, c) => log.animated.push(c), _perk() {}, _patSync() {}, _redraw() {}, _careVariant: (_s, _k, pool) => s.pinVariant?.lights || pool[0],

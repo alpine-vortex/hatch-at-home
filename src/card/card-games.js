@@ -14,6 +14,7 @@ class HatchPetCardGames extends HatchPetCardCare {
       return;
     }
     if (s.screen.classList.contains("show-status")) this._toggleStatus(s);
+    this._rimCue(s, button?.dataset?.action); // play's two-point pulse
     s.screen.querySelector(".flair")?.remove();
     // A beat before the picker (care reactions, ship A): the ball drops in from the pad, the pet
     // perks at it, 600 ms. The picker does not wait: it opens now and the beat plays over its fade.

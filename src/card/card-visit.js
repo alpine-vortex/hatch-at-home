@@ -676,6 +676,17 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     }
   }
 
+  // A rim cue for a toy's press (slice 3C): the data-action names it (feed, play, clean, lights;
+  // anything else has none). It is the press's own beat, called by the press (_press, _startGame) ahead of
+  // a scene's start and by a tuck's end (_sceneEnd), never from the cap's classes; _tapped runs after
+  // _sceneStart, when this press's own scene already counts as running and would win. The adapter makes
+  // no sound and no haptic, and offers nothing under reduced motion.
+  _rimCue(s, action) {
+    if (!s || !this._director) return;
+    this._rimSeq = (this._rimSeq || 0) + 1;
+    HATCH_DEVICE_FX.rim(this._director, s, action, `rim-${this._rimSeq}`, this._dirEnv());
+  }
+
   _sparkle(s) {
     const ring = document.createElement("span");
     ring.className = "burst big";

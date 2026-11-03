@@ -28,7 +28,7 @@ Where things live:
 | world | odds, ms, flair, SEASONS, hanukkah, turn/visitor day, once-per-day, season helpers |
 | hop-engine | `HATCH_HOP`, Hop of the Day's rules (one frozen namespace; hop.py's twin, no `this`) |
 | interaction-director | `HATCH_DIRECTOR`, the device-alive director: track leases, generation tokens, `BUSY_OWNERS` (one frozen namespace, pure, no `this`, no DOM; the card creates one per card in `_build`, device-fx.js is its first adapter) |
-| device-fx | `HATCH_DEVICE_FX`, the rain adapter for the director (slice 3B): wire entry to cue, the rain recipe (`dir-*` classes on the slide's `.hw.glass`), ambience paint, `live`, `enter` (one frozen namespace, no `this`, no DOM beyond the glass; the card's `_dir*` methods in card-visit call it) |
+| device-fx | `HATCH_DEVICE_FX`, the adapter for the director (slices 3B, 3C): wire entry to cue, the rain recipe (`dir-*` classes on the slide's `.hw.glass`), ambience paint, `live`, `enter`; and the rim cues (feed, play, clean, the confirmed tuck: `RIM`, `rim`, `dir-*` classes on the slide's `.hw.rim`) (one frozen namespace, no `this`, no DOM beyond the glass and the rim; the card's `_dir*` methods and `_rimCue` in card-visit call it) |
 | lines | poses, wishes, BABY, PERSONA |
 | lines-fresh | the fresh-expand copy block (scripts/copy-scan.js's COPY_TABLES) |
 | ui-copy | screen copy, kindred, follow text, QUESTIONS, notes, dreams, moment consts, helpers |

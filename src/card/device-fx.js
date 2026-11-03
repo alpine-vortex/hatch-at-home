@@ -14,6 +14,12 @@
 // The classes on the glass are the director's own and all start `dir-`: `dir-wet` is the ambience
 // (state), `dir-drop` / `dir-clear` the onset, `dir-echo` its shortened form. Never the screen
 // classes the house effects use (plan FM4, m5): a source test keeps the two families apart.
+//
+// Slice 3C adds the rim cues (plan section 7's last paragraph): feed, play, clean and the tuck, each a
+// `shellImpulse` lease on the slide's rim layer (`slide.rim`, a `.hw.rim` in the bezel, deaf to the
+// pointer), classes `dir-feed`, `dir-play`, `dir-clean`, `dir-tuck`. They are the user's own press, so
+// they come from the card (`rim`, below), not the wire. Never on a `.cap` or `.toy`; no sound, no
+// haptic; reduced motion offers none; a care scene already running wins.
 const HATCH_DEVICE_FX = Object.freeze(
   (() => {
     const COLLAPSE = "rain"; // a start and its end share it: they cancel, neither plays
@@ -24,6 +30,7 @@ const HATCH_DEVICE_FX = Object.freeze(
       rain_stopped: Object.freeze({ direction: "end", value: false }),
     });
     const CLASSES = Object.freeze(["dir-drop", "dir-clear", "dir-echo"]);
+    const RIM_CLASSES = Object.freeze(["dir-feed", "dir-play", "dir-clean", "dir-tuck"]);
     const isObj = (x) => !!x && typeof x === "object";
 
     // The ambient state the house view carries. Missing is "nothing to paint", never dry; a
@@ -84,6 +91,50 @@ const HATCH_DEVICE_FX = Object.freeze(
       },
     });
 
+    // The rim cues, by the toy's data-action: the cue kind, its class on the rim and its length (the
+    // CSS animation's own clock is the same). Medicine, snack, scold and praise have none (plan 13).
+    const RIM = Object.freeze({
+      feed: Object.freeze({ kind: "rimFeed", cls: "dir-feed", ms: 1300 }), // the delivery path, glowing in turn
+      play: Object.freeze({ kind: "rimPlay", cls: "dir-play", ms: 900 }), // two points, pulsing twice
+      clean: Object.freeze({ kind: "rimClean", cls: "dir-clean", ms: 1100 }), // one sweep along the top
+      lights: Object.freeze({ kind: "rimTuck", cls: "dir-tuck", ms: 1800 }), // the lamps dimming in sequence
+    });
+    const clearRim = (rim) => rim.classList.remove(...RIM_CLASSES);
+    const rimRecipe = (cue) =>
+      Object.freeze({
+        track: "shellImpulse", priority: HATCH_DIRECTOR.PRIORITY.care, // a press is over a house onset
+        durationMs: cue.ms, cancel: "finish",
+        start: (slide, effect) => {
+          const rim = slide && slide.rim;
+          if (!rim) return;
+          clearRim(rim);
+          void rim.offsetWidth; // a replaced cue restarts its animation
+          rim.classList.add(cue.cls);
+          slide.dirEffect = effect.id;
+        },
+        dispose: (slide, effect) => {
+          const rim = slide && slide.rim;
+          if (rim) clearRim(rim);
+          if (slide && slide.dirEffect === effect.id) slide.dirEffect = 0;
+        },
+      });
+    const RECIPES = Object.freeze({
+      rain: RAIN,
+      ...Object.fromEntries(Object.values(RIM).map((cue) => [cue.kind, rimRecipe(cue)])),
+    });
+
+    // A rim cue for the toy `action` (its data-action), from the card's press (or a confirmed tuck).
+    // `id` is the press's own (the director dedups by it). Reduced motion: none (it is an onset);
+    // an action with no cue: none; a care scene running: it wins. The director decides the rest
+    // (canRender: the switch, on show, visible).
+    const rim = (dir, slide, action, id, env) => {
+      const cue = Object.prototype.hasOwnProperty.call(RIM, action) ? RIM[action] : null;
+      if (!cue) return { accepted: false, reason: "no-cue", effectId: 0 };
+      if (env.calm) return { accepted: false, reason: "calm", effectId: 0 };
+      if (dir.busyOwners(slide).includes("scene")) return { accepted: false, reason: "busy", effectId: 0 };
+      return dir.offer(slide, { id, kind: cue.kind, origin: "user", presentation: "onset" });
+    };
+
     // The ambience on the glass: the wet sheen, when the switch is on and the house says rain.
     // Painted for any slide (it is still: no animation, nothing to freeze).
     const paint = (dir, slide, env) => {
@@ -116,6 +167,6 @@ const HATCH_DEVICE_FX = Object.freeze(
       return dir.enterView(slide, ringOf(recent), env.clockKnown === true);
     };
 
-    return { RECIPES: Object.freeze({ rain: RAIN }), KINDS, CLASSES, ambientOf, cueOf, ringOf, paint, sync, live, enter };
+    return { RECIPES, KINDS, CLASSES, RIM, RIM_CLASSES, ambientOf, cueOf, ringOf, paint, sync, live, enter, rim };
   })()
 );
