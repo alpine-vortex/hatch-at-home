@@ -22,6 +22,9 @@ delays care, navigation, dialogue, questions or games.
 | Q3 | **Reuse the "screen effects here" switch** (`card-status.js:311`, the `lcdfx` button). No new label, no second row. Ambience and echo follow it. |
 | Q4 | **The server `device_fx` slice comes before any art.** |
 | Q5 | **Screen morphs come last, optional, CSS only.** |
+| FM1 | Generic rim/glass treatments are fine in every world for slices 3-4; world flavour can come later (first mate, 2026-11-03, reversible). |
+| FM2 | Rare glass (slice 6) comes before morphs and depends on slice 3's glass layer. |
+| FM3 | No labels: matrix rows stay letterless glyphs; any wording goes to the first mate as a DRAFT question. |
 
 Consequences: the first four slices need no art. The plan has no new player copy; any
 wording a slice finds it needs goes to the first mate as a DRAFT question, not into the
