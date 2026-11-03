@@ -792,9 +792,10 @@ class HatchPetCardTick extends HatchPetCardLayout {
   }
 
   // acts.pat for ~900 ms on a pat (R2), kept in s.patPoseUntil so `reacting` in the
-  // next pat is as before. Not over a reaction, a call, or a child; unloadable: today's pat only.
+  // next pat is as before. Not over a reaction or a call; unloadable: today's pat only. A child
+  // pats with its own child_pat frames where its species.json lists "child" in acts.pat (care ship E).
   _patPose(s, reacting) {
-    if (reacting || s.calling || s.drawn === "child" || s.asleep) return;
+    if (reacting || s.calling || s.asleep) return;
     const own = this._actPose(s.species, s.drawn, s.speciesId, "pat", () => {
       if (s.patPoseFrames !== own) return;
       s.patPoseUntil = 0;

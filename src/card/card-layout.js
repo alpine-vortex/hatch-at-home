@@ -871,14 +871,14 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     return waves;
   }
 
-  // A species' own act frames (species.json "acts", never the child) for a stage, or null.
+  // A species' own act frames (species.json "acts": a stage only where it is listed) for a stage, or null.
   // Every sprite is probed once, remembered in _poseOk by species/stage/act (not the
   // wave's keys). Unknown plays; a failed load calls `apply` once so the caller swaps
   // back to the frames it had, and later calls get null. Never a broken image. A call
   // while the probe is out (stored as undefined) starts no new one: its `apply` waits too.
   _actPose(sp, stage, speciesId, act, apply) {
     const stages = sp?.acts?.[act];
-    if (!act || !stage || stage === "child" || !(stages === true || (Array.isArray(stages) && stages.includes(stage)))) return null;
+    if (!act || !stage || !(stages === true || (Array.isArray(stages) && stages.includes(stage)))) return null;
     const names = [`${stage}_${act}_1`, `${stage}_${act}_2`];
     this._poseOk ||= new Map();
     this._poseWait ||= new Map();
