@@ -520,6 +520,8 @@ class HatchPetCardSheets extends HatchPetCardStatus {
     if (!id) return;
     const key = scope === "house" ? "house_open_on" : "open_on";
     const before = (this._slides || []).map((x) => x.mine?.[key]);
+    // The server says if the person has a favourite on any pet, shown here or not (R3 audit).
+    const hadFavourite = (this._slides || []).some((x) => x.mine?.has_open_on === true);
     const show = (on) => {
       button.setAttribute("aria-pressed", String(on));
       button.textContent = on ? "on" : "off";
@@ -532,7 +534,7 @@ class HatchPetCardSheets extends HatchPetCardStatus {
     if (scope === "me") {
       openOnWrite(this._openKey(), enabled ? s.ids.device : null);
       this._renderShelf(); // the heart moves now
-      if (!enabled) this._restOffer = null; // the toggle off takes the offer with it (§6.2)
+      if (!enabled && !this._restOffer?.busy) this._restOffer = null; // the toggle off takes the offer with it (§6.2), unless its answer is in flight (a new one waits for that)
     }
     let ok = false;
     try {
@@ -549,7 +551,7 @@ class HatchPetCardSheets extends HatchPetCardStatus {
     } finally {
       button.classList.remove("pending");
     }
-    if (ok) this._offerRest(s, scope, enabled, before); // after the call: a failure offers nothing
+    if (ok) this._offerRest(s, scope, enabled, before, hadFavourite); // after the call: a failure offers nothing
   }
 
   // The other pets on this card that "rest them" would rest (favourite §6.2 rule 4): a pet
@@ -570,11 +572,15 @@ class HatchPetCardSheets extends HatchPetCardStatus {
   // offers), on their own screen, never for "house" or _openOnSync's late move (which never
   // calls this). Not shown and not marked when no other pet can rest (Q5). Card state only:
   // a button answers it; leaving the sheet clears it and saves nothing (Q1).
-  _offerRest(s, scope, enabled, before) {
+  _offerRest(s, scope, enabled, before, hadFavourite) {
     if (scope !== "me") return;
     if (!enabled || sharedScreen() || before.some((on) => on === true)) return;
+    if (hadFavourite) return; // a favourite on a pet this card doesn't show: a move, not a first pick
     if (s.mine?.rest_offer !== false || (this._slides || []).some((x) => x.mine?.rest_offer === true)) return;
     if (!this._othersToRest(s).length) return;
+    // The call took a round trip: the sheet may be closed, the card on another pet, or the
+    // last offer still busy (toggled off and on again); none of these makes a new offer.
+    if (!s.settings || (this._slides || [])[this._index] !== s || this._restOffer?.busy) return;
     this._restOffer = { device: s.ids.device };
     s.statusHtml = null;
     if (s.settings) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);

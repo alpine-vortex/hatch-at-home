@@ -2840,6 +2840,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "open_on": self.people.open_on(user) == self.pet_id,
             # They answered the offer to rest the others (§6.4); never "show it now".
             "rest_offer": person.get("rest_offer") is True,
+            # They have a favourite somewhere, on any pet, shown on this card or not (the
+            # offer's edge: a move is not a first pick). A yes/no, never which pet.
+            "has_open_on": self.people.open_on(user) is not None,
             **(
                 {"house_open_on": self.people.house_open_on() == self.pet_id}
                 if admin

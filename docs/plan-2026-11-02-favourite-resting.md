@@ -609,7 +609,7 @@ card. The only signals are that label, the helper text and the guide. **Decided 
 
 ### 6.6 Touch list
 
-`people.py` (`_PERSON_KEYS`), `coordinator.py` (`async_set_rest_offer`, `_mine`),
+`people.py` (`_PERSON_KEYS`), `coordinator.py` (`async_set_rest_offer`, `_mine` with `rest_offer` and `has_open_on`),
 `__init__.py` (the ws command and its registration), `card-status.js` (the row, the handlers,
 the forget key list), `card-sheets.js` (`_offerRest`, `_answerRestOffer`, the call in
 `_setOpenOn`), `ui-copy.js` (the copy), the guide and features.md. Not `strings.json`.
@@ -976,6 +976,21 @@ Each checked against `origin/main` at `ce4f3c8a` first; all held.
     offer; JS tests; no new card-check section; `resting` preset exists, `open_on` is R2's).
 11. Tests 29-31: §8, expanded to 29a-i, 30a-e, 31.
 12. Touch list: §0 table and §6.6.
+
+## R3 audit (s2790, tier 2): player-impact 1 (fixed), nits 7 (N2, N5 fixed; N3, N4, N6, N7, N8 accepted)
+
+Fixed by s2791:
+
+- Player-impact 1 (a favourite on a pet this card doesn't show still offered): `mine.has_open_on`
+  (`people.open_on(user) is not None`, the person's own `mine` only, a yes/no and never which
+  pet) tells the card the person already has a favourite somewhere. `_offerRest` returns when
+  any slide's `mine.has_open_on` was true before the call (captured with `before`). Never on
+  shared snapshots, `house`, the bus, state or diagnostics; the forget handler resets it.
+- Nit 2: after the `open_on` await, no offer if the sheet closed or the card moved off that pet.
+- Nit 5: a busy offer stays through a toggle off, and no new offer is made while it is busy.
+- Accepted: N3 (a late `rest_offer` failure reads as a failure), N4 (failure message on a
+  slide left), N6 (a late `rest_offer` after forget recreates the record), N7 (a disabled
+  `switch.resting` counts as can-rest), N8 (a tap in the same tick as a push clears silently).
 
 ## Open questions: decided (first mate, 2026-11-02)
 

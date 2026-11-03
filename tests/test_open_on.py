@@ -149,17 +149,29 @@ async def test_mine_says_it_only_to_its_person_and_never_on_a_shared_screen(
     wall = await hass_ws_client(hass, token)
     pip_wall = await subscribe(wall, shared=True)
     assert pip_me["mine"]["open_on"] is False and bo_me["mine"]["open_on"] is False
+    assert (
+        pip_me["mine"]["has_open_on"] is False and bo_me["mine"]["has_open_on"] is False
+    )
     # An admin's own view says where shared screens open (their row); no one
     # else's does, and a personal screen's house view never does.
     assert pip_me["mine"]["house_open_on"] is False
     assert "house_open_on" not in pip_them["mine"]
     assert "house_open_on" not in pip_me["house"]
+    assert (
+        "has_open_on" not in pip_me["house"] and "has_open_on" not in pip_wall["house"]
+    )
+    assert "has_open_on" not in pip_them["house"]
     assert pip_wall["mine"] is None and pip_wall["house"]["house_open_on"] is False
     await pushed(me), await pushed(them), await pushed(wall)
 
     assert (await open_on(me, "sensor.pip_life_stage", True))["success"]
     mine = [p["mine"] for p in await pushed(me) if "mine" in p]
-    assert [m["open_on"] for m in mine] == [True]  # Pip's; Bo's didn't change
+    # Pip's says yes; Bo's hears only that they now have a favourite somewhere (R3
+    # audit: the offer's edge), and not which.
+    assert sorted((m["open_on"], m["has_open_on"]) for m in mine) == [
+        (False, True),
+        (True, True),
+    ]
     assert all("mine" not in p for p in await pushed(them))  # not theirs
     assert all("mine" not in p and "house" not in p for p in await pushed(wall))
 
