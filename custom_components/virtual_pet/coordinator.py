@@ -43,7 +43,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import TemperatureConverter
 
-from . import channel, model, notify, people as P, rates as R, wellbeing
+from . import channel, hop, model, notify, people as P, rates as R, wellbeing
 from .backup import (
     NOTHING,
     async_backup,
@@ -327,6 +327,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # Games dropped unfinished (idle, away, asleep, switched from): the
         # next guess of that kind starts a new game, and its reply says so.
         self._dropped_games: set[str] = set()
+        # Hop of the Day's boards, today's only, in memory: one shared build per
+        # (day, world, family, specials, w, h), so two screens calling at once
+        # run the generator once (ship 3a's settle reads the same cache).
+        self._hop_boards: dict[tuple, asyncio.Future[hop.Board]] = {}
         self._visits: dict[str, float] = {}
         # People (HA user IDs) whose person entity just came home, and when the
         # pet last cheered for each (in memory).
@@ -1885,10 +1889,16 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             else:
                 note = {"kind": "pet_birthday", **born}
             celebrations.append(("pet", "birthday", today, note))
+        # Memory (plan M1b): doors only while it is on and this pet allows it. Read
+        # with .get (memory()), never person(), so nothing here re-creates a record.
+        mem = self.people.memory(user) if self.memory_allowed else None
         if friends:
-            celebrations.append(
-                ("pet", "friends", today, {"kind": "friends_for", "months": months})
-            )
+            note = {"kind": "friends_for", "months": months}
+            # Door 11 (plan M2, 6a): the 12-month day only, one fixed-list tag and
+            # nothing else; no memory mark (the bond's `noted` is the line's own).
+            if months == 12 and mem is not None and (tag := P.memory_recap(mem, today)):
+                note["tag"] = tag
+            celebrations.append(("pet", "friends", today, note))
         out += celebrations[:1]
         gen = str(state.generation)
         if gen in bond.get("photos", {}) and noted.get("photo") != gen:
@@ -1949,9 +1959,6 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             )
             if note := wellbeing.notice(seen, level, hour):
                 out.append(("person", "day", today, note))
-        # Memory (plan M1b): doors only while it is on and this pet allows it. Read
-        # with .get (memory()), never person(), so nothing here re-creates a record.
-        mem = self.people.memory(user) if self.memory_allowed else None
 
         def told(kind: str) -> bool:
             """Door 6: a favourite told on an earlier day while memory was on, and
@@ -2167,6 +2174,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         text: Any = None,
         day: Any = None,
         private: bool = False,
+        tag: Any = None,
     ) -> dict[str, Any] | None:
         """A remembered answer: a favourite, tonight's dream, a guess, its
         catchphrase, or a follow-up's (F1: a tough day's softer morning, a big
@@ -2174,9 +2182,22 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
         private: the card said it isn't a shared screen (`shared: false`). Only
         then may a pick also go to the person's memory (memory plan R3, M1 B1),
-        if it's on and this pet allows it; else the answer is kept as ever."""
+        if it's on and this pet allows it; else the answer is kept as ever.
+
+        tag: a big day's or weekend's "yes" may carry one fixed-list tag (memory
+        plan M2). One outside the list, not a string, or on any other answer is
+        refused before anything is kept; a good one that can't be kept here
+        (memory off, this pet's option off, a shared or old card) is dropped and
+        the "yes" kept (FM s2782 Q7)."""
         assert self.state is not None
         keep = private and self.memory_allowed
+        if tag is not None and not (
+            question in P.MEMORY_TAG_KINDS
+            and answer == "yes"
+            and isinstance(tag, str)
+            and tag in P.MEMORY_TAGS
+        ):
+            raise ValueError("It didn't ask that")
         if question in P.LATER_CHECKED:
             if answer not in P.ANSWERS.get(question, ()):
                 raise ValueError("Not an answer the pet keeps")
@@ -2211,10 +2232,25 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     if not P.big_day_pick(today, day):
                         raise ValueError("Not a day this week")
                     self.people.open_follow(user, question, today, text, day=day)
-                    kept = {"until": self.people.open_event(user)["until"]}
+                    event = self.people.open_event(user)
+                    kept = {"until": event["until"]}
+                    if tag and keep:  # the day they picked (memory plan M2)
+                        self.people.remember(
+                            user,
+                            "tags",
+                            {"day": event["due"], "kind": question, "tag": tag},
+                        )
                 elif answer == "yes":  # weekend: with their words, if any
                     self.people.open_follow(user, question, today, text)
-                    kept = {"until": self.people.open_event(user)["until"]}
+                    event = self.people.open_event(user)
+                    kept = {"until": event["until"]}
+                    if tag and keep:  # its Saturday: due is the Monday (plan M2 N12)
+                        saturday = date.fromisoformat(event["due"]) - timedelta(days=2)
+                        self.people.remember(
+                            user,
+                            "tags",
+                            {"day": saturday.isoformat(), "kind": question, "tag": tag},
+                        )
                 # Audit 0.43.0 F-01: answered, the later slot holds no open question
                 # (the evening's ask may then take it). The dated follow-ups keep it:
                 # their typed step answers the same ask again.
@@ -2447,6 +2483,17 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             ):
                 self.people.set_open_on(who, None)  # a stale one goes too
                 await self.people.async_save_now()
+        self._push_everywhere()
+
+    async def async_set_rest_offer(self, user: str) -> None:
+        """This person answered the offer to rest the others ("rest them" or
+        "not now", plan favourite-resting §6.4): it doesn't come again until
+        they forget their data. Saved at once, unlike `async_set_open_on`'s on:
+        a once-only answer mustn't come back after a crash. Every pet's channel
+        hears it, so a second slide's sheet doesn't offer again."""
+        async with self.people.lock(user):
+            self.people.person(user)["rest_offer"] = True
+            await self.people.async_save_now()
         self._push_everywhere()
 
     def _birthday_morning(self) -> None:
@@ -2791,6 +2838,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             # Their card opens on this pet (the favourite, §5.3): only theirs, never
             # anyone else's choice.
             "open_on": self.people.open_on(user) == self.pet_id,
+            # They answered the offer to rest the others (§6.4); never "show it now".
+            "rest_offer": person.get("rest_offer") is True,
+            # They have a favourite somewhere, on any pet, shown on this card or not (the
+            # offer's edge: a move is not a first pick). A yes/no, never which pet.
+            "has_open_on": self.people.open_on(user) is not None,
             **(
                 {"house_open_on": self.people.house_open_on() == self.pet_id}
                 if admin
@@ -3115,6 +3167,69 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._save()
         self._publish()
         return info
+
+    async def async_hop_board(self) -> dict[str, Any]:
+        """Today's Hop board for this pet, or why there is none. Changes
+        nothing: no care log (so not start_game), no event, no save, no
+        publish, and no person (the board is the pet's, the same on every
+        screen)."""
+        assert self.state is not None
+        now = self._now()
+        self._advance(now)
+        refusal = model._refuse_play(self.state)
+        if refusal is not None:
+            if refusal == "away" and self.privacy:
+                refusal = "asleep"
+            return {"result": refusal}
+        day = self._today(now)[0]
+        specials, w, h = hop.params_for(model.life_stage(self.state), day)
+        board = await self.async_hop_day_board(
+            day, hop.family_of(self.state.species), specials, w, h
+        )
+        return {
+            "result": model.OK,
+            "day": day,
+            **board.to_dict(),
+            # `twist` is ship 4's; `done` and `tidy` are ship 3a's (the day's
+            # pay state). Until they ship the board is a plain, unpaid one.
+            "twist": None,
+            "done": False,
+            "tidy": False,
+        }
+
+    async def async_hop_day_board(
+        self, day: str, family: str, specials: int, w: int, h: int
+    ) -> hop.Board:
+        """The day's board, built once off the loop and kept for the day. Calls
+        with the same arguments at once share one build. Ship 3a's settle
+        calls this too, so it replays the board the screen was shown."""
+        key = (day, self.world, family, specials, w, h)
+        for old in [k for k in self._hop_boards if k[0] != day]:
+            del self._hop_boards[old]
+        future = self._hop_boards.get(key)
+        if future is None:
+            future = self.hass.async_add_executor_job(
+                hop.hop_board, self.pet_id, day, self.world, family, specials, w, h
+            )
+            self._hop_boards[key] = future
+
+            def failed(done: asyncio.Future[hop.Board]) -> None:
+                # A build that died is not kept: the next call tries again.
+                if done.cancelled() or done.exception() is not None:
+                    if self._hop_boards.get(key) is done:
+                        del self._hop_boards[key]
+
+            future.add_done_callback(failed)
+        try:
+            # Shielded: one caller giving up must not cancel the build the
+            # others wait on.
+            return await asyncio.shield(future)
+        except Exception:
+            # Dropped here as well as in the callback, which may run after
+            # this caller has already raised.
+            if self._hop_boards.get(key) is future:
+                del self._hop_boards[key]
+            raise
 
     def share_news(self, headline: str, topic: str | None = None) -> str:
         """An automation brings news: the pet says it in its bubble, a passing

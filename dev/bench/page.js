@@ -747,6 +747,31 @@
       const over = (i) => (Array.isArray(shot.mine) ? shot.mine[i] || {} : typeof shot.mine === "object" ? shot.mine : {});
       slides.forEach((s, i) => { s.mine = { ...mine, ...over(i) }; });
     }
+    // `textStep`: the big day's (or weekend's) typed step through the card's own
+    // _askTextStart and _askText, its line in the bubble and the box held (no timer):
+    // {kind, day, tag}. With mine's memory_on and memory_allowed the box has memory's tag
+    // chips (plan M2), `tag` picked by a tap.
+    if (shot.textStep) {
+      const ts = shot.textStep;
+      card._followOk = true;
+      card._memoryOn = !!cur.mine?.memory_on;
+      cur.memoryAllowed = !!cur.mine?.memory_allowed;
+      card._askTextStart(cur, cur.ids?.["sensor.life_stage"], ts.kind || "big_day", ts.day || null);
+      const step = cur.textStep;
+      const line = step && cur.queue?.pop();
+      if (step) {
+        card._write(cur, line.text, 1e9);
+        card._askText(cur, step);
+        clearTimeout(step.timer);
+        step.until = Date.now() + 1e9;
+        const chip = ts.tag && cur.screen.querySelector(`.askday button.tag[data-tag="${ts.tag}"]`);
+        if (chip) {
+          chip.click();
+          chip.classList.remove("tap-feedback", "tapped", "pressed");
+        }
+        card._askPlace(cur, step.box);
+      }
+    }
     // The house view the channel would send (`house`, an object over it), and `basket`:
     // how many finds wait (house.basket, 0-3), so the basket shows through _basketSync.
     if (shot.house || shot.basket !== undefined) {

@@ -1260,6 +1260,20 @@ const STYLE = `
   .screen .askday.wide button { min-width: 52px; padding: 4px 6px; }
   .screen .askday.asktext input { font: inherit; font-size: 16px; min-height: 44px; width: 9.5em; max-width: 46%;
     border-radius: 14px; border: 2px solid #3a2a1a; padding: 2px 10px; box-sizing: border-box; } /* F1; 16 px: no iOS zoom */
+  /* Memory's tag chips (plan M2), inside the text step's box above the input: the prompt, then
+     one wrapping row of small chips (the picked one filled), kept low so the box leaves the
+     bubble its line: 28 px chips, three rows at 300-330, two at 420. */
+  .screen .askday.asktext .tagq { flex-basis: 100%; text-align: center; font-size: 11px; line-height: 14px;
+    color: #3a2a1a; background: #fffdf5; border-radius: 8px; padding: 0 6px; margin: 0 auto -2px; max-width: max-content; }
+  .screen .askday.asktext .tags { flex-basis: 100%; display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; }
+  .screen .askday.asktext .tags button.tag, .compact .screen .askday.asktext .tags button.tag { min-height: 28px;
+    min-width: 0; font-size: 11px; line-height: 1; padding: 0 6px; border-radius: 9px; border-width: 2px;
+    box-shadow: 0 2px 0 #3a2a1a; }
+  /* The picked chip is inverted (dark fill, light text), not only yellow: the mono LCD look turns
+     #ffe9a8 and #fffdf5 into one tone, and a player there must still see which tag is picked. */
+  .screen .askday.asktext .tags button.tag[aria-pressed="true"] { background: #3a2a1a; color: #fffdf5; }
+  .compact .screen .askday.asktext .tags { gap: 2px; }
+  .compact .screen .askday.asktext .tags button.tag { min-height: 26px; padding: 0 4px; }
   .compact .screen .askday { gap: 4px; bottom: 2%; }
   .compact .screen .askday.many { max-width: 100%; }
   .compact .screen .askday button { min-height: 44px; min-width: 44px;

@@ -96,6 +96,20 @@ play_game:
       default: false
       selector:
         boolean:
+hop:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: virtual_pet
+    action:
+      required: true
+      example: board
+      selector:
+        select:
+          options:
+            - board
 share_news:
   fields:
     entity_id:

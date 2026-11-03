@@ -524,7 +524,8 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
    next free version from `main` then, and never releases the other's unmerged work.
    Merge `main` into your branch before pushing, and say in the PR when you touch
    shared files (`scripts/card-check.js`, the card's game overlay, `play_game`). Not chosen (don't start unasked): learning household
-   routines, a daily diary in the journal (declined), pets on the shelf noticing
+   routines (beyond the one the owner chose: memory door 10, weekday patterns for three
+   tagged kinds of big day), a daily diary in the journal (declined), pets on the shelf noticing
    each other, chore streaks, trained tricks, items, calendar celebrations.
 7. **BirdNET bird visits:** the owner deferred this ("will be reset at a later time");
    don't start it unasked. The design and the stalled-feed workaround are in the

@@ -112,6 +112,8 @@ async def test_each_person_hears_only_their_own_bond(
         "memory_on": False,  # memory plan M1a: two booleans, nothing kept
         "memory_allowed": True,
         "open_on": False,  # favourite §5.3: their card doesn't open on it
+        "rest_offer": False,  # favourite §6.4: not answered yet
+        "has_open_on": False,  # favourite R3 audit: a favourite on any pet, none yet
         "house_open_on": False,  # an admin's: shared screens don't either
         "gift": None,  # visitors v2 V-E: their waiting gift, none yet
         "fav_visitor": None,  # F4: their favourite of this world's visitors

@@ -24,6 +24,14 @@ section 2a is the table, with what was folded and what was not. These marks read
 this revision M1a is ready to build**; M1b waits only on the first mate's go (section 13,
 Q1 is now decided).
 
+**Revised 2026-11-03 (s2783)** to fold in the adversarial review of the M2 plan (s2782; two
+blockers, seven should-fixes, four nits, in the numbering "(M2 B1)", "(M2 S3)", "(M2 N12)"
+and so on, problems 1-15) and the first mate's eight answers on it (section 1, "on the M2
+review"). Each problem was checked against the code at `9f4c8125` first; section 2b is the
+table. **The first mate approved the copy table (section 6a) on 2026-11-03, so M2 is ready to
+build.** M2 now has a copy table written by the plan's author; the M2 ship worker writes no
+copy.
+
 ## 0. Summary
 
 | Ship | What | Size | Tier |
@@ -31,7 +39,7 @@ Q1 is now decided).
 | **M0** | Four gap fixes: dated asks before a came-home "how was your day?" (M0-a), fav-weather line in the turn rotation (M0-b), "ask me again" for favourites (M0-c), forget_me clears the dream pick (M0-d) | S-M | M0-b 1; M0-a, c, d **2** |
 | **M1a** | The record and validators, the switch, the admin option and its erase, the WS command rules, the privacy test table, the guide | M | **2** |
 | **M1b** | The one-time ask (with the card's "great" send); doors 2, 4, 5, 6 (weather + season), 12 | M | **2** |
-| **M2** | Tag chips on big day and weekend; doors 1, 3, 11, then 10 as its own commit (door 9 dropped, FM Q4) | M | **2** |
+| **M2** | Tag chips on big day and weekend (inside the text step); doors 3, 1, 11, then 10 as its own commit (door 9 dropped, FM Q4); the tag `test` is now `exam` | M | **2** |
 | **M3a** | "Things you told me" page with per-item forget; the `memory_get` / `memory_forget` commands | M | **2** |
 | **M3b** | Stickers (door 8), the bench preset and the card-check section if not already in M3a | S | **2** |
 
@@ -101,6 +109,44 @@ built on it.
 - **Q4: no to door 9** (pets compare notes): dropped from M2.
 - **Q5: yes, 3 chosen days per 14, then retry** (the stale-card bound, section 5).
 
+### First mate, 2026-11-03, on the M2 review (s2782)
+
+All eight are **Decided** and cite review s2782 (the problem number is in brackets). Used
+in sections 4, 5, 6, 8 and 10.
+
+- **Decided (s2782 Q1, problem 3): a door note may carry one fixed-list `tag`**, nothing
+  dated. The section 10 row for `_mine`, `_visit_prefs` and the visit reply is reworded as
+  for `pick` (M1b Q1): "at most one fixed-list pick or one fixed-list tag, nothing dated".
+  `tests/test_memory.py` (the door-notes test, `assert set(note) <= {"kind", "pick"}`)
+  is updated to `{"kind", "pick", "tag"}`.
+- **Decided (s2782 Q2, problems 1, 2): the chips sit inside the text-step box** (one ask,
+  no extra stage). The tag lives on `step.tag`; every end path of the text step sends the
+  one `yes` with it.
+- **Decided (s2782 Q3, problem 6): the plan holds a draft copy table** (section 6a: chip
+  prompt, eight labels, "no tag", doors 1 and 3 per tag, 10, 11), every line run through
+  `scripts/copy-scan.js`. **The M2 ship worker writes no copy.** The first mate approves
+  the table before M2 starts.
+- **Decided (s2782 Q4, problem 6): doors 1 and 3 do not assert the day happened** ("you told
+  me" style). Door 1 may read the named tags (and `exam`, Q8); **`exam` is out of door 3.**
+- **Decided (s2782 Q5, problem 4): door order 2, 3, 1, 10, 4, 5, 12**, an exception to
+  door-number order; one `said` key per door; door 10's 28 days hold across all patterns;
+  an exact-day trigger is **lost** when no look falls in its window; Feb 29 uses Feb 28.
+- **Decided (s2782 Q6, problem 5): door 11 only on the 12-month `friends_for`**, by
+  extending that note with fixed-list fields (no numbers, no count words); lost when
+  `birthday_friends` wins that day; the line is at most 40 characters.
+- **Decided (s2782 Q7, problem 8): a valid tag the server cannot store keeps the `yes` and
+  drops the tag silently**; only a tag outside the list is refused.
+- **Decided (s2782 Q8, problem 7): the tag `test` is renamed `exam`** (a medical reading
+  is the reason `appointment` was dropped). Door 1 reads it; door 3 does not.
+- **Door 9 is dropped** (FM Q4, above); the stale wording is removed (problem 10).
+
+### First mate, 2026-11-03, on the M2 build (s2784)
+
+- **Decided (s2784 Q2): door 10 fires only while its pattern is fresh.** The pattern's
+  most recent entry on its weekday must be within the last 8 weeks (56 days,
+  `R.MEMORY_DOOR10_STALE_DAYS`); an older pattern (a season of lessons that ended) is
+  not remarked on. Like the rest of door 10 it is re-derived from the tags, nothing kept.
+
 ### Audit tally, 2026-11-02
 
 - **M0 audit (s2739, tier 2): 0 player-impact findings, 6 nits.** (The R1 tally belongs in
@@ -110,6 +156,7 @@ built on it.
   admin erase pushes to every loaded pet (5), the row's fallback is the viewed pet's own
   option and the row hides until it is known (4), memory's days are canonical ISO (2);
   findings 3 and 6 are the notes in section 12 and the guide.
+- **M2 audit s2785 (2026-11-03): player-impact 1 (mono chip, fixed in this follow-up), nits 6 (N2, N4, N6 fixed; N1, N3, N5 accepted).**
 
 ## 2. What was checked against the code
 
@@ -121,7 +168,7 @@ Read at `origin/main` `60ebf751`. The scout's claims held, with these correction
 | `JUST_HOME_HOURS = 2.0` (`rates.py:444`) | True. |
 | fav_weather: one fixed line, once a day (`coordinator.py:1898-1912`, `ui-copy.js:283`) | True. The server's `people.said(user, "fav_weather", today)` is the once-a-day guard; the card's `fav_weather` entry in `NOTES` (`ui-copy.js:283`) is one string per weather. |
 | `forget_me` leaves the dream pick (`__init__.py:558-576`, `model.py:3151`) | True. `async_forget_games` (`coordinator.py:2787`) drops only `parked` and `game.player`. `state.dream.user` is also read at `coordinator.py:1846` (`yours`) and is a second place the person's id stays (about a day). |
-| `_event_ok` forbids `pet` on a big-day event (`people.py:525-527`) | True (`return "pet" not in v` for big_day and weekend). Door 9 therefore keeps its "said by" in memory, not in the event (section 6). |
+| `_event_ok` forbids `pet` on a big-day event (`people.py:525-527`) | True (`return "pet" not in v` for big_day and weekend). So no event ever holds who said it; door 9, which would have needed that, is dropped (FM Q4). |
 | Options are household options | **Not quite.** All options are per pet entry (`config_flow.py`, `topics.py`: `CONF_PRIVACY` and `CONF_HOUSE_WORDS_PRIVATE` sit in the "people" topic and are read from `self.config_entry.options` in `coordinator.py:420-426`). There is no integration-wide option. Section 5 says how a per-person record meets per-pet options. |
 | `People.forget` pops the whole record | True, and keeps `birthday_skipped` (`people.py:244-254`). Section 5 says the same for the memory question. |
 | `REDACT_PEOPLE` exists (`diagnostics.py:72`) | True, and it is **referenced nowhere else**; the people store is not in the dump (`diagnostics.py:66-71`). `memory` joins the set for a later dump. **Corrected (M1 B3):** the dump runs `async_redact_data(_saved(pet), REDACT_STATE | PRIVATE_READINGS)` and `REDACT_STATE` already holds `bonds`, `user`, `by`, `for` and `player` (`diagnostics.py:84-93, 126`), so "no user id in the dump" passes vacuously. M0-d's claim is tested on the store (`pet.to_dict()` / `hass_storage`), for `dream_picks` and `dream.user` only (section 10, Diagnostics). |
@@ -158,6 +205,29 @@ Where the fix is not what the review recommended, the row says so.
 | **N4** `forget_me` is not a memory command; no `shared` field | **True** (`__init__.py:560-579`). | R3 |
 | **N5** docs test strings; HANDOFF line owner | **True.** | section 8 M1a, section 10 |
 
+## 2b. The M2 review (s2782), checked against the code
+
+Read at `origin/main` `9f4c8125`. Every problem was checked against the code first; all 15
+held (none rejected). "FM" is the first mate's answer of 2026-11-03 (section 1).
+
+| Problem | Check | Where it landed |
+|---|---|---|
+| **1** (B) "answered twice" is false | **True.** `_askTextEnd` sends one `yes`; a second `yes` re-runs `open_follow`, replaces the event and resets `said`. | section 4 "Dates and keys", section 8 M2, section 14 item 19 |
+| **2** (B) chips have no slot | **True.** FM Q2: inside the text-step box, `step.tag`. | section 8 M2 "The card", section 11, section 14 |
+| **3** doors need a tag; the row forbids it | **True.** FM Q1. | section 1, section 10 `_mine` row, section 8 |
+| **4** doors 1, 3, 10 have no window, key, order | **True.** FM Q5. | section 6 "Door timing" and bullets, section 8, section 10 "Doors", section 12 |
+| **5** door 11's hook is stale | **True** (`_notes` celebrations block; every whole month). FM Q6. | section 6a "Door 11's carrier", section 12 |
+| **6** example lines fail the scan; no approved copy | **True.** FM Q3, Q4. | section 6a (draft table, scan result), section 6 table |
+| **7** which tag feeds which door contradicts | **True.** FM Q8. | section 4 (the table, `exam`), section 14 item 8 |
+| **8** a valid tag the server will not store | **True.** FM Q7. | section 5 "The `tag` field", R3, section 10 |
+| **9** M2 acceptance is one paragraph | **True.** | section 8 M2 "Acceptance" |
+| **10** door 9 residue | **True** (R6, section 8, the "Door 9 ..." paragraphs). | R6, section 2, section 6 table row 9, "Old stores" and "The not chosen list", section 8 |
+| **11** "forgetting ends the pattern" is wrong | **True** (4-of-5; window moves). | section 6 door 10 bullets, section 10 "Erase: per item" |
+| **12** `BIG_DAY_AHEAD` is 6; the Saturday formula | **True** (`people.py`; `follow_dates` returns the Monday). | section 4 "Dates and keys" |
+| **13** "open event" check is vacuous | **True.** The guard is `asked_later` and `keep`. | section 4 |
+| **14** M1a already built the tag plumbing | **True.** | section 8 M2 |
+| **15** where the tag is validated | **True** (`async_answer`; the handler's `except ValueError`). | section 5 "The `tag` field" |
+
 ## 3. Rules (R1-R12, as decided)
 
 These are the scout's proposals with the owner's answers applied. Changes from the scout:
@@ -172,8 +242,7 @@ R6 follows Q4 = C; R2 follows Q3 = A; R10 follows Q3's default-on admin option.
   same command's effect). The ask comes from bond level 4, once; "not now" sticks.
 - **R3. Shared screens and other people.** A shared screen never asks, shows, fetches or
   adds to memory. **Fail closed** (review S1): every memory command (`memory`,
-  `memory_get`, `memory_forget`, `ask_again`, the `memory` ask's answer, and an `answer`
-  carrying a `tag`) takes `shared` as a **required** bool and the server refuses unless
+  `memory_get`, `memory_forget`, `ask_again` and the `memory` ask's answer) takes `shared` as a **required** bool and the server refuses unless
   `msg["shared"] is False`, as the gift path does (`__init__.py:855-857, 884-886`, "so the
   gift path can't fail open"). A card that forgets the flag gets no memory. This is a
   **card-honesty guard, not authentication**: `shared` is the client's own claim, read
@@ -190,9 +259,11 @@ R6 follows Q4 = C; R2 follows Q3 = A; R10 follows Q3's default-on admin option.
   **Every write path is covered (M1 B1).** The rule is on the *write*, not the command
   name: any `answer` that would call `remember` (a dream, guess, game or favourite pick,
   "great", `since_told`, a `tag`) needs `msg.get("shared") is False`. An `answer` with
-  `shared` true or absent still stores its ordinary state (the pick, the like) and writes
-  **nothing** to memory, and it is not an error; the `memory` ask's answers and a `tag`
-  are refused with the generic error. The card passes `shared: false` explicitly (an old
+  `shared` true or absent still stores its ordinary state (the pick, the like, the `yes`
+  that opens a big day) and writes **nothing** to memory, and it is not an error, **a `tag`
+  included** (FM s2782 Q7: the `yes` is kept and the tag dropped silently); the `memory`
+  ask's answers are refused with the generic error, and so is a `tag` outside the fixed
+  list (section 5). The card passes `shared: false` explicitly (an old
   card sends none, so it writes no memory: the same fail-closed stance as an old card
   elsewhere). **What the server cannot guard:** door notes and the `memory` ask come from
   the `virtual_pet.visit` service's reply, which has no `shared`; the only guard there is
@@ -217,7 +288,7 @@ R6 follows Q4 = C; R2 follows Q3 = A; R10 follows Q3's default-on admin option.
   put a health-adjacent dated list into every backup.
 - **R6. Kept until forgotten; count caps only (Q4 = C).** No time-based expiry on a
   remembered thing. Each class has a count cap; when full, the oldest entry goes (section
-  4). Operational bookkeeping that is not a memory (the door 9 "said by", the one-line
+  4). Operational bookkeeping that is not a memory (the one-line
   `said` marks) is pruned by its own day, as follow-up events are today. `People.prune`
   gets the cap step; load drops invalid entries as it drops an expired event
   (`people.py:219-220`).
@@ -297,20 +368,38 @@ The whole record is bounded at roughly 160 entries, well under 10 KB.
   `people.py:321-325`), so 130 tags in one day leave 120.
 - **One entry per key, so a repeat can't double-record.** `tags` holds at most one entry
   per `(day, kind)`; each `picks` list at most one per `day`. A second write for the same
-  key **replaces** the entry (a dated follow-up is answered twice for one ask, "yes" then
-  its typed step, `coordinator.py` `async_answer`; the tag may ride on either call, and a
-  later tag corrects an earlier one). The per-item key is therefore `(list, day)` for
-  picks and `(list, day, kind)` for tags, with no new id, and "forget removes exactly one
-  entry" holds.
-- **A tag is written only while the person has an open event of that kind** (the "yes"
-  just opened it, or its typed step), never from a bare call.
+  key **replaces** the entry. The per-item key is therefore `(list, day)` for picks and
+  `(list, day, kind)` for tags, with no new id, and "forget removes exactly one entry"
+  holds.
+- **The tag rides on the one `yes` (M2 B1; the review found the earlier "answered twice"
+  wording false).** The card sends **one** `virtual_pet/answer ... yes` per ask, at the end
+  of the text step (`_askTextEnd`, `src/card/card-looks.js`: "However it ends ... the 'yes'
+  is sent once"); with no follow support or on a shared screen `_askTextStart` sends one
+  `yes` at once. The day question for a big day sends nothing. So the tag is chosen on the
+  card **before** that single send, held on the step object (`step.tag`, section 8), and
+  goes in the same `answer`. There is no second call to carry it and no "a later tag
+  corrects an earlier one" rule. A repeated `yes` is not a normal path: it calls
+  `People.open_follow` again, which **replaces the event, resets `said`** and pops the
+  held typed words (`self._texts`), as it does today. If a hand-made client repeats a `yes`
+  the same day with a different `tag`, the entry for that `(day, kind)` is replaced (the
+  key rule); with a different `day` it adds an entry per day, at most 6 (`BIG_DAY_AHEAD`)
+  for one ask, own data, capped (M2 N13: accepted, said plainly).
+- **The write guard is `keep` and `asked_later` (M2 N13).** The tag is written inside the
+  `LATER_CHECKED` branch of `async_answer`, after `asked_later(person, today, question)`
+  holds (the dated kinds keep `later_kind` after a `yes`, `SLOT_CLOSED_BY_ANSWER` omits
+  them), and only when `keep` (memory on, this pet's option, `shared` false: the same flag
+  the picks use). Not "an open event": the tag rides on the call that opens it.
 - **`tags.day` is the event's own day:** for `big_day` the day they picked
-  (`big_day_pick`, 1-7 days ahead, the event's `due`); for `weekend` the **Saturday** of
-  that weekend (`follow_dates` gives the Monday as `due`, which would make every weekend
-  tag a Monday). A big day picked ahead may not happen; the tag is what the person said
-  was coming, and the page says "you told me" rather than "you went".
-- **Which doors read which kind:** doors 1, 3 and 10 read `big_day` tags only (they need
-  a real, specific day). `weekend` tags feed the page and door 11's recap, nothing else.
+  (`big_day_pick`, the next 1 to 6 days: `BIG_DAY_AHEAD = 6`, `people.py`; the event's
+  `due`); for `weekend` the **Saturday** of that weekend. `follow_dates("weekend", today)`
+  returns the **Monday** as `due`, so the Saturday is `due` minus 2 days (M2 N12). The
+  weekend ask is made on Fridays only (`follow_question`, weekday 4), so the Saturday is
+  the next day. A big day picked ahead may not happen; the tag is what the person said
+  was coming, and the doors and the page say "you told me" rather than "you went".
+- **Which doors read which tag, and which kind** is the table below (M2 S7). Doors 1, 3,
+  10 and 11 read `big_day` tags only (they need a real, specific day). **`weekend` tags
+  feed the page and nothing else** (door 11 reads `big_day` tags, section 6a; the earlier
+  "weekend tags feed door 11's recap" had no line to use them).
 - **`since_told`** has no value for a favourite told before memory was on (`likes` holds
   values with no date, `coordinator.py` answer branch). The page shows no "since" for
   those and door 6 does not fire for them; nothing is back-filled. `ask_again` (M0-c) is
@@ -327,13 +416,36 @@ needs it, and a backup shouldn't hold one). Only "great" is saved, for door 2; "
 never sets the soft morning (M1 B2, section 8). No
 right/wrong count for guesses or games (the "no score" rule, guide.md "Using the card").
 
-**The fixed tag list (draft):** test, match, show, trip, party, lesson, work thing,
-something else. Translatable, so no free text; the first mate approves the labels.
-**`appointment` is dropped from the scout's list** (review S5; FM to confirm, section
-13): R5 gave it no anniversary, count, sticker or pattern, so no door would read it, and
-it would sit in every HA backup as a dated health-adjacent list only to be shown on the
-page. `work thing` and `something else` stay: door 11 and the page use them (R5 draws no
-sticker for either).
+**The fixed tag list (draft):** exam, match, show, trip, party, lesson, work thing,
+something else (keys `exam`, `match`, `show`, `trip`, `party`, `lesson`, `work_thing`,
+`something_else`). Translatable, so no free text; the labels are in section 6a, which the
+first mate approves. **`test` is renamed `exam`** (FM s2782 Q8): "test" can be read as
+medical, the reason `appointment` was dropped. M1a shipped `MEMORY_TAGS` with `test`
+(`people.py`) but nothing writes a tag yet, so no store holds one and the rename is a
+one-word change in M2 (a stray `test` in a hand-made store is dropped on load like any
+other value outside the list). **`appointment` is dropped from the scout's list** (review
+S5; section 13): no door would read it, and it would sit in every HA backup as a dated
+health-adjacent list only to be shown on the page.
+
+**Which tag feeds what (M2 S7; the single table, replacing the earlier contradiction
+between this section and section 14).** "Page" is the M3a page. "Sticker" is M3b's
+(section 9).
+
+| Tag | Door 1 | Door 3 | Door 10 | Door 11 | Page | Sticker |
+|---|---|---|---|---|---|---|
+| `exam` | yes | **no** (FM Q4/Q8) | no | yes | yes | yes |
+| `match` | yes | yes | yes | yes | yes | yes |
+| `show` | yes | yes | yes | yes | yes | yes |
+| `trip` | yes | yes | no | yes | yes | yes |
+| `party` | yes | yes | no | yes | yes | yes |
+| `lesson` | yes | yes | yes | yes | yes | yes |
+| `work_thing` | no | no | no | no | yes | no |
+| `something_else` | no | no | no | no | yes | no |
+| any `weekend` tag | no | no | no | no | yes | no |
+
+Door 11 and its line read **one** tag (section 6a). Neither `work_thing` nor
+`something_else` ever reaches a door, a sticker, a count or the recap; the page is their
+only reader. (Section 14 item 8 asks the reviewer to check exactly this.)
 
 ## 5. The switch, the ask, the admin option (M1a, M1b)
 
@@ -360,10 +472,25 @@ this pet's option is off; turning **off** is exempt from the option check only, 
 - **`answer` is the exception, because it predates memory** (M1 B1): `shared` stays
   `vol.Optional` there (an old card, or a pick that has nothing to do with memory, must
   still work). The server calls `remember` only when `msg.get("shared") is False`;
-  otherwise the pick or like is stored as today and memory is left unchanged. A `tag`
-  or the `memory` ask's answer with `shared` not `False` is refused with the generic
-  error. The M1b card passes `shared: false` from `_keepAnswer`, `_sendFollow` and the
-  new "great" send.
+  otherwise the pick or like is stored as today and memory is left unchanged. The
+  `memory` ask's answer with `shared` not `False` is refused with the generic error. The
+  M1b card passes `shared: false` from `_keepAnswer`, `_sendFollow` and the new "great"
+  send.
+- **The `tag` field (M2 Q7, S8, N15).** `tag` is optional on `answer`, typed `object`, and
+  checked in `async_answer`, not in `websocket_answer` (whose `ANSWERS` check is for
+  `answer` only): a `ValueError` there becomes the fixed "It didn't ask that" message
+  (`__init__.py`, the handler's `except ValueError`), so the one generic error holds. Two
+  cases, and they differ:
+  - **A value outside the fixed list (or not a string, or a tag on a question that has none):
+    refused** with the one generic error, **nothing saved** (not the `yes`, not the event).
+    A real client never sends one, so this is the tampered-client path; the `caplog` test
+    (section 10, "Logs") covers it.
+  - **A valid tag the server cannot store: the `yes` is kept and the tag dropped, silently,
+    no error.** That is memory off for this person, this pet's option off, or `shared` not
+    `False`. A person who turns memory off on another device while the chip row is open
+    must not lose their big day or the typed words; this is how the picks already behave
+    (the ordinary answer stores, memory is left alone). The list check runs first, then the
+    storage check, so a bad value is refused whatever the memory state.
 - `tag`, `key`, `list`, `pick` are typed `object` in the schema (as `text` is,
   `__init__.py:462-464`) and checked in the handler, which sends one generic error
   (`not_asked` style) that never repeats the value. HA logs a schema failure at ERROR
@@ -372,9 +499,10 @@ this pet's option is off; turning **off** is exempt from the option check only, 
   entry. The handler's error text and any `ValueError` text also carry no value
   (`websocket_answer` already turns `ValueError` into one fixed message).
 - **The pet's option is checked on the server, not only in `_mine`** (review S8):
-  `memory_get`, `memory_forget`, the `memory` ask's answer and a `tag` are refused with
+  `memory_get`, `memory_forget` and the `memory` ask's answer are refused with
   one error when **this pet's** `CONF_MEMORY` is off, even if the person's memory is on
-  through another pet. Only the switch-off is exempt.
+  through another pet. Only the switch-off is exempt. A `tag` is **not** refused for this:
+  it is dropped silently (the bullet above, FM s2782 Q7).
 
 **The one-time ask (M1b).** A `memory` ask, level 4, after `birthday` in the order (so
 `ASK_ONCE_GAP_DAYS` = 3 keeps them apart), asked only when `memory_allowed`, not yet on,
@@ -498,11 +626,11 @@ skip, since the `visit` service cannot see `shared` (R3).
 | 5 | **Your habit:** the last 5 guesses all the same way | "you always say sun! my sunny friend" | M1b |
 | 6 | **Since you told me:** the first time a favourite **weather or season** comes back after it was told (**one-shot per favourite**, FM Q-B). **Not** part of M0-b's rotation: its own short list, replacing that day's plain line | "it's snowing! you told me snow's the best" | M1b |
 | 12 | **The game you picked:** 3 of the last 5 game picks the same. **No "lapsed" clause** (FM Q-B): no "played" signal exists | "your dig again? i'm ready" | M1b |
-| 1 | **Week-later echo:** about 7 days after a tagged `big_day`, once | "i still think about your show!" | M2 |
-| 3 | **Anniversary:** a year after a tagged `big_day` (tag `trip`, `show`, ...) | "a year ago today was your big trip!" | M2 (dormant until a year passes) |
-| 9 | **Pets compare notes:** with several pets, a second pet nods to a big day another pet already cheered | "Mochi told me about your test! good luck" | **Dropped** (FM Q4, 2026-11-02): not built |
-| 10 | **Weekday pattern:** the same tag on the same weekday 3 times | "match tomorrow? i'll be cheering" | **M2, its own last commit** |
-| 11 | **Friendship-year recap** on the 12-month friendship day (`coordinator.py:1825-1837`); **no numbers** (review S10: section 4 forbids counts shown as a score, and the sticker rule says the same) | "a whole year! so many big days, and so many snack dreams" | M2 |
+| 1 | **Week-later echo:** exactly 7 days after a tagged `big_day`'s own day, once; the six named tags and `exam` (section 4 table). The line does not say the day happened ("you told me", FM s2782 Q4) | "thinking of the show you told me about" | M2 |
+| 3 | **Anniversary:** exactly a year after a tagged `big_day` (not `exam`, FM s2782 Q4/Q8). "you told me", not "you went" | "a year ago you told me about a trip ♥" | M2 (dormant until a year passes) |
+| 9 | *(Dropped, FM Q4, 2026-11-02: not built. The number stays unused so the other doors keep theirs.)* | | |
+| 10 | **Weekday pattern:** the same tag on the same weekday 3 times | "maybe a match tomorrow! go you ♥" | **M2, its own last commit** |
+| 11 | **Friendship-year recap** on the 12-month friendship day only, by extending the `friends_for` note (FM s2782 Q6); **no numbers and no count words** (section 4 forbids counts shown as a score, and the sticker rule says the same) | "a whole year! you told me about a show" | M2 |
 | 7 | **"Things you told me" page** | see section 9 | M3a |
 | 8 | **Stickers** | see section 9 | M3b |
 
@@ -518,14 +646,48 @@ after they first fire, so without a spacing they would fire daily. Each door get
 | 5 | the last 5 `picks.guess` entries all the same | 7 days (`door5`) | a look, 11:00-20:00 |
 | 6 | the favourite was told on an earlier day (`since_told[key]` < today) and its matching weather or season comes back | **one-shot per favourite** (`door6_fav_weather`, `door6_fav_season`); `ask_again` clears the key (section 4) | the day's existing fav-weather / season note |
 | 12 | 3 of the last 5 `picks.game` entries the same | 7 days (`door12`) | a look, 11:00-20:00 |
+| 3 | today's (month, day) equals the (month, day) of a `big_day` tag exactly 1 year back, tag not `exam`, `work_thing` or `something_else` (Feb 29 below) | once per such day (`door3` = the day it was said; it cannot fire twice on one day) | a look, 11:00-20:00 |
+| 1 | a `big_day` tag whose own `day` is exactly **today minus 7**, tag not `work_thing` or `something_else` | once per such day (`door1` = the day it was said) | a look, 11:00-20:00 |
+| 10 | tomorrow's weekday is the pattern's weekday (below) for `match`, `lesson` or `show` | **28 days across all patterns** (one `door10` key; saying the `match` line holds back the `show` line too) | a look, 11:00-20:00 |
+
+(M2 S4: the rows for 3, 1 and 10 sit below door 12 in the table because they are M2's;
+the order they fire in is the next bullet, not the row order.)
 
 - **Day keys.** `picks.guess` is keyed on the day the answer was **given** (`today`), not
   the guessed day (`person["guess"]` stores `tomorrow`, `coordinator.py:2197`, for its own
   outcome line; `remember` is passed `today`). The other picks key on the answer day too.
-- **One door per visit, in door-number order** (2, 4, 5, 12; door 6 is the weather note
-  and never counts), **after** any birthday or celebration note and inside the
-  `NOTES_PER_VISIT` room the look already has; a door that finds no room waits for the next
-  look and is not marked said.
+- **One door per visit, in this order: 2, 3, 1, 10, 4, 5, 12** (M2 S4, FM s2782 Q5; door 6
+  is the weather note and never counts). **This is an exception to door-number order, and
+  it is on purpose:** doors 3, 1 and 2 are the ones that can be reached **only on one
+  day** (an exact-day trigger), and 10 only on one eve. Door 4, 5 and 12 stay true for
+  days (their 7-day spacing is what stops them), so they go last. In door-number order door
+  1 would sort ahead of door 2 and take the single look door 2 can use, and door 2 is
+  then gone for good. `memory_door` (`people.py`) returns the first due door in this
+  order. The door goes **after** any birthday or celebration note and inside the
+  `NOTES_PER_VISIT` room the look already has; a door that finds no room waits for the
+  next look and is not marked said.
+- **An exact-day trigger is lost when no look falls in its window (FM s2782 Q5).** Doors
+  1, 2, 3 and 10 are tied to one day; if there is no look from 11:00 to 20:00 (door 2:
+  before noon) that day, the door is gone for good, **accepted** as for a stale card (section
+  12). No plus-or-minus-N-days window is added.
+- **One `said` key per door (FM s2782 Q5): `door1`, `door3`, `door10`.** The regex
+  `_MEMORY_SAID` (`people.py`) already matches them (`door(?:[1-8]|1[0-2])`) and takes no
+  suffix, so it needs **no change**, and `said` grows by at most three keys (section 4
+  budgets about 14). There is no per-tag or per-pattern key, so "door 1 once per tag" is
+  kept by the exact-day rule and "door 10 once per pattern" by the 28 days across all
+  patterns.
+- **Feb 29 (FM s2782 Q5): a tag on Feb 29 uses Feb 28.** Door 3 compares (month, day) of
+  today with (month, day) of the tag's day, and **a tag whose day is Feb 29 counts as Feb
+  28** (`date.replace(year=...)` would raise on it, and a Feb 29 tag would otherwise match
+  only every fourth year). Today is used as it is, so Feb 29 itself fires nothing and a
+  tag fires on exactly one day a year (no double fire on Feb 28 and 29). The tag's year
+  must be exactly one before today's. A tag on Feb 29, 2028 fires on Feb 28, 2029. If a Feb
+  28 and a Feb 29 tag of the same year both map to Feb 28, the **later** day's tag goes
+  (one door a visit). Door 1 is a plain `today - 7 days` date (no `replace`) and needs no
+  rule.
+- **Two tags on one day:** `tags` holds at most one `big_day` entry per day (the key rule),
+  so doors 1 and 3 have at most one candidate per day; across years the year-back tag
+  goes, not older ones.
 - **Door 6's carrier.** The server's existing `fav_weather` and `season` /
   `season_holiday` notes (`coordinator.py:1898-1938`) gain a boolean `told` (e.g.
   `{"kind": "fav_weather", "weather": fav, "told": true}`), set only when memory is on, the
@@ -543,30 +705,135 @@ history; the weekday is computed from the saved date, so **no new data is kept**
 Because it is the most sensitive door, the plan limits it:
 
 - Only for `big_day` tags `lesson`, `match` and `show` (a weekly activity). Never
-  `test`, `work thing`, `party`, `trip` or `something else`, and never a `weekend` tag
+  `exam`, `work thing`, `party`, `trip` or `something else`, and never a `weekend` tag
   (its day is the Saturday, section 4).
 - Only after **3 of the last 5 entries for that tag fall on the same weekday**, said on
-  the **eve** of that weekday, at most once per pattern per 28 days (`said`).
+  the **eve** of that weekday, **at most once per 28 days across all patterns** (the one
+  `door10` key, FM s2782 Q5), on a look from 11:00 to 20:00 (lost if there is none).
+  "The last 5" are the last 5 `big_day` entries of that tag **by day**, as they stand now.
 - The line never names the weekday's reason beyond the tag, and never says the pet
   "knows" or "has been watching" (no surveillance framing; first mate checks the copy).
-- Forgetting any one of those tag entries from the page ends the pattern at once (fewer
-  than 3 remain), and turning memory off erases the history it came from.
+- **A pattern is re-derived from the entries that remain (M2 S11).** The earlier claim
+  "forgetting any one entry ends the pattern at once" was false in two cases: with 4 or 5 of
+  the last 5 on the weekday, forgetting one leaves 3 and the pattern stands; and forgetting
+  an entry that is *not* on the weekday moves the "last 5" window, so an older matching
+  entry can enter it and start a pattern that was not there. Door 10 is a pure function of
+  the remaining `tags` and nothing is stored for it, so it is always consistent with the
+  page: forgetting a tag ends the pattern **exactly when fewer than 3 of the then-last 5
+  of that tag share the weekday**. (How the M3a page lets a person forget a pattern item is
+  M3a's call; it can only forget entries, and the pattern follows.) Turning memory off
+  erases the history it came from.
 - Separate commit so the first mate can drop it from the batch without touching the rest.
 
-**Door 9 and `_event_ok`.** Dropped with door 9 (FM Q4): no `heard` entry exists. An old
-store holding `heard`, `door9` or a `visitor_*` since-told key still loads; the loader
-drops them quietly (M1b audit, finding 4).
+**Old stores.** A store holding `heard`, `door9` or a `visitor_*` since-told key (door 9's
+leftovers, from before FM Q4) still loads; the loader drops them quietly (M1b audit,
+finding 4).
 
-**Door 9 and the "not chosen" list (review S10).** `docs/HANDOFF.md:525` lists, as *not
-chosen, don't start unasked*, "learning household routines" and "pets on the shelf noticing
-each other". Door 10 is a learned routine, but the owner chose it (Q1 = C); the commit
-updates that HANDOFF line to say so, as the 2026-10-28 journal decline is named above.
-Door 9 is pets noticing each other and **no owner answer names it**; the first mate said
-no (FM Q4, 2026-11-02), so it is not built.
+**The "not chosen" list (review S10; M2 problem 10).** `docs/HANDOFF.md` (the line near
+525) lists, as *not chosen, don't start unasked*, "learning household routines" and "pets
+on the shelf noticing each other". Door 10 is a learned routine, but the owner chose it
+(Q1 = C), so **the door-10 commit changes the routines clause only**: "learning household
+routines" is reworded to say weekday patterns for three tagged kinds are chosen. **"Pets on
+the shelf noticing each other" stays "not chosen"** (FM Q4 said no to door 9); a worker
+must not delete it.
 
 **Door 12 does not close** Part 1 item 6 of the scout (a game picked and never played):
 FM Q-B dropped the "lapsed" clause because no "played" signal exists, and a new one is not
 in this plan (M1 S5).
+
+### 6a. Door 11's carrier, and the M2 draft copy (M2 S5, S6; FM s2782 Q3, Q4, Q6)
+
+**Door 11's carrier (FM s2782 Q6).** The 12-month friendship day is the existing
+`friends_for` note: `_notes` (`coordinator.py`, the celebrations block after
+`model.friends_for(bond.get("since"), today)`) puts `{"kind": "friends_for", "months": n}`
+into `celebrations`, and only `celebrations[:1]` goes out a look. (The old cite
+`coordinator.py:1825-1837` has moved; names win.) `friends_for` fires on **every whole
+month**; the card already says "we've been friends for a whole year!!" at 12 months
+(`ui-copy.js`, `NOTES.friends_for`). M2 extends that note and nothing else:
+- **Only when `months == 12`**, memory is on for this person, this pet's option allows it,
+  and the visit came from a personal screen (the card's own skip, R3). **24 months and up:
+  no recap**; the existing line stands.
+- It gains **one fixed-list field: `tag`**, the key of the **most recent `big_day` tag**
+  in the last 12 months, among `exam`, `match`, `show`, `trip`, `party`, `lesson`
+  (section 4 table). No tag in the window, or only `work_thing`, `something_else` or a
+  `weekend` tag: **no field, and the existing line is said unchanged.** No numbers, no
+  count ("so many"), no dream or other pick (this is the content rule the review asked
+  for: one tag, nothing else). The note keeps its existing `months` field (the friendship
+  length, not a memory); the new field is the only memory in it.
+- **It writes no `memory["said"]` key.** The celebration marks `noted["friends"]` on the
+  bond, as today; that is not a memory trace (it exists with memory off, for the existing
+  line). "Off leaves no trace" is therefore unchanged for door 11, and the test says so.
+- **At 12 months `birthday_friends` cannot win** (M2 audit s2785 N6): the pet's first
+  birthday is `{"years": 1}`, not a month count, so the `friends_for` note is not displaced.
+  On the pet's first birthday the recap **waits a look** (the birthday note goes first); it
+  is lost only if no second counted look comes that day (FM s2782 Q6). The card line is at
+  most 40 characters.
+- The card, given `n.tag` on a `friends_for` note at 12 months, says
+  `MEMORY_TAG_DOORS.door11[tag]`; if the key is not there (an unknown tag from a newer
+  server) it says the existing line. An **old cached card** ignores the field and says the
+  existing line: no harm.
+
+**The copy table.** APPROVED by the first mate 2026-11-03 ("told me of" changed to "told me about", every line still at most 40 characters); written by the plan's author. **The M2 ship worker writes no copy** and copies
+this table as approved (or as the first mate edits it). Two tables go in the fresh block
+of `src/card/lines-fresh.js` and in `COPY_TABLES` (`scripts/copy-scan.js`):
+`MEMORY_TAG_CHIPS` (`asks: ["q"]`) and `MEMORY_TAG_DOORS` (no fill). Doors 1, 3, 10 and
+11 are keyed by the tag; a door's note carries `kind` and `tag` (`{"kind": "door1",
+"tag": "show"}`), and the card looks the line up. The same lines are the
+`aria-label`/`textContent` of the chips; the chip row follows section 8.
+
+| Table.key | Line | Chars |
+|---|---|---|
+| `MEMORY_TAG_CHIPS.q` (the chip prompt) | what kind of day is it? | 23 |
+| `.labels.exam` | exam | 4 |
+| `.labels.match` | match | 5 |
+| `.labels.show` | show | 4 |
+| `.labels.trip` | trip | 4 |
+| `.labels.party` | party | 5 |
+| `.labels.lesson` | lesson | 6 |
+| `.labels.work_thing` | work thing | 10 |
+| `.labels.something_else` | something else | 14 |
+| `.none` (the "no tag" chip; the default) | no tag | 6 |
+| `MEMORY_TAG_DOORS.door1.exam` | thinking of the exam you told me about | 38 |
+| `.door1.match` | thinking of the match you told me about | 39 |
+| `.door1.show` | thinking of the show you told me about | 38 |
+| `.door1.trip` | thinking of the trip you told me about | 38 |
+| `.door1.party` | thinking of the party you told me about | 39 |
+| `.door1.lesson` | thinking of the lesson you told me about | 40 |
+| `.door3.match` | a year ago you told me about a match ♥ | 38 |
+| `.door3.show` | a year ago you told me about a show ♥ | 37 |
+| `.door3.trip` | a year ago you told me about a trip ♥ | 37 |
+| `.door3.party` | a year ago you told me about a party ♥ | 38 |
+| `.door3.lesson` | a year ago you told me about a lesson ♥ | 39 |
+| `.door10.match` | maybe a match tomorrow! go you ♥ | 32 |
+| `.door10.show` | maybe a show tomorrow! break a leg ♥ | 36 |
+| `.door10.lesson` | maybe a lesson tomorrow! have fun ♥ | 35 |
+| `.door11.exam` | a whole year! you told me about an exam | 39 |
+| `.door11.match` | a whole year! you told me about a match | 39 |
+| `.door11.show` | a whole year! you told me about a show | 38 |
+| `.door11.trip` | a whole year! you told me about a trip | 38 |
+| `.door11.party` | a whole year! you told me about a party | 39 |
+| `.door11.lesson` | a whole year! you told me about a lesson | 40 |
+
+Notes on the wording, for the first mate:
+- **Doors 1, 3 and 11 never say the day happened** ("you told me about", FM s2782 Q4): a big
+  day picked ahead may not have taken place. Door 1 does not say "a week", since the line
+  is said exactly 7 days after the tag's day and the person knows that. Door 3 has no
+  `exam` line (it is not read by door 3) and none for `work thing` or `something else`;
+  door 1 has no line for those two either; door 10 has `match`, `show` and `lesson` only.
+- **Door 10 does not say the pet knows or watches** ("maybe a ... tomorrow"); it never
+  names the weekday or a count.
+- **A tag with no line in a door's table is a bug**, not a fallback: the server only sends
+  the tags that table lists, and the card drops a note whose line is missing (an unknown
+  tag from a newer server says nothing).
+- The scout's lines are replaced because they failed the scan ("i still think about your
+  show!" nags on "still"; "match tomorrow? i'll be cheering" asks outside `asks`; the
+  recap was 56 characters and said "so many", a count).
+- **Scan result** (`scripts/copy-scan.js` `scanFreshCopy`, the card's fresh block with both
+  tables added and named in `COPY_TABLES`, run by the plan's author for s2783): **0 bad, 30
+  new lines** (579 scanned against 549), longest 38 characters with the longest fill. The
+  same run on the scout's three lines above reports the three failures named, so the
+  scan was live. The M2 ship worker re-runs it on the real table; `types` in card-check
+  runs it too.
 
 ## 7. M0: the gap fixes
 
@@ -844,21 +1111,116 @@ false; B's data is untouched.
   Q-B). **Card work:** `_keepAnswer`, `_sendFollow` and the "great" send pass
   `shared: false` (M1 B1).
 
-**M2 (tier 2).**
-- The tag step in the big_day and weekend flows: after "yes" (and the day, for big day),
-  **a chip row** (the fixed list), shown only when `mine.memory_on`; with it off, the ask
-  is exactly as today (typed step included). With memory on, the chips replace nothing:
-  the optional typed step stays (memory-only), and a tag may be skipped ("no tag").
-  The tag goes in the `answer` command as `tag`, typed `object` and checked in the
-  handler against the fixed list (section 5: a `vol.In` here would log the value on a
-  schema failure), with `shared` required.
-- `memory["tags"]` gets the entry on the answer that carries the tag, which may be the
-  "yes" or its typed step, under the one-per-`(day, kind)` rule and the open-event check
-  of section 4. Pytest: an invalid tag is refused with one generic error and nothing
-  saved; the same tag on both calls leaves one entry; a different tag on the second call
-  replaces the first; forgetting that one entry leaves no twin.
-- Doors 1, 3, 10, 11 as in section 6 (door 10 last; door 9 dropped, FM Q4; was: its own commit if the first
-  mate agrees). Door 3's lines are dormant until a year passes; tested with the freezer.
+**M2 (tier 2): the tag chips and doors 3, 1, 11, 10.** Read sections 4 (the tag table and
+"Dates and keys"), 5 ("The `tag` field"), 6 ("Door timing", "6a") first; this section is the
+build list. **M2 only wires `answer`, the card and the doors** (M2 N14): M1a already built
+the tag plumbing (`MEMORY_TAGS`, `MEMORY_TAG_KINDS`, the tag validation in
+`_memory_entry_ok`, `remember(user, "tags", ...)`, `forget_item(..., tag_kind)`, the cap,
+`people.py`). M2 renames `test` to `exam` in `MEMORY_TAGS` and writes no copy.
+
+*The card (the one ask, FM s2782 Q2).*
+- **The chips sit inside the text-step box.** The text step is one `.askday asktext` box
+  (`_askText`, `src/card/card-looks.js`): input, "ok", "skip". M2 adds the prompt and the
+  chip row to **that same box** (prompt, chips, input, ok, skip), so a weekend is still
+  two stages (yes -> the box) and a big day three (yes -> day options -> the box); there is
+  **no fourth stage and no new timer** (each stage has its own `ASK_MS`, 60 s; the box keeps
+  its one). The prompt is `MEMORY_TAG_CHIPS.q`; the chips are the eight labels and, first
+  and selected by default, "no tag".
+- **The tag lives on `step.tag`** (the object `_askTextStart` makes and `_askTextEnd`
+  reads). A tap on a chip sets it (a second tap on the same chip, or "no tag", clears it).
+  **Every end path sends the one `yes` with `step.tag` if set**: "ok", "skip", an empty
+  input, the Enter key, the `ASK_MS` timer, a slide switch, the tab hiding. A path that ends
+  with no chosen tag sends the `yes` with no `tag`, exactly as today. `_sendFollow` gains an
+  optional `tag` argument and puts `tag` in the one `virtual_pet/answer` it sends, with
+  `shared: false` (already there).
+- **The row is built only when** `this._mineSwitch(s, "memory_on", this._memoryOn)` (what
+  `card-status.js` reads, not `mine.memory_on` alone) **and**
+  `this._mineSwitch(s, "memory_allowed", s.memoryAllowed)` **and** `!sharedScreen()`. With
+  any of them false the box is exactly as today (input, ok, skip). A no-follow-support
+  server or a shared screen takes the `_askTextStart` early path (one `yes` at once, no box,
+  so no chips and no tag).
+- **A tag that fails on the server costs nothing** (section 5, FM s2782 Q7): the `yes` and
+  the typed words are kept; the card says nothing about the tag either way.
+- All new strings are `textContent` (privacy table, "HTML").
+- **The bench** (`dev/bench/README.md`, AGENTS.md "Screenshots"): the bench's `ask` option
+  runs `_ask` only, so the text step cannot be pinned today. M2 adds a `textStep` option
+  (`{kind, day}`, with `mine.memory_on` and `memory_allowed` from `mine`) that runs
+  `_askTextStart` and shows the box with the chip row, a chip chosen, and a narrow
+  (330 px) width; the README row is updated. The shots are the check for the row fitting;
+  the real-phone tap is section 11, not a gate.
+
+*The server (`answer`).*
+- `websocket_answer` (`__init__.py`): `vol.Optional("tag"): object`, passed to `async_answer`
+  as a parameter; **the validation is in `async_answer`** (section 5, M2 N15), not the
+  schema. A value outside `MEMORY_TAGS`, or not a string, raises the fixed `ValueError`
+  (nothing saved). A valid tag with `keep` false (memory off, this pet's option off,
+  `shared` not `False`) is ignored: the `yes` goes through. A tag on a question other than
+  `big_day` or `weekend` is refused (the same fixed error).
+- In the `big_day` / `weekend` `yes` branches, after the open event, `remember(user, "tags",
+  {"day": <the event's day>, "kind": question, "tag": tag})` when `keep` and a valid tag is
+  there: `day` is the picked day for a big day, and the **Saturday** (`due` minus 2 days,
+  section 4) for a weekend. The cap and the replace-on-key rule are `remember`'s.
+- The guide (`docs/guide.md`, "Privacy: what the pets remember"): a line about tags (the
+  eight kinds, `exam` among them, kept with the day, never typed words, shown on the page
+  later and used by a few remarks, forgotten with the rest) and door 10 (weekday patterns
+  for three kinds, one remark a month at most); a `GUIDE_STRINGS` entry for each in
+  `tests/test_memory.py` (M2 S9). `docs/features.md` section 7's memory row gets the tag
+  chips and doors 1, 3, 10, 11.
+
+*The doors.* As section 6, in this order of commits: the tag chips and the write; doors 3,
+1 and 11 (with the draft copy of 6a); **door 10 last, as its own commit**, with the
+`docs/HANDOFF.md` routines clause (section 6, "The not chosen list"; reword only that
+clause). `memory_door(mem, today, hour)` returns the first due door in the order 2, 3, 1,
+10, 4, 5, 12 (section 6); door 3's and door 1's notes are `{"kind": "door3", "tag": ...}`;
+door 11 is the `tag` field on the `friends_for` note (6a). `_MEMORY_SAID` needs no change.
+The visit marks `door1`, `door3` and `door10` through `mark_memory_said`, never
+`people.mark`, as the M1a notes say; door 11 marks nothing in memory (6a).
+
+*Acceptance (M2 S9; the tests the review should be able to run).*
+- **Pytest, tags** (`tests/test_memory.py`): `yes` with a valid `tag` leaves one tag
+  (`(day, kind)` as keyed, with the Saturday for a weekend); `yes` with no tag leaves none;
+  a repeat `yes` the same day with a different tag replaces the tag (and, as today, resets
+  the event); an invalid tag (a string outside the list, an `object`, a number, a list) is
+  refused with the one generic error and **nothing saved, the event included**; a valid tag
+  with memory off, with this pet's option off, and with `shared` absent or `true`: the `yes`
+  and the event are kept and **no tag and no error**; the typed words are in none of the
+  stored data (the "Typed words" row); a tag on a `how_day` answer is refused; forgetting
+  that one entry leaves no twin; a tag is not written without `asked_later`; `caplog` on the
+  integration and `websocket_api` shows no tag value after a bad `tag` (section 10,
+  "Logs"); the weekend tag's day is the Saturday; 130 tags in a day leave 120.
+- **Pytest, doors** (the freezer): door 3 fires a year after (a `trip`), not for `exam`,
+  `work_thing`, `something_else` or a `weekend` tag, not the day before or after, once per
+  day, and **Feb 29** (a tag on Feb 29, 2028 fires on Feb 28, 2029 and never on a Feb 29);
+  door 1 fires on tag day plus 7 and not on plus 6 or 8, not for `work_thing` or
+  `something_else`, and is **lost** (no `said` write) when the look is before 11:00 or from
+  20:00; door 10: 3 of the last 5 `match` on one weekday, said on the eve in the window,
+  not twice in 28 days across `match` and `show` patterns, and the two forget cases of
+  section 6 (4-of-5 survives one forget; forgetting a non-matching entry can start a
+  pattern); **door order**: with doors 2, 3, 1 and 4 all due, one goes per visit, in the
+  order 2, 3, 1, 10, 4, 5, 12, and the others are **not** marked said; with memory off, the
+  pet's option off, or no record, no door note and no `said`; door 11: a 12-month
+  `friends_for` carries `tag` when a `big_day` tag of the six exists in the window, carries
+  nothing for `work_thing`, a `weekend` tag or none, waits a look when the pet's first
+  birthday is that day (lost only with no second counted look), is not sent at 24 months, and writes no `memory["said"]` key. The `tags` cap
+  interplay: a door reads the capped list.
+- **Pytest, shape** (section 10, "`_mine`..." row): the door-notes test asserts
+  `set(note) <= {"kind", "pick", "tag"}` (the existing assertion in `tests/test_memory.py`
+  becomes this, FM s2782 Q1); a `friends_for` note's only added key is `tag`.
+- **JS tests** (`tests/js`): the chip row exists only with `_memoryOn` and
+  `memoryAllowed` and not `sharedScreen()`; a tap sets `step.tag`; **the single send carries
+  `tag` and `shared: false`**, and every end path of the text step (ok, skip, empty,
+  Enter, timer, slide switch, tab hide) sends **once** with the tag so far (or none);
+  with memory off the box has no row and the send has no `tag` key; the card says
+  `door11[tag]` for a 12-month `friends_for` with a tag and the existing line otherwise;
+  `fresh_copy.test.js` (the scan) passes with the two new tables named in `COPY_TABLES`.
+- **Card-check:** a new section `memorytags` (named in `SECTIONS`; it needs the same dev
+  bond `restart` seeds, so list it in `NEEDS`): the chip row shows with memory on, sends
+  once with the tag, and is absent without memory; **`sharedscreen` also gains "no chips on
+  a shared screen"** (it opens the same flow with the shared flag set); a tag label with
+  markup renders as text; `types` runs the copy scan. Run it through `scripts/gate --auto`
+  (the picker names the sections), `scripts/ci-gate` if it picks `all`.
+- **Copy scan:** the real table passes `scripts/copy-scan.js`; the M2 worker adds no
+  line that is not in 6a.
 
 ## 9. M3a and M3b: the page and the stickers (tier 2, card-heavy)
 
@@ -924,10 +1286,10 @@ adversarial review should be able to run.
 | Concern | Rule | Test |
 |---|---|---|
 | Sensors and attributes | Never (R4) | Pytest: with memory on and full (caps hit), the JSON of every sensor's attributes, `_house_view`, and `debug` holds none of the memory strings (tags, picks, dates of tags) |
-| `_mine`, `_visit_prefs` and the channel | Only `memory_on` and `memory_allowed` booleans (R3; M1 S7) | Pytest: `_mine(user)`, `_visit_prefs(user)`, the `visit` reply and a channel snapshot hold no dates, no tags, no lists (door notes hold at most one fixed-list pick, FM Q1: a door 4, 5 or 12 note is `kind` and `pick`, door 2's only `kind`), and exactly those two booleans about memory; `memory_get` is the only carrier. A door-6 note adds only the boolean `told` to its favourite's note |
+| `_mine`, `_visit_prefs` and the channel | Only `memory_on` and `memory_allowed` booleans (R3; M1 S7) | Pytest: `_mine(user)`, `_visit_prefs(user)`, the `visit` reply and a channel snapshot hold no dates and no lists (**door notes hold at most one fixed-list pick or one fixed-list tag, nothing dated**, FM M1b Q1 and FM s2782 Q1: a door 4, 5 or 12 note is `kind` and `pick`, a door 1, 3 or 10 note is `kind` and `tag`, door 2's only `kind`), and exactly those two booleans about memory; `memory_get` is the only carrier. A door-6 note adds only the boolean `told` to its favourite's note; **a 12-month `friends_for` note adds only `tag`** (door 11; its `months` is the friendship length, not a memory). The door-notes test in `tests/test_memory.py` asserts `set(note) <= {"kind", "pick", "tag"}` |
 | Bus, logbook, recorder | WS commands, not services | Pytest: a `MATCH_ALL` listener across `memory`, `memory_get`, `memory_forget`, `ask_again`, and the answer with a tag sees no event holding memory or the choice |
-| Logs | No integration log with memory or answers; no schema failure echoing a value (all free-value fields typed `object`, section 5) | Pytest with `caplog` on the integration **and** `homeassistant.components.websocket_api`: a bad tag, a bad `list`, a bad `key` **with a valid day and tag of a real entry**, a wrong type leave no record containing the value; and the handler's own error carries no value. This row can pass only with `object`-typed fields (review B1): with `vol.In` HA logs `humanize_error`'s message |
-| Shared screens | The card never asks, shows, fetches or adds; the server refuses unless `shared` is `false` (fail closed, R3; a card-honesty guard, not authentication). **Every `remember` path** is covered (M1 B1) | Pytest: each memory command with `shared: true` **and with `shared` absent** is refused and saves nothing. **And an `answer` for dream / guess / game / fav / great / a favourite's `since_told` with `shared` true or absent leaves `person["memory"]` unchanged, while the ordinary answer still works** (the pick or like is stored); a `tag` or the `memory` ask's answer with `shared` not `False` is refused with the generic error. Card-check `sharedscreen`: no memory WS call, no row, no link, no page. JS test: `_keepAnswer`, `_sendFollow` and the "great" send pass `shared: false`. Doors and the ask come from `visit`, which cannot see `shared`: see "Doors" |
+| Logs | No integration log with memory or answers; no schema failure echoing a value (all free-value fields typed `object`, section 5) | Pytest with `caplog` on the integration **and** `homeassistant.components.websocket_api`: a bad tag (a string outside the list, an `object`, a number), a bad `list`, a bad `key` **with a valid day and tag of a real entry**, a wrong type leave no record containing the value; and the handler's own error carries no value. This row can pass only with `object`-typed fields (review B1): with `vol.In` HA logs `humanize_error`'s message |
+| Shared screens | The card never asks, shows, fetches or adds; the server refuses unless `shared` is `false` (fail closed, R3; a card-honesty guard, not authentication). **Every `remember` path** is covered (M1 B1) | Pytest: each memory command with `shared: true` **and with `shared` absent** is refused and saves nothing. **And an `answer` for dream / guess / game / fav / great / a favourite's `since_told` / a big day or weekend `yes` with a `tag`, with `shared` true or absent, leaves `person["memory"]` unchanged, while the ordinary answer still works** (the pick or like is stored; the `yes` opens its event and keeps the typed words; **no tag, no error**, FM s2782 Q7); the `memory` ask's answer with `shared` not `False` is refused with the generic error, and so is a `tag` outside the fixed list, whatever `shared` is. Card-check `sharedscreen`: no memory WS call, no row, no link, no page. JS test: `_keepAnswer`, `_sendFollow` and the "great" send pass `shared: false`. Doors and the ask come from `visit`, which cannot see `shared`: see "Doors" |
 | WS shape | The memory commands copy `websocket_ask_again` (M1 N2) | Pytest: each command with `shared` absent is refused **before** the pet lookup (a bad `entity_id` with `shared` true gets `shared`, not `no_pet`); the only error codes are `shared`, `no_pet`, `not_asked`, one generic text each; `forget_me` still takes no `shared` |
 | Other people | Only `connection.user.id` | Pytest: B's `memory_get` and `memory_forget` never see or touch A's entries; B turning memory on leaves A's record alone |
 | WS fetch on demand | The page is fetched on open, held in no cache | Card-check: after closing the page, no memory text in the DOM; no `hatch-memory-*` localStorage key ever; `STASHED_QUESTIONS` doesn't include the memory ask |
@@ -936,7 +1298,7 @@ adversarial review should be able to run.
 | The ask | Counts only on the card's `shown` (M1 S3); asked once; held for baby talk (FM Q-D); `memory` not in `ONCE_KINDS` | Pytest: `_question` for `memory` writes no `likes_asked` and no `once_last` until `shown`; `shown` writes both only under `asked_later(..., "memory")` (a stray `shown` counts for nothing); a card that never sends `shown` is offered the ask on 3 days and gets `how_day` on day 4, and the ask returns after the weeks gap; "not now" and "yes" both set `memory_asked`; "yes" or "not_now" with no ask today, "yes" with the pet's option off, and either with `shared` not `False` are refused; `once_due` skips it after; with `baby_talk` on it is not asked; a saved `later_kind: "memory"` survives a reload; `forget` keeps `memory_asked` **and** `birthday_skipped` together |
 | Great answer | "great" records, never a soft morning (M1 B2, FM Q-A) | Pytest: "great" with memory on leaves `_moods` empty and writes `picks.great`; with memory off, the pet's option off or `shared` absent it gets the fixed refusal and no `set_mood`; a second "great" send is refused (`later_kind` popped); "tough" still sets the mood |
 | Off leaves no trace | Door guards live in `memory["said"]` only (M1 S2) | Pytest: fire a door note, turn memory off: the stored person has no door key anywhere (`noted` included); the visit's mark step for a door note never calls `people.mark`; `memory_said` on a forgotten person does not re-create the record |
-| Erase: per item | One entry gone, saved at once, a pattern ends with its history | Pytest: forget one tag; store and `memory_get` both lack it; a door 10 pattern with 3 entries stops after one is forgotten |
+| Erase: per item | One entry gone, saved at once; door 10 is re-derived from what remains (M2 S11) | Pytest: forget one tag; store and `memory_get` both lack it; a door 10 pattern of exactly 3 stops after one is forgotten; **a pattern of 4 (or 5) of the last 5 survives one forget**; forgetting an entry that is not on the weekday moves the last-5 window so an older matching entry **can start a pattern**, and the test says so |
 | Erase: admin option off | Off on every pet erases every person's memory; the triggers are the options flow's save **and removing an entry** (FM Q-C), comparing **stored options** across the other entries (section 5; review B2; M1 S8) | Pytest through the options flow **and `async_remove_entry`**: removal: A on and B off, remove A erases and saves; A on and B on, remove A erases nothing; the only pet removed erases; a disabled third entry with memory on blocks it; with no `people` in `hass.data` the flow saves the option and the removal finishes, no `KeyError`. Options flow: an unrelated option saved on the only pet erases **nothing** (the reload that follows leaves memory alone, and so does unloading or setting up an entry with zero or one pet loaded); memory off on the only pet erases once, saved at once; two pets: off on one erases nothing, then off on the second erases; a disabled third entry with memory on blocks the erase; the daily prune never erases |
 | Retention | Count caps only (Q4 = C), **enforced on write** (M1 S7); invalid entries dropped on load | Pytest: 130 tags saved **in one day, before any prune** -> 120 kept, oldest gone; a hand-edited store with an unknown tag, a bad date, a text-like value drops those entries and keeps the rest; a 13-month-old tag is **kept** (no time prune) |
 | What may be stored | Fixed lists and dates only (R5) | Pytest: every key and value in `person["memory"]` after a full flow matches the fixed-list schema; no typed text is anywhere in the store after a big day with words |
@@ -953,7 +1315,8 @@ adversarial review should be able to run.
 | Concurrency | An answer that lands during an off-switch's save can't re-add memory | Pytest: patch `async_save_now` to wait on an event, call `set_memory(off)`, send an answer while it waits, release: no memory in the store and in `memory_get`. Holding the lock is not the test; an `await` held open is (review S6). `remember` on a forgotten person does not re-create the record |
 | Dream pick (M0-d) | forget_me leaves no dream pick and no dream asker in the pet's save | See M0-d acceptance and "Diagnostics" (the store, never the dump). The guide's carve-out (section 8, M1 S9) says it is per pet and reaches loaded pets only |
 | HTML | `textContent` only | Card-check: a tag label, a pick value and an item key with markup render as text |
-| Doors | One door per visit, in door-number order (section 6); no door note and no `memory["said"]` write with memory off, the pet's option off or no memory record (M1 S6) | Pytest on `async_visit`: with memory off, with the pet's option off, and with the record missing, no door note and no `said` write; with two doors due, one goes, the lower-numbered, and the other is not marked said; door 5 does not fire on consecutive days (7-day spacing); door 6 fires once per favourite and `ask_again` re-arms it |
+| Doors | One door per visit, **in the order 2, 3, 1, 10, 4, 5, 12** (section 6, an exception to door-number order); no door note and no `memory["said"]` write with memory off, the pet's option off or no memory record (M1 S6) | Pytest on `async_visit`: with memory off, with the pet's option off, and with the record missing, no door note and no `said` write; with two doors due, one goes, the first in that order, and the other is not marked said (2 before 3, 3 before 1, 1 before 4; a due door 1 does not take door 2's single look); door 1, 2, 3 and 10 are **lost, not marked said**, when no look falls in their window; door 5 does not fire on consecutive days (7-day spacing); door 6 fires once per favourite and `ask_again` re-arms it |
+| Tags (M2) | The tag rides on the one `yes`; a valid tag that cannot be stored is dropped silently; a tag outside the list is refused (FM s2782 Q7); only the fixed list and the day are kept | Pytest: section 8 "Acceptance, tags" (valid, absent, invalid, memory off, option off, `shared` absent or true, wrong question, the Saturday, the cap). JS: the chip row only with `_memoryOn` and `memoryAllowed` and not `sharedScreen()`; one send carries `tag` and `shared: false`; every end path sends once. Card-check `memorytags` and `sharedscreen` (no chips). No typed word is in the stored data |
 | Door screen guard | The shared-screen guard for doors is the card's (R3; M1 S6) | JS test (`tests/js`): the card does not call `virtual_pet.visit` when `sharedScreen()` (existing behaviour, `card-visit.js:216`). The server cannot test this: `visit` has no `shared`. The guide says so |
 | Door order | (Concurrency and this row assert more than they test; neither counts as evidence alone) | Covered by "Doors" and "Door screen guard" above; the earlier "absent in the shared snapshot" wording is dropped (door lines come from the `visit` reply, not a snapshot) |
 | Stale card | An old card burns no ask and sends no `great`/memory write | See "The ask" (3-day bound) and "Shared screens" (absent `shared` writes no memory); the `great` send only when `mine.memory_on` is a card-side test, and the server refuses it with memory off |
@@ -990,6 +1353,11 @@ tools), none of these slices needs one: no new art (section 9).
   (the "no nagging" rule is about reminding the person, not a pet remembering fondly, but
   the scan can't tell). **Decided (FM, 2026-11-02): this plan's choice stands:** reword
   first, ask for an exception only if a line loses its charm.
+- **M2's doors are tied to a day and are lost with no look** (doors 1, 3, 10, and door 2
+  before them; FM s2782 Q5): a day with no look from 11:00 to 20:00 (door 2: before noon)
+  spends the door for good, accepted. **Door 11 waits a look on the pet's first birthday**
+  (it cannot lose to `birthday_friends` at 12 months; it is lost only with no second counted
+  look that day), and there is no recap at 24 months (FM s2782 Q6). Neither is a bug.
 - **Good news has no callback besides door 2.** "great" to slept, or a weekend "yes"
   without words, still end at the reply. Out of scope here.
 - **`slept: not really`** has no follow-up. Out of scope.
@@ -1041,7 +1409,8 @@ only so the numbering of 2 and 3 holds.
 
 **2. The `appointment` tag (review S5).** **Default: dropped from the list** (section 4):
 no door reads it and it would put a health-adjacent dated list in every backup. Keep it
-only if the owner wants the chip for the page's sake.
+only if the owner wants the chip for the page's sake. (`test` became `exam` for the same
+reason, FM s2782 Q8.)
 
 **3. Door 9, pets compare notes (review S10).** No owner answer names it and HANDOFF.md:525
 lists "pets noticing each other" as not chosen. **Decided (FM Q4, 2026-11-02): no.** Not
@@ -1080,12 +1449,15 @@ For the reviewer of each build ship. Try to break each; every item should have a
    says yes to everything for two years still keep the last 13 months of tags? Does any
    time-based prune remain that would eat remembered things (Q4 = C says none)?
 8. **Doors and nagging.** Does any door's line read as watching, scoring or nagging? Does
-   door 10 stay inside its limits (three tags, 3 of 5, eve only, once per 28 days)? Does
-   a `work thing` or `something else` tag ever reach a door, a sticker, a count or the recap? Does a door
-   repeat on consecutive days, or sooner than its spacing (section 6 "Door timing"; door
+   door 10 stay inside its limits (three tags, 3 of 5, eve only, once per 28 days across
+   all patterns)? Does a `work thing` or `something else` tag ever reach a door, a sticker,
+   a count or the recap (the section 4 table says: the page only; the answer wanted is no)?
+   Does a door 1, 3 or 11 line say the day happened, or is it "you told me"? Does `exam`
+   reach door 3? Does a door repeat on consecutive days, or sooner than its spacing (section 6 "Door timing"; door
    6 is one-shot per favourite)? Do two doors ever fire on one visit? Does a door guard
    write `person["noted"]`? Do the new tables pass `scripts/copy-scan.js` or have an
-   explicit, reviewed exception?
+   explicit, reviewed exception? Do the doors fire in the order 2, 3, 1, 10, 4, 5, 12
+   (section 6)?
 9. **M0-a's order.** Walk every weekday for a person who has come home (work, school,
    home) with: no event, an open event, 2 dated asks used, a kind resting, level 1 and 2,
    a one-time question due, morning vs evening, and a child back at 15:00. Does anyone
@@ -1120,11 +1492,19 @@ For the reviewer of each build ship. Try to break each; every item should have a
     still pass `scripts/card-check` `sharedscreen` and `types`?
 18. **`shared` fails closed.** Send every memory command with `shared` absent and with
     `true`: refused, nothing saved? (R3)
-19. **Dedupe and keys.** A dated follow-up answered twice for one ask leaves one tag? Does
-    a per-item forget remove exactly one entry with no twin? Which date does a weekend tag
-    carry, and which doors read it (section 4)?
+19. **Dedupe and keys.** The card sends **one** `yes` per ask and the tag rides on it
+    (section 4; the earlier "answered twice" was false). Does every end path of the text
+    step (ok, skip, empty, timer, slide switch, tab hide) send exactly once, with the tag so
+    far? Does a repeated `yes` the same day replace the tag and not double it? Does a
+    per-item forget remove exactly one entry with no twin? Which date does a weekend tag
+    carry (the Saturday), and which doors read it (none, section 4)?
 20. **An old card.** Does an old cached card burn the memory ask, starve the later slot
     for more than 3 days, or write memory with no `shared`? Does "great" ever set the soft
     morning (M1 B2)?
 21. **The pet's own option, server side.** Pets A (off) and B (on), memory on: does
-    `memory_get`, `memory_forget` or a `tag` through A work?
+    `memory_get` or `memory_forget` through A work? Does a `tag` through A keep the `yes`
+    and write no tag, with no error (FM s2782 Q7)?
+22. **A tag the server cannot store.** Turn memory off on another device while the chip row
+    is open, then tap "ok": is the big day kept, the typed words held, no tag stored and no
+    error shown? Does a tag outside the list get one generic error and nothing saved, and
+    leave no value in any log?

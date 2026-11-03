@@ -41,7 +41,7 @@ const results = [];
 
 // The gated sections of main(), in file order.
 const SECTIONS = ["shelf", "shell", "play", "resume", "moments", "photos", "personality", "types",
-  "egg", "sharedscreen", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "winter", "care",
+  "egg", "sharedscreen", "memorytags", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "winter", "care",
   "editor", "boot", "infrared", "lowbattery", "restart", "gifts", "finds", "collection", "oldcard"];
 // oldcard asserts restart's seeded bond; finds taps the basket restart seeds; collection
 // opens the finds page on the collection restart seeds; gifts uses restart's bounce (and
@@ -8141,6 +8141,37 @@ async function main() {
     check("fresh E8 (Sh-a): a visitor stays longer on a shared screen (its stay twice over)",
       e8s.shared - e8s.personal >= 2900, JSON.stringify(e8s));
   }
+  // Memory M2 (plan sections 8, 10): a shared screen gets no tag chips, even with memory on
+  // in its mine; the big day's "yes" goes at once, with no box, no tag (no follow-up send).
+  {
+    const m2s = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const entity = s.ids?.["sensor.life_stage"];
+      const realWS = el._hass.callWS;
+      const sent = [];
+      const had = { mine: s.mine, follow: el._followOk, shared: localStorage.getItem("hatch-shared-screen") };
+      try {
+        el._hass.callWS = (msg) => { sent.push(msg); return msg.type === "virtual_pet/answer" ? Promise.resolve({ until: "2999-12-31" }) : realWS.call(el._hass, msg); };
+        s.mine = { ...(had.mine || {}), memory_on: true, memory_allowed: true };
+        el._followOk = true;
+        localStorage.setItem("hatch-shared-screen", "on");
+        el._askTextStart(s, entity, "big_day", "2999-12-30");
+        s.queue?.find((q) => q.ask)?.then();
+        return { step: !!s.textStep, chips: s.screen.querySelectorAll(".asktext .tags, .asktext button.tag").length,
+          answers: sent.filter((m) => m.type === "virtual_pet/answer") };
+      } finally {
+        el._hass.callWS = realWS;
+        s.mine = had.mine;
+        el._followOk = had.follow;
+        if (had.shared === null) localStorage.removeItem("hatch-shared-screen"); else localStorage.setItem("hatch-shared-screen", had.shared);
+        el._askTextEnd(s);
+        s.screen.querySelector(".askday")?.remove();
+        Object.assign(s, { queue: [], asking: false, textStep: null });
+      }
+    });
+    check("memory M2: no tag chips on a shared screen (memory on in its mine), and no tag sent",
+      !m2s.step && m2s.chips === 0 && m2s.answers.every((m) => !("tag" in m)), JSON.stringify(m2s));
+  }
   // 5b. FA: turning on "shared screen" clears every personal line, typed or
   // typing, on every slide of every card on the page and in every tab (privacy P1).
   {
@@ -8486,6 +8517,135 @@ async function main() {
       h8s.words.join() === "Shared words ♪" && h8s.pool.includes(h8s.delivery[0]), JSON.stringify(h8s));
   }
 
+  await unpinAwake(card);
+  }
+  if (enter("memorytags")) {
+  // Memory M2 (docs/plan-2026-11-02-memory.md sections 6a, 8 "Acceptance", 10 "Tags"): the
+  // tag chips inside the big day's typed step, in the real card. With memory on and allowed
+  // the box has the prompt and nine chips (no tag first, picked); a tap picks one; ok sends
+  // the one "yes" once, with the tag and shared: false; without memory there is no row and
+  // no tag; the labels are text. The answer is caught here (the server's side is
+  // pytest's: tests/test_memory.py, "M2: the tags").
+  await pinAwake(card, "memorytags");
+  {
+    const src = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+    const CHIPS = require("vm").runInNewContext(`(${src.match(/\nconst MEMORY_TAG_CHIPS = (\{[\s\S]*?\n\});/)[1]})`);
+    const m2 = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const entity = s.ids?.["sensor.life_stage"];
+      const realWS = el._hass.callWS;
+      const sent = [];
+      const had = { mine: s.mine, follow: el._followOk, shared: localStorage.getItem("hatch-shared-screen") };
+      const box = () => s.screen.querySelector(".askday.asktext");
+      const chips = () => [...(box()?.querySelectorAll("button.tag") || [])];
+      const open = (kind = "big_day", day = "2999-12-30") => {
+        el._askTextStart(s, entity, kind, day);
+        s.queue?.find((q) => q.ask)?.then();
+      };
+      const answers = () => sent.filter((m) => m.type === "virtual_pet/answer");
+      const out = {};
+      try {
+        el._hass.callWS = (msg) => { sent.push(msg); return msg.type === "virtual_pet/answer" ? Promise.resolve({ until: "2999-12-31" }) : realWS.call(el._hass, msg); };
+        el._followOk = true;
+        localStorage.removeItem("hatch-shared-screen");
+        s.mine = { ...(had.mine || {}), memory_on: true, memory_allowed: true };
+        open();
+        const b = box();
+        out.on = {
+          prompt: b?.querySelector(".tagq")?.textContent,
+          labels: chips().map((c) => c.textContent),
+          keys: chips().map((c) => c.dataset.tag),
+          pressed: chips().map((c) => c.getAttribute("aria-pressed")),
+          order: [...(b?.children || [])].map((c) => c.className || c.tagName),
+          shown: !!b && chips().every((c) => c.offsetParent !== null),
+          // Every chip inside the screen, none under another (the row fits).
+          inside: (() => {
+            const sr = s.screen.getBoundingClientRect();
+            return chips().every((c) => { const r = c.getBoundingClientRect(); return r.left >= sr.left - 1 && r.right <= sr.right + 1 && r.top >= sr.top - 1 && r.bottom <= sr.bottom + 1; });
+          })(),
+        };
+        // The mono LCD look turns the old yellow fill and the chip's cream into one tone, so the
+        // picked chip must differ from an unpicked one in colours (fill and text), not by hue alone.
+        {
+          const hadMono = el._card.classList.contains("mono");
+          el._card.classList.add("mono");
+          const cs = (c) => { const x = getComputedStyle(c); return { bg: x.backgroundColor, fg: x.color }; };
+          out.mono = { picked: cs(chips()[0]), unpicked: cs(chips()[1]) };
+          el._card.classList.toggle("mono", hadMono);
+        }
+        chips().find((c) => c.dataset.tag === "show")?.click();
+        out.tapped = { tag: s.textStep?.tag, pressed: chips().find((c) => c.dataset.tag === "show")?.getAttribute("aria-pressed"), sent: answers().length };
+        chips().find((c) => c.dataset.tag === "show")?.click();
+        out.untapped = s.textStep?.tag ?? null;
+        chips().find((c) => c.dataset.tag === "lesson")?.click();
+        const input = b?.querySelector("input");
+        if (input) input.value = "piano";
+        [...(b?.querySelectorAll(":scope > button") || [])].find((x) => x.textContent === "ok")?.click();
+        el._askTextEnd(s); // the tick's end after: nothing more
+        await new Promise((r) => setTimeout(r, 50));
+        out.sent = answers().map((m) => ({ ...m }));
+        out.gone = !box();
+        // Skip with a tag, and the timer's end (no tap on ok): one send each, the tag on it.
+        sent.length = 0;
+        open("weekend", null);
+        chips().find((c) => c.dataset.tag === "something_else")?.click();
+        s.textStep.until = 0;
+        el._askTextEnd(s);
+        out.timer = answers().map((m) => ({ ...m }));
+        // Memory off: no row, the box as it was, the send has no tag.
+        sent.length = 0;
+        s.mine = { ...(had.mine || {}), memory_on: false, memory_allowed: true };
+        open();
+        out.off = { chips: chips().length, prompt: !!box()?.querySelector(".tagq"), order: [...(box()?.children || [])].map((c) => c.tagName) };
+        [...(box()?.querySelectorAll(":scope > button") || [])].find((x) => x.textContent === "skip")?.click();
+        out.offSent = answers().map((m) => ({ ...m }));
+        // Not allowed on this pet: no row.
+        s.mine = { ...(had.mine || {}), memory_on: true, memory_allowed: false };
+        open();
+        out.disallowed = chips().length;
+        el._askTextEnd(s);
+        // The labels are the card's own constants (a module's, out of reach here), so the
+        // markup rule is checked as built: every chip and the prompt are one text node.
+        s.mine = { ...(had.mine || {}), memory_on: true, memory_allowed: true };
+        open();
+        out.markup = [box()?.querySelector(".tagq"), ...chips()].map((c) => c && c.childNodes.length === 1 && c.firstChild.nodeType === 3);
+        el._askTextEnd(s);
+      } finally {
+        el._hass.callWS = realWS;
+        s.mine = had.mine;
+        el._followOk = had.follow;
+        if (had.shared === null) localStorage.removeItem("hatch-shared-screen"); else localStorage.setItem("hatch-shared-screen", had.shared);
+        el._askTextEnd(s);
+        s.screen.querySelector(".askday")?.remove();
+        Object.assign(s, { queue: [], asking: false, textStep: null, sayUntil: 0, sayClass: 0 });
+      }
+      return out;
+    });
+    const keys = ["", "exam", "match", "show", "trip", "party", "lesson", "work_thing", "something_else"];
+    check("memory M2: with memory on the typed step's box has the prompt and nine chips, no tag first and picked, in the one box",
+      m2.on.prompt === CHIPS.q && JSON.stringify(m2.on.keys) === JSON.stringify(keys) &&
+        JSON.stringify(m2.on.labels) === JSON.stringify([CHIPS.none, ...Object.values(CHIPS.labels)]) &&
+        m2.on.pressed[0] === "true" && m2.on.pressed.slice(1).every((p) => p === "false") &&
+        JSON.stringify(m2.on.order) === JSON.stringify(["tagq", "tags", "INPUT", "BUTTON", "BUTTON"]) && m2.on.shown,
+      JSON.stringify(m2.on));
+    check("memory M2: every chip shows inside the screen", m2.on.inside, JSON.stringify(m2.on));
+    check("memory M2: in mono the picked chip's fill and text colours differ from an unpicked one (dark fill, light text)",
+      m2.mono.picked.bg !== m2.mono.unpicked.bg && m2.mono.picked.fg !== m2.mono.unpicked.fg, JSON.stringify(m2.mono));
+    check("memory M2: a tap picks the tag (and sends nothing); the same chip again clears it",
+      m2.tapped.tag === "show" && m2.tapped.pressed === "true" && m2.tapped.sent === 0 && m2.untapped === null, JSON.stringify(m2.tapped));
+    const one = m2.sent[0] || {};
+    check("memory M2: ok sends the one yes once, with the tag, the words and shared: false",
+      m2.sent.length === 1 && one.question === "big_day" && one.answer === "yes" && one.tag === "lesson" &&
+        one.shared === false && one.text === "piano" && one.day === "2999-12-30" && m2.gone, JSON.stringify(m2.sent));
+    check("memory M2: the step's time running out sends the one yes with the tag so far (the weekend's)",
+      m2.timer.length === 1 && m2.timer[0].question === "weekend" && m2.timer[0].tag === "something_else" && m2.timer[0].shared === false,
+      JSON.stringify(m2.timer));
+    check("memory M2: memory off or not allowed here, no chips and the box as it was; the yes has no tag",
+      m2.off.chips === 0 && !m2.off.prompt && JSON.stringify(m2.off.order) === JSON.stringify(["INPUT", "BUTTON", "BUTTON"]) &&
+        m2.offSent.length === 1 && !("tag" in m2.offSent[0]) && m2.disallowed === 0, JSON.stringify({ off: m2.off, sent: m2.offSent, no: m2.disallowed }));
+    check("memory M2: the prompt and every chip label are text (textContent), never markup",
+      m2.markup?.length === 10 && m2.markup.every(Boolean), JSON.stringify(m2.markup));
+  }
   await unpinAwake(card);
   }
   if (enter("forget")) {

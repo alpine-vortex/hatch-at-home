@@ -32,6 +32,7 @@ import voluptuous as vol
 
 from . import channel, notify, rates as R
 from .const import (
+    ATTR_ACTION,
     ATTR_CATEGORY,
     ATTR_CONFIG_ENTRY_ID,
     ATTR_ENABLED,
@@ -59,6 +60,7 @@ from .const import (
     FRONTEND_URL,
     HOUSE_CATEGORIES,
     SERVICE_FAST_FORWARD,
+    SERVICE_HOP,
     SERVICE_MY_DAY,
     SERVICE_NOTIFY_ME,
     SERVICE_PLAY_GAME,
@@ -137,6 +139,15 @@ PLAY_GAME_SCHEMA = vol.Schema(
         # The card on a shared screen: a berry dig is the household's, not the
         # signed-in user's (the screen's own claim, as on the channel).
         vol.Optional("shared", default=False): cv.boolean,
+    }
+)
+# virtual_pet.hop (Hop of the Day). "board" only for now: ship 3a adds the
+# settle action. No `shared` and no person: the board is the pet's, the same
+# on every screen, and the call changes nothing.
+HOP_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        vol.Required(ATTR_ACTION): vol.In(["board"]),
     }
 )
 SHARE_NEWS_SCHEMA = vol.Schema(
@@ -241,6 +252,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_greeted)
     websocket_api.async_register_command(hass, websocket_my_day)
     websocket_api.async_register_command(hass, websocket_open_on)
+    websocket_api.async_register_command(hass, websocket_rest_offer)
     websocket_api.async_register_command(hass, websocket_rest)
     websocket_api.async_register_command(hass, websocket_set_shell)
     websocket_api.async_register_command(hass, websocket_rename)
@@ -340,6 +352,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             guess, call.context, kind, call.data["shared"]
         )
 
+    async def hop(call: ServiceCall) -> ServiceResponse:
+        # Only "board" so far (the schema holds the list).
+        return await pet_of(call).async_hop_board()
+
     async def share_news(call: ServiceCall) -> ServiceResponse:
         # One pet that isn't loaded doesn't keep the news from the others.
         pets: dict[str, PetCoordinator] = {}
@@ -419,6 +435,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     hass.services.async_register(
         DOMAIN,
+        SERVICE_HOP,
+        hop,
+        schema=HOP_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
         SERVICE_SHARE_NEWS,
         share_news,
         schema=SHARE_NEWS_SCHEMA,
@@ -470,6 +494,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         # "anything big this week?": the day they picked (opp #2), an ISO date.
         vol.Optional("day"): cv.string,
         vol.Optional("shared"): bool,
+        # A big day's or weekend's tag (memory plan M2): any value passes the schema, so
+        # a schema failure can never log it; the pet checks it against the fixed list.
+        vol.Optional("tag"): object,
     }
 )
 @websocket_api.async_response
@@ -509,6 +536,7 @@ async def websocket_answer(
             # (memory plan R3, M1 B1); an old card or a shared one keeps the
             # answer as ever, and memory is left alone.
             private=msg.get("shared") is False,
+            tag=msg.get("tag"),
         )
     except ValueError:
         connection.send_error(msg["id"], "not_asked", "It didn't ask that")
@@ -906,6 +934,37 @@ async def websocket_open_on(
     await pet.async_set_open_on(
         connection.user.id, msg["enabled"], house=msg["scope"] == "house"
     )
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/rest_offer",
+        vol.Required("entity_id"): cv.entity_id,
+        # Refused unless False, as open_on: a shared screen answers for no one.
+        vol.Required("shared"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_rest_offer(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """The signed-in person answered the offer to rest the others (plan
+    favourite-resting §6.4). It only sets the answer; "Forget my data" clears
+    it. The rests themselves are separate `rest` calls."""
+    if msg["shared"] is not False:
+        connection.send_error(
+            msg["id"], "shared", "That is answered on its person's own screen"
+        )
+        return
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    await pet.async_set_rest_offer(connection.user.id)
     connection.send_result(msg["id"])
 
 

@@ -253,3 +253,13 @@ def test_an_old_save_drops_a_zone_when_my_day_is_off():
     assert "zone" not in P._person({"zone": zone})
     assert "zone" not in P._person({"zone": zone, "my_day": False})
     assert P._person({"zone": zone, "my_day": True})["zone"] == zone
+
+
+def test_the_rest_offer_answer_is_a_boolean_and_goes_with_forget():
+    """Plan favourite-resting §6.4 point 3 (test 30c): a wrong-typed answer is
+    dropped, a kept one stays, and "forget my data" doesn't keep it."""
+    assert P._person({"rest_offer": "yes", "my_day": True}) == {"my_day": True}
+    assert P._person({"rest_offer": 1}) == {}
+    assert P._person({"rest_offer": True}) == {"rest_offer": True}
+    assert P._person({"rest_offer": False}) == {"rest_offer": False}
+    assert "rest_offer" not in P._FORGET_KEEPS
