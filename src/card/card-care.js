@@ -763,11 +763,14 @@ class HatchPetCardCare extends HatchPetCardActions {
   }
 
   // The unheld sleep state: what the server says now, not what a running scene holds (4.3b).
+  // Each is true, false, or null when the entity is unavailable, unknown or missing (an integration
+  // reload between the tap and the answer): that is no reading, not an off.
   _lightsLive(s) {
-    return {
-      asleep: this._hass.states[s.ids?.["binary_sensor.asleep"]]?.state === "on",
-      lights: this._hass.states[s.ids?.["switch.lights_out"]]?.state === "on",
+    const read = (id) => {
+      const st = this._hass.states[s.ids?.[id]]?.state;
+      return st === "on" ? true : st === "off" ? false : null;
     };
+    return { asleep: read("binary_sensor.asleep"), lights: read("switch.lights_out") };
   }
 
   // The answer to a lights scene, read on every hass update (_layout) and every frame of the scene
@@ -780,7 +783,7 @@ class HatchPetCardCare extends HatchPetCardActions {
     if (sc?.kind !== "lights" || sc.failAt != null || sc.answerAt != null || sc.refuseAt != null) return;
     const live = this._lightsLive(s);
     const was = sc.start0;
-    const changed = sc.wake ? !live.asleep && !live.lights && (was.asleep || was.lights) : live.asleep && !was.asleep;
+    const changed = sc.wake ? live.asleep === false && live.lights === false && (was.asleep || was.lights) : live.asleep === true && !was.asleep;
     const at = this._sceneNow(sc);
     if (changed) {
       this._sceneAnswer(s, "ok", at);

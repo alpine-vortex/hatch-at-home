@@ -1379,3 +1379,45 @@ test("audit N1/N5: nothing past the gate plays while the scene holds on it: lie,
   assert.deepStrictEqual(plain(wake.log.bg), ["day"]);
   assert.strictEqual(w.dusk.style.opacity, ".3");
 });
+
+test("audit N6: an unavailable, unknown or missing asleep entity is no change, not an answer", () => {
+  for (const bad of ["unavailable", "unknown", undefined]) {
+    const f = lightsCard({ asleep: true, lights: true });
+    lightsTap(f);
+    const sc = f.s.scene;
+    assert.strictEqual(sc.wake, true);
+    f.states["binary_sensor.asleep"] = bad === undefined ? undefined : { state: bad };
+    f.states["switch.lights_out"] = { state: "off" };
+    sc.at = 100;
+    f.self._lightsWatch(f.s);
+    assert.strictEqual(sc.answerAt, null, `a wake with asleep ${bad}`);
+    flipLive(f, false); // the entities are back, the pet is awake: now it is the answer
+    sc.at = 200;
+    f.self._lightsWatch(f.s);
+    assert.strictEqual(sc.result, "ok");
+  }
+  const t = lightsCard();
+  lightsTap(t);
+  t.states["binary_sensor.asleep"] = { state: "unavailable" };
+  t.s.scene.at = 100;
+  t.self._lightsWatch(t.s);
+  assert.strictEqual(t.s.scene.answerAt, null, "a tuck is not answered by an unavailable one either");
+  assert.deepStrictEqual(plain(t.self._lightsLive(t.s)), { asleep: null, lights: false });
+});
+
+test("audit N2, N7, N9: _forget clears the drape, a lights scene drops .resting, disconnect ends scene and drape timers", () => {
+  const forget = method("_forget");
+  assert.match(forget, /this\._drapeStop\(s\);\s+this\._drapeHide\(s\);\s+s\.wasDrape = undefined;/);
+  assert.match(src, /toggle\("resting", !!rest && !lightsScene\)/);
+  const bye = src.match(/\n  disconnectedCallback\(\) \{[\s\S]*?\n  \}\n/)[0];
+  assert.match(bye, /this\._sceneEnd\(s, \{ quiet: true \}\);/);
+  assert.match(bye, /this\._drapeStop\(s\);/);
+  // And what the clear does: a landing timer is cancelled and the blanket is down.
+  const f = lightsCard();
+  f.self._drapeSync(f.s, false);
+  f.self._drapeSync(f.s, true);
+  assert.strictEqual(f.s.drapeAnim, true);
+  f.self._drapeStop(f.s);
+  f.self._drapeHide(f.s);
+  assert.deepStrictEqual([f.s.drapeAnim, f.s.drape.hidden, f.s.drapeFrame, plain(f.s.drapeTimers)], [false, true, 0, []]);
+});
