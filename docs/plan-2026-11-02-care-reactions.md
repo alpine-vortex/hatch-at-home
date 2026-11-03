@@ -1475,5 +1475,3 @@ B1 validation fixes below.
 - Reduced motion: the scene never starts (`sceneFade`). The "calm pat" follow-up needed no code: `_pat`
   sets the pat pose before it looks at the cooldown, and ship C's rewrite keeps the wiggle for motion only
   (`tests/js/touch.test.js`, "reduced motion: the pose and the line, no lean, no wiggle").
-- Two pre-existing pytest failures on the B1 base (`test_ask_again.py::test_the_answer_is_on_no_bus_log_sensor_or_house_view`,
-  `test_forget.py::test_a_dream_without_its_asker_loads_and_is_nobodys_idea`): not from this ship.
