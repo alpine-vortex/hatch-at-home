@@ -556,6 +556,15 @@ const OPEN_ON_COPY = {
   mine: (name) => `♥ open on ${name}`,
   house: (name) => `shared screens open on ${name}`,
 };
+// The offer after a person's first pick of the pet their card opens on (favourite §6.1,
+// FM approved 2026-11-03): the whole of its copy. The helper is REST_HELP in the plural, so
+// it promises no refill, no "content" and no "no calls" (owner R1-1).
+const REST_OFFER_COPY = {
+  title: "Let the others rest?",
+  rest: "rest them",
+  notNow: "not now",
+  help: "Resting pets won't get any hungrier, and don't grow up until they're back. Visit any time.",
+};
 // The settings row: a switch on a personal screen; on a shared one its state only (decided).
 function restRow(on, shared, name) {
   const value = shared

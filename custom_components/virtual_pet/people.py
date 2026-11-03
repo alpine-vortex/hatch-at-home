@@ -688,6 +688,9 @@ _PERSON_KEYS: dict[str, Any] = {
     "asked": lambda v: isinstance(v, dict) and isinstance(v.get("day"), str),
     "phone_asked": lambda v: isinstance(v, bool),  # the phone question (top10 1a)
     "open_on": lambda v: isinstance(v, str),  # a pet's entry id (favourite §5.2)
+    # The rest offer was answered ("rest them" or "not now", favourite §6.4); not
+    # kept by forget, so it can come once more after.
+    "rest_offer": lambda v: isinstance(v, bool),
     # The memory ask (memory plan M1): answered, and the days it was offered unshown.
     "memory_asked": lambda v: isinstance(v, bool),
     "memory_chosen_days": lambda v: (

@@ -532,9 +532,12 @@ class HatchPetCardSheets extends HatchPetCardStatus {
     if (scope === "me") {
       openOnWrite(this._openKey(), enabled ? s.ids.device : null);
       this._renderShelf(); // the heart moves now
+      if (!enabled) this._restOffer = null; // the toggle off takes the offer with it (§6.2)
     }
+    let ok = false;
     try {
       await this._hass.callWS({ type: "virtual_pet/open_on", entity_id: id, enabled, scope, shared: sharedScreen() });
+      ok = true;
     } catch (err) {
       (this._slides || []).forEach((x, i) => { if (x.mine) x.mine[key] = before[i]; });
       if (scope === "me") {
@@ -546,6 +549,66 @@ class HatchPetCardSheets extends HatchPetCardStatus {
     } finally {
       button.classList.remove("pending");
     }
+    if (ok) this._offerRest(s, scope, enabled, before); // after the call: a failure offers nothing
+  }
+
+  // The other pets on this card that "rest them" would rest (favourite §6.2 rule 4): a pet
+  // the card knows (not unavailable or unknown, which would only answer "egg" or "no_pet"),
+  // not an egg, not resting already. An away one counts: it may rest while away (§3.4).
+  // This card's slides only (config.devices): a pet the card doesn't show isn't rested.
+  _othersToRest(s) {
+    return (this._slides || []).filter((x) => {
+      if (x === s || !x.ids || x.empty) return false;
+      const stage = this._state(x, "sensor.life_stage")?.state;
+      return !!stage && !["unavailable", "unknown", "egg"].includes(stage)
+        && this._state(x, "switch.resting")?.state !== "on";
+    });
+  }
+
+  // The offer to rest the others (favourite §6.3): only on a person's first pick, the edge
+  // per person (no slide said mine.open_on before the call, so moving the favourite never
+  // offers), on their own screen, never for "house" or _openOnSync's late move (which never
+  // calls this). Not shown and not marked when no other pet can rest (Q5). Card state only:
+  // a button answers it; leaving the sheet clears it and saves nothing (Q1).
+  _offerRest(s, scope, enabled, before) {
+    if (scope !== "me") return;
+    if (!enabled || sharedScreen() || before.some((on) => on === true)) return;
+    if (s.mine?.rest_offer !== false || (this._slides || []).some((x) => x.mine?.rest_offer === true)) return;
+    if (!this._othersToRest(s).length) return;
+    this._restOffer = { device: s.ids.device };
+    s.statusHtml = null;
+    if (s.settings) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+  }
+
+  // The offer's buttons (§6.3): "rest them" rests each other pet that can (one call each,
+  // each with its own refill rule; the offer reads no refill time), then marks the person;
+  // "not now" only marks them. Answered if one rest went through (Q4); any failure says so
+  // once, with no retry (each pet's own sheet has its resting row). The row then goes.
+  async _answerRestOffer(s, rest, button) {
+    const offer = this._restOffer;
+    if (!offer || offer.busy || offer.device !== s.ids?.device) return; // a call is in flight
+    offer.busy = true;
+    for (const b of button?.parentElement?.querySelectorAll(".bell") || []) b.classList.add("pending");
+    let failed = false;
+    let answered = !rest;
+    if (rest) {
+      const done = await Promise.allSettled(this._othersToRest(s).map((x) =>
+        this._hass.callWS({ type: "virtual_pet/rest", entity_id: x.ids["sensor.life_stage"], enabled: true })));
+      failed = done.some((r) => r.status === "rejected");
+      answered = done.some((r) => r.status === "fulfilled");
+    }
+    if (answered) {
+      try {
+        await this._hass.callWS({ type: "virtual_pet/rest_offer", entity_id: s.ids["sensor.life_stage"], shared: sharedScreen() });
+        this._setMine("rest_offer", true); // at once; the channel's push confirms it
+      } catch (err) {
+        failed = true;
+      }
+    }
+    if (this._restOffer === offer) this._restOffer = null; // the row just goes (Q6)
+    s.statusHtml = null;
+    if (s.settings) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+    if (failed) this._statusMessage(s, SETTINGS_AGAIN.failed); // after the redraw, which would replace it
   }
 
   // "My day" is per person too: steps, stairs and sleep from their own phones.

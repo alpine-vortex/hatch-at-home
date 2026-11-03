@@ -252,6 +252,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_greeted)
     websocket_api.async_register_command(hass, websocket_my_day)
     websocket_api.async_register_command(hass, websocket_open_on)
+    websocket_api.async_register_command(hass, websocket_rest_offer)
     websocket_api.async_register_command(hass, websocket_rest)
     websocket_api.async_register_command(hass, websocket_set_shell)
     websocket_api.async_register_command(hass, websocket_rename)
@@ -933,6 +934,37 @@ async def websocket_open_on(
     await pet.async_set_open_on(
         connection.user.id, msg["enabled"], house=msg["scope"] == "house"
     )
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/rest_offer",
+        vol.Required("entity_id"): cv.entity_id,
+        # Refused unless False, as open_on: a shared screen answers for no one.
+        vol.Required("shared"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_rest_offer(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """The signed-in person answered the offer to rest the others (plan
+    favourite-resting §6.4). It only sets the answer; "Forget my data" clears
+    it. The rests themselves are separate `rest` calls."""
+    if msg["shared"] is not False:
+        connection.send_error(
+            msg["id"], "shared", "That is answered on its person's own screen"
+        )
+        return
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    await pet.async_set_rest_offer(connection.user.id)
     connection.send_result(msg["id"])
 
 

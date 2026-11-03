@@ -888,6 +888,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     if (!n) return;
     this._userMoved = true; // a swipe, an arrow or a dot: the opening pet no longer moves the card
     const to = (index + n) % n;
+    if (this._restOffer && this._restOffer.device !== this._slides[to]?.ids?.device) this._restOffer = null; // offered on the pet left
     this._slides.forEach((x, i) => {
       // A game stops on the slide being left: nobody plays it unseen.
       if (x.game && i !== to) this._quitGame(x, null);

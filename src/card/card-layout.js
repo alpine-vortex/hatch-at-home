@@ -784,6 +784,7 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     if (open) this._stopTyping(s); // the bubble hides: the line is said whole
     if (open && s.game) this._quitGame(s, null); // the sheet covers it: nobody plays it unseen
     s.screen.classList.toggle("show-status", open);
+    if (!open) this._restOffer = null; // the sheet closed without a button: not an answer (§6.3)
     s.journal = false;
     s.finds = false;
     s.everyWorld = false;
