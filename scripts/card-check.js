@@ -9917,7 +9917,8 @@ async function main() {
   // inner glass, driven through the card's own _channel with the wire 3A built (house.device_fx.current,
   // snapshot.device_fx_recent, a live {"fx": entry}). It names the adapter (_dirLive, _dirView, _dirSync, _dirSwitch,
   // _dirPause, _dirShown), _channel, _toggleStatus, _go and _onHidden so scripts/pick-sections picks it when one
-  // of them changes (a client-only follow-up would otherwise pick nothing, pick-sections:118-134).
+  // of them changes (a client-only follow-up would otherwise pick nothing, pick-sections:118-134). It names the
+  // part's constants too: HATCH_DEVICE_FX, HATCH_DIRECTOR, RECIPES, CLASSES, KINDS, COLLAPSE, RAIN, serverClockKnown.
   await setLcd(true); // the harness runs with the effects off; the glass needs the switch on
   await card.evaluate((el) => el._dirSwitch());
   const fxWait = (ms) => page.waitForTimeout(ms);
