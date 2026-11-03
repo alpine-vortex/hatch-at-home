@@ -95,6 +95,7 @@ class HatchPetCardActions extends HatchPetCardJournal {
     if (!s.laySheet && s.screen.classList.contains("show-status")) this._toggleStatus(s);
     // Its log entry is "mine" (PR 2a); a few kept, so two quick taps both count.
     s.pressed = [...(s.pressed || []).filter((p) => Date.now() - p.pressedAt < MINE_MATCH_MS), { action, pressedAt: Date.now() }];
+    this._rimCue(s, button?.dataset?.action); // feed's and clean's rim cue; the others have none
     this._sceneStart(s, action);
     const sc = s.scene;
     const layAt = action === "lay_egg" ? this._layWatch(s) : null; // the name sheet waits for the lay (S3)
@@ -270,6 +271,9 @@ class HatchPetCardActions extends HatchPetCardJournal {
     s.frame = 0;
     if (!quiet) this._redraw(s);
     if (!quiet && sc.result === "ok") entry?.done?.call(this, s, sc);
+    // The tuck, confirmed (the answer was a yes and the lie-down beat wrote s.wasAsleep): the lamps dim
+    // on the rim. A wake wrote false, a refusal has no ok; the scene's own beats are not touched.
+    if (!quiet && sc.kind === "lights" && !sc.wake && sc.result === "ok" && s.wasAsleep === true) this._rimCue(s, "lights");
   }
 
   // The answer reaches the live scene: at is ms since the tap (the bench passes its own).

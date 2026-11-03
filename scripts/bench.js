@@ -141,6 +141,26 @@ const PRESETS = {
     rain("lit", "rain, the backlight on", { deviceFx: { rain: true }, scene: "night", classes: ["lit"] });
     rain("reduce", "rain, reduced motion (still sheen; no onset)", { deviceFx: { rain: true, onset: "start", at: 600 }, motion: "reduce" });
     rain("off", "rain, screen effects off (nothing)", { deviceFx: { rain: true, onset: "start", at: 600 }, lcd: "off" });
+    // Device-alive slice 3C: the rim cues, one shot per cue mid-flight (clip: the device, so the bezel shows),
+    // against a light and a dark shell, then the protected states: the switch off (nothing), reduced motion
+    // (nothing), a care scene running (the scene wins: no cue), medicine (no cue). `at` is ms into the cue.
+    const rimShot = (name, label, extra) => {
+      for (const width of [420, 300]) {
+        out.push({ name: `alive/rim-${width}-${name}`, group: `alive-rim-${width}`, label, world: "woodland", width,
+          clip: "device", ...extra });
+      }
+    };
+    rimShot("feed", "feed: the delivery path, 450 ms in", { rimCue: { action: "feed", at: 450 } });
+    rimShot("play", "play: two points, 150 ms in", { rimCue: { action: "play", at: 150 } });
+    rimShot("clean", "clean: the sweep, 500 ms in", { rimCue: { action: "clean", at: 500 } });
+    rimShot("tuck", "tuck: the lamps dimming, 700 ms in", { rimCue: { action: "lights", at: 700 } });
+    rimShot("feed-dark", "feed on a dark shell", { rimCue: { action: "feed", at: 450 }, shell: { finish: "smoke" } });
+    rimShot("tuck-dark", "tuck on a dark shell", { rimCue: { action: "lights", at: 700 }, shell: { finish: "smoke" } });
+    rimShot("off", "feed with screen effects off (nothing)", { rimCue: { action: "feed", at: 450 }, lcd: "off" });
+    rimShot("reduce", "feed, reduced motion (nothing)", { rimCue: { action: "feed", at: 450 }, motion: "reduce" });
+    rimShot("scene", "clean pressed with a care scene running (the scene wins: nothing)",
+      { care: "clean", careAt: 600, pet: { poop: 1 }, rimCue: { action: "clean", at: 500 } });
+    rimShot("medicine", "medicine (no cue)", { rimCue: { action: "medicine", at: 450 } });
     return out;
   },
   // The card around the toy: status screen, game picker, a speech bubble.

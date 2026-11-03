@@ -828,6 +828,39 @@ provable without a device; the device queue above is for the look and feel only.
   the card's own `_channel` (cases 1, 2, 3, 7, M7, 8, 9, 12, 13, 14, 17); the real-rain-flip line (dev's
   `input_number.fake_rain_rate`) is not in it, see the first mate's list in the 3B report.
 
+**As built in 3C.**
+
+- **Part.** No new part: the rim recipes are in `device-fx.js` (`RIM`: `feed`, `play`, `clean`, `lights`, each a kind
+  `rimFeed`, `rimPlay`, `rimClean`, `rimTuck`; `RIM_CLASSES`; `rim(dir, slide, action, id, env)`), merged into
+  `RECIPES` beside the rain, so the manifest order and the TDZ guard are unchanged. A rim recipe is a `shellImpulse`
+  lease at `PRIORITY.care` (a press is over a house onset; a rain drop in flight is replaced, the sheen stays),
+  `durationMs` 1300 / 900 / 1100 / 1800, `cancel: "finish"`, origin `user`, presentation `onset`, no cooldown, a fresh
+  id per press (`rim-<n>`).
+- **Layer.** `<i class="hw rim"><b></b><b></b><b></b></i>` in the `.bezel`, after `.hw.light` and before `.screen`
+  (so beside the toys, never over one): `inset:0`, `z-index:-1` like every `.hw`, `pointer-events:none`, shown only
+  under `ha-card.lcd-on` and the `round()` gate, hidden under reduced motion. `.cap` and `.toy` have no rim rule. The
+  rain's `.hw.glass` is untouched; the two layers share the one `s.dirEffect` (one `shellImpulse` effect per slide).
+  The rim's own `dir-rim-life` animation is the lease's clock; its `animationend` (target the rim only) releases it.
+- **Cues.** Amber lamps (`b`) on the bezel plastic, by opacity or `left` only: feed = three lamps along the bottom edge
+  lighting in turn; play = the middle of each side, two pulses; clean = one lamp sweeping the top edge; tuck = three lamps
+  on the top edge, each lit then dimming, one after another.
+- **Where they start.** `_rimCue(s, action)` (card-visit.js) is the one method, called from `_press` (feed, clean: after
+  the call is known to go out, **ahead of `_sceneStart`**), `_startGame` (play: after its refusals) and `_sceneEnd` (the
+  tuck: `sc.kind === "lights" && !sc.wake && sc.result === "ok" && s.wasAsleep === true`, so a confirmed lie-down, never
+  a wake, a refusal or a tap that cut the scene before the lie-down beat). Not from `_tapped`, which in `_press` runs after
+  `_sceneStart`, when the press's own scene already counts as running and would win. No tuck beat is edited
+  (`_lightsTuck`, `_lightsWake`, `card-care.js` are untouched).
+- **Rules.** `rim` offers nothing under `calm()`; checks `busyOwners(slide)` for `scene` itself (the director only
+  consults the busy list for `screenFx` and `petBody`) and returns `busy`; the director's `canRender` handles the switch
+  and the slide on show. A press is never held as an echo. Medicine, snack, scold and praise: `no-cue`. No sound and no
+  haptic anywhere in the path.
+- **Bench.** `alive/rim-*`: one shot per cue mid-flight at both widths, feed and tuck on a dark shell, the switch off,
+  reduced motion, a clean scene running (the scene wins) and medicine (no cue). Shot option `rimCue` (README).
+- **Not done / for slice 4.** No card-check case (the node tests and the bench cover it; the real-Chromium
+  `elementFromPoint` check on a control is a one-liner to add to `devicefx` if the first mate wants it). The tuck's cue
+  comes at the scene's end, after the dim, not during it (the scene is running then, and it wins). Slice 4 may move the
+  rim recipes with the house rows if they are to share a rim layer with ambience.
+
 3C (rim cues; `node --test`, the bench, card-check only if first adapter):
 
 | Case | Proof |

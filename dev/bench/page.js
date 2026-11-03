@@ -247,6 +247,21 @@
     window.bench.info = { glass: s.glass.className, effect: s.dirEffect || 0, canRender: card._director.inspect(s)?.tracks || null };
   }
 
+  // `rimCue` (device-alive 3C): {action, at}. The card's own `_rimCue` for the toy's data-action (feed, play,
+  // clean, lights; medicine and the rest have none), the rim's animations paused `at` ms in (default 500), so a
+  // frame is the same every run. After a `care` scene is seeked, a running scene wins (no cue).
+  function rimShot(card, s, shot) {
+    const cue = shot.rimCue;
+    s.subscribed = true;
+    card._rimCue(s, cue.action);
+    for (const a of s.rim.getAnimations({ subtree: true })) {
+      if (typeof CSSTransition !== "undefined" && a instanceof CSSTransition) a.finish();
+      else { a.pause(); a.currentTime = cue.at ?? 500; }
+    }
+    (window.bench.info ||= {}).rim = { classes: s.rim.className, effect: s.dirEffect || 0, scene: s.scene?.kind || null,
+      busy: card._director.busyOwners(s) };
+  }
+
   // `look`: a look played over time by the card's own tick (the driver moves the pinned
   // clock and calls bench.step): {at: seconds in, resumed: a tab back after 3 h hidden
   // (fresh-moment 1), seenAgo: hours since this device last looked (the away note)}.
@@ -1082,6 +1097,7 @@
     }
     // `care`: a care scene started through _sceneStart, paused and seeked to `careAt` ms (careSeek).
     if (shot.care) await careSeek(card, cur, shot);
+    if (shot.rimCue) rimShot(card, cur, shot);
     // `bowlStep`: the feed bowl on the floor at step 0 (full) to 3 of its clip, through the card's own
     // _bowlClip (plan care-reactions 5.1); `bowlRim` stands in for species.json "bowl_rim".
     if (shot.bowlStep !== undefined) {

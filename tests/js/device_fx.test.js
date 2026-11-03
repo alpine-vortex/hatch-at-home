@@ -449,7 +449,7 @@ test("the snapshot sets the ambient state before the first view reads it (M6), a
 // ---- the CSS (12, 14) ----
 
 const rules = (css) => [...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => [m[1].trim(), m[2]]);
-const glassCss = () => src.slice(src.indexOf("  @supports (width: round(1px, 1px)) {\n    .hw.glass {"), src.indexOf("  /* Clear: the board behind the screen"));
+const glassCss = () => src.slice(src.indexOf("  @supports (width: round(1px, 1px)) {\n    .hw.glass {"), src.indexOf("  /* The rim cues (device-alive 3C"));
 
 test("14: the glass is a .hw layer in the screen, under the bubble, the status, the game and the boot screen", () => {
   const build = src.slice(src.indexOf("  _buildSlide() {"), src.indexOf("    const q = (sel) => slide.querySelector(sel);"));
