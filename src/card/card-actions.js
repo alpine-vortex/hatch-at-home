@@ -148,15 +148,18 @@ class HatchPetCardActions extends HatchPetCardJournal {
     s.screen.classList.add("in-scene");
     this._patSync(s);
     for (const el of [s.pet, s.perch]) el.style.transition = "none";
-    // A tap on the screen ends a skippable one; a meal's takes the tap and does nothing.
-    // Either way it doesn't open the status. The status sheet, opened over it, keeps its own
-    // taps: a meal plays for seconds, and its settings must not go dead under it.
-    sc.stop = (e) => {
-      if (s.status?.contains(e.target)) return;
-      e.stopImmediatePropagation();
-      if (entry.skippable) this._sceneEnd(s);
-    };
-    s.screen.addEventListener("click", sc.stop, true);
+    // A tap on the screen ends a skippable one (medicine, clean); it doesn't open the status.
+    // A meal's (feed, snack) and a bedtime's leave screen taps alone (plan 4.3, FM decision
+    // 2026-11-02): the wanted chip, the basket and the tap on the screen work during a meal. The
+    // status sheet, opened over a skippable one, keeps its own taps.
+    if (entry.skippable) {
+      sc.stop = (e) => {
+        if (s.status?.contains(e.target)) return;
+        e.stopImmediatePropagation();
+        this._sceneEnd(s);
+      };
+      s.screen.addEventListener("click", sc.stop, true);
+    }
     this._sceneRender(s, 0);
     const loop = () => {
       if (s.scene !== sc) return;

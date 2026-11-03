@@ -650,3 +650,11 @@ test("a gobble's chomps are not cut: variant C's second chomp outlives the first
   assert.ok(sc.bites[1].at - sc.bites[0].at < 280, "the bites are closer than a chomp is long");
   assert.match(src, /this\._animate\(s, s\.pet, "chomp", 280\)/);
 });
+
+test("the screen-tap stop is installed for a skippable scene only; the status sheet keeps its taps", () => {
+  const start = method("_sceneStart");
+  assert.match(start, /if \(entry\.skippable\) \{\n\s+sc\.stop = /);
+  assert.ok(!/sc\.stop = [^]*if \(entry\.skippable\) this\._sceneEnd/.test(start));
+  assert.match(start, /if \(s\.status\?\.contains\(e\.target\)\) return;/);
+  assert.match(method("_sceneEnd"), /if \(sc\.stop\) s\.screen\.removeEventListener/);
+});
