@@ -867,9 +867,9 @@ const PRESETS = {
     // The drape sheet: every species and stage on frame 3, in the day (the scene at 1500) and in the dim.
     for (const species of allSpecies().sort()) {
       for (const stage of speciesData(species).stages.filter((x) => x !== "egg")) {
-        shot("sheet-day", `${species}-${stage}`, `${species} ${stage} day`, { species, stage, world: worldOf(species), careAt: 1500, live, tile: 110 });
+        shot("sheet-day", `${species}-${stage}`, `${species} ${stage} day`, { species, stage, world: worldOf(species), careAt: 1500, live, tile: 150 });
         out.push({ name: `tuck/sheet-dim/${species}-${stage}`, group: "tuck-sheet-dim", label: `${species} ${stage} dim`, ...plain, species, stage,
-          world: worldOf(species), tile: 110 });
+          world: worldOf(species), tile: 150 });
       }
     }
     return out;
