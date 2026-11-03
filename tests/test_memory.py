@@ -225,9 +225,10 @@ def test_a_saved_record_over_its_caps_or_with_twins_is_cut_on_load() -> None:
     assert out["picks"]["dream"] == picks[-5:]
 
 
-def test_memory_days_are_canonical_iso_and_none_after_today_at_load() -> None:
+def test_memory_days_are_canonical_iso() -> None:
     """Audit finding 2: `fromisoformat` takes 20261101 and 2026-W44-1, which would twin a
-    day; a future day would pin itself as the newest. Memory only: a bad entry goes."""
+    day. Memory only: a bad entry goes. A day after today is kept (no clock test at load:
+    a stale clock at boot would erase real days)."""
     for bad in ("20261101", "2026-W44-1", "2026-11-1", "9999-12-31 ", " 2026-11-01"):
         assert not P._memory_entry_ok(
             "tags", {"day": bad, "kind": "big_day", "tag": "show"}
@@ -256,26 +257,25 @@ def test_memory_days_are_canonical_iso_and_none_after_today_at_load() -> None:
     assert out == {"on": True}
     assert not P._person({"memory_chosen_days": ["20261101"]}).get("memory_chosen_days")
     assert P._person({"memory_chosen_days": ["2026-11-01"]})["memory_chosen_days"]
-    # At load, a day after today goes; today stays.
+    # A day after today is kept, whatever "today" is.
     future = {"day": "9999-12-31", "pick": "sea"}
     today = {"day": "2026-11-02", "pick": "sea"}
     record = {"memory": {"on": True, "picks": {"dream": [today, future]}}}
-    assert P._person(record, "2026-11-02")["memory"]["picks"]["dream"] == [today]
     assert P._person(record)["memory"]["picks"]["dream"] == [today, future]
 
 
-async def test_a_stored_future_day_is_dropped_on_load_and_saved(
+async def test_a_stored_future_day_is_kept_on_load_even_with_a_stale_clock(
     hass: HomeAssistant, hass_storage: dict[str, Any]
 ) -> None:
+    """A box booting with a clock before NTP must not erase real days."""
     far = {"day": "9999-12-31", "pick": "sea"}
     old = {"day": "2011-03-03", "pick": "sea"}
-    pet = await start(
-        hass,
-        hass_storage,
-        {"u": {"memory": {"on": True, "picks": {"dream": [old, far]}}}},
-    )
-    assert pet.people.memory("u")["picks"]["dream"] == [old]
-    assert saved_people(hass_storage)["u"]["memory"]["picks"]["dream"] == [old]
+    stale = {"memory": {"on": True, "picks": {"dream": [old, far]}}}
+    with patch(
+        "custom_components.virtual_pet.people.model_today", return_value="2001-01-01"
+    ):
+        pet = await start(hass, hass_storage, {"u": stale})
+    assert pet.people.memory("u")["picks"]["dream"] == [old, far]
 
 
 async def test_remember_keeps_one_per_key_and_its_caps_at_once(

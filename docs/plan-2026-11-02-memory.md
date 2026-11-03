@@ -95,8 +95,8 @@ built on it.
 - **M1a audit (s2758, tier 2): 1 player-impact finding, 5 nits** ("player-impact 1, nits
   5"). The fixes shipped in s2759: the row shows while memory is on (finding 1), the
   admin erase pushes to every loaded pet (5), the row's fallback is the viewed pet's own
-  option and the row hides until it is known (4), memory's days are canonical ISO and
-  none after today at load (2); findings 3 and 6 are the notes in section 12 and the guide.
+  option and the row hides until it is known (4), memory's days are canonical ISO (2);
+  findings 3 and 6 are the notes in section 12 and the guide.
 
 ## 2. What was checked against the code
 
@@ -784,6 +784,12 @@ false; B's data is untouched.
   stores the new options, could leave one record on with no pet allowing it. Nothing
   can write to it (every write checks this pet's option), but only "forget my data" or
   another off-save clears it. Small window; not fixed in M1a.
+- **Remainder (a future day)**: memory's days must be canonical ISO, but a day after
+  today is kept. A clock set wrong at write time can leave one that sorts newest, so the
+  cap evicts the real oldest first. Accepted (M1a audit finding 2; FM 2026-11-02): a
+  load-time drop would erase real memory on a box that boots with a stale clock before
+  NTP, and a clock-aware cap has the same flaw (a stale "today" would treat real days as
+  future). Needs a clock wrong at write time; no honest write path produces it.
 - **Remainder (two options saves at once)**: each flow's erase check reads the other pet
   entry's stored options before either has saved, so two admins (or two tabs) turning off
   two different pets' options at the same moment can each see the other "on", and neither
