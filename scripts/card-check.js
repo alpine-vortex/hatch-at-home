@@ -5291,7 +5291,7 @@ async function main() {
     el._sceneEnd(s);
     out.own = { text: s.bubble.textContent, cls: s.sayClass };
     s.sayUntil = 0; s.sayClass = 0; s.queue = [];
-    s.sceneOwes = { kind: "medicine", until: Date.now() + 5000 };
+    s.sceneOwes = [{ kind: "medicine", until: Date.now() + 5000, playOwed: false }];
     el._react(s, { action: "medicine", result: "ok", at: new Date().toISOString() }, { mine: true });
     out.late = { text: s.bubble.textContent, cls: s.sayClass };
     s.sayUntil = 0; s.sayClass = 0; s.queue = [];

@@ -322,9 +322,17 @@
         cancelAnimationFrame(sc.raf);
         sc.paused = true;
         tag();
+        // `answer`: {at, result} answers it at that scene ms, through the card's own _sceneAnswer
+        // (with none, a scene with a gate holds there, then gives up 2 s on: plan 4.3).
+        const answer = shot.answer;
         for (let t = 0; cur.scene === sc; t = Math.min(at, t + 10)) {
           runDue(t);
           now = t;
+          if (answer && !sc.benchAnswered && t >= answer.at) {
+            sc.benchAnswered = true;
+            card._sceneAnswer(cur, answer.result || "ok", answer.at);
+            tag();
+          }
           if (cur.scene !== sc) break;
           card._sceneRender(cur, t);
           tag();

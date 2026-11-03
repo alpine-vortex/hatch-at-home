@@ -10,7 +10,14 @@
 //                                   ramp(a, b) and ease(a, b) on the clock t
 //   clear(s, sc)                 what the scene changed outside sc.els, put back at its end
 //   done(s, sc)                  after the end's redraw, when the scene was answered
-//   skippable                    a tap on the screen, or the same care again, ends it
+//   skippable                    a tap on the screen, or the same care again, ends it (else the
+//                                second tap is ignored and the screen tap does nothing)
+//   gate                         ms at which the answer is needed; the scene holds there (4.3)
+//   playOwed                     an ok that comes after the scene ended plays the floor (4.5)
+//   refuse(s, sc, u, k), refuseMs, refuseAt(s, sc, te)
+//                                the push-away u ms in, how long it is, where on the clock it
+//                                starts for a refusal at te (default te)
+//   exit(s, sc, u, k)            the exit beat u ms in (SCENE_EXIT_MS), when it gives up
 const SCENES = {
   medicine: {
     ms: 2200,
@@ -69,7 +76,8 @@ const SCENES = {
     ms: 2300,
     skippable: true,
     due(s) {
-      return Number(this._state(s, "sensor.poop")?.state || 0) > 0;
+      const poop = Number.parseFloat(this._state(s, "sensor.poop")?.state); // unavailable, unknown, NaN: no scene (4.2)
+      return Number.isFinite(poop) && poop > 0;
     },
     setup(s, sc, { add, box, pet }) {
       this._actPose(s.species, s.drawn, s.speciesId, "splash", () => {}); // warm the load probe

@@ -20,7 +20,14 @@ const REFUSALS = {
 const PROP_FOR = { game: "play", chore_treat: "snack" };
 // Sol's shared props, for every species that has no own ("../ui/" leaves sprites/).
 const FALLBACK_PROPS = { scold: "../ui/prop_scold", praise: "../ui/prop_praise", fan: "../ui/prop_fan" };
-// Care scenes (SCENES, card-care.js): their props, two frames each (art/props/cut_clean_props.py). A species may bring
+// Care scenes (SCENES, card-care.js; plan care-reactions 4.3-4.5). A log entry's action
+// answers the scene of its kind: lights_out answers a lights scene, every other its own.
+const SCENE_KIND_OF = { lights_out: "lights" };
+const sceneKind = (action) => SCENE_KIND_OF[action] || action;
+const SCENE_HOLD_MS = 2000; // the longest a scene waits at its gate for the answer
+const SCENE_EXIT_MS = 400; // the exit beat when it gives up, or the call failed
+const SCENE_OWE_MS = 10000; // how long an ended scene's answer is still its own
+// Their props, two frames each (art/props/cut_clean_props.py). A species may bring
 // its own in species.json "props" under the same key.
 const SCENE_PROPS = {
   broom: ["../ui/prop_broom_1", "../ui/prop_broom_2"],
