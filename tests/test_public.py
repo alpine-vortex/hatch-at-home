@@ -431,3 +431,61 @@ async def test_an_appliance_done_moment_holds_only_type_kind_and_at(
     # No entity id, and not its words, on the bus or the list.
     text = json.dumps([e.data for e in heard] + done, default=str)
     assert "upstairs" not in text and "binary_sensor" not in text
+
+
+async def test_a_shared_screens_device_fx_is_the_whitelist_and_nothing_else(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Slice 3A, cases 10 and 15: on a shared (wall) screen everything the device
+    bridge sends is a version, whitelisted booleans, and ring entries of a fixed
+    shape: no entity id, no name, no user, no title, and no more than a personal
+    screen's (the same house view)."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    hass.states.async_set("weather.garden_of_zebulon", "sunny")
+    await setup_with_house(hass, weather="weather.garden_of_zebulon")
+    pet = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id(
+        {
+            "type": f"{DOMAIN}/subscribe",
+            "entity_id": "sensor.pip_life_stage",
+            "shared": True,
+        }
+    )
+    assert (await client.receive_json())["success"]
+    heard: list[dict[str, Any]] = [(await client.receive_json())["event"]]
+    for state in ("rainy", "sunny"):  # a rain, and (after its block) the end of it
+        hass.states.async_set("weather.garden_of_zebulon", state)
+        await settle(hass, freezer, 60)
+        await client.send_json_auto_id({"type": "ping"})
+        while (msg := await client.receive_json())["type"] != "pong":
+            heard.append(msg["event"])
+    assert pet.device_fx.recent(pet._now())
+    kinds = set()
+    for message in heard:
+        view = (message.get("house") or {}).get("device_fx")
+        if view is not None:
+            assert set(view) == {"version", "current"} and view["version"] == 1
+            assert set(view["current"]) <= {"rain"}
+            assert all(isinstance(v, bool) for v in view["current"].values())
+        for entry in [
+            *message.get("device_fx_recent", []),
+            *([message["fx"]] if "fx" in message else []),
+        ]:
+            assert set(entry) == {"id", "kind", "occurred_at", "expires_at", "scope"}
+            assert entry["scope"] == "house" and entry["kind"].startswith("rain_")
+            kinds.add(entry["kind"])
+    assert kinds == {"rain_started", "rain_stopped"}
+    text = json.dumps(heard)
+    for leak in ("weather.", "zebulon", "garden", hass_admin_user.id, "Zeb", "user"):
+        assert leak.lower() not in text.lower(), leak
+    # The house view a shared screen gets holds the same device_fx as a personal one.
+    assert (
+        pet._shared_house(pet._house_view())["device_fx"]
+        == pet._house_view()["device_fx"]
+    )

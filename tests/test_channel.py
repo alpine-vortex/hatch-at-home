@@ -21,7 +21,7 @@ from custom_components.virtual_pet import model
 from custom_components.virtual_pet.const import DOMAIN
 
 from .test_forget import a_user
-from .test_init import STORE_KEY, hatched_pet, settle, setup
+from .test_init import STORE_KEY, hatched_pet, settle, setup, setup_with_house
 
 LEVELS = model.R.BOND_LEVELS
 
@@ -483,3 +483,85 @@ async def test_the_evening_reaches_an_open_card_with_nothing_else_changing(
             e["mine"]["follow_evening"] for e in await pushed(client) if "mine" in e
         ]
     assert heard == [True]  # once, when the hour came
+
+
+async def rainy_house(
+    hass: HomeAssistant, hass_storage: dict[str, Any], now: float, state: str = "sunny"
+) -> Any:
+    """A pet whose house can tell rain (a weather entity), for the device bridge."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    hass.states.async_set("weather.private_name", state)
+    await setup_with_house(hass, weather="weather.private_name")
+    return hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+
+
+async def test_the_house_goes_out_before_the_device_onset_that_belongs_to_it(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Plan 6.3 (M1): _sense_home only collects; the new `current` reaches the
+    card first and the `fx` message second, one per transition, top level (never
+    under `moment`, where an old card would keep it or say it)."""
+    await rainy_house(hass, hass_storage, now)
+    client = await hass_ws_client(hass)
+    snapshot = await subscribe(client)
+    assert snapshot["house"]["device_fx"]["current"] == {"rain": False}
+    hass.states.async_set("weather.private_name", "rainy")
+    await settle(hass, freezer)
+    got = await pushed(client)
+    assert [next(iter(e)) for e in got] == ["house", "fx"]
+    assert got[0]["house"]["device_fx"]["current"] == {"rain": True}
+    assert set(got[1]) == {"fx"} and got[1]["fx"]["kind"] == "rain_started"
+    assert not [e for e in got if "moment" in e and "fx" in json.dumps(e["moment"])]
+
+
+async def test_a_push_with_nothing_new_sends_nothing_with_the_bridge_on(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """B4: `recent` is never in the diffed house, so it expiring is no change."""
+    coordinator = await rainy_house(hass, hass_storage, now)
+    client = await hass_ws_client(hass)
+    await subscribe(client)
+    hass.states.async_set("weather.private_name", "rainy")
+    await settle(hass, freezer)
+    await pushed(client)
+    assert coordinator.device_fx.recent(coordinator._now())
+    freezer.tick(timedelta(seconds=120))  # the ring empties between pushes
+    coordinator._push_watchers()
+    coordinator._push_watchers()
+    assert await pushed(client) == []
+    assert "device_fx_recent" not in json.dumps(coordinator._house_view())
+
+
+async def test_the_onset_reaches_every_watcher_once_the_shared_screen_too(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    await rainy_house(hass, hass_storage, now)
+    mine = await hass_ws_client(hass)
+    shared = await hass_ws_client(hass)
+    await subscribe(mine)
+    await subscribe(shared, shared=True)
+    hass.states.async_set("weather.private_name", "rainy")
+    await settle(hass, freezer)
+    for client in (mine, shared):
+        got = await pushed(client)
+        assert [e["fx"]["kind"] for e in got if "fx" in e] == ["rain_started"]
+        assert [next(iter(e)) for e in got] == ["house", "fx"]
+    # A shared screen's snapshot: the same whitelist as a personal one.
+    again = await subscribe(await hass_ws_client(hass), shared=True)
+    assert again["house"]["device_fx"] == {"version": 1, "current": {"rain": True}}
+    assert [e["kind"] for e in again["device_fx_recent"]] == ["rain_started"]
