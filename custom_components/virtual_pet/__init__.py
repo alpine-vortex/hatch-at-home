@@ -32,6 +32,7 @@ import voluptuous as vol
 
 from . import channel, notify, rates as R
 from .const import (
+    ATTR_ACTION,
     ATTR_CATEGORY,
     ATTR_CONFIG_ENTRY_ID,
     ATTR_ENABLED,
@@ -59,6 +60,7 @@ from .const import (
     FRONTEND_URL,
     HOUSE_CATEGORIES,
     SERVICE_FAST_FORWARD,
+    SERVICE_HOP,
     SERVICE_MY_DAY,
     SERVICE_NOTIFY_ME,
     SERVICE_PLAY_GAME,
@@ -137,6 +139,15 @@ PLAY_GAME_SCHEMA = vol.Schema(
         # The card on a shared screen: a berry dig is the household's, not the
         # signed-in user's (the screen's own claim, as on the channel).
         vol.Optional("shared", default=False): cv.boolean,
+    }
+)
+# virtual_pet.hop (Hop of the Day). "board" only for now: ship 3a adds the
+# settle action. No `shared` and no person: the board is the pet's, the same
+# on every screen, and the call changes nothing.
+HOP_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        vol.Required(ATTR_ACTION): vol.In(["board"]),
     }
 )
 SHARE_NEWS_SCHEMA = vol.Schema(
@@ -340,6 +351,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             guess, call.context, kind, call.data["shared"]
         )
 
+    async def hop(call: ServiceCall) -> ServiceResponse:
+        # Only "board" so far (the schema holds the list).
+        return await pet_of(call).async_hop_board()
+
     async def share_news(call: ServiceCall) -> ServiceResponse:
         # One pet that isn't loaded doesn't keep the news from the others.
         pets: dict[str, PetCoordinator] = {}
@@ -414,6 +429,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         SERVICE_PLAY_GAME,
         play_game,
         schema=PLAY_GAME_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_HOP,
+        hop,
+        schema=HOP_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
 
