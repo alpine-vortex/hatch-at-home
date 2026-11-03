@@ -1038,6 +1038,11 @@ const STYLE = `
   /* Every row: an icon slot (maybe empty), the label, the value; all on one grid. */
   .row { display: grid; grid-template-columns: 18px 84px minmax(0, 1fr); align-items: center; gap: 6px; }
   ha-card:not(.bigtext) .porthole .row { grid-template-columns: 16px 60px minmax(0, 1fr); gap: 5px; } /* the rim cuts the value column (UX8 F7) */
+  /* The nature row (N3) holds a 40-60 character note, which the narrow value column (about 54px at 300, 44 in
+     big text) wrapped to 8 lines of one or two words: where the column is narrow (a compact card, which every
+     viewport under 420 is, and big text) the label sits on its own line and the note runs full width below it. The wide card keeps the row. */
+  .compact .row.naturerow, ha-card.bigtext .row.naturerow { grid-template-columns: 18px minmax(0, 1fr); row-gap: 2px; }
+  .compact .row.naturerow > :last-child, ha-card.bigtext .row.naturerow > :last-child { grid-column: 1 / -1; }
   .bar { height: 9px; border: 2px solid #2f3a24; padding: 1px; }
   .bar div { height: 100%; background: #2f3a24; }
   .hearts { letter-spacing: 2px; }

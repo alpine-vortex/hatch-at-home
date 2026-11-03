@@ -1169,9 +1169,9 @@ async function runShots(browser, base, shots, outDir, workers) {
             const el = document.querySelector("hatch-pet-card").shadowRoot.querySelector(sel);
             const r = document.createRange();
             r.selectNodeContents(el);
-            return new Set([...r.getClientRects()].map((q) => Math.round(q.top))).size;
+            return { lines: new Set([...r.getClientRects()].map((q) => Math.round(q.top))).size, value: Math.round(el.getBoundingClientRect().width) };
           }, shot.lines);
-          fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify({ lines: n }));
+          fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(n));
         }
         if (shot.costume || shot.gift || shot.look || shot.care || shot.lightsAlign) {
           const info = await page.evaluate(() => window.bench.info);

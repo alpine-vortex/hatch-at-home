@@ -1695,16 +1695,16 @@ Where the code differed, the code is right and N4 reads from it.
 3. **Server.** `coordinator.species_notes` (filled in the `catalog.species` loop),
    `species_note` in the status slots (`intent.py`), the sentence in `PROMPT` before "Care
    for it only when asked to". `test_assist.py`'s `endswith` check is untouched.
-4. **The cap (Q4), measured.** The bench's new `lines` shot option counts a row's wrapped
-   lines (`nature/note-*` shots, plus a throwaway run over all 30). **No note fits two lines
-   at 330**: the value column holds about 19 characters there, and the shortest note (fox,
-   47) is already 3 lines. Counts by length: hamster (60) 3 / 4 / 5 / 6 lines at 420 / 330 /
-   300 / big text; the worst are octopus 3 / 5 / 8 / 9, hermitcrab 3 / 5 / 7 / 9 and seal
-   3 / 5 / 7 / 10 (they break on long words). The status page scrolls, so nothing clips, but
-   the row is tall at 300 and in big text. As the plan says, the builder does not reword
-   and the **data test's cap stays the hard ceiling, 60** (a lower cap that all 30 notes
-   meet does not exist). The full table is in the worker's `renders/note-line-counts.txt`.
-   Open for the first mate: shorten the notes, put the row last, or accept the height.
+4. **The cap (Q4), measured; FM decision 2026-11-03: keep 60, no shortening.** The bench's
+   new `lines` shot option counts a row's wrapped lines (`nature/note-*` shots, plus a
+   throwaway run over all 30). First measure: the value column is 122px at 420, 78 at 330,
+   54 at 300 and 44 in big text, so no note fit two lines at 330 and octopus was 3 / 5 / 8 / 9
+   lines at 420 / 330 / 300 / big text. **Fix (card CSS only, `style.js`):** where the
+   column is narrow (`.compact`, which is every viewport under 420, and big text) the
+   `.naturerow` stacks: the label on its own line, the note full width below; the 420 card
+   is unchanged. After it, the worst of all 30 is 3 / 2 / 3 / 3 lines (octopus 3 / 2 / 3 / 3;
+   hamster, 60 characters, 3 / 2 / 2 / 3). The data test's cap stays the hard ceiling, 60.
+   The full table is in the worker's `renders/note-line-counts.txt`.
 5. **Tests.** Python: `test_species.py` (each note: valid, at most 60, no digit or `?` or
    `!`, no NAG or banned word on word boundaries, clock and sky clauses equal to the
    species' `nature`; all 30 distinct; firefly and lunamoth do not hum or sing) and
