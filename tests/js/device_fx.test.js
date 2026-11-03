@@ -112,7 +112,7 @@ test("m5: the adapter and its part never name a screen class of the house effect
   const calls = [...(code(part) + code(adapterText()) + code(src.slice(src.indexOf("  _forget(s) {"), src.indexOf("    this._clearAsk(s);")))).matchAll(/glass\??\.classList\.(?:add|remove|toggle)\(([^)]*)\)/g)];
   assert.ok(calls.length >= 4, "the glass's classList calls were found");
   for (const m of calls) for (const lit of m[1].match(/"[^"]*"/g) || []) assert.match(lit, /^"dir-/, m[0]);
-  assert.deepStrictEqual([...F.CLASSES], ["dir-drop", "dir-clear", "dir-echo"]);
+  for (const c of [...F.CLASSES, ...F.CLASSES_BY_LAYER.ambient, ...F.CLASSES_BY_LAYER.rim]) assert.match(c, /^dir-/, c);
 });
 
 test("the adapter makes no sound, no haptic, and has no quiet-hours branch (12)", () => {
@@ -128,6 +128,7 @@ function stubCard(w, over = {}) {
   ctx.lcdOn = () => w.env.lcdOn;
   ctx.calm = () => w.env.calm;
   ctx.serverClockKnown = () => w.env.clockKnown;
+  ctx.serverNow = () => w.env.now;
   const Adapter = vm.runInNewContext(`(class {\n${adapterText()}\n})`, ctx);
   const card = Object.assign(Object.create(Adapter.prototype), { _director: w.dir, _visible: true, _booting: false, _slides: [], _index: 0 });
   return card;
@@ -171,7 +172,7 @@ test("a live onset leaves occurredAt and ttlMs unset; a ring entry carries the s
 
 test("anything the card does not know is dropped: kind, scope, id, a bad time, a non-object", () => {
   for (const bad of [
-    entry("snow_started"), entry("rain_started", { scope: "private" }), entry("rain_started", { id: "" }), entry("rain_started", { id: 7 }),
+    entry("hail_started"), entry("snow_started", { kind: "snow_paused" }), entry("rain_started", { scope: "private" }), entry("rain_started", { id: "" }), entry("rain_started", { id: 7 }),
     entry("rain_started", { kind: "__proto__" }), null, "rain_started", 5,
   ]) assert.strictEqual(F.cueOf(bad, false), null, JSON.stringify(bad));
   assert.strictEqual(F.cueOf(entry("rain_started", { occurred_at: "soon" }), true), null);
@@ -307,6 +308,7 @@ test("an old timer cannot clear a newer drop (the generation token)", () => {
   F.live(w.dir, s, entry("rain_started", { id: "a" }), w.env);
   const first = s.dirEffect;
   w.dir.cancel(s, "test");
+  w.advance(w.t + 21000); // past the kind's cooldown
   F.live(w.dir, s, entry("rain_started", { id: "b" }), w.env);
   assert.notStrictEqual(s.dirEffect, first);
   assert.strictEqual(w.dir.release(s, first), false); // a stale animationend
@@ -392,7 +394,7 @@ test("the hooks: statusOpen, the director, the glass element, the first-view and
   assert.match(src, /this\._director = HATCH_DIRECTOR\.create\(\{\s*now: serverNow, deviceNow: Date\.now, trusted: serverClockKnown,\s*canRender: \(s\) => lcdOn\(\) && this\._dirShown\(s\),/);
   assert.match(src, /recipes: HATCH_DEVICE_FX\.RECIPES/);
   assert.doesNotMatch(src, /!calm\(\)[^\n]*_dirShown|_dirShown[^\n]*calm\(\)/); // reduced motion is not in canRender (M3)
-  assert.match(src, /s\.glass\.addEventListener\("animationend", \(\) => \{\s*if \(s\.dirEffect\) this\._director\?\.release\(s, s\.dirEffect\);/);
+  assert.match(src, /s\.glass\.addEventListener\("animationend", \(e\) => \{\s*if \(e\.target === s\.glass && e\.animationName === "dir-glass-life" && s\.dirEffect\) this\._director\?\.release\(s, s\.dirEffect\);/);
   const go = src.slice(src.indexOf("  _go(index, auto = false) {"));
   assert.match(go.slice(0, go.indexOf("\n  }\n")), /this\._dirView\(this\._slides\[to\]\)/);
   const hidden = src.slice(src.indexOf("  _onHidden = () => {"), src.indexOf("  connectedCallback() {"));
@@ -479,8 +481,8 @@ test("12: the glass's motion is its own dir- classes, still under reduced motion
   const wet = rules(css).filter(([sel]) => /dir-wet/.test(sel));
   assert.ok(wet.length >= 2);
   for (const [sel, body] of wet) assert.doesNotMatch(body, /animation\s*:/, sel);
-  // every selector that animates is a dir- one
-  for (const [sel, body] of rules(css)) if (/animation\s*:/.test(body)) assert.match(sel, /dir-(drop|clear)/, sel);
+  // every selector that animates is a dir- one (the weather's own checks are in device_fx_weather.test.js)
+  for (const [sel, body] of rules(css)) if (/animation(-duration)?\s*:/.test(body)) assert.match(sel, /dir-/, sel);
   assert.match(css, /@keyframes dir-run/);
   assert.match(css, /@keyframes dir-dry/);
 });
