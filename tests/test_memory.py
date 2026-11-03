@@ -26,7 +26,7 @@ from pytest_homeassistant_custom_component.common import (
     async_capture_events,
 )
 
-from custom_components.virtual_pet import async_remove_entry, people as P
+from custom_components.virtual_pet import async_remove_entry, people as P, rates as R
 from custom_components.virtual_pet.const import CONF_MEMORY, DOMAIN
 from custom_components.virtual_pet.diagnostics import (
     async_get_config_entry_diagnostics,
@@ -165,7 +165,7 @@ def test_a_hand_edited_record_drops_bad_entries_one_by_one() -> None:
             {"day": "2026-10-01", "kind": "big_day", "tag": "appointment"},
             {"day": "2026-13-01", "kind": "weekend", "tag": "trip"},
             {"day": "2026-10-02", "kind": "big_day", "tag": "my sister's recital"},
-            {"day": "2026-10-03", "kind": "big_day", "tag": "test", "text": "maths"},
+            {"day": "2026-10-03", "kind": "big_day", "tag": "exam", "text": "maths"},
             "x",
         ],
         "picks": {
@@ -809,6 +809,11 @@ async def test_full_memory_is_on_no_sensor_view_log_bus_dump_or_assist(
     bus = async_capture_events(hass, MATCH_ALL)
     me = hass_admin_user.id
     pet = await start(hass, hass_storage, {me: {"memory": full_memory()}})
+    # Set up everything that registers an HTTP view before hass_ws_client starts the
+    # HTTP app: after that the router is frozen and a late view fails the test at random.
+    assert await async_setup_component(hass, "homeassistant", {})
+    assert await async_setup_component(hass, "intent", {})
+    assert await async_setup_component(hass, "llm", {})
     client = await hass_ws_client(hass)
     assert (await switch(client, True, shared=False))["success"]
     assert (await answer(client, "dream", "snacks", shared=False))["success"]
@@ -816,9 +821,6 @@ async def test_full_memory_is_on_no_sensor_view_log_bus_dump_or_assist(
     await pet.async_visit(me)
     await hass.async_block_till_done()
     assert pet.people.memory(me)["picks"]["dream"][-1]["day"] == today()
-    assert await async_setup_component(hass, "homeassistant", {})
-    assert await async_setup_component(hass, "intent", {})
-    assert await async_setup_component(hass, "llm", {})
     spoken = await intent.async_handle(
         hass, "test", "VirtualPetStatus", {}, context=Context(user_id=me)
     )
@@ -934,6 +936,19 @@ GUIDE_STRINGS = (
     "**What the pets say from memory.**",
     "the card's own check",
     '"great" is kept only while memory is on',
+    # M2: the tags.
+    "**Tags.**",
+    "exam, match, show, trip, party, lesson, work thing or something else",
+    "the Saturday for a weekend; never what you typed",
+    '"work thing" and "something else" are never said back',
+    "a week after that day",
+    "not for an exam",
+    "between 11:00 and 20:00",
+    "friends for a whole year",
+    'They say "you told me", never that the day happened, and never count.',
+    "maybe a match tomorrow! go you ♥",
+    "one such remark a month at most across all three",
+    "the pattern has ended",
 )
 
 
@@ -1348,7 +1363,7 @@ async def test_one_door_a_look_in_order_and_a_door_with_no_room_waits(
     reply = await door_visit(pet, ada.id)
     assert door_notes(reply) == [{"kind": "door5", "pick": "sun"}]
     for note in door_notes(reply):
-        assert set(note) <= {"kind", "pick"}
+        assert set(note) <= {"kind", "pick", "tag"}
     noted = pet.people.data["people"][ada.id].get("noted") or {}
     assert not any(k.startswith("door") for k in noted)
 
@@ -1461,3 +1476,594 @@ async def test_since_told_goes_where_the_pet_does_not_allow_memory(
     client = await hass_ws_client(hass, token)
     assert (await answer(client, "fav_season", "summer", shared=False))["success"]
     assert pet.people.memory(ada.id).get("since_told", {}) == {}
+
+
+# --- M2: the tags (plan sections 4, 5, 8 "Acceptance, tags", 10 "Tags") -----------------
+
+MONDAY = "2026-11-02"  # a big day's ask; the day picked is the Thursday
+THURSDAY = "2026-11-05"
+FRIDAY = (
+    "2026-11-06"  # a weekend's ask; its Saturday is the 7th, its due the Monday 9th
+)
+
+
+async def tag_pet(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    freezer: Any,
+    day: str = MONDAY,
+    on: bool = True,
+    **options: Any,
+) -> tuple[Any, Any, Any]:
+    """Pip, and Ada asked a dated question today (big day or weekend), memory on."""
+    freezer.move_to(f"{day} 17:00:00+00:00")
+    ada, token = await a_user(hass)
+    record = {"memory": {"on": True, "since": "2026-10-01"}} if on else {}
+    pet = await start(hass, hass_storage, {ada.id: record}, **options)
+    client = await hass_ws_client(hass, token)
+    return pet, ada, client
+
+
+def ask(pet: Any, user: str, kind: str = "big_day") -> None:
+    pet.people.data["people"][user]["asked"] = {
+        "day": today(),
+        "later": True,
+        "later_kind": kind,
+    }
+
+
+async def big_day_yes(client: Any, **extra: Any) -> dict[str, Any]:
+    return await answer(client, "big_day", "yes", day=THURSDAY, **extra)
+
+
+async def test_a_tag_rides_on_the_one_yes_keyed_by_the_events_day(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    """The big day's tag is kept on the day they picked; a "yes" with no tag keeps
+    none; a repeated "yes" the same day replaces it (and the event, as ever)."""
+    pet, ada, client = await tag_pet(hass, hass_storage, hass_ws_client, freezer)
+    ask(pet, ada.id)
+    assert (await big_day_yes(client, shared=False))["success"]
+    assert "tags" not in pet.people.memory(ada.id)  # no tag: none kept
+    assert pet.people.open_event(ada.id)["due"] == THURSDAY
+    msg = await big_day_yes(client, shared=False, tag="show", text="the school play")
+    assert msg["success"]
+    assert pet.people.memory(ada.id)["tags"] == [
+        {"day": THURSDAY, "kind": "big_day", "tag": "show"}
+    ]
+    # The dated ask keeps its slot after a "yes", so a hand-made repeat is answered
+    # again: the one (day, kind) entry is replaced, not doubled.
+    assert (await big_day_yes(client, shared=False, tag="match"))["success"]
+    assert pet.people.memory(ada.id)["tags"] == [
+        {"day": THURSDAY, "kind": "big_day", "tag": "match"}
+    ]
+    stored = saved_people(hass_storage)[ada.id]
+    assert "school play" not in json.dumps(stored)  # typed words: memory only
+    # Forgetting it leaves no twin.
+    assert await pet.people.forget_item(ada.id, "tags", THURSDAY, "big_day")
+    assert pet.people.memory(ada.id).get("tags") == []
+    assert saved_people(hass_storage)[ada.id]["memory"]["tags"] == []
+
+
+async def test_a_weekend_tag_is_kept_on_its_saturday(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    pet, ada, client = await tag_pet(
+        hass, hass_storage, hass_ws_client, freezer, day=FRIDAY
+    )
+    ask(pet, ada.id, "weekend")
+    msg = await answer(client, "weekend", "yes", shared=False, tag="trip")
+    assert msg["success"]
+    assert pet.people.open_event(ada.id)["due"] == "2026-11-09"  # the Monday
+    assert pet.people.memory(ada.id)["tags"] == [
+        {"day": "2026-11-07", "kind": "weekend", "tag": "trip"}
+    ]
+
+
+@pytest.mark.parametrize(
+    "bad", ["dentist", "test", "", "SHOW", {"tag": "show"}, 3, ["show"], True, 1.5]
+)
+async def test_a_tag_outside_the_list_is_refused_and_nothing_is_kept(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    freezer,
+    caplog: pytest.LogCaptureFixture,
+    bad: Any,
+) -> None:
+    """The one generic error, nothing saved (not the "yes", not the event), whatever
+    the memory state; no log line holds the value (the field is `object`-typed, so no
+    schema failure logs it). The websocket API's own DEBUG wire log ("Received {...}")
+    logs every message whole, the guide says so; INFO and up is what it logs unasked."""
+    caplog.set_level(logging.DEBUG, logger="custom_components.virtual_pet")
+    caplog.set_level(logging.INFO, logger="homeassistant.components.websocket_api")
+    pet, ada, client = await tag_pet(hass, hass_storage, hass_ws_client, freezer)
+    ask(pet, ada.id)
+    for extra in ({"shared": False}, {"shared": True}, {}):
+        msg = await big_day_yes(client, tag=bad, **extra)
+        assert msg["error"] == {"code": "not_asked", "message": "It didn't ask that"}
+    assert pet.people.open_event(ada.id) is None
+    assert "tags" not in pet.people.memory(ada.id)
+    assert pet.people.data["people"][ada.id]["asked"]["later_kind"] == "big_day"
+    # And with memory off: refused all the same (the list check comes first).
+    await pet.people.forget_memory(ada.id)
+    assert not (await big_day_yes(client, shared=False, tag=bad))["success"]
+    assert pet.people.open_event(ada.id) is None
+    log = " ".join(
+        r.getMessage()
+        for r in caplog.records
+        if not r.name.startswith("pytest_homeassistant_custom_component")
+    )
+    if isinstance(bad, str) and bad:
+        assert repr(bad) not in log and f'"{bad}"' not in log  # "test": test_pet's id
+        assert bad == "test" or bad not in log
+    assert "'tag'" not in log and '"tag"' not in log
+
+
+async def test_a_tag_on_any_other_answer_is_refused(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    pet, ada, client = await tag_pet(hass, hass_storage, hass_ws_client, freezer)
+    person = pet.people.data["people"][ada.id]
+    ask(pet, ada.id, "how_day")
+    msg = await answer(client, "how_day", "tough", shared=False, tag="exam")
+    assert msg["error"]["code"] == "not_asked"
+    assert pet.people._moods == {}  # nothing kept: not the soft morning either
+    ask(pet, ada.id)
+    msg = await answer(client, "big_day", "no", shared=False, tag="exam")
+    assert msg["error"]["code"] == "not_asked"
+    for question, value in (("dream", "sea"), ("guess", "sun")):
+        msg = await answer(client, question, value, shared=False, tag="exam")
+        assert msg["error"]["code"] == "not_asked"
+    assert "guess" not in person and "tags" not in pet.people.memory(ada.id)
+    assert "picks" not in pet.people.memory(ada.id)
+
+
+async def test_a_tag_is_not_kept_without_todays_ask(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    pet, ada, client = await tag_pet(hass, hass_storage, hass_ws_client, freezer)
+    assert not (await big_day_yes(client, shared=False, tag="show"))["success"]
+    ask(pet, ada.id, "weekend")  # asked, but another kind
+    assert not (await big_day_yes(client, shared=False, tag="show"))["success"]
+    assert pet.people.open_event(ada.id) is None
+    assert "tags" not in pet.people.memory(ada.id)
+
+
+@pytest.mark.parametrize(
+    ("memory", "options", "extra"),
+    [
+        (False, {}, {"shared": False}),  # memory off for this person
+        (True, {CONF_MEMORY: False}, {"shared": False}),  # this pet's option off
+        (True, {}, {}),  # an old card: no shared flag
+        (True, {}, {"shared": True}),  # a shared screen
+    ],
+)
+async def test_a_good_tag_that_cannot_be_kept_keeps_the_yes_silently(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    freezer,
+    memory: bool,
+    options: dict[str, Any],
+    extra: dict[str, Any],
+) -> None:
+    """FM s2782 Q7: no error, the big day and its words kept, no tag anywhere."""
+    pet, ada, client = await tag_pet(
+        hass, hass_storage, hass_ws_client, freezer, on=memory, **options
+    )
+    ask(pet, ada.id)
+    bus = async_capture_events(hass, MATCH_ALL)
+    msg = await big_day_yes(client, tag="party", text="nan's party", **extra)
+    await hass.async_block_till_done()
+    assert msg["success"] and msg["result"] == {"until": THURSDAY}
+    assert pet.people.open_event(ada.id)["due"] == THURSDAY
+    if not extra.get("shared"):  # a shared screen's words are never kept
+        assert pet.people._texts[ada.id] == "nan's party"
+    mem = pet.people.memory(ada.id)
+    assert mem is None if not memory else "tags" not in mem
+    text = json.dumps(saved_people(hass_storage), default=str)
+    assert "party" not in text
+    assert "party" not in json.dumps([(e.event_type, e.data) for e in bus], default=str)
+
+
+async def test_the_bus_never_sees_a_kept_tag(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    pet, ada, client = await tag_pet(hass, hass_storage, hass_ws_client, freezer)
+    ask(pet, ada.id)
+    bus = async_capture_events(hass, MATCH_ALL)
+    assert (await big_day_yes(client, shared=False, tag="lesson"))["success"]
+    await hass.async_block_till_done()
+    assert pet.people.memory(ada.id)["tags"][0]["tag"] == "lesson"
+    text = json.dumps([(e.event_type, e.data) for e in bus], default=str)
+    assert "lesson" not in text and THURSDAY not in text
+
+
+# --- M2: doors 3, 1 and 11 (plan sections 6 "Door timing", 6a, 8 "Acceptance, doors") ---
+
+
+def tag(day: str, name: str, kind: str = "big_day") -> dict[str, str]:
+    return {"day": day, "kind": kind, "tag": name}
+
+
+def tag_memory(*tags: dict[str, str], **said: str) -> dict[str, Any]:
+    mem: dict[str, Any] = {"on": True, "since": "2025-01-01", "tags": list(tags)}
+    if said:
+        mem["said"] = dict(said)
+    return mem
+
+
+def test_door_three_a_year_after_once_and_not_for_exam() -> None:
+    mem = tag_memory(tag("2025-11-03", "trip"))
+    assert P.memory_door(mem, "2026-11-03", 12) == (
+        "door3",
+        {"kind": "door3", "tag": "trip"},
+    )
+    for day in ("2026-11-02", "2026-11-04", "2027-11-03", "2025-11-03"):
+        assert P.memory_door(mem, day, 12) is None, day
+    for hour in (10, 20, 23):  # outside the window: lost, not marked
+        assert P.memory_door(mem, "2026-11-03", hour) is None
+    assert (
+        P.memory_door({**mem, "said": {"door3": "2026-11-03"}}, "2026-11-03", 12)
+        is None
+    )
+    for name in ("exam", "work_thing", "something_else"):
+        assert (
+            P.memory_door(tag_memory(tag("2025-11-03", name)), "2026-11-03", 12) is None
+        )
+    weekend = tag_memory(tag("2025-11-03", "trip", "weekend"))
+    assert P.memory_door(weekend, "2026-11-03", 12) is None
+
+
+def test_door_three_takes_feb_29_as_feb_28() -> None:
+    mem = tag_memory(tag("2028-02-29", "show"))
+    assert P.memory_door(mem, "2029-02-28", 12) == (
+        "door3",
+        {"kind": "door3", "tag": "show"},
+    )
+    assert P.memory_door(mem, "2029-03-01", 12) is None
+    # A Feb 28 tag never fires on a Feb 29, and Feb 29 itself fires nothing.
+    mem = tag_memory(tag("2027-02-28", "show"))
+    assert P.memory_door(mem, "2028-02-29", 12) is None
+    assert P.memory_door(mem, "2028-02-28", 12) == (
+        "door3",
+        {"kind": "door3", "tag": "show"},
+    )
+    # A Feb 28 and a Feb 29 tag of one year: the later day's goes.
+    mem = tag_memory(tag("2028-02-28", "match"), tag("2028-02-29", "party"))
+    assert P.memory_door(mem, "2029-02-28", 12) == (
+        "door3",
+        {"kind": "door3", "tag": "party"},
+    )
+
+
+def test_door_one_a_week_after_once() -> None:
+    mem = tag_memory(tag("2026-10-27", "exam"))
+    assert P.memory_door(mem, "2026-11-03", 11) == (
+        "door1",
+        {"kind": "door1", "tag": "exam"},
+    )
+    assert P.memory_door(mem, "2026-11-03", 19) == (
+        "door1",
+        {"kind": "door1", "tag": "exam"},
+    )
+    for day in ("2026-11-02", "2026-11-04"):  # plus 6, plus 8
+        assert P.memory_door(mem, day, 12) is None, day
+    for hour in (10, 20):
+        assert P.memory_door(mem, "2026-11-03", hour) is None
+    said = {**mem, "said": {"door1": "2026-11-03"}}
+    assert P.memory_door(said, "2026-11-03", 12) is None
+    for name in ("work_thing", "something_else"):
+        assert (
+            P.memory_door(tag_memory(tag("2026-10-27", name)), "2026-11-03", 12) is None
+        )
+    weekend = tag_memory(tag("2026-10-27", "trip", "weekend"))
+    assert P.memory_door(weekend, "2026-11-03", 12) is None
+
+
+def test_the_doors_go_in_the_order_two_three_one_then_the_picks() -> None:
+    """FM s2782 Q5: 2, 3, 1, 10, 4, 5, 12; a due door 1 does not take door 2's look."""
+    mem = door_memory()  # doors 2, 4, 5, 12 due on 2026-11-03
+    mem["tags"] = [tag("2025-11-03", "show"), tag("2026-10-27", "match")]
+    day = "2026-11-03"
+    assert P.memory_door(mem, day, 11)[0] == "door2"
+    mem["said"] = {"door2": day}
+    assert P.memory_door(mem, day, 11) == ("door3", {"kind": "door3", "tag": "show"})
+    mem["said"]["door3"] = day
+    assert P.memory_door(mem, day, 11) == ("door1", {"kind": "door1", "tag": "match"})
+    mem["said"]["door1"] = day
+    assert P.memory_door(mem, day, 11)[0] == "door4"
+
+
+def test_door_eleven_reads_one_recent_named_tag() -> None:
+    day = "2026-11-03"
+    assert P.memory_recap(tag_memory(), day) is None
+    mem = tag_memory(
+        tag("2025-11-01", "party"),  # over a year ago
+        tag("2026-03-01", "trip"),
+        tag("2026-06-01", "exam"),
+        tag("2026-09-01", "work_thing"),
+        tag("2026-10-31", "something_else", "weekend"),
+        tag("2026-11-05", "show"),  # ahead: not yet
+    )
+    assert P.memory_recap(mem, day) == "exam"
+    only = tag_memory(
+        tag("2026-09-01", "work_thing"), tag("2026-10-01", "show", "weekend")
+    )
+    assert P.memory_recap(only, day) is None
+    # A year back to the day counts (M2 audit s2785 N2); a day older does not.
+    assert P.memory_recap(tag_memory(tag("2025-11-03", "party")), day) == "party"
+    assert P.memory_recap(tag_memory(tag("2025-11-02", "party")), day) is None
+
+
+async def friends_pet(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: Any,
+    record: dict[str, Any],
+    months: int = 12,
+    **options: Any,
+) -> tuple[Any, str]:
+    """Pip on 2026-11-03 at noon, Ada its friend for `months` whole months."""
+    freezer.move_to("2026-11-03 12:00:00+00:00")
+    ada, _ = await a_user(hass)
+    pet = await start(hass, hass_storage, {ada.id: record}, **options)
+    since = f"{2026 - months // 12}-11-03"  # whole years only, as the tests use
+    pet.state.bonds.setdefault(ada.id, {})["since"] = since
+    pet.state.bonds[ada.id]["points"] = 25
+    return pet, ada.id
+
+
+def friends_note(reply: dict[str, Any]) -> dict[str, Any] | None:
+    return next(
+        (n for n in reply["notes"] if n["kind"] in ("friends_for", "birthday_friends")),
+        None,
+    )
+
+
+async def test_door_eleven_rides_the_twelve_month_friends_note(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer
+) -> None:
+    mem = tag_memory(tag("2026-06-01", "lesson"), tag("2026-09-01", "work_thing"))
+    pet, ada = await friends_pet(hass, hass_storage, freezer, {"memory": mem})
+    with patch.object(pet.people, "mark_memory_said", side_effect=AssertionError):
+        reply = await door_visit(pet, ada)
+    note = friends_note(reply)
+    assert note == {"kind": "friends_for", "months": 12, "tag": "lesson"}
+    assert "said" not in pet.people.memory(ada)  # no memory mark for door 11
+    assert set(note) - {"kind", "months"} == {"tag"}
+
+
+@pytest.mark.parametrize(
+    ("record", "options"),
+    [
+        ({"memory": tag_memory(tag("2026-09-01", "work_thing"))}, {}),
+        ({"memory": tag_memory(tag("2026-09-01", "show", "weekend"))}, {}),
+        ({"memory": tag_memory()}, {}),
+        ({}, {}),  # memory off
+        ({"memory": tag_memory(tag("2026-06-01", "show"))}, {CONF_MEMORY: False}),
+    ],
+)
+async def test_door_eleven_carries_nothing_without_a_named_tag_here(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer,
+    record: dict[str, Any],
+    options: dict[str, Any],
+) -> None:
+    pet, ada = await friends_pet(hass, hass_storage, freezer, record, **options)
+    reply = await door_visit(pet, ada)
+    assert friends_note(reply) == {"kind": "friends_for", "months": 12}
+
+
+async def test_door_eleven_not_at_twenty_four_months(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer
+) -> None:
+    mem = tag_memory(tag("2026-06-01", "show"))
+    pet, ada = await friends_pet(hass, hass_storage, freezer, {"memory": mem}, 24)
+    reply = await door_visit(pet, ada)
+    assert friends_note(reply) == {"kind": "friends_for", "months": 24}
+
+
+async def test_door_eleven_waits_a_look_when_the_pets_first_birthday_is_today(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer
+) -> None:
+    """At 12 months the pet's own first birthday is {"years": 1}, never
+    birthday_friends (that is a first-year month only, model.pet_birthday), so the
+    birthday takes the first look and the recap comes on the next, as the plain
+    friends line does today (plan 6a's "lost when birthday_friends wins" cannot
+    happen at 12 months: a question in the M2 report)."""
+    mem = tag_memory(tag("2026-06-01", "show"))
+    pet, ada = await friends_pet(hass, hass_storage, freezer, {"memory": mem})
+    pet.state.hatched_on = "2025-11-03"  # a year old today
+    reply = await door_visit(pet, ada)
+    assert [n for n in reply["notes"] if n["kind"] == "pet_birthday"] == [
+        {"kind": "pet_birthday", "years": 1}
+    ]
+    assert friends_note(reply) is None
+    reply = await door_visit(pet, ada)
+    assert friends_note(reply) == {"kind": "friends_for", "months": 12, "tag": "show"}
+
+
+async def test_door_eleven_is_lost_when_birthday_friends_wins(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer
+) -> None:
+    """The one note birthday_friends carries no tag (it is never 12 months, above;
+    checked here with a patched pet birthday that says it is)."""
+    mem = tag_memory(tag("2026-06-01", "show"))
+    pet, ada = await friends_pet(hass, hass_storage, freezer, {"memory": mem})
+    pet.state.hatched_on = "2025-11-03"
+    with patch(
+        "custom_components.virtual_pet.model.pet_birthday",
+        return_value={"months": 12},
+    ):
+        reply = await door_visit(pet, ada)
+    assert friends_note(reply) == {"kind": "birthday_friends", "months": 12}
+
+
+async def test_doors_one_and_three_go_out_one_a_look_marked_in_memory(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer
+) -> None:
+    """Off leaves no trace: the marks are in memory's said only; turning it off takes
+    them, and `noted` never holds a door key."""
+    freezer.move_to("2026-11-03 12:00:00+00:00")
+    ada, token = await a_user(hass)
+    mem = tag_memory(tag("2025-11-03", "trip"), tag("2026-10-27", "show"))
+    pet = await ready_pet(hass, hass_storage, freezer, ada.id, record={"memory": mem})
+    reply = await door_visit(pet, ada.id)
+    assert door_notes(reply) == [{"kind": "door3", "tag": "trip"}]
+    assert pet.people.memory_said(ada.id, "door3") == "2026-11-03"
+    assert pet.people.memory_said(ada.id, "door1") is None
+    reply = await door_visit(pet, ada.id)
+    assert door_notes(reply) == [{"kind": "door1", "tag": "show"}]
+    reply = await door_visit(pet, ada.id)
+    assert door_notes(reply) == []
+    for note in door_notes(reply):
+        assert set(note) <= {"kind", "pick", "tag"}
+    person = pet.people.data["people"][ada.id]
+    assert not any(k.startswith("door") for k in person.get("noted") or {})
+    await pet.people.forget_memory(ada.id)
+    assert "door" not in json.dumps(saved_people(hass_storage)[ada.id])
+
+
+async def test_a_door_reads_the_capped_tags(
+    hass: HomeAssistant, hass_storage: dict[str, Any]
+) -> None:
+    """The cap holds on write: a year-old tag pushed out by 120 newer ones is no door."""
+    hass_storage[PEOPLE_KEY] = people_store(
+        {"u": {"memory": {"on": True, "tags": [tag("2025-11-03", "trip")]}}}
+    )
+    people = P.People(hass)
+    await people.async_load()
+    first = date(2026, 1, 1)
+    for i in range(P.MEMORY_TAGS_CAP):
+        day = (first + timedelta(days=i)).isoformat()
+        assert people.remember("u", "tags", tag(day, "work_thing"))
+    mem = people.memory("u")
+    assert len(mem["tags"]) == P.MEMORY_TAGS_CAP
+    assert P.memory_door(mem, "2026-11-03", 12) is None
+
+
+# --- M2: door 10, the weekday pattern (plan section 6, its own commit) ------------------
+
+# Saturdays in October 2026 (weekday 5); 2026-11-06 is a Friday, the eve of one.
+SATURDAYS = ["2026-10-03", "2026-10-10", "2026-10-17", "2026-10-24", "2026-10-31"]
+FRI = "2026-11-06"
+
+
+def test_door_ten_on_the_eve_of_a_weekday_pattern() -> None:
+    mem = tag_memory(*(tag(d, "match") for d in SATURDAYS[:3]))
+    assert P.memory_door(mem, FRI, 12) == ("door10", {"kind": "door10", "tag": "match"})
+    assert P.memory_door(mem, "2026-11-05", 12) is None  # not the eve
+    assert P.memory_door(mem, "2026-11-07", 12) is None  # the day itself
+    for hour in (10, 20):  # outside the window: lost, nothing kept for it
+        assert P.memory_door(mem, FRI, hour) is None
+    # Two of five is no pattern; nor a weekend tag, nor a kind that isn't weekly.
+    assert (
+        P.memory_door(tag_memory(*(tag(d, "match") for d in SATURDAYS[:2])), FRI, 12)
+        is None
+    )
+    for name, kind in (
+        ("match", "weekend"),
+        ("trip", "big_day"),
+        ("exam", "big_day"),
+        ("party", "big_day"),
+    ):
+        mem = tag_memory(*(tag(d, name, kind) for d in SATURDAYS[:3]))
+        assert P.memory_door(mem, FRI, 12) is None, name
+
+
+def test_door_ten_once_in_twenty_eight_days_across_every_pattern() -> None:
+    mem = tag_memory(
+        *(tag(d, "match") for d in SATURDAYS[:3]),
+        # And show on Sundays: its eve is Saturday the 7th.
+        *(tag(d, "show") for d in ("2026-10-04", "2026-10-11", "2026-10-18")),
+        door10=FRI,
+    )
+    assert P.memory_door(mem, "2026-11-07", 12) is None  # match's said holds show back
+    assert P.memory_door(mem, "2026-11-13", 12) is None  # 7 days on
+    assert P.memory_door(mem, "2026-11-28", 12) is None  # 22 days on: a Saturday's eve
+    mem["said"]["door10"] = "2026-10-09"  # 28 days before the 6th
+    assert P.memory_door(mem, FRI, 12) == ("door10", {"kind": "door10", "tag": "match"})
+
+
+def test_door_ten_is_re_derived_from_what_remains() -> None:
+    """M2 S11: exactly 3 stops after one is forgotten; 4 of 5 survives one forget;
+    forgetting an entry off the weekday moves the last-5 window and can start one."""
+    three = [tag(d, "lesson") for d in SATURDAYS[:3]]
+    mem = tag_memory(*three)
+    assert P.memory_door(mem, FRI, 12)[0] == "door10"
+    mem["tags"] = three[1:]
+    assert P.memory_door(mem, FRI, 12) is None
+    four = [tag(d, "lesson") for d in SATURDAYS[:4]] + [tag("2026-11-02", "lesson")]
+    mem = tag_memory(*four)
+    mem["tags"].remove(four[0])
+    assert P.memory_door(mem, FRI, 12)[0] == "door10"  # 3 Saturdays of the last 5 left
+    # Saturdays the 3rd and 10th, then three Mondays: no pattern in the last 5 is a
+    # Saturday's (2 of 5); forgetting one Monday brings the oldest Saturday (Sep 26)
+    # into the window: 3 of the then-last 5 are Saturdays.
+    older = [tag("2026-09-26", "lesson")]
+    sats = [tag(d, "lesson") for d in SATURDAYS[:2]]
+    mondays = [tag(d, "lesson") for d in ("2026-10-19", "2026-10-26", "2026-11-02")]
+    mem = tag_memory(*older, *sats, *mondays)
+    assert P.memory_door(mem, FRI, 12) is None
+    mem["tags"].remove(mondays[0])
+    assert P.memory_door(mem, FRI, 12) == (
+        "door10",
+        {"kind": "door10", "tag": "lesson"},
+    )
+
+
+def test_door_ten_only_while_the_pattern_is_eight_weeks_fresh() -> None:
+    """FM s2784 Q2: the pattern's latest entry on its weekday at most 56 days old. From a
+    Friday a Saturday is 55 or 62 days back, never 56."""
+    fresh = tag_memory(
+        *(tag(d, "lesson") for d in ("2026-08-29", "2026-09-05", "2026-09-12"))
+    )
+    assert P.memory_door(fresh, FRI, 12) == (
+        "door10",
+        {"kind": "door10", "tag": "lesson"},
+    )
+    stale = tag_memory(
+        *(tag(d, "lesson") for d in ("2026-08-22", "2026-08-29", "2026-09-05"))
+    )
+    assert P.memory_door(stale, FRI, 12) is None
+    # A newer entry on another weekday does not keep it going; one on the weekday does.
+    stale["tags"] += [tag("2026-10-26", "lesson"), tag("2026-11-02", "lesson")]
+    assert P.memory_door(stale, FRI, 12) is None
+    stale["tags"].remove(tag("2026-10-26", "lesson"))
+    stale["tags"].append(tag("2026-10-31", "lesson"))
+    assert P.memory_door(stale, FRI, 12) == (
+        "door10",
+        {"kind": "door10", "tag": "lesson"},
+    )
+    assert R.MEMORY_DOOR10_STALE_DAYS == 56
+
+
+def test_door_ten_goes_after_one_and_before_the_picks() -> None:
+    mem = door_memory()
+    mem["tags"] = [tag(d, "match") for d in SATURDAYS[:3]]
+    mem["tags"].append(tag("2026-10-30", "show"))  # door 1 on the 6th
+    mem["said"] = {"door2": FRI}
+    assert P.memory_door(mem, FRI, 12)[0] == "door1"
+    mem["said"]["door1"] = FRI
+    assert P.memory_door(mem, FRI, 12)[0] == "door10"
+    mem["said"]["door10"] = FRI
+    assert P.memory_door(mem, FRI, 12)[0] == "door4"
+
+
+async def test_door_ten_through_the_visit_marks_memory_only(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer
+) -> None:
+    freezer.move_to(f"{FRI} 12:00:00+00:00")
+    ada, _ = await a_user(hass)
+    mem = tag_memory(*(tag(d, "show") for d in SATURDAYS[2:]))
+    pet = await ready_pet(hass, hass_storage, freezer, ada.id, record={"memory": mem})
+    reply = await door_visit(pet, ada.id)
+    assert door_notes(reply) == [{"kind": "door10", "tag": "show"}]
+    assert pet.people.memory_said(ada.id, "door10") == FRI
+    assert door_notes(await door_visit(pet, ada.id)) == []
+    noted = pet.people.data["people"][ada.id].get("noted") or {}
+    assert not any(k.startswith("door") for k in noted)

@@ -96,6 +96,198 @@ const PRESETS = {
     }
     return out;
   },
+  // Device-alive slice 2: the caps' press states pinned by class (the bench cannot hold `:active`):
+  // at rest, every cap down (`pressed`), in flight (`pending`), and a rejected call (`failed`), at 420
+  // and 300, day and under reduced motion (the still tones). The five caps are the care four and
+  // the lights toy; the rebound itself is a move, so a device row looks at it.
+  alive() {
+    const out = [];
+    const keys = ["feed", "play", "clean", "medicine", "lights"];
+    const all = (cls) => Object.fromEntries(keys.map((k) => [k, [cls]]));
+    const states = [["rest", {}], ["pressed", all("pressed")], ["pending", all("pending")], ["failed", all("failed")],
+      ["mixed", { feed: ["pressed"], play: ["pending"], clean: ["failed"] }]];
+    for (const width of [420, 300]) {
+      for (const motion of ["", "reduce"]) {
+        for (const [state, capClasses] of states) {
+          if (motion && state === "rest") continue;
+          out.push({ name: `alive/${width}-${state}${motion ? "-reduce" : ""}`, group: `alive-${width}`,
+            label: `${state}${motion ? " (reduced motion)" : ""}`, world: "woodland", width, clip: "device",
+            capClasses, ...(motion ? { motion } : {}) });
+        }
+      }
+    }
+    // Device-alive slice 3B: rain on the inner glass. Rest (the wet sheen), the onset mid-run, the
+    // echo, the last bead clearing, and the protected states: a dialogue open, the status sheet, the
+    // game picker (the glass is under all three), reduced motion (a still sheen, and an onset that
+    // never starts), the switch off (nothing), a dry house and a house that does not say (nothing).
+    // `at` is ms into the animation; the shot is the screen, whole, so the layering shows.
+    const rain = (name, label, extra) => {
+      for (const width of [420, 300]) {
+        out.push({ name: `alive/rain-${width}-${name}`, group: `alive-rain-${width}`, label, world: "woodland", width,
+          clip: "screen", ...extra });
+      }
+    };
+    rain("dry", "dry (current false)", { deviceFx: { rain: false } });
+    rain("unknown", "no device_fx (nothing to paint)", {});
+    rain("rest", "rain, the wet sheen", { deviceFx: { rain: true } });
+    rain("onset", "rain onset, 600 ms in", { deviceFx: { rain: true, onset: "start", at: 600 } });
+    rain("onset-late", "rain onset, 1300 ms in", { deviceFx: { rain: true, onset: "start", at: 1300 } });
+    rain("echo", "rain echo (first view 20 s on), 300 ms in", { deviceFx: { rain: true, echo: "start", at: 300 } });
+    rain("clear", "rain stopped, the sheen drying, 500 ms in", { deviceFx: { rain: false, onset: "end", at: 500 } });
+    rain("dialogue", "rain with a line open", { deviceFx: { rain: true, onset: "start", at: 600 }, say: "oh! it's raining ~" });
+    rain("status", "rain, the status sheet open", { deviceFx: { rain: true }, view: "status" });
+    rain("games", "rain, the game picker open", { deviceFx: { rain: true }, view: "games" });
+    rain("night", "rain at night", { deviceFx: { rain: true }, scene: "night" });
+    rain("lit", "rain, the backlight on", { deviceFx: { rain: true }, scene: "night", classes: ["lit"] });
+    rain("reduce", "rain, reduced motion (still sheen; no onset)", { deviceFx: { rain: true, onset: "start", at: 600 }, motion: "reduce" });
+    rain("off", "rain, screen effects off (nothing)", { deviceFx: { rain: true, onset: "start", at: 600 }, lcd: "off" });
+    // Device-alive slice 4B: the other weather keys on the same glass (rain's shots are above), one table
+    // row per key, as the card's WEATHER table is: the look at rest, the onset mid-run and late, the echo, the
+    // end, a line open over it, a dark shell, reduced motion (the still look, no onset), the switch off.
+    // A row is the house's `current` and the length of its onset, so the storm's frames can be looked at in
+    // turn (it is the one that must not flash). `at` is ms into the animation. A new key is a row here.
+    const WEATHER_LOOKS = {
+      snow: { current: { snow: true }, line: "brr, it's snowing ~", frames: [500, 1300, 2200] },
+      fog: { current: { fog: true }, line: "i can't see far ~", frames: [600, 1400, 2200] },
+      storm: { current: { storm: true }, line: "that sounds loud!", frames: [300, 700, 1200, 1800, 2600] },
+      wind: { current: { wind: true }, line: "whoosh ~", frames: [300, 900, 1500] },
+    };
+    const weather = (key, name, label, extra) => {
+      for (const width of [420, 300]) {
+        out.push({ name: `alive/${key}-${width}-${name}`, group: `alive-${key}-${width}`, label, world: "woodland", width,
+          clip: "screen", ...extra });
+      }
+    };
+    for (const [key, look] of Object.entries(WEATHER_LOOKS)) {
+      const fx = (more) => ({ deviceFx: { key, current: look.current, ...more } });
+      weather(key, "dry", `${key} false (nothing)`, { deviceFx: { key, current: { [key]: false } } });
+      weather(key, "rest", `${key} at rest`, fx({}));
+      look.frames.forEach((at, i) => weather(key, `onset-${i + 1}`, `${key} onset, ${at} ms in`, fx({ onset: "start", at })));
+      weather(key, "echo", `${key} echo (first view 20 s on), 300 ms in`, fx({ echo: "start", at: 300 }));
+      weather(key, "end", `${key} ended, 700 ms in`, { deviceFx: { key, current: { [key]: false }, onset: "end", at: 700 } });
+      weather(key, "dialogue", `${key} with a line open`, { ...fx({ onset: "start", at: look.frames[1] }), say: look.line });
+      weather(key, "dark", `${key} on a dark shell`, { ...fx({ onset: "start", at: look.frames[1] }), shell: { finish: "smoke" }, scene: "night" });
+      weather(key, "reduce", `${key}, reduced motion (the still look; no onset)`, { ...fx({ onset: "start", at: 600 }), motion: "reduce" });
+      weather(key, "off", `${key}, screen effects off (nothing)`, { ...fx({ onset: "start", at: 600 }), lcd: "off" });
+    }
+    weather("storm", "rain", "lightning-rainy: rain and storm together", { deviceFx: { current: { rain: true, storm: true } } });
+    weather("snow", "wind", "snow and wind together", { deviceFx: { current: { snow: true, wind: true } } });
+    // Device-alive slice 6: the rare glass marks (paw, smudge, edge shadow), generic in every world. Each mark at the gate's
+    // own spot and at each fixed spot, at 420 and 330, on a clear, a dark (smoke, night) and a glitter shell, in two worlds
+    // (woodland and tidepool), then the protected states: reduced motion (nothing), the switch off (nothing), a mark late in its
+    // fade, a mark over the rain's sheen. The shot is the device, whole (the shell shows). `at` is ms into dir-mark-life.
+    const mark = (name, label, extra, widths = [420, 330]) => {
+      for (const width of widths) {
+        out.push({ name: `alive/mark-${width}-${name}`, group: `alive-mark-${width}`, label, world: "woodland", width, clip: "device", ...extra });
+      }
+    };
+    const SHELLS = [["clear", { finish: "clear" }, "day"], ["dark", { finish: "smoke" }, "night"], ["glitter", { finish: "glitter" }, "day"]];
+    for (const kind of ["paw", "smudge", "edge"]) {
+      for (const [shellName, shell, scene] of SHELLS) {
+        mark(`${kind}-${shellName}`, `${kind} on a ${shellName} shell (the gate's spot)`, { glassMark: { kind }, shell, scene });
+      }
+      for (const world of ["tidepool"]) {
+        mark(`${kind}-${world}`, `${kind} in the ${world} world`, { glassMark: { kind }, world });
+      }
+      for (const spot of ["bl", "br", "ml", "mr"]) {
+        mark(`${kind}-at-${spot}`, `${kind} at the ${spot} spot`, { glassMark: { kind, spot } });
+      }
+    }
+    mark("paw-fade", "paw, 21 s in (the fade)", { glassMark: { kind: "paw", at: 21000 } });
+    mark("paw-rain", "paw on the wet sheen", { glassMark: { kind: "paw" }, deviceFx: { rain: true } });
+    mark("paw-reduce", "reduced motion (nothing)", { glassMark: { kind: "paw" }, motion: "reduce" });
+    mark("paw-off", "screen effects off (nothing)", { glassMark: { kind: "paw" }, lcd: "off" });
+    // Device-alive slice 4D: the room's keys (the 4C rows) and the moments' rim cues. Lights and the fireplace paint
+    // and cue on the rim (the bezel's plastic: clip the device), music and the tv on the glass (clip the screen),
+    // heating and cooling are the rim's tint only (no onset, no echo). A row is the house's `current`, the wire kinds
+    // if they are not `<key>_started`/`_stopped`, the layer's clip and the length of its onset. A new key is a row here.
+    const ROOM_LOOKS = {
+      lights: { current: { lights: "on" }, off: { lights: "off" }, kinds: ["lights_on", "lights_off"], clip: "device", frames: [300, 800, 1300] },
+      fireplace: { current: { fireplace: true }, kinds: null, clip: "device", frames: [300, 800, 1300] },
+      tv: { current: { tv: true }, kinds: null, clip: "screen", frames: [500, 1100, 1700] },
+      music: { current: { music: true }, kinds: null, clip: "screen", frames: [500, 1100, 1700] },
+    };
+    const room = (key, name, label, extra) => {
+      for (const width of [420, 300]) {
+        out.push({ name: `alive/${key}-${width}-${name}`, group: `alive-${key}-${width}`, label, world: "woodland", width,
+          clip: ROOM_LOOKS[key]?.clip || "device", ...extra });
+      }
+    };
+    for (const [key, look] of Object.entries(ROOM_LOOKS)) {
+      const fx = (more, current = look.current) => ({ deviceFx: { key, current, ...(look.kinds ? { kinds: look.kinds } : {}), ...more } });
+      const off = look.off || { [key]: false };
+      room(key, "off-state", `${key} ${look.off ? "off (the dimmed rim)" : "false (nothing)"}`, fx({}, off));
+      room(key, "rest", `${key} at rest`, fx({}));
+      look.frames.forEach((at, i) => room(key, `onset-${i + 1}`, `${key} onset, ${at} ms in`, fx({ onset: "start", at })));
+      room(key, "echo", `${key} echo (first view 20 s on), 300 ms in`, fx({ echo: "start", at: 300 }));
+      room(key, "end", `${key} ended, 700 ms in`, fx({ onset: "end", at: 700 }, off));
+      room(key, "dark", `${key} on a dark shell`, { ...fx({ onset: "start", at: look.frames[1] }), shell: { finish: "smoke" }, scene: "night" });
+      room(key, "reduce", `${key}, reduced motion (the still look; no onset)`, { ...fx({ onset: "start", at: 600 }), motion: "reduce" });
+      room(key, "off", `${key}, screen effects off (nothing)`, { ...fx({ onset: "start", at: 600 }), lcd: "off" });
+    }
+    room("lights", "lit", "lights on, the backlight on (the rim steps aside)", { deviceFx: { key: "lights", current: { lights: "on" } }, scene: "night", classes: ["lit"] });
+    room("lights", "dim-lit", "lights off, the backlight on (the rim steps aside)", { deviceFx: { key: "lights", current: { lights: "off" } }, scene: "night", classes: ["lit"] });
+    room("heating", "rest", "heating: the warm tint", { deviceFx: { key: "heating", current: { heating: true } } });
+    room("heating", "dark", "heating on a dark shell", { deviceFx: { key: "heating", current: { heating: true } }, shell: { finish: "smoke" }, scene: "night" });
+    room("heating", "reduce", "heating, reduced motion (the tint stays)", { deviceFx: { key: "heating", current: { heating: true } }, motion: "reduce" });
+    room("heating", "off", "heating, screen effects off (nothing)", { deviceFx: { key: "heating", current: { heating: true } }, lcd: "off" });
+    room("cooling", "rest", "cooling: the cool tint", { deviceFx: { key: "cooling", current: { cooling: true } } });
+    room("cooling", "dark", "cooling on a dark shell", { deviceFx: { key: "cooling", current: { cooling: true } }, shell: { finish: "smoke" }, scene: "night" });
+    room("fireplace", "heating", "fireplace and heating together (the warm rim and the tint)", { deviceFx: { key: "fireplace", current: { fireplace: true, heating: true } } });
+    // The moments' rim cues, one shot per cue mid-flight (clip: the device), against a light and a dark shell, then
+    // the protected states: reduced motion (nothing), the switch off (nothing). `at` is ms into the cue.
+    const MOMENT_LOOKS = [
+      ["doorbell", "doorbell_live", undefined, "the chime: two notes", [300, 800]],
+      ["washer", "appliance_done", "washer", "the washer's tick (left)", [300]],
+      ["dryer", "appliance_done", "dryer", "the dryer's tick (middle)", [300]],
+      ["dishwasher", "appliance_done", "dishwasher", "the dishwasher's tick (right)", [300]],
+      ["machine", "appliance_done", "machine", "an unknown machine: the middle tick", [300]],
+      ["heat", "house_answered", "heating", "the heating's wash (warm)", [400, 800]],
+      ["cool", "house_answered", "cooling", "the cooling's wash (cool)", [400, 800]],
+      ["rotor-out", "robot_out", undefined, "the vacuum out: the rotor turns", [150, 350, 650]],
+      ["rotor-home", "robot_home", undefined, "the vacuum home: the rotor slows", [300, 900, 1500]],
+    ];
+    const momentShot = (name, label, extra) => {
+      for (const width of [420, 300]) {
+        out.push({ name: `alive/moment-${width}-${name}`, group: `alive-moment-${width}`, label, world: "woodland", width, clip: "device", ...extra });
+      }
+    };
+    for (const [name, moment, variant, label, frames] of MOMENT_LOOKS) {
+      frames.forEach((at, i) => momentShot(frames.length > 1 ? `${name}-${i + 1}` : name, `${label}, ${at} ms in`, { momentCue: { moment, variant, at } }));
+      momentShot(`${name}-dark`, `${label}, on a dark shell`, { momentCue: { moment, variant, at: frames[0] }, shell: { finish: "smoke" } });
+    }
+    momentShot("reduce", "the chime, reduced motion (nothing)", { momentCue: { moment: "doorbell_live", at: 300 }, motion: "reduce" });
+    momentShot("off", "the chime, screen effects off (nothing)", { momentCue: { moment: "doorbell_live", at: 300 }, lcd: "off" });
+    // The moon (FM11), off the wire: a full and a new day, with a house that has no device_fx at all.
+    for (const [name, moon, extra] of [["full", "full", {}], ["new", "new", {}], ["full-dark", "full", { shell: { finish: "smoke" }, scene: "night" }],
+      ["full-reduce", "full", { motion: "reduce" }], ["full-off", "full", { lcd: "off" }]]) {
+      for (const width of [420, 300]) {
+        out.push({ name: `alive/moon-${width}-${name}`, group: `alive-moon-${width}`, label: `${moon} moon${name === "full" || name === "new" ? "" : ` (${name})`}`,
+          world: "woodland", width, clip: "screen", moon, ...extra });
+      }
+    }
+    // Device-alive slice 3C: the rim cues, one shot per cue mid-flight (clip: the device, so the bezel shows),
+    // against a light and a dark shell, then the protected states: the switch off (nothing), reduced motion
+    // (nothing), a care scene running (the scene wins: no cue), medicine (no cue). `at` is ms into the cue.
+    const rimShot = (name, label, extra) => {
+      for (const width of [420, 300]) {
+        out.push({ name: `alive/rim-${width}-${name}`, group: `alive-rim-${width}`, label, world: "woodland", width,
+          clip: "device", ...extra });
+      }
+    };
+    rimShot("feed", "feed: the delivery path, 450 ms in", { rimCue: { action: "feed", at: 450 } });
+    rimShot("play", "play: two points, 150 ms in", { rimCue: { action: "play", at: 150 } });
+    rimShot("clean", "clean: the sweep, 500 ms in", { rimCue: { action: "clean", at: 500 } });
+    rimShot("tuck", "tuck: the lamps dimming, 700 ms in", { rimCue: { action: "lights", at: 700 } });
+    rimShot("feed-dark", "feed on a dark shell", { rimCue: { action: "feed", at: 450 }, shell: { finish: "smoke" } });
+    rimShot("tuck-dark", "tuck on a dark shell", { rimCue: { action: "lights", at: 700 }, shell: { finish: "smoke" } });
+    rimShot("off", "feed with screen effects off (nothing)", { rimCue: { action: "feed", at: 450 }, lcd: "off" });
+    rimShot("reduce", "feed, reduced motion (nothing)", { rimCue: { action: "feed", at: 450 }, motion: "reduce" });
+    rimShot("scene", "clean pressed with a care scene running (the scene wins: nothing)",
+      { care: "clean", careAt: 600, pet: { poop: 1 }, rimCue: { action: "clean", at: 500 } });
+    rimShot("medicine", "medicine (no cue)", { rimCue: { action: "medicine", at: 450 } });
+    return out;
+  },
   // The card around the toy: status screen, game picker, a speech bubble.
   ui() {
     const out = [];
@@ -143,6 +335,36 @@ const PRESETS = {
       game: "dig", digReplies: [r(0, 0, 0)] });
     out.push({ width: 330, world: "woodland", group: "dig-calm", name: "dig/330-bee-calm", label: "a bee, reduced motion",
       motion: "reduce", game: "dig", digReplies: [r(1, 2, 2), r(2, 2, 0, { found: "bee", round_over: true })], digTaps: ["dig"] });
+    return out;
+  },
+  // Hop of the Day (ship 2b, behind experimental_hop): the picker with the Hop row, then per width and
+  // family (a canned `board` reply built by hop.py, dev/bench/hop-boards.json) a board at the start, a lit
+  // cell (the first tap of a two-tap commit), a spent special, the solved view (a plain win) and the tidy view
+  // (both pinned by the bench's `board.moves`, not by a reply's done/tidy), and a blocked key (a corner:
+  // the keys' on/off and aria are in each shot's .json, with the measured cell and key size).
+  hop() {
+    const out = [];
+    const families = ["hop", "glide", "swim", "dig", "climb", "squeeze"];
+    for (const width of [300, 330, 420]) {
+      const base = { width, world: "woodland", group: `hop-${width}` };
+      out.push({ ...base, name: `hop/${width}-picker`, label: "picker with the Hop row", view: "games", hop: true });
+      for (const f of families) {
+        const board = { fixture: `${f}-adult` };
+        const shot = (state, label, extra) => out.push({ ...base, group: `hop-${width}-${f}`, name: `hop/${width}-${f}-${state}`,
+          label: `${f}: ${label}`, view: "board", board: { ...board, ...extra } });
+        shot("board", "the board", {});
+        shot("lit", "a lit cell", { lit: "first" });
+        shot("spent", "a spent special", { moves: "win", spent: true });
+        shot("solved", "solved (a plain win)", { moves: "win" });
+        shot("tidy", "tidy", { moves: "tidy" });
+      }
+      out.push({ ...base, group: `hop-${width}-blocked`, name: `hop/${width}-blocked`, label: "a blocked key (a move in)",
+        view: "board", board: { fixture: "hop-adult", moves: "win", take: 1 } });
+      out.push({ ...base, group: `hop-${width}-baby`, name: `hop/${width}-baby`, label: "a baby's 4 x 3",
+        view: "board", board: { fixture: "hop-baby" } });
+      out.push({ ...base, group: `hop-${width}-calm`, name: `hop/${width}-calm`, label: "reduced motion",
+        view: "board", motion: "reduce", board: { fixture: "swim-adult", moves: "win", take: 3 } });
+    }
     return out;
   },
   // World visitors at 330: every one at its greet (its own hours: night ones on a night
@@ -348,6 +570,25 @@ const PRESETS = {
       out.push({ name: `bigtext/${width}/status-end`, group: `bigtext-${width}`, label: "status, end", world: "woodland", width,
         view: "status", bigText: true, scrollEnd: true });
     }
+    return out;
+  },
+  // Memory's tag chips (memory plan M2) inside the big day's typed step: none picked and
+  // "show" picked at 420, 330 and 300, the weekend's, the porthole's rim, big text and mono,
+  // and memory off (the box as it was).
+  memorytags() {
+    const on = { memory_on: true, memory_allowed: true };
+    const out = [];
+    const shot = (name, label, extra) => out.push({ name: `memorytags/${name}`, group: "memorytags", label,
+      world: "woodland", mine: on, textStep: { kind: "big_day", day: "2026-06-18" }, ...extra });
+    for (const width of [420, 330, 300]) {
+      shot(`${width}-none`, `${width}: no tag`, { width });
+      shot(`${width}-show`, `${width}: show`, { width, textStep: { kind: "big_day", day: "2026-06-18", tag: "show" } });
+    }
+    shot("330-weekend", "330: weekend, something else", { width: 330, textStep: { kind: "weekend", tag: "something_else" } });
+    shot("330-porthole", "330: porthole", { width: 330, shell: { shape: "porthole" }, textStep: { kind: "big_day", tag: "lesson" } });
+    shot("330-bigtext", "330: big text", { width: 330, bigText: true, textStep: { kind: "big_day", tag: "work_thing" } });
+    shot("330-mono", "330: mono", { width: 330, mono: true, textStep: { kind: "big_day", tag: "exam" } });
+    shot("330-off", "330: memory off", { width: 330, mine: { memory_on: false, memory_allowed: true } });
     return out;
   },
   // The lay sheet (settings S2): the offer in two worlds at both card widths, big text at
@@ -559,6 +800,55 @@ const PRESETS = {
       out.push({ species: "otter", world: "tidepool", stage, width: 330, pet: { flags: ["rainy"] }, idle: { mood: "content" },
         name: `nature/${stage}-none`, group: "nature-none", label: `${stage}: no nature line` });
     }
+    // Species nature N2 (section 10): the action lines. An idle species line per habit (the first cell; the pet is
+    // calm so the line is the shot, the moves are the JS tests' and card-check's), the two light performers' glow
+    // cells, at 330 and 300; a solo, a social watcher's and a social explorer's visitor greeting; a builder host's
+    // link line; mono and big text for the longest lines; a baby and a child with none.
+    const habits = [["hoarder", "squirrel"], ["builder", "tarantula"], ["basker", "tortoise"], ["groomer", "kitten"],
+      ["explorer", "fox"], ["watcher", "owl"], ["performer", "bird"], ["glow-firefly", "firefly"], ["glow-lunamoth", "lunamoth"]];
+    const idle = (species, draw = 0) => ({ species, world: worldOf(species), motion: "reduce", idle: { mood: "content", species: true, draw } });
+    for (const [habit, species] of habits) {
+      out.push({ ...idle(species), width: 330, name: `nature/species-idle-${habit}`, group: "nature-species-idle", label: `${habit} idle (${species})` });
+      out.push({ ...idle(species), width: 300, name: `nature/species-idle-${habit}-300`, group: "nature-species-idle-300", label: `${habit} idle 300` });
+    }
+    out.push({ ...idle("firefly", 0.99), width: 330, name: "nature/species-idle-glow-firefly-2", group: "nature-species-idle", label: "firefly idle, second cell" });
+    out.push({ ...idle("lunamoth", 0.99), width: 330, name: "nature/species-idle-glow-lunamoth-2", group: "nature-species-idle", label: "lunamoth idle, second cell" });
+    for (const [species, what] of [["fox", "solo"], ["deer", "social watcher"], ["corgi", "social explorer"]]) {
+      out.push({ species, world: worldOf(species), width: 330, visitor: { species: true },
+        name: `nature/species-visit-${species}`, group: "nature-species-visit", label: `${what} greeting (${species})` });
+    }
+    for (const species of ["tarantula", "puffin"]) {
+      out.push({ species, world: worldOf(species), width: 330, pets: 2, clip: "card", link: { rolls: [0.1, 0.1, 0], say: "host" },
+        name: `nature/species-link-${species}`, group: "nature-species-link", label: `${species} hosts (builder)` });
+    }
+    // The longest lines, in mono and big text: the find line (26) is said straight, as a find would, since the bench pins no V1 find.
+    const long = [["find-came-back", "fox", "*came back with something*"], ["idle-nudges", "tarantula", null, 0.99], ["idle-glows", "firefly", null],
+      ["idle-flickers", "lunamoth", null, 0.99], ["idle-fixes", "tarantula", null], ["idle-fixes-opossum", "opossum", null]];
+    for (const [name, species, say, draw] of long) {
+      for (const [mode, opts] of [["mono", { mono: true }], ["big", { bigText: true }]]) {
+        out.push(say ? { species, world: worldOf(species), width: 300, say, ...opts, name: `nature/species-long-${name}-${mode}`, group: `nature-species-long-${mode}`, label: `${name} ${mode}` }
+          : { ...idle(species, draw ?? 0), width: 300, ...opts, name: `nature/species-long-${name}-${mode}`, group: `nature-species-long-${mode}`, label: `${name} ${mode}` });
+      }
+    }
+    for (const stage of ["baby", "child"]) {
+      out.push({ ...idle("kitten"), stage, width: 330, name: `nature/species-idle-${stage}-none`, group: "nature-species-none", label: `${stage}: no species line` });
+    }
+    // N3 (section 10): the status page's "nature" row. The longest note of each world (hamster is 60), scrolled to
+    // the row at 420, 330, 300, in big text and in the porthole; a teen, a child and a baby show it; an egg does not.
+    const longest = [["deer", "woodland"], ["gecko", "terrarium"], ["hamster", "hearth"], ["octopus", "tidepool"],
+      ["axolotl", "pond"], ["opossum", "nightsky"]];
+    const note = (species, world, extra) => ({ species, world, view: "status", scroll: ".naturerow", ...extra });
+    for (const [species, world] of longest) {
+      for (const width of [420, 330, 300]) {
+        out.push(note(species, world, { width, name: `nature/note-${species}-${width}`, group: `nature-note-${width}`, label: `${species} ${width}` }));
+      }
+      out.push(note(species, world, { width: 300, bigText: true, name: `nature/note-${species}-big`, group: "nature-note-big", label: `${species} big text` }));
+      out.push(note(species, world, { width: 330, shell: { shape: "porthole" }, name: `nature/note-${species}-porthole`, group: "nature-note-porthole", label: `${species} porthole` }));
+    }
+    for (const stage of ["teen", "child", "baby"]) {
+      out.push(note("hamster", "hearth", { stage, width: 330, name: `nature/note-${stage}`, group: "nature-note-stage", label: `${stage}: nature row` }));
+    }
+    out.push(note("hamster", "hearth", { stage: "egg", width: 330, scroll: undefined, name: "nature/note-egg", group: "nature-note-stage", label: "egg: no nature row" }));
     return out;
   },
   // Resting (R1, plan favourite-resting §9): the label and breathing pose, its idle line and a
@@ -821,6 +1111,26 @@ const PRESETS = {
   // reduced-motion tap, the drape's alignment through a settle and a pat; and a drape sheet: every
   // species at every stage with the drape on frame 3, in the day and in the dim (the face stays clear).
   // Pass rules (lightsPass): the calm frames, the 2% compares, the alignment within 1 px.
+  // Motion ship 2 (the flip as a tool): the edge-on sprite swap (a hatch, a stage-up), the status sheet
+  // closing, a game counter flipping, a find landing: each paused mid-motion, and once under reduced motion.
+  motion2() {
+    const out = [];
+    const base = { species: "fox", world: "woodland", width: 330, clip: "screen", say: "" };
+    const add = (name, label, extra) => out.push({ ...base, name: `motion2/${name}`, group: "motion2", label, ...extra });
+    for (const [what, stage] of [["hatch", "egg"], ["hatch-baby", "baby"], ["stage-teen", "teen"], ["stage-adult", "adult"]]) {
+      for (const at of [0, 50, 100, 150]) add(`turn-${what}-${at}`, `${what}: ${at} ms`, { stage, petClasses: ["turn"], petAt: at });
+    }
+    add("turn-adult-reduce", "stage-up under reduced motion: no turn", { stage: "adult", petClasses: ["turn"], motion: "reduce" });
+    for (const at of [0, 40, 80, 120]) add(`close-${at}`, `sheet closing: ${at} ms`, { view: "status", statusClose: at, clip: "card" });
+    add("close-reduce", "sheet closing under reduced motion: closed at once", { view: "status", statusClose: 0, motion: "reduce", clip: "card" });
+    for (const at of [0, 40, 80, 120]) add(`gnum-${at}`, `counter flip: ${at} ms`, { game: "higher_lower", gnumFlip: { at }, clip: "screen" });
+    add("gnum-win-300", "counter, a win: the perk after the flip", { game: "higher_lower", gnumFlip: { at: 300, win: true } });
+    add("gnum-reduce", "counter under reduced motion: the number", { game: "higher_lower", gnumFlip: { at: 0 }, motion: "reduce" });
+    for (const at of [0, 150, 300, 450, 600]) add(`land-${at}`, `a find lands: ${at} ms`, { basket: 1, basketLands: { at }, findsShown: true });
+    add("land-more-450", "a fuller basket rocks", { basket: 3, basketLands: { at: 450, more: true }, findsShown: true });
+    add("land-reduce", "a find lands under reduced motion: the basket", { basket: 1, motion: "reduce", findsShown: true });
+    return out;
+  },
   tuck() {
     const out = [];
     const live = { at: 150, asleep: true };
@@ -1076,7 +1386,16 @@ async function runShots(browser, base, shots, outDir, workers) {
         const png = await page.screenshot({ path: file, clip });
         shot.file = file;
         if (shot.mono) shot.measure = { screen: await page.evaluate(() => window.bench.screenClass), ...await measureMono(page, clip, png) };
-        if (shot.costume || shot.gift || shot.look || shot.care || shot.lightsAlign) {
+        if (shot.lines) { // `lines` (a selector in the card): how many lines its text wraps to, into the shot's .json (N3's cap)
+          const n = await page.evaluate((sel) => {
+            const el = document.querySelector("hatch-pet-card").shadowRoot.querySelector(sel);
+            const r = document.createRange();
+            r.selectNodeContents(el);
+            return { lines: new Set([...r.getClientRects()].map((q) => Math.round(q.top))).size, value: Math.round(el.getBoundingClientRect().width) };
+          }, shot.lines);
+          fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(n));
+        }
+        if (shot.costume || shot.deviceFx || shot.glassMark || shot.momentCue || shot.gift || shot.look || shot.care || shot.lightsAlign || shot.view === "board" || shot.view === "games") {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
         }

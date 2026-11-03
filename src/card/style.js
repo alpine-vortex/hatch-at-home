@@ -450,16 +450,70 @@ const STYLE = `
   .game .gpick.wrap button { min-width: 0; padding: 0 10px; font-size: 12px; justify-content: center; }
   .game .gpick.wrap.tight { left: 1%; right: 1%; gap: 4px 3px; } /* still too tall: two a row */
   .game .gpick.wrap.tight button { padding: 0 6px; font-size: 11px; }
+  /* A 284 px card's LCD (182 x 136): two rows of 44 px don't fit under the close button, so two even
+     columns of 36 px (_fitPicker, the last resort only; a label may take two lines, whatever order the
+     games are in). An odd game sits in the middle, or, with the Hop row, leaves it the other cell. */
+  .game .gpick.wrap.snug:not([hidden]) { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 3px; align-content: center; }
+  .game .gpick.wrap.snug button { min-height: 36px; padding: 0 4px; font-size: 11px; line-height: 1.05;
+    text-align: center; }
+  .game .gpick.wrap.snug button:last-child:nth-child(odd) { grid-column: 1 / -1; justify-self: center;
+    width: calc(50% - 1.5px); }
   /* F2: the pile's leaves, or higher or lower's number, beside the pet (opposite the bubble,
      under the close button), so its face shows all game. */
   .game .gnum { position: absolute; right: 5%; top: 34%;
     display: grid; place-items: center; min-width: 30px; min-height: 36px; padding: 5px 7px;
     border-radius: 10px; background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a;
     box-shadow: 2px 2px 0 #3a2a1a; }
-  .game .gnum.flip { animation: perk .3s ease-out; }
+  /* a flip-clock (_flipNumber): the digit tips away and back on rotate (two steps a way), the swap at the
+     edge; a win's perk follows on transform. Reduced motion: the number, instantly (JS and the global rule). */
+  @keyframes flip-clock { 0%, 100% { rotate: x 0deg; } 50% { rotate: x 90deg; } }
+  .game .gnum.flip { animation: flip-clock .16s steps(2); }
+  .game .gnum.flip.win { animation: flip-clock .16s steps(2), perk .3s ease-out .16s; }
   /* D-a: today's visitor watching a dig, still, behind the buttons (fresh-expand E5). */
   .game .gwatch { position: absolute; right: 4%; bottom: 26%; height: 18%; image-rendering: pixelated;
     pointer-events: none; transform: scaleX(-1); }
+  /* Hop of the Day (experimental_hop; plan ship 2b). The row under the picker: the picker's own
+     chunky button, a strip at the foot; _fitPicker moves it into the last line of the games where
+     the strip leaves them no room (.slot) and shrinks it to its label (.tight). */
+  .game .ghop { left: 3%; right: 3%; bottom: 2%; min-height: 44px; width: auto; border-radius: 14px;
+    padding: 4px 10px; font: inherit; font-size: 14px; box-shadow: 0 4px 0 #3a2a1a; }
+  .game .ghop[hidden] { display: none; }
+  .game .ghop.tight { padding: 0 6px; font-size: 11px; white-space: nowrap; }
+  .game .ghop.snug { min-height: 36px; line-height: 1.05; white-space: normal; }
+  .game .ghop:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
+  /* The board: the grid on the left, the keys on the right (2 x 4; the close button is the eighth).
+     Sizes are set in JS (_hopLayout) from the overlay: --hk the key, --c the cell. No new art:
+     the cells are CSS. The real pet stays under the board, still, and the piece wears its frame. */
+  .game .hopb[hidden] { display: none; }
+  .game .hgrid { position: absolute; display: grid; grid-auto-rows: var(--c); outline: none;
+    pointer-events: auto; }
+  .game .hc { box-sizing: border-box; border: 1px solid rgba(58, 42, 26, .35); }
+  .game .hc.pad { background: rgba(255, 253, 245, .86); border-radius: 22%; }
+  .game .hc.pad.find::after { content: "✦"; display: grid; place-items: center; height: 100%;
+    color: #b8651b; font-size: calc(var(--c) * .5); line-height: 1; }
+  .game .hc.stone { background: rgba(110, 104, 96, .9); border-radius: 30%; }
+  .game .hc.water { background: rgba(70, 130, 190, .72); }
+  .game .hc.wall { background: rgba(58, 42, 26, .92); border-radius: 0; }
+  .game .hc.nest { background: rgba(255, 253, 245, .55); border: 2px dashed #3a2a1a; border-radius: 50%; }
+  .game .hc.nest.open { background: rgba(255, 253, 245, .95); border-style: solid; }
+  .game .hc.sunk { background: rgba(58, 42, 26, .28); border-style: dashed; }
+  .game .hc.sunk::after { content: none; }
+  .game .hc.legal { box-shadow: inset 0 0 0 2px #3a2a1a; }
+  .game .hc.lit { box-shadow: inset 0 0 0 3px #fffdf5, inset 0 0 0 5px #3a2a1a; background: rgba(255, 253, 245, 1); }
+  .game .hpath { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none;
+    z-index: 1; }
+  .game .hpath path { fill: none; stroke: #3a2a1a; stroke-width: 2; stroke-dasharray: 2 4; stroke-linecap: round; }
+  .game .hpiece { position: absolute; left: 0; top: 0; z-index: 2; image-rendering: pixelated;
+    pointer-events: none; object-fit: contain; transition: translate .14s ease-out; }
+  .game .hkeys { position: absolute; display: grid; grid-template-columns: repeat(2, var(--hk));
+    grid-auto-rows: var(--hk); gap: 3px; pointer-events: none; }
+  .game .hk { position: static; min-width: 0; min-height: 0; width: var(--hk); height: var(--hk);
+    font: inherit; font-size: calc(var(--hk) * .42); line-height: 1; }
+  .game .hk.on { background: #3a2a1a; color: #fffdf5; }
+  .game.hop .gx { top: auto; right: var(--hr); bottom: var(--hb); width: var(--hk); height: var(--hk);
+    min-width: 0; min-height: 0; font-size: calc(var(--hk) * .42); }
+  .screen:has(> .game.hop:not([hidden])) :is(.pet, .ghost, .drape, .perch, .attention) { visibility: hidden; }
+  .screen:has(> .game.hop:not(.end):not([hidden])) .bubble { display: none; }
   /* Trait flair: placed in JS from the head point and the feet line. Every piece
      must read standing still too (reduced motion turns all animation off). */
   .flair { position: absolute; inset: 0; z-index: 2; pointer-events: none;
@@ -581,6 +635,9 @@ const STYLE = `
   .screen .basket::before { content: ""; position: absolute; left: 50%; top: 50%;
     width: max(44px, 100%); height: max(44px, 100%); translate: -50% -50%; }
   .screen .basket.idle, .screen .reveal { pointer-events: none; }
+  /* a find lands (_basketSync): the first pops the basket in, then one rock; a fuller basket only rocks */
+  .screen .basket.lands { animation: pop .3s ease-out, rock .6s steps(4, jump-none) .3s; transform-origin: 50% 100%; }
+  .screen .basket.lands-more { animation: rock .6s steps(4, jump-none); transform-origin: 50% 100%; }
   .screen .basket img, .screen .reveal .rb { position: static; display: block; width: 100%; pointer-events: none; }
   .screen .reveal .rf { position: absolute; left: 50%; bottom: 60%; width: calc(var(--px, 2px) * 16);
     margin-left: calc(var(--px, 2px) * -8); image-rendering: pixelated; }
@@ -661,6 +718,10 @@ const STYLE = `
      trick, 360 degrees in .9 s, below.) */
   .pet.twirl { animation: twirl .6s step-end; }
   @keyframes twirl { 0% { rotate: y 180deg; } 25% { rotate: y 0deg; } 50% { rotate: y 180deg; } 75% { rotate: y 0deg; } }
+  /* the edge-on sprite swap (_swapFlip): the paper flip as a mask. The art swaps while it is a line (90deg). */
+  @keyframes turn-swap { 0% { rotate: y 0deg; animation-timing-function: ease-in; }
+    50% { rotate: y 90deg; animation-timing-function: ease-out; } 100% { rotate: y 0deg; } }
+  .pet.turn { animation: turn-swap .2s linear; }
   /* Thunder: now and then the scene flashes. */
   .flash { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 2;
     background: #fff; opacity: 0; }
@@ -777,6 +838,274 @@ const STYLE = `
     top: round(down, 50% - var(--px) * 2.5, var(--px)); width: calc(var(--px) * 5); height: calc(var(--px) * 5); }
   .device:has(.screen.dim) .hw.light { --art: var(--hw-light-off); }
   @supports not (width: round(1px, 1px)) { .hw { display: none !important; } } /* placed on the grid with round() */
+  /* The inner glass (device-alive 3B, plan 6.6): a layer in the screen, over the scene and under
+     everything that is read or pressed. It sits after .glow in the DOM and has no z-index of its own
+     above 0, so the bubble, the pat box, the basket, the game, the status sheet and the boot screen
+     (later in the DOM, or z-index 1+) are all over it; it is deaf to the pointer. Drawn only where
+     round() is known (every .hw is) and only with "screen effects here" on. dir-wet is the rain
+     ambience (still); dir-drop / dir-clear are the onset, dir-echo its shorter form. */
+  @supports (width: round(1px, 1px)) {
+    .hw.glass { display: none; inset: 0; z-index: 0; background: none; -webkit-mask: none; mask: none;
+      --b: var(--px, 2px); }
+    ha-card.lcd-on .hw.glass { display: block; }
+    .screen.show-status .hw.glass { display: none; }
+    .hw.glass::before, .hw.glass::after { content: ""; position: absolute; pointer-events: none; }
+    .hw.glass::before { inset: 0; opacity: 0; transition: opacity .8s ease-out; }
+    .hw.glass.dir-wet::before, .hw.glass.dir-clear::before {
+      background:
+        radial-gradient(circle at 14% 22%, rgba(236,246,255,.85) 0 calc(var(--b) * 1.5), transparent calc(var(--b) * 1.5 + 1px)),
+        radial-gradient(circle at 37% 11%, rgba(236,246,255,.8) 0 var(--b), transparent calc(var(--b) + 1px)),
+        radial-gradient(circle at 81% 19%, rgba(236,246,255,.85) 0 calc(var(--b) * 1.5), transparent calc(var(--b) * 1.5 + 1px)),
+        radial-gradient(circle at 63% 47%, rgba(236,246,255,.8) 0 var(--b), transparent calc(var(--b) + 1px)),
+        radial-gradient(circle at 8% 63%, rgba(236,246,255,.8) 0 var(--b), transparent calc(var(--b) + 1px)),
+        radial-gradient(circle at 90% 71%, rgba(236,246,255,.85) 0 calc(var(--b) * 1.5), transparent calc(var(--b) * 1.5 + 1px)),
+        radial-gradient(circle at 44% 86%, rgba(236,246,255,.8) 0 var(--b), transparent calc(var(--b) + 1px)),
+        linear-gradient(112deg, rgba(214,232,255,.2), rgba(214,232,255,0) 42%, rgba(214,232,255,.12)); }
+    .hw.glass.dir-wet::before { opacity: .8; }
+    /* The onset: a drop runs down the glass in steps (a pixel toy), or the sheen dries off. */
+    .hw.glass.dir-drop::after { left: 63%; top: -8%; width: calc(var(--b) * 3); height: calc(var(--b) * 7);
+      border-radius: 40% 40% 50% 50%; background: linear-gradient(180deg, rgba(240,248,255,0), rgba(240,248,255,.95) 45%, rgba(200,224,255,.85));
+      animation: dir-run 1.8s steps(18) both; }
+    .hw.glass.dir-clear::before { animation: dir-dry 1.2s ease-in both; }
+    .hw.glass.dir-echo.dir-drop::after { animation-duration: .9s; }
+    .hw.glass.dir-echo.dir-clear::before { animation-duration: .6s; }
+    @keyframes dir-run { 0% { top: -8%; opacity: 0; } 10%, 80% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+    @keyframes dir-dry { from { opacity: .8; } to { opacity: 0; } }
+    /* The other layers (slice 4B, plan 6.6b): five <b> in the glass, one per look, each at rest by a
+       transition on opacity. 1 frost (snow), 2 fog, 3 storm, 4 wind, 5 the moon (client-computed, off the
+       wire). The ambience is the class on the glass (dir-frost ...): still, a transition at most, never a
+       finite animation that ends on the glass (F11). An onset is the layer's own animation to or from
+       its resting look, and the glass carries the lease's clock, the one named animation dir-glass-life,
+       the only thing the card's animationend listener releases on. */
+    .hw.glass b { position: absolute; inset: 0; display: block; opacity: 0; pointer-events: none;
+      transition: opacity .8s ease-out; }
+    @keyframes dir-glass-life { from, to { opacity: 1; } }
+    .hw.glass.dir-drop { animation: dir-glass-life 1.8s linear both; }
+    .hw.glass.dir-clear { animation: dir-glass-life 1.2s linear both; }
+    .hw.glass.dir-frost-form, .hw.glass.dir-thaw, .hw.glass.dir-fog-in, .hw.glass.dir-fog-out { animation: dir-glass-life 2.4s linear both; }
+    .hw.glass.dir-storm-in, .hw.glass.dir-storm-out { animation: dir-glass-life 3s linear both; }
+    .hw.glass.dir-wind-gust, .hw.glass.dir-wind-die { animation: dir-glass-life 2s linear both; }
+    /* Snow: frost in the four corners, in hard pixel rings. It forms in six steps and thaws the same way. */
+    .hw.glass b:nth-child(1) { background:
+      radial-gradient(circle at 0 0, rgba(238,247,255,.85) 0 calc(var(--b) * 9), rgba(238,247,255,.5) calc(var(--b) * 9) calc(var(--b) * 15), rgba(238,247,255,.22) calc(var(--b) * 15) calc(var(--b) * 22), transparent calc(var(--b) * 22)),
+      radial-gradient(circle at 100% 0, rgba(238,247,255,.85) 0 calc(var(--b) * 8), rgba(238,247,255,.5) calc(var(--b) * 8) calc(var(--b) * 13), rgba(238,247,255,.22) calc(var(--b) * 13) calc(var(--b) * 19), transparent calc(var(--b) * 19)),
+      radial-gradient(circle at 0 100%, rgba(238,247,255,.85) 0 calc(var(--b) * 8), rgba(238,247,255,.5) calc(var(--b) * 8) calc(var(--b) * 13), rgba(238,247,255,.22) calc(var(--b) * 13) calc(var(--b) * 19), transparent calc(var(--b) * 19)),
+      radial-gradient(circle at 100% 100%, rgba(238,247,255,.85) 0 calc(var(--b) * 9), rgba(238,247,255,.5) calc(var(--b) * 9) calc(var(--b) * 15), rgba(238,247,255,.22) calc(var(--b) * 15) calc(var(--b) * 22), transparent calc(var(--b) * 22)); }
+    .hw.glass.dir-frost b:nth-child(1) { opacity: .9; }
+    .hw.glass.dir-frost-form b:nth-child(1) { animation: dir-layer-in 2.4s steps(6) both; }
+    .hw.glass.dir-thaw b:nth-child(1) { animation: dir-layer-in 2.4s steps(6) reverse both; }
+    /* Fog: a soft veil that thickens toward the rim. It gathers and clears slowly. */
+    .hw.glass b:nth-child(2) { background:
+      radial-gradient(ellipse at 50% 52%, rgba(226,232,238,.05) 0 34%, rgba(226,232,238,.22) 74%, rgba(226,232,238,.42)); }
+    .hw.glass.dir-fog b:nth-child(2) { opacity: .9; }
+    .hw.glass.dir-fog-in b:nth-child(2) { animation: dir-layer-in 2.4s ease-in-out both; }
+    .hw.glass.dir-fog-out b:nth-child(2) { animation: dir-layer-in 2.4s ease-in-out reverse both; }
+    /* Storm: a cooler dim over the screen. NOT a flash: the shiver is a slow wobble on the tint's
+       opacity (every step at most .17, none shorter than a fifth of a 1.8 s echo, so under 2 Hz), the
+       release a plain ease, and nothing here repeats. A source test holds these numbers. */
+    .hw.glass b:nth-child(3) { background: linear-gradient(180deg, rgba(30,44,80,.34), rgba(30,44,80,.2)); }
+    .hw.glass.dir-storm b:nth-child(3) { opacity: 1; }
+    .hw.glass.dir-storm-in b:nth-child(3) { animation: dir-storm-shiver 3s linear both; }
+    .hw.glass.dir-storm-out b:nth-child(3) { animation: dir-layer-in 3s ease-in-out reverse both; }
+    @keyframes dir-storm-shiver { 0% { opacity: 0; } 20% { opacity: .5; } 40% { opacity: .38; } 60% { opacity: .55; } 80% { opacity: .46; } 100% { opacity: 1; } }
+    /* Wind: a few flecks, level and short, that lean in from the side. */
+    .hw.glass b:nth-child(4) { background:
+      linear-gradient(rgba(240,246,252,.85), rgba(240,246,252,.85)) 14% 24% / calc(var(--b) * 7) var(--b) no-repeat,
+      linear-gradient(rgba(240,246,252,.85), rgba(240,246,252,.85)) 62% 18% / calc(var(--b) * 9) var(--b) no-repeat,
+      linear-gradient(rgba(240,246,252,.7), rgba(240,246,252,.7)) 38% 44% / calc(var(--b) * 6) var(--b) no-repeat,
+      linear-gradient(rgba(240,246,252,.85), rgba(240,246,252,.85)) 80% 52% / calc(var(--b) * 8) var(--b) no-repeat,
+      linear-gradient(rgba(240,246,252,.7), rgba(240,246,252,.7)) 22% 70% / calc(var(--b) * 9) var(--b) no-repeat,
+      linear-gradient(rgba(240,246,252,.85), rgba(240,246,252,.85)) 70% 84% / calc(var(--b) * 6) var(--b) no-repeat; }
+    .hw.glass.dir-wind b:nth-child(4) { opacity: .7; }
+    .hw.glass.dir-wind-gust b:nth-child(4) { animation: dir-wind-in 2s steps(10) both; }
+    .hw.glass.dir-wind-die b:nth-child(4) { animation: dir-wind-out 2s steps(10) both; }
+    @keyframes dir-layer-in { from { opacity: 0; } }
+    @keyframes dir-wind-in { from { opacity: 0; transform: translateX(-26%); } to { opacity: .7; transform: none; } }
+    @keyframes dir-wind-out { from { opacity: .7; transform: none; } to { opacity: 0; transform: translateX(30%); } }
+    /* An echo is the same onset, shorter (its lease clock too). */
+    .hw.glass.dir-echo.dir-frost-form, .hw.glass.dir-echo.dir-thaw, .hw.glass.dir-echo.dir-fog-in, .hw.glass.dir-echo.dir-fog-out,
+    .hw.glass.dir-echo.dir-frost-form b, .hw.glass.dir-echo.dir-thaw b, .hw.glass.dir-echo.dir-fog-in b, .hw.glass.dir-echo.dir-fog-out b { animation-duration: 1.2s; }
+    .hw.glass.dir-echo.dir-storm-in, .hw.glass.dir-echo.dir-storm-out, .hw.glass.dir-echo.dir-storm-in b, .hw.glass.dir-echo.dir-storm-out b { animation-duration: 1.8s; }
+    .hw.glass.dir-echo.dir-wind-gust, .hw.glass.dir-echo.dir-wind-die, .hw.glass.dir-echo.dir-wind-gust b, .hw.glass.dir-echo.dir-wind-die b { animation-duration: 1s; }
+    .hw.glass.dir-echo.dir-drop { animation-duration: .9s; }
+    .hw.glass.dir-echo.dir-clear { animation-duration: .6s; }
+    /* The moon, on the full and the new day (computed by the card from the server's clock, no wire key):
+       a still halo at the top right of the glass. */
+    .hw.glass b:nth-child(5) { background: none; }
+    .hw.glass.dir-moon b:nth-child(5) { opacity: 1; background:
+      radial-gradient(circle at 86% 13%, rgba(255,246,208,.9) 0 calc(var(--b) * 3), rgba(255,246,208,.4) calc(var(--b) * 3) calc(var(--b) * 6), rgba(255,246,208,.14) calc(var(--b) * 6) calc(var(--b) * 10), transparent calc(var(--b) * 10)); }
+    .hw.glass.dir-newmoon b:nth-child(5) { opacity: 1; background:
+      radial-gradient(circle at 86% 13%, rgba(14,20,40,.62) 0 calc(var(--b) * 3), rgba(190,206,255,.34) calc(var(--b) * 3) calc(var(--b) * 4), transparent calc(var(--b) * 4)); }
+    /* The room on the glass (slice 4D, plan 6.6): music's bars (6) and the tv's reflection (7), the same
+       way as the weather: still at rest (a class on the glass), an onset the layer's own animation to or
+       from its resting look, the lease's clock the glass's dir-glass-life. Quiet: a few bars in the
+       bottom corner; a faint rectangle of colour at the screen's lower edge. */
+    .hw.glass b:nth-child(6) { background:
+      linear-gradient(rgba(206,232,255,.8), rgba(206,232,255,.8)) 90% 96% / calc(var(--b) * 2) calc(var(--b) * 4) no-repeat,
+      linear-gradient(rgba(206,232,255,.8), rgba(206,232,255,.8)) 93% 96% / calc(var(--b) * 2) calc(var(--b) * 7) no-repeat,
+      linear-gradient(rgba(206,232,255,.8), rgba(206,232,255,.8)) 96% 96% / calc(var(--b) * 2) calc(var(--b) * 5) no-repeat; }
+    .hw.glass.dir-bars b:nth-child(6) { opacity: .75; }
+    .hw.glass.dir-bars-up b:nth-child(6) { animation: dir-layer-in 1.8s steps(6) both; }
+    .hw.glass.dir-bars-down b:nth-child(6) { animation: dir-layer-in 1.8s steps(6) reverse both; }
+    .hw.glass b:nth-child(7) { background:
+      linear-gradient(rgba(172,206,255,.75), rgba(172,206,255,.75)) 50% 100% / 46% calc(var(--b) * 3) no-repeat,
+      linear-gradient(180deg, transparent 66%, rgba(150,190,255,.24)); }
+    .hw.glass.dir-tv b:nth-child(7) { opacity: .8; }
+    .hw.glass.dir-tv-on b:nth-child(7) { animation: dir-layer-in 1.8s ease-in-out both; }
+    .hw.glass.dir-tv-off b:nth-child(7) { animation: dir-layer-in 1.8s ease-in-out reverse both; }
+    .hw.glass.dir-bars-up, .hw.glass.dir-bars-down, .hw.glass.dir-tv-on, .hw.glass.dir-tv-off { animation: dir-glass-life 1.8s linear both; }
+    .hw.glass.dir-echo.dir-bars-up, .hw.glass.dir-echo.dir-bars-down, .hw.glass.dir-echo.dir-tv-on, .hw.glass.dir-echo.dir-tv-off,
+    .hw.glass.dir-echo.dir-bars-up b, .hw.glass.dir-echo.dir-bars-down b, .hw.glass.dir-echo.dir-tv-on b, .hw.glass.dir-echo.dir-tv-off b { animation-duration: .9s; }
+    /* Reduced motion: the still looks only; an onset is a move, so there is none (the card never starts
+       one, and the global rule above also stops the animation and the transition). */
+    @media (prefers-reduced-motion: reduce) { .hw.glass.dir-drop::after, .hw.glass.dir-clear::before { display: none; } }
+    /* The rare glass mark (device-alive slice 6, plan section 9): one element after the seven layers (a <u>, so
+       none of the b rules above reach it), drawn about once in 20 minutes of viewed time. A generic paw, smudge or
+       edge shadow at one of four fixed spots in the screen's margin band (percentages of the glass, so a resize
+       keeps the spot; --edge, the porthole's round corners, moves the lower and side spots in). Its own classes (dir-mark-*) are on this element only, never on .hw.glass, and it uses
+       neither pseudo-element, so the wet sheen and the frost sit under it. No lease: dir-mark-life is the clock
+       (20 s on, a 2 s fade: 22 s in all), a one-shot, opacity only. Deaf to the pointer. */
+    .hw.glass .mark { position: absolute; display: block; opacity: 0; pointer-events: none; }
+    .hw.glass .mark.dir-mark-on { animation: dir-mark-life 22s linear both; }
+    .hw.glass .mark.dir-mark-bl { left: calc(3% + var(--edge, 0%)); top: 70%; }
+    .hw.glass .mark.dir-mark-br { right: calc(3% + var(--edge, 0%)); top: 70%; }
+    .hw.glass .mark.dir-mark-ml { left: calc(2% + var(--edge, 0%) * .25); top: 36%; }
+    .hw.glass .mark.dir-mark-mr { right: calc(2% + var(--edge, 0%) * .25); top: 36%; }
+    .hw.glass .mark.dir-mark-paw { width: 9%; aspect-ratio: 1; rotate: -14deg;
+      background:
+        radial-gradient(ellipse 15% 13% at 18% 36%, rgba(30,22,14,.5) 55%, transparent 100%),
+        radial-gradient(ellipse 15% 14% at 39% 17%, rgba(30,22,14,.5) 55%, transparent 100%),
+        radial-gradient(ellipse 15% 14% at 61% 17%, rgba(30,22,14,.5) 55%, transparent 100%),
+        radial-gradient(ellipse 15% 13% at 82% 36%, rgba(30,22,14,.5) 55%, transparent 100%),
+        radial-gradient(ellipse 32% 26% at 50% 67%, rgba(30,22,14,.5) 60%, transparent 100%); }
+    .hw.glass .mark.dir-mark-br.dir-mark-paw, .hw.glass .mark.dir-mark-mr.dir-mark-paw { rotate: 12deg; }
+    .hw.glass .mark.dir-mark-smudge { width: 15%; aspect-ratio: 1.7; border-radius: 50%;
+      background: radial-gradient(ellipse 50% 50% at 46% 52%, rgba(255,255,255,.5), rgba(255,255,255,.24) 55%, transparent 100%); }
+    .hw.glass .mark.dir-mark-edge { width: 10%; height: 38%; }
+    .hw.glass .mark.dir-mark-edge.dir-mark-bl, .hw.glass .mark.dir-mark-edge.dir-mark-br { top: 58%; }
+    .hw.glass .mark.dir-mark-edge.dir-mark-bl, .hw.glass .mark.dir-mark-edge.dir-mark-ml { left: 0; background: linear-gradient(90deg, rgba(10,8,6,.62), rgba(10,8,6,.26) 45%, transparent); }
+    .hw.glass .mark.dir-mark-edge.dir-mark-br, .hw.glass .mark.dir-mark-edge.dir-mark-mr { right: 0; background: linear-gradient(270deg, rgba(10,8,6,.62), rgba(10,8,6,.26) 45%, transparent); }
+    @keyframes dir-mark-life { 0% { opacity: 0; } 0.5% { opacity: 1; } 90.9% { opacity: 1; } 100% { opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .hw.glass .mark { display: none; } }
+  }
+  /* The rim cues (device-alive 3C, plan section 7): a press's one pulse on the bezel's plastic, on its
+     own layer (.hw.rim, in the bezel, under the screen, deaf to the pointer, never over a control: it
+     lies in the bezel's padding, and the toys are outside the bezel). Drawn only with "screen effects
+     here" on. The class on it is the director's lease (dir-feed, dir-play, dir-clean, dir-tuck); each
+     lamp (b) moves by opacity or left alone. Nothing here touches .cap or .toy (slice 2 owns them);
+     reduced motion draws none (the card offers none, and this hides the layer as well). */
+  @supports (width: round(1px, 1px)) {
+    .hw.rim { display: none; inset: 0; z-index: -1; background: none; -webkit-mask: none; mask: none;
+      --b: var(--px, 2px); --lit: #ff9f1c; }
+    ha-card.lcd-on .hw.rim { display: block; }
+    .hw.rim b { position: absolute; display: block; width: calc(var(--b) * 6); height: calc(var(--b) * 3);
+      background: var(--lit); box-shadow: 0 0 calc(var(--b) * 2) var(--lit), 0 0 0 calc(var(--b) / 2) rgba(255, 244, 200, .8); opacity: 0; pointer-events: none; }
+    .hw.rim.dir-feed { animation: dir-rim-life 1.3s linear both; }
+    .hw.rim.dir-play { animation: dir-rim-life .9s linear both; }
+    .hw.rim.dir-clean { animation: dir-rim-life 1.1s linear both; }
+    .hw.rim.dir-tuck { animation: dir-rim-life 1.8s linear both; }
+    @keyframes dir-rim-life { from, to { opacity: 1; } }
+    /* Feed: the delivery path, three lamps along the bottom edge lighting in turn. */
+    .hw.rim.dir-feed b { bottom: calc(var(--b) / 2); animation: dir-rim-blip .5s steps(5) both; }
+    .hw.rim.dir-feed b:nth-child(1) { left: 32%; }
+    .hw.rim.dir-feed b:nth-child(2) { left: 46%; animation-delay: .25s; }
+    .hw.rim.dir-feed b:nth-child(3) { left: 60%; animation-delay: .5s; }
+    /* Play: two points, the middle of each side, pulsing twice together. */
+    .hw.rim.dir-play b:nth-child(2) { display: none; }
+    .hw.rim.dir-play b:nth-child(1), .hw.rim.dir-play b:nth-child(3) { top: 40%; width: calc(var(--b) * 3); height: calc(var(--b) * 7);
+      animation: dir-rim-blip .4s steps(4) 2 both; }
+    .hw.rim.dir-play b:nth-child(1) { left: calc(var(--b) / 2); }
+    .hw.rim.dir-play b:nth-child(3) { right: calc(var(--b) / 2); }
+    /* Clean: one sweep along the top edge, left to right. */
+    .hw.rim.dir-clean b:nth-child(1), .hw.rim.dir-clean b:nth-child(3) { display: none; }
+    .hw.rim.dir-clean b:nth-child(2) { top: calc(var(--b) / 2); width: calc(var(--b) * 12); animation: dir-rim-sweep 1s steps(10) both; }
+    /* The tuck, confirmed: three lamps on the top edge, each lit then dimming, one after the other. */
+    .hw.rim.dir-tuck b { top: calc(var(--b) / 2); animation: dir-rim-dim .6s steps(6) both; }
+    .hw.rim.dir-tuck b:nth-child(1) { left: 38%; }
+    .hw.rim.dir-tuck b:nth-child(2) { left: 48%; animation-delay: .45s; }
+    .hw.rim.dir-tuck b:nth-child(3) { left: 58%; animation-delay: .9s; }
+    /* The room on the rim (slice 4D, plan 6.6, 6.6a). Two kinds of thing share this layer, and never the
+       same classes. The AMBIENCE is a still glow on the plastic, a class on the rim (dir-rim-*) painted by
+       the adapter from the house's 'current': ::before is the room's (the lights lit or dimmed, the
+       fireplace's warm rim; the fireplace over the lights), ::after the climate's tint (warm for the
+       heating, cool for the cooling). A transition on opacity at most, no animation, and reduced motion
+       keeps it. The lights' glow steps aside for the backlight (the player's own light is its own, the
+       ambient is never over '.lit'). The CUES are one-shots on the same three amber lamps as the care cues
+       (opacity and 'left' only, the rim's 'dir-rim-life' the lease's clock): the lights' and the
+       fireplace's onsets from the wire, the doorbell's chime, the appliance's tick, the vacuum's rotor and
+       the heating's wash from the moments (one per event). --lit sets a lamp's colour. */
+    .hw.rim::before, .hw.rim::after { content: ""; position: absolute; inset: 0; opacity: 0; pointer-events: none;
+      transition: opacity .8s ease-out; }
+    .hw.rim::before { box-shadow: inset 0 0 0 calc(var(--b) * 2) var(--rim-glow, transparent), inset 0 0 calc(var(--b) * 6) var(--rim-glow, transparent); }
+    .hw.rim::after { box-shadow: inset 0 0 0 calc(var(--b) * 2) var(--rim-tint, transparent), inset 0 0 calc(var(--b) * 5) var(--rim-tint, transparent); }
+    .hw.rim.dir-rim-lit::before { --rim-glow: rgba(255, 226, 160, .55); opacity: 1; }
+    .hw.rim.dir-rim-dim::before { --rim-glow: rgba(10, 12, 24, .5); opacity: 1; }
+    .hw.rim.dir-rim-fire::before { --rim-glow: rgba(255, 96, 24, .75); opacity: 1; }
+    .bezel:has(.screen.lit) .hw.rim.dir-rim-lit::before, .bezel:has(.screen.lit) .hw.rim.dir-rim-dim::before { opacity: 0; }
+    .hw.rim.dir-rim-warm::after { --rim-tint: rgba(255, 170, 60, .6); opacity: 1; }
+    .hw.rim.dir-rim-cool::after { --rim-tint: rgba(110, 176, 255, .4); opacity: 1; }
+    .hw.rim.dir-lamp-on, .hw.rim.dir-lamp-off, .hw.rim.dir-ember-in, .hw.rim.dir-ember-out { animation: dir-rim-life 1.5s linear both; }
+    .hw.rim.dir-chime { animation: dir-rim-life 1.2s linear both; }
+    .hw.rim.dir-tick-l, .hw.rim.dir-tick-m, .hw.rim.dir-tick-r { animation: dir-rim-life .9s linear both; }
+    .hw.rim.dir-wash-warm, .hw.rim.dir-wash-cool { animation: dir-rim-life 1.3s linear both; }
+    .hw.rim.dir-rotor-out { animation: dir-rim-life 1.1s linear both; }
+    .hw.rim.dir-rotor-home { animation: dir-rim-life 2.2s linear both; }
+    /* Lights on: the top lamps come on in turn and stay lit to the end; off: they dim in turn, last first. */
+    .hw.rim.dir-lamp-on b, .hw.rim.dir-lamp-off b { top: calc(var(--b) / 2); }
+    .hw.rim.dir-lamp-on b { animation: dir-rim-rise .5s steps(5) both; }
+    .hw.rim.dir-lamp-off b { animation: dir-rim-dim .6s steps(6) both; }
+    .hw.rim.dir-lamp-on b:nth-child(1), .hw.rim.dir-lamp-off b:nth-child(3) { left: 38%; }
+    .hw.rim.dir-lamp-on b:nth-child(2), .hw.rim.dir-lamp-off b:nth-child(2) { left: 48%; animation-delay: .45s; }
+    .hw.rim.dir-lamp-on b:nth-child(3), .hw.rim.dir-lamp-off b:nth-child(1) { left: 58%; animation-delay: .9s; }
+    .hw.rim.dir-lamp-off b:nth-child(3) { animation-delay: 0s; }
+    /* The fireplace: three embers along the bottom edge, lit in turn (and, at its end, set in turn). */
+    .hw.rim.dir-ember-in, .hw.rim.dir-ember-out { --lit: #ff5a14; }
+    .hw.rim.dir-ember-in b, .hw.rim.dir-ember-out b { bottom: calc(var(--b) / 2); }
+    .hw.rim.dir-ember-in b { animation: dir-rim-rise .5s steps(5) both; }
+    .hw.rim.dir-ember-out b { animation: dir-rim-dim .6s steps(6) both; }
+    .hw.rim.dir-ember-in b:nth-child(1), .hw.rim.dir-ember-out b:nth-child(3) { left: 36%; }
+    .hw.rim.dir-ember-in b:nth-child(2), .hw.rim.dir-ember-out b:nth-child(2) { left: 48%; animation-delay: .45s; }
+    .hw.rim.dir-ember-in b:nth-child(3), .hw.rim.dir-ember-out b:nth-child(1) { left: 60%; animation-delay: .9s; }
+    .hw.rim.dir-ember-out b:nth-child(3) { animation-delay: 0s; }
+    /* The doorbell: two notes, a lamp each along the top edge, the second a beat after. */
+    .hw.rim.dir-chime b:nth-child(2) { display: none; }
+    .hw.rim.dir-chime b { top: calc(var(--b) / 2); animation: dir-rim-blip .5s steps(5) both; }
+    .hw.rim.dir-chime b:nth-child(1) { left: 42%; }
+    .hw.rim.dir-chime b:nth-child(3) { left: 54%; animation-delay: .5s; }
+    /* The appliance: one lamp, one tick, at the bottom edge: left for the washer, middle for the dryer and any
+       other machine, right for the dishwasher. */
+    .hw.rim.dir-tick-l b:nth-child(1), .hw.rim.dir-tick-l b:nth-child(3), .hw.rim.dir-tick-m b:nth-child(1), .hw.rim.dir-tick-m b:nth-child(3),
+    .hw.rim.dir-tick-r b:nth-child(1), .hw.rim.dir-tick-r b:nth-child(3) { display: none; }
+    .hw.rim.dir-tick-l b:nth-child(2), .hw.rim.dir-tick-m b:nth-child(2), .hw.rim.dir-tick-r b:nth-child(2) { bottom: calc(var(--b) / 2); animation: dir-rim-blip .6s steps(6) both; }
+    .hw.rim.dir-tick-l b:nth-child(2) { left: 22%; }
+    .hw.rim.dir-tick-m b:nth-child(2) { left: 47%; }
+    .hw.rim.dir-tick-r b:nth-child(2) { left: 72%; }
+    /* The heating or the cooling coming on for the pet: one wash along the top edge, warm or cool. */
+    .hw.rim.dir-wash-warm { --lit: #ff8a3c; }
+    .hw.rim.dir-wash-cool { --lit: #6fb4ff; }
+    .hw.rim.dir-wash-warm b:nth-child(1), .hw.rim.dir-wash-warm b:nth-child(3), .hw.rim.dir-wash-cool b:nth-child(1), .hw.rim.dir-wash-cool b:nth-child(3) { display: none; }
+    .hw.rim.dir-wash-warm b:nth-child(2), .hw.rim.dir-wash-cool b:nth-child(2) { top: calc(var(--b) / 2); width: calc(var(--b) * 12); animation: dir-rim-sweep 1.2s steps(12) both; }
+    /* The vacuum: a rotor of three lamps (the left side, the top, the right side) lit in turn. Out: one quick
+       turn. Home: the same turn, slower, and it ends. */
+    .hw.rim.dir-rotor-out b, .hw.rim.dir-rotor-home b { width: calc(var(--b) * 3); height: calc(var(--b) * 7); top: 40%; }
+    .hw.rim.dir-rotor-out b:nth-child(1), .hw.rim.dir-rotor-home b:nth-child(1) { left: calc(var(--b) / 2); }
+    .hw.rim.dir-rotor-out b:nth-child(2), .hw.rim.dir-rotor-home b:nth-child(2) { top: calc(var(--b) / 2); left: 48%; width: calc(var(--b) * 7); height: calc(var(--b) * 3); }
+    .hw.rim.dir-rotor-out b:nth-child(3), .hw.rim.dir-rotor-home b:nth-child(3) { right: calc(var(--b) / 2); }
+    .hw.rim.dir-rotor-out b { animation: dir-rim-blip .4s steps(4) both; }
+    .hw.rim.dir-rotor-out b:nth-child(2) { animation-delay: .25s; }
+    .hw.rim.dir-rotor-out b:nth-child(3) { animation-delay: .5s; }
+    .hw.rim.dir-rotor-home b { animation: dir-rim-blip .8s steps(8) both; }
+    .hw.rim.dir-rotor-home b:nth-child(2) { animation-delay: .6s; }
+    .hw.rim.dir-rotor-home b:nth-child(3) { animation-delay: 1.2s; }
+    /* An echo (the first view soon after): the same, shorter, the lamps together. */
+    .hw.rim.dir-rim-echo { animation-duration: .7s; }
+    .hw.rim.dir-rim-echo b:nth-child(n) { animation-duration: .4s; animation-delay: 0s; }
+    @keyframes dir-rim-rise { 0% { opacity: 0; } 30%, 100% { opacity: 1; } }
+    @keyframes dir-rim-blip { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes dir-rim-sweep { 0% { left: 12%; opacity: 0; } 15%, 85% { opacity: 1; } 100% { left: 78%; opacity: 0; } }
+    @keyframes dir-rim-dim { 0% { opacity: 0; } 15%, 40% { opacity: 1; } 100% { opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .hw.rim b { display: none !important; } } /* the lamps are cues, and none is offered; the still glow stays */
+  }
   .compact .egg .hw.light { display: none; } /* no margin left beside a narrow egg's screen */
   /* Clear: the board behind the screen, seen through the plastic round the bezel,
      and a glare on the plastic. */
@@ -971,9 +1300,12 @@ const STYLE = `
      across between its pages. Reduced motion makes both instant (the global rule). */
   @keyframes lcd-wipe-down { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0); } }
   @keyframes lcd-wipe-side { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
+  @keyframes lcd-wipe-up { from { clip-path: inset(0); } to { clip-path: inset(0 0 100% 0); } }
   .status:focus { outline: none; } /* focused by a tap inside it, so Escape reaches it (UX fix 2, F4) */
   .screen .status.wipe-down { animation: lcd-wipe-down .16s steps(4) both; }
   .screen .status.wipe-side { animation: lcd-wipe-side .16s steps(4) both; }
+  /* closing: show-status is already off; the page is drawn over the screen for the wipe and ignores taps */
+  .screen .status.wipe-up { display: flex; pointer-events: none; animation: lcd-wipe-up .16s steps(4) both; }
   /* The backlight lights the menus too (F10): the sheet and its back band lift toward the glow's
      mint, a faint lift by day and a stronger one in the dark, fading out with the glow. */
   .status, .shead { transition: background-color .6s ease-out; }
@@ -1024,6 +1356,11 @@ const STYLE = `
   /* Every row: an icon slot (maybe empty), the label, the value; all on one grid. */
   .row { display: grid; grid-template-columns: 18px 84px minmax(0, 1fr); align-items: center; gap: 6px; }
   ha-card:not(.bigtext) .porthole .row { grid-template-columns: 16px 60px minmax(0, 1fr); gap: 5px; } /* the rim cuts the value column (UX8 F7) */
+  /* The nature row (N3) holds a 40-60 character note, which the narrow value column (about 54px at 300, 44 in
+     big text) wrapped to 8 lines of one or two words: where the column is narrow (a compact card, which every
+     viewport under 420 is, and big text) the label sits on its own line and the note runs full width below it. The wide card keeps the row. */
+  .compact .row.naturerow, ha-card.bigtext .row.naturerow { grid-template-columns: 18px minmax(0, 1fr); row-gap: 2px; }
+  .compact .row.naturerow > :last-child, ha-card.bigtext .row.naturerow > :last-child { grid-column: 1 / -1; }
   .bar { height: 9px; border: 2px solid #2f3a24; padding: 1px; }
   .bar div { height: 100%; background: #2f3a24; }
   .hearts { letter-spacing: 2px; }
@@ -1218,22 +1555,34 @@ const STYLE = `
   .toy { gap: calc(var(--px, 2px) * 3 + 2px); }
   .toy .cap { position: relative; width: calc(var(--px, 2px) * var(--cap-n, 23));
     height: calc(var(--px, 2px) * var(--cap-n, 23)); display: flex; align-items: center; justify-content: center;
-    background: #fff7ec; color: #3a2a1a; clip-path: var(--cap-clip); transition: transform .08s, background .2s; }
+    background: #fff7ec; color: #3a2a1a; clip-path: var(--cap-clip);
+    transition: translate var(--rebound-ms, .12s) var(--rebound, cubic-bezier(.3, 2, .5, 1)), background .2s, filter .25s; }
   .toy .cap::before, .toy .cap::after { content: ""; position: absolute; left: 0; top: 0; width: 100%;
     height: calc(var(--px, 2px) * (var(--cap-n, 23) + 3)); z-index: -1; pointer-events: none; }
   .toy .cap::before { background: var(--d-btn-shadow); clip-path: var(--cap-side); }
   .toy .cap::after { background: var(--cap-tones) 0 0 / 100% 100%; }
   .toy .cap > * { position: relative; }
   /* Pressed: held down for at least 160 ms so even a quick tap reads as a press. */
-  .toy:active .cap, .toy.pressed .cap { transform: translateY(calc(var(--px, 2px) * 2));
-    clip-path: var(--cap-clip-dn); transition-duration: .04s; }
+  .toy:active .cap, .toy.pressed .cap { translate: 0 calc(var(--px, 2px) * 2);
+    clip-path: var(--cap-clip-dn); transition-duration: .04s, .2s, .25s; transition-timing-function: ease-out; }
   .toy:active .cap::before, .toy.pressed .cap::before { clip-path: var(--cap-side-dn); }
   .toy:active .cap::after, .toy.pressed .cap::after { background-image: var(--cap-tones-dn);
     height: calc(var(--px, 2px) * (var(--cap-n, 23) + 1)); }
-  .toy.pending .cap { animation: waiting .9s ease-in-out infinite; }
-  @keyframes waiting { 50% { filter: brightness(.9); } }
-  .toy.failed .cap { animation: shake .35s; }
-  @keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+  /* Release: the cap's own transition overshoots as it comes back up (the rebound; the
+     .toy button, the hit target, does not move). Each action has its own curve, the rest the
+     default above. A cap's state never uses transform or an animation of it (the pressed
+     offset is translate), so nothing here can cancel another move. */
+  .toy[data-action="feed"] .cap { --rebound: cubic-bezier(.3, 1.7, .5, 1); --rebound-ms: .14s; }
+  .toy[data-action="play"] .cap { --rebound: cubic-bezier(.3, 2.8, .5, 1); --rebound-ms: .12s; }
+  .toy[data-action="clean"] .cap { --rebound: cubic-bezier(.2, 2.4, .6, .6); --rebound-ms: .1s; }
+  .toy[data-action="medicine"] .cap { --rebound: cubic-bezier(.3, 1.25, .5, 1); --rebound-ms: .09s; }
+  .toy[data-action="lights"] .cap { --rebound: cubic-bezier(.3, .9, .5, 1); --rebound-ms: .14s; }
+  /* Pending (_call: the service call is out) and failed (it was rejected): tones only. Both
+     have a still value, so reduced motion (no animation, no transition) shows them too. Failed
+     wins over pending. A refusal is not a failure and shows nothing here. */
+  .toy.pending .cap { filter: brightness(.94); animation: waiting .9s ease-in-out infinite; }
+  @keyframes waiting { 50% { filter: brightness(.86); } }
+  .toy.failed .cap { animation: none; filter: saturate(.35) brightness(.88); }
   .burst { position: absolute; left: 50%; top: 0; width: 46px; height: 46px; margin-left: -23px;
     border-radius: 50%; pointer-events: none; border: 3px solid #ffe9a8;
     animation: burst .45s ease-out forwards; }
@@ -1246,6 +1595,20 @@ const STYLE = `
   .screen .askday.wide button { min-width: 52px; padding: 4px 6px; }
   .screen .askday.asktext input { font: inherit; font-size: 16px; min-height: 44px; width: 9.5em; max-width: 46%;
     border-radius: 14px; border: 2px solid #3a2a1a; padding: 2px 10px; box-sizing: border-box; } /* F1; 16 px: no iOS zoom */
+  /* Memory's tag chips (plan M2), inside the text step's box above the input: the prompt, then
+     one wrapping row of small chips (the picked one filled), kept low so the box leaves the
+     bubble its line: 28 px chips, three rows at 300-330, two at 420. */
+  .screen .askday.asktext .tagq { flex-basis: 100%; text-align: center; font-size: 11px; line-height: 14px;
+    color: #3a2a1a; background: #fffdf5; border-radius: 8px; padding: 0 6px; margin: 0 auto -2px; max-width: max-content; }
+  .screen .askday.asktext .tags { flex-basis: 100%; display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; }
+  .screen .askday.asktext .tags button.tag, .compact .screen .askday.asktext .tags button.tag { min-height: 28px;
+    min-width: 0; font-size: 11px; line-height: 1; padding: 0 6px; border-radius: 9px; border-width: 2px;
+    box-shadow: 0 2px 0 #3a2a1a; }
+  /* The picked chip is inverted (dark fill, light text), not only yellow: the mono LCD look turns
+     #ffe9a8 and #fffdf5 into one tone, and a player there must still see which tag is picked. */
+  .screen .askday.asktext .tags button.tag[aria-pressed="true"] { background: #3a2a1a; color: #fffdf5; }
+  .compact .screen .askday.asktext .tags { gap: 2px; }
+  .compact .screen .askday.asktext .tags button.tag { min-height: 26px; padding: 0 4px; }
   .compact .screen .askday { gap: 4px; bottom: 2%; }
   .compact .screen .askday.many { max-width: 100%; }
   .compact .screen .askday button { min-height: 44px; min-width: 44px;
@@ -1301,6 +1664,7 @@ const STYLE = `
   ha-card.bigtext .game .hl { font-size: 16px; }
   ha-card.bigtext .game .gpick.wrap button { font-size: 14px; }
   ha-card.bigtext .game .gpick.wrap.tight button { font-size: 13px; }
+  ha-card.bigtext .game .gpick.wrap.snug button { font-size: 12px; }
   ha-card.bigtext .screen .askday button { font-size: 15px; }
   .screen .bondhearts img, .screen .linkhearts img, .screen .carehearts img { position: absolute; left: calc(50% + var(--x)); top: 52%; width: 18px; height: auto;
     opacity: 0; image-rendering: pixelated; pointer-events: none; z-index: 2; animation: bondheart 1.6s ease-out forwards; }

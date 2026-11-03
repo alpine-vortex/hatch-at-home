@@ -7,9 +7,14 @@ re-checked against `origin/main` `b38c9852`; where the code differs, section 2 s
 **Revised by s2736** to fold in the adversarial review s2733 (3 blockers, 10 should-fix,
 5 nits; each checked against the code first). Section 15 lists every finding and what
 became of it.
+**N2 folded by s2793** from review s2792 (the first mate's decisions of 2026-11-03,
+section 16; every finding's fate in section 15). N2 is now a build-ready section (8, N2).
+**N2 shipped by s2794** (branch `crew/hatch-at-home-s2794-species-nature-n2-action-line`;
+section 16 "N2 shipped" says where the code differed and what each pin became).
 Names win over line numbers. **Every pet line, field-note and pose name here is DRAFT**
 until the first mate approves it (decisions-2026-10-28.md, "How the crew works with the
-owner"). No final player copy is in this plan.
+owner"), **except N1's (shipped) and N2's 22 lines, which the first mate approved on
+2026-11-03** (section 16).
 
 The build is four ships. **Ships 1-2 are tier 1** (card and data; flavour only; no saved
 field, no stat, no rate). **Ship 3 is tier 1 with a small server change** (one species-note
@@ -18,7 +23,9 @@ for the code, the art goes through the art review). Nothing here touches `PetSta
 
 ## 0. Summary
 
-Today species differ in **look, voice and words, never in behaviour**. Each species has
+Today species differ in **look, voice and words, never in behaviour** (the care scenes
+already pick a gesture by `nature().habit` and time a beat by pace, `card-care.js`: the
+care-reactions plan's decision, a picture and never a number). Each species has
 three own poses (the otter's rock, hold paws and kelp wrap), but they are drawn **for the
 child only**, about four days of a pet's life. A teen or adult otter idles exactly like a
 teen or adult tortoise.
@@ -32,7 +39,7 @@ flavour only. No species is better at anything, needier, or sadder.
 | Ship | What | Size | Art | Copy (DRAFT lines) |
 |---|---|---|---|---|
 | **N1** | `nature` block in all 30 `species.json`, README row, data test. The idle manner (habit and pace reweight the existing idle moves, cadence by pace). The sky body reaction. The clock flavour, as variant lines on the **existing** `sunset` and `good_morning` moments | S-M | none | about 20 |
-| **N2** | The species action-line layer in `_lines` (idle, snack, clean, find), the company manner on visitor greet and link host | M | none | about 40 |
+| **N2** | The species action-line layer in `_lines`, opt-in per call site (idle, find, visit, link host), the solo "peeks first" visit line. Snack and clean are the care scenes' (section 8a) | S-M | none | 22 |
 | **N3** | A hand-written field note per species on the status page (the pet's own species), and the same note in the Assist status data. **Server change** (a coordinator map, an `intent.py` slot, a prompt sentence) | S-M | none | 30 notes + 1 prompt sentence |
 | **N4** | One adult signature pose per species (30 species x 2 frames = 60 frames), `signature` in `species.json`, the idle `pose` move learns the stage. **No reaction path** | L | **60 frames** | 0 |
 
@@ -71,6 +78,11 @@ Nothing else is left to the owner; section 13 lists what is open.
 
 Checked at `b38c9852` (the scout read `f2c5e8a8` or earlier). Everything in the scout's
 Part 1 held. Items worth the builder's knowing:
+
+(**Line numbers below are as of `b38c9852` and have since moved** (care B1/B2, the resting
+ships and N1 all touched these files; review s2792 S10 lists the new places). Names win.
+The care scenes now live in `card-care.js`, the clean `squint` is gone from
+`card-actions.js`, and `_lines` is `card-tick.js:239`.)
 
 - **30 ready species**, each `custom_components/virtual_pet/frontend/sprites/<id>/species.json`.
   The beetle has a sprite folder and a `worlds.json` roster slot but no `species.json`
@@ -153,7 +165,7 @@ Six facts per species. Five are shown; none changes a number.
 |---|---|---|---|
 | **Clock** | `day`, `dusk`, `night` | `nature.clock` | A clock-flavoured variant of the existing sunset and good-morning lines. **Sleep hours, chirps and quiet hours never change.** |
 | **Sky** | `sun`, `rain`, `snow`, `fog`, `wind`, `fire`, `moon` | `nature.sky` | A **body reaction** (a perk and a short `*action*` line) when its flag is up, once a day. Never "favourite" (Q3). |
-| **Company** | `social`, `solo` | `nature.company` | How it meets a world visitor or a link guest. Solo means shy for a beat, never cold. |
+| **Company** | `social`, `solo` | `nature.company` | How it meets a world visitor: a solo species says one shy line, "peeks first, then waves"; never cold, no timing change. |
 | **Pace** | `quick`, `steady`, `slow` | derived from `voice.pace` | The idle cadence (+/-25% at most) and the move mix. |
 | **Habit** | `hoarder`, `builder`, `basker`, `groomer`, `explorer`, `watcher`, `performer` | `nature.habit` | The signature: idle moves, action lines, a field note, and in N4 the idle pose. (No dream: dreams are the server's pick, section 8, N2.) |
 | **Move** | `hop`, `glide`, `swim`, `dig`, `climb`, `squeeze` | Hop's `FAMILY_OF` | Hop of the Day only. Not repeated here. |
@@ -252,7 +264,7 @@ Notes on the table:
 
 ### 5.1 The idle manner (N1)
 
-`_idleMoves` (`card-tick.js:232`) builds the list from the common moves, the type's adds
+`_idleMoves` (`card-tick.js`) builds the list from the common moves, the type's adds
 and the tricks. N1 adds one more source for a **teen or adult**, the same guard as
 `_typeAdds`: `SPECIES_ADDS[habit]`, a table in `lines.js`, copies of existing moves only.
 
@@ -293,11 +305,13 @@ is applied only when not calm, so a calm pet's idle is exactly as today).
 `Math.random` in a fixed order, `scripts/card-check.js:7541-7546`, babies at `:6325`):
 
 - `mumble` stays element 0 of `_idleMoves`. The draws are, in order: the delay, then the
-  move (0 picks `mumble`), then the persona coin. **The cadence scale and the sky check
-  draw no `Math.random` before those two.** The scale is a multiplier on the two
-  constants, not a draw.
+  move (0 picks `mumble`), **[the neighbour roll, with two or more pets]**, `pick(lines)`
+  for the normal line, then the persona coin. **The cadence scale and the sky check
+  draw no `Math.random` before the delay and the move.** The scale is a multiplier on the
+  two constants, not a draw. (Corrected by s2792 S5: the neighbour roll and the `normal`
+  pick sit between the move and the coin; section 5.4 has the full order.)
 - The species roll (section 5.4) runs **after** the persona coin, and only in the `mumble`
-  branch. A test key whose persona has no list would otherwise see the species line where
+  branch, for the `idle` key (content and cozy). A test key whose persona has no list would otherwise see the species line where
   it expects the normal line (`NORMAL_GREET`, "hehe!"/"wheee"). The builder updates those
   card-check expectations in the same ship, and says so in the report.
 - **"Idle life happens by itself"** (`card-check.js:3384-3390`) waits 225 x 400 ms = 90 s.
@@ -315,7 +329,7 @@ a caricature: the species adds at most **3 copies** in total (the table above ha
 3), and the type's adds are untouched.
 
 **What the adds do to the mix.** A line is said only in the `mumble` branch
-(`card-tick.js:391-409`), so every add lowers `mumble`'s share. The list for a content
+(the final `else` of `_idle`), so every add lowers `mumble`'s share. The list for a content
 adult without a pose is `mumble, look, look, wander, perk, speck` (6 moves, `mumble` 1 in
 6); three `look` copies for a watcher make it 9 (1 in 9). That is intended (a watcher
 talks less, looks more), and it is why the line cap in section 6 is defined on the
@@ -397,72 +411,173 @@ Ship 1 does not try to make night creatures noisier at night.
 
 ### 5.4 Signature behaviours per habit (N2 copy)
 
-Each habit gets a handful of keys. All lines are DRAFT. **Every species line is an
-`*action*` line** (the body); no species line is speech. The voice stays with the
-personality (`plan-2026-10-28-personality-types.md:33,103`), and a species line competes
-with the persona list in `_lines`, not beside it. They fit 40 characters with the
-longest fill (the copy scan's rule).
+**Folded from review s2792 and the first mate's decisions of 2026-11-03 (section 16).** N2
+has **four keys: `idle`, `find`, `visit`, `link_host`.** Snack and clean are **not** N2's:
+the care scenes own those moments (section 8a). All lines are **FM-approved copy** (the
+quoted lines below are final, except the one marked "new" in section 16, which needs the
+first mate's nod); the copy scan was re-run on every one (section 8, N2: PASS).
+
+**Every species line is an `*action*` line** (the body); no species line is speech. The
+voice stays with the personality (`plan-2026-10-28-personality-types.md:33,103`), and a
+species line competes with the persona list in `_lines`, not beside it. They fit 40
+characters with the longest fill (the copy scan's rule).
 
 **A species line and the catchphrase.** The species already owns a voice block
 (`species.json` `voice`: catchphrase, sound, likes; `coordinator.py:479-487`; the opener
 logic at `prefs.js:172-181`). An `*action*` line begins with `*`, which `OPENERS`
-(`prefs.js:181`; the check is at `card-tick.js:502`) treats as a sound of its own, so the catchphrase is **not** put in front
-of it. A species line is said bare; the catchphrase still opens the persona and normal
-lines as today.
+(`prefs.js:181`; the check is in `_idle`, `card-tick.js`) treats as a sound of its own, so
+the catchphrase is **not** put in front of it. A species line is said bare; the catchphrase
+still opens the persona and normal lines as today.
 
-| Habit | Idle (2 each, `*action*`) | Snack | Clean | Find | Visitor / link guest |
-|---|---|---|---|---|---|
-| **hoarder** (squirrel, hamster, ferret, hermitcrab) | "\*tucks something away\*" with `munch`; "\*pats its cheeks\*" | "\*pockets half for later\*" | none | "\*stashes it, pleased\*" | none |
-| **builder** (beaver, puffin, tarantula, opossum) | "\*fixes up the {home}\*" with `settle`; "\*nudges a bit into place\*" | none | "\*tidies the {home}\*" | none | host: "\*shows off the {home}\*" |
-| **basker** (beardeddragon, tortoise, pondturtle, seal) | "\*a long, slow stretch\*" with `settle`; "\*soaks it in\*" | "\*eats slowly, eyes half shut\*" | none | none | none |
-| **groomer** (kitten, bunny, gecko, otter) | "\*grooms\*" with a small `rock`; "\*smooths itself down\*" | none | "\*fluffs up, pleased\*" | none | none |
-| **explorer** (fox, octopus, bananaslug, duckling, corgi) | "\*sniffs around\*" with `wander`; "\*pokes at a corner\*" | none | none | "\*went looking, and look!\*" | visit: "\*wanders over first\*" |
-| **watcher** (deer, axolotl, ballpython, owl) | "\*watches closely\*" with `look`; "\*holds very still\*" | none | none | none | visit: "\*ears up\*" |
-| **performer** (bird, treefrog, firefly, lunamoth, bat) | "\*hums a little tune\*" with `perk`; "\*does a tiny twirl\*" (a glow for the light ones) | none | none | none | none |
+**The cell shape (one, everywhere).** Every cell is an object `{ text, move }`:
 
-The old draft's speech lines ("saving half for later ♪", "mine! ...ok, ours ♥", "now to
-tidy my {home}", "come see my {home}!", "I went looking and found...") are **gone**:
-they were voice. Also gone: the won-game "its sound as a tune" (a Hop-or-game line, and
-Hop's win lines stay plain), the sky-flag line for the basker (the sky has its own 14
-lines), the morning line (the clock flavour has it) and the dream column (section 8, N2).
-An empty cell is `null`: the habit says its normal line for that key.
+- `text` is a string, or a function `(home) => string` for a line with the `{home}` fill.
+  The function returns a falsy value when `home` is missing, and that cell is **dropped from
+  the pool** (never "my undefined"); a pool left empty means the roll is skipped and
+  **nothing is drawn**, so the cap stays exact.
+- `move` is optional, from the closed set `perk settle munch rock look wander` (the idle
+  moves `_idle` already handles). Only the `idle` key has moves; `find`, `visit` and
+  `link_host` cells have none.
 
-**How a species line is said** (the mechanics the first draft left open):
+**The table** (`SPECIES_LINES` in `lines-fresh.js`, inside the fresh-expand copy block):
 
-- **Idle** is the `mumble` branch of `_idle` only (`card-tick.js:391-409`), which has no
-  animation of its own. A row with a move ("with `munch`") is a pair `[text, move]`, and
-  after the bubble is written the branch calls `_animate(s, s.pet, move, ms)` as `perk` does.
-  This is the only new coupling.
-- **Snack and clean are not rows in an existing table.** `_lines` has no `snack` or `clean`
-  key today. The keys that exist are `yum` (via `_mealLine`, `card-moment.js:467-480`),
-  `find` (`card-visitors.js:472`), `visit` (`card-visitors.js:259`), `praise`,
-  `all_better` and the refusals; a clean does only `_bubblePop` (`card-moment.js:530`).
-  So the snack and the clean are **two new call sites** in `_care`/`_react`, each one
-  `this._natureLine(s, "snack")` ahead of the normal line. They are the interplay hooks of
-  section 8a.
-- **`find`, `visit`** go through the existing `_lines` calls; the species roll sits inside
-  `_lines` after the persona's. **`host`** (a link guest) is a new call in `card-link.js`.
+```js
+const SPECIES_LINES = {
+  habit:   { hoarder: { idle: [...], find: [...] }, builder: { idle: [...], link_host: [...] }, ... },
+  company: { solo: { visit: [...] } },
+  own:     { firefly: { idle: [...] }, lunamoth: { idle: [...] } },
+};
+```
 
-The `{home}` and `{food}` fills come from the species' `words` (`_words(s)`,
-`card-visit.js:196`), so a moth's stage words still apply. A line with a fill whose word
-is missing is **not offered** (it falls back to the plain line, never "my undefined"); a
-JS test walks all 30 species' `words` and asserts no line contains `undefined` or an
-unfilled brace.
+A cell is looked up for `(species, key)` **most specific first: `own[speciesId][key]`, then
+`company[nature.company][key]`, then `habit[nature.habit][key]`**; the first that exists
+wins as a whole (cells are never merged across levels). A missing level, key or `nature`
+gives no cell, and the call site says its normal line.
+
+| Habit | `idle` (2 cells; `move` after "with") | `find` | `visit` | `link_host` |
+|---|---|---|---|---|
+| **hoarder** (squirrel, hamster, ferret, hermitcrab) | "\*tucks something away\*" with `munch`; "\*pats its cheeks\*" | "\*stashes it, happily\*" | none | none |
+| **builder** (beaver, puffin, tarantula, opossum) | `(home)` "\*fixes up the {home}\*" with `settle`; "\*nudges a bit into place\*" | none | none | `(home)` "\*shows off the {home}\*" |
+| **basker** (beardeddragon, tortoise, pondturtle, seal) | "\*a long, slow stretch\*" with `settle`; "\*soaks it in\*" | none | none | none |
+| **groomer** (kitten, bunny, gecko, otter) | "\*grooms\*" with `rock`; "\*smooths itself down\*" | none | none | none |
+| **explorer** (fox, octopus, bananaslug, duckling, corgi) | "\*sniffs around\*" with `wander`; "\*pokes at a corner\*" | "\*came back with something\*" | "\*sniffs the air\*" (new, see below) | none |
+| **watcher** (deer, axolotl, ballpython, owl) | "\*watches closely\*" with `look`; "\*stays very quiet\*" | none | "\*ears up\*" | none |
+| **performer** (bird, treefrog, firefly, lunamoth, bat) | "\*hums a little tune\*" with `perk`; "\*does a tiny twirl\*" | none | none | none |
+
+**The two other levels.**
+
+- **`own`, the light performers.** Firefly and lunamoth do not hum; their `idle` cells
+  replace the performer's two: "\*glows a little brighter\*" with `perk`; "\*flickers in a
+  tiny loop\*". (Bird, treefrog and bat keep the hum and the twirl.)
+- **`company.solo.visit`: "\*peeks first, then waves\*"** (no move). All 15 solo species say
+  it on a visitor's greeting, and it **wins over the habit's `visit` cell** (so the solo
+  watchers, ballpython, owl and axolotl, and the solo explorers, fox, octopus and
+  bananaslug, say "peeks first", not "ears up" or "sniffs the air"). The habit's `visit`
+  cell is therefore said only by a **social** watcher or explorer: deer ("\*ears up\*"),
+  corgi and duckling ("\*sniffs the air\*"). That is the whole `visit` map; every other
+  social species says the usual greeting.
+- **Reworded from the draft (review S4):** the explorer's "\*wanders over first\*" claimed a
+  motion the card does not play (a visiting pet is held by `flairUntil`), so the cell is
+  "\*sniffs the air\*", a stand-alone gesture. It is the one line not named in the first
+  mate's decisions; it passes the scan; refusing it costs one deleted cell and nothing else.
+
+The old draft's speech lines are **gone** (they were voice), and so are: the won-game "its
+sound as a tune" (Hop's win lines stay plain), the sky-flag line for the basker (the sky
+has its own 14 lines), the morning line (the clock flavour has it), the dream column
+(section 8, N2), and the **snack and clean columns** (section 8a). An empty cell is absent:
+the call site says its normal line for that key. (Fresh-expand's "never the same twice"
+rule is not involved: none of the four keys is a `fresh` key.)
+
+**How a species line is said.** The species roll is **opt-in per call site**:
+
+```js
+this._lines(s, key, normal, arg, { fresh, nature: "<key>" })
+```
+
+`nature` names the cell key, and the result gains a `move`: `{ text, baby, move }` (`move` is
+`null` unless a species cell with a move was taken). A call site that does not pass
+`nature` is byte-identical to today: the ~40 other `_lines` callers (wish, yum, praise,
+the refusals, the seasons...) draw no extra `Math.random` and their `{text, baby}` result
+is unchanged. Inside `_lines`, after the persona's coin has failed to take the line (or
+the persona has no list for the key) and the pet is **not** a baby set:
+
+1. the stage must be **teen or adult** (`sensor.life_stage` read directly, as
+   `_speciesAdds` does: a child, a baby and an egg get none, whatever baby talk is on);
+2. the pool is every cell for `(species, key)` whose `text` resolves (the `{home}` word from
+   `this._words(s)`); an empty pool ends it, with no draw;
+3. `Math.random() < SPECIES_LINE_ODDS` (0.25), and then `pick(pool)` is the line, said bare.
+
+**The draw order a card-check or bench pin must know** (it corrects section 5.1): the
+`_idle` delay, the move, **[the neighbour roll, only with two or more pets and not for a
+baby or a bodily mood]**, `pick(lines)` for `normal`, the persona coin (only when the persona
+has a list for the key; if it passes, `pick` of the persona list follows and the species
+roll is **not** made), **[the species roll, then `pick(pool)`]**. A key without a species
+cell draws exactly what it draws today.
+
+**Rate, so nobody tunes against 25%.** "At most 1 in 4" is the ceiling. No persona list
+has a `find` key, so `find` is a flat 25% of the eligible finds; `idle`, `visit` and
+`link_host` have a persona list for all 8 types, so after the persona's 50% coin a typed
+teen or adult says the species line on **12.5%** of those lines (a pet with no type yet:
+25%).
+
+**Per key:**
+
+- **`idle`** is the `mumble` branch of `_idle` only (`card-tick.js`, the final `else`),
+  `nature: "idle"`, and only when `key === "idle"` (the content and cozy moods): the
+  bored and excited keys (`idle_bored`, `idle_excited`) and the bodily moods (sleepy,
+  hungry, dirty, sick, which skip `_lines`) get none, and so neither does a resting pet or
+  a neighbour line. So rule 7's "not while sick or resting" holds without a new check.
+  **The move** is not `_animate`'s for every name: `look` and `wander` go through `_look(s,
+  1800)` and `_wander(s, 2200)` (persistent classes with their own `_moving`), the rest
+  (`perk settle munch rock`) through `_animate`. N2 therefore **extracts the simple branches
+  of `_idle`** (`look`, `wander`, `perk`, `settle`, `munch`, `rock`, with the ms they use
+  today) into one `_idleMove(s, move)`, which `_idle`'s own `if/else` calls for those
+  moves too (no behaviour change for them), and the `mumble` branch calls
+  `this._idleMove(s, move)` **after `_write`, only if `!isCalm` and the result has a
+  `move`**. Calm or reduced motion: the line only, no move.
+- **`find`** is `_findLine` (`card-visitors.js`), the **V1 branch only**: the species line
+  is offered only when the find has no visitor who left it (V3) and is not a first-ever
+  find (V2) (`nature: who || f.new ? null : "find"`), so a line that names the visitor or
+  says "new" is never replaced. (The V1 line names the thing found; the species line does
+  not, the find's picture shows it.)
+- **`visit`** is the last branch of `_visitorGreet` (`card-visitors.js`), after the guest,
+  pair, favourite and friend lines: `nature: "visit"`. Those branches stay first, and a
+  baby set stays first (`_babySet`).
+- **`link_host`** is the existing call in `_linkStart` (`card-link.js`), `nature:
+  "link_host"`. It is an **alternate hello** for the builder host: the species line stands
+  in for "hi, {guest}!" 1 time in 4 at most (above), so the host does not greet the guest by
+  name on that visit. The guest's reply (`link_guest`) is unchanged, and **no species
+  line is added on the guest's side**. The line is stored in `L.said` like any hello.
+  The `_linkStart` comment, "every roll is made here, at the start", stays true.
+
+The `{home}` fill comes from `_words(s)` (`card-visit.js`), so a moth's stage words still
+apply. A JS test walks all 30 species' `words` (and the stage words) and asserts no cell
+text contains `undefined` or an unfilled brace.
 
 (The scout's draft day-in-the-life lines for six species are kept in the scout's report;
 they were illustrations and are not copied here as final.)
 
 ### 5.5 Company (N2)
 
-How a species meets a world visitor (`card-visitors.js`) or a link guest (`card-link.js`):
+How a species meets a world visitor (`card-visitors.js`) or a link guest (`card-link.js`).
+**Lines only, no beat** (first mate, 2026-11-03; review s2792 B2):
 
-- **social:** a bounce (`perk`), then the wave, as today.
-- **solo:** it **watches for a beat first** (`look`, about 1 s), then waves with a small
-  action line ("\*peeks first, then waves\*"). Warm with its own people; never "doesn't like you", never refuses the guest.
+- **social:** unchanged. The greeting already plays a bounce (`greethop`, from
+  `_reactFrames(s, "greet")`) for every species; N2 adds nothing, no `perk`, no line of
+  its own (a social watcher or explorer has the habit's `visit` cell, section 5.4).
+- **solo:** the one `visit` line, "\*peeks first, then waves\*" (section 5.4), at the
+  usual cap. **No delay, no `perk`, no `look` call.** The "look first" beat already exists:
+  a visitor from the left makes the pet look from the arrival, and holds it through the
+  stay, and a right-hand one meets the art already facing it; the calm path has no look and
+  needs none. A delayed greet would eat the 3 s stay and a second one-shot `.pet.<cls>`
+  animation would silence `greethop` (AGENTS.md, composition rule).
+- **Link guest: nothing.** The guest's reply is timed to `t0+1800` and the extra's timing
+  is built on it (`card-link.js`), so a solo guest says what it says today.
 
-This changes timing and one short line only. The existing `waves` frames, the greet text
-tables and the kindred pairs (by personality) are unchanged. It never changes who visits,
-how often, or what is left behind.
+Warm with its own people; never "doesn't like you", never refuses the guest. It changes one
+short line and no timing. The existing `waves` frames, the greet text tables and the kindred
+pairs (by personality) are unchanged. It never changes who visits, how often, or what is
+left behind.
 
 ## 6. The non-intrusive rules
 
@@ -475,11 +590,13 @@ how often, or what is left behind.
 3. **Nothing punishing.** No axis value produces a sad or reluctant line. A night
    creature's morning is groggy and fond. A solo creature is shy with guests, never cold to
    its person. The sky axis has no "dislike".
-4. **Rate caps.** Species action lines are **at most 1 in 4 of the lines the `mumble`
-   branch says**: one constant (`SPECIES_LINE_ODDS = 0.25`) on that branch, rolled after the
-   persona's coin fails to take the line. It is defined on `mumble` and not on all idle
+4. **Rate caps.** Species action lines are **at most 1 in 4 of the lines a call site says**:
+   one constant (`SPECIES_LINE_ODDS = 0.25`), rolled after the persona's coin fails to take
+   the line, and only at the four call sites that opt in (section 5.4: `idle` in the
+   `mumble` branch, `find`, `visit`, `link_host`). It is defined on `mumble` and not on all idle
    moves, because only `mumble` says a line and the species adds change its share
-   (section 5.1). The JS test sweeps the random value across 0..1 and counts: species
+   (section 5.1). With the persona's 50% coin before it, a typed teen or adult says it on
+   12.5% of those lines; `find` has no persona list, so it is 25% of the eligible finds. The JS test sweeps the random value across 0..1 and counts: species
    line for `r < 0.25` of the draws that reach the roll, never otherwise. One sky
    reaction per day. The clock lines are the existing `sunset` and `good_morning` moments,
    so their rate is unchanged (once a day each, as the server emits them). The idle
@@ -487,20 +604,23 @@ how often, or what is left behind.
 5. **Body, not voice.** Species lines are `*action*` lines only (no speech). The
    personality type keeps the voice. In `_lines` the order is: baby set (wins everything);
    else the persona list at its 50% roll; else, only on the lines the persona did **not**
-   take, the species list at 1 in 4 (section 8). A line is never both, and a species line is
-   said bare, without the catchphrase (section 5.4).
-6. **Babies get none.** A baby keeps its baby talk (`_babySet`). A child gets the lines and
-   the cadence (it already has its own poses); the teen and adult also get the idle manner
-   and, in N4, the signature pose.
+   take, the species list at 1 in 4 (section 5.4, opt-in per call site). A line is never both,
+   and a species line is said bare, without the catchphrase (section 5.4).
+6. **Babies and children get no species line.** A baby keeps its baby talk (`_babySet`). A
+   child gets the **cadence** only (it already has its own poses, and no persona, so a
+   species line would have no coin before it); the **teen and adult** get the idle manner,
+   the action lines and, in N4, the signature pose (first mate, 2026-11-03; review s2792 S2).
 7. **Not while the pet's state owns the screen:** asleep, lights out, away, resting, sick,
    in a game, an egg; a game's prompt owns the bubble. This is the existing idle gate
    (`_free(s)`) plus the `resting` flag.
-8. **Calm or reduced motion:** no new movement, lines only (as `_idleMoves` does now).
+8. **Calm or reduced motion:** no new movement, lines only (as `_idleMoves` does now). A
+   species line's `move` is skipped under `calm()` (section 5.4, `idle`).
 9. **Nothing private.** The nature is a species fact. It reads no person's data, stores
    nothing on the server, and nothing about it joins an entity, bus event or log. No privacy
    table applies. (The "once a day" keys are `localStorage`, as every other card
    once-a-day.)
-10. **Status screen, calls, notifications, quiet hours: unchanged.** The axes must never look
+10. **Status screen, calls, notifications, quiet hours: unchanged** (the status page gains
+    the one "nature" row of N3, nothing else). The axes must never look
     like stats or ratings; the field note (N3) is the only place they are named, as prose.
 
 ## 7. Priority in a first look
@@ -526,7 +646,7 @@ The sky reaction rides the idle path and the clock flavour rides existing moment
 - **Card.** `nature(s)`/`paceOf(s)` helpers in `lines.js`; `SPECIES_ADDS` there;
   `_idleMoves` and the two cadence lines in `_idle` use them. The sky reaction is a small
   method in `card-moment.js` called from the idle path. The clock flavour is a change to
-  the `sunset` and `good_morning` cases in `card-moment.js:107-119` (the `normal` argument
+  the `sunset` and `good_morning` cases in `card-moment.js` (now via `_clockLines`) (the `normal` argument
   chosen by `nature.clock`), with **no detector and no `_firstLook` change**. No new part in `manifest.txt` is needed; if a part grows past
   its neighbours the builder may add `card-nature.js` between `card-moment` and
   `card-status` (the class is an extends chain; the new link goes in the chain order, so it
@@ -545,24 +665,89 @@ The sky reaction rides the idle path and the clock flavour rides existing moment
   "sad" as well. The scan has **no** "favourite" rule and must not get a global one (the
   memory plan's `fav_weather` list in the same block says it, `plan-2026-11-02-memory.md:436`);
   the "favourite"/"fond of"/"love"/"best" ban lives in `nature_lines.test.js` (section 10).
-  `FILL` (`copy-scan.js:10-15`) has no home or food kind: N1/N2 add `home` ("kelp bed" is
-  8, "vivarium" 8) and `food` ("dandelions" 10, "bloodworms" 10) so the 40-character check
-  is proven for `{home}`/`{food}` lines.
+  `FILL` (`copy-scan.js:10-15`) has no home or food kind, and N1 added neither (it has no
+  `{home}` line). **N2 adds `home` ("vivarium" and "kelp bed" are 8)**; no `food` kind
+  (no line uses one).
 - **No server, no save, no art.**
 
-### N2: the action-line layer and company (card only, tier 1, M)
+### N2: the action-line layer and the solo visit line (card only, tier 1, S-M)
 
-- **Lines.** A species layer in `_lines`: a `SPECIES_LINES[habit][key]` table and a
-  helper `_natureLine(s, key)` that returns an action line (or `[text, move]`) or `null`
-  (a missing key is `null`, so a habit with nothing for a key says its normal line). Keys:
-  `idle`, `snack`, `clean`, `find`, `visit`, `host`. **`idle`, `find` and `visit` ride
-  existing `_lines` calls; `snack`, `clean` and `host` are new call sites** (section 5.4,
-  "How a species line is said"), so N2 is M, not a table-only change. The 1-in-4 roll is
-  taken **after** the persona's roll fails to take the line (section 6, rules 4-5).
-  `fresh` lines keep their "never the same twice" rule via `_fresh`.
-- **Company** (section 5.5): a `look` beat before the wave for solo species, a `perk`
-  for social; two short lines. The beat must not delay a visitor's own timers or the link
-  handshake enough to double a greet (checklist 13).
+**Status: SHIPPED (s2794), as written below.** Differences, the pin audit and the bench shots
+are in section 16, "N2 shipped". The text that follows is the build brief as it was folded
+(s2793) from review s2792 and the first mate's decisions of 2026-11-03 (section 16). Card, scan, tests and
+bench only: **no server change, no save, no art, no `species.json` change, no heating flag**
+(the `cozy`/`sunny` stand-in for `fire` stays; section 16).
+
+**What it is.** Four keys, `idle`, `find`, `visit`, `link_host`, each an opt-in species
+line in `_lines` (section 5.4 has the table, the cell shape, the lookup order, the draw
+order and the rates). 22 cells. Snack and clean are the care scenes' and are not built here.
+
+**Build, in order:**
+
+1. **`lines-fresh.js`**, inside the `// --- fresh-expand copy` block: `SPECIES_LINES` (the
+   table of section 5.4; cells `{ text, move }`, the `{home}` cells as `(home) => ...`).
+   `lines.js`: `SPECIES_LINE_ODDS = 0.25` beside the other idle constants.
+2. **`scripts/copy-scan.js`**: `SPECIES_LINES: { fill: "home" }` in `COPY_TABLES`;
+   `FILL.home = "vivarium"` (8, the longest `words.home` of the 30; every function cell
+   is scanned with it); `lines()` skips the key `move` (a move name is not copy). No
+   `food` kind: no N2 line uses a food.
+3. **`card-tick.js`, `_lines`**: the `{ nature }` option and the `move` in the result
+   (section 5.4, "How a species line is said"). A small helper `_natureCells(s, key)`
+   (the lookup order and the dropped-cell rule) is what the tests call. **No `_natureLine`
+   public helper, no `tuck`/`pat` keys, no `snack`/`clean` keys.**
+4. **`card-tick.js`, `_idle`**: extract `_idleMove(s, move)` for `look`, `wander`, `perk`,
+   `settle`, `munch`, `rock` (the same ms as today: 1800, 2200, 320, 2500, 1500, 600);
+   `_idle`'s own `if/else` calls it for those moves (no behaviour change for them); the
+   `mumble` branch passes `nature: "idle"` when `key === "idle"` and calls `_idleMove` for
+   the result's `move` only when `!isCalm`. The `mumble` branch is reached under calm: the
+   line is said, the move is not.
+5. **`card-visitors.js`**: `_findLine` passes `nature: "find"` on its V1 branch only;
+   `_visitorGreet`'s last branch passes `nature: "visit"`.
+6. **`card-link.js`**: the `link_host` `_lines` call passes `nature: "link_host"`. The
+   `link_guest` call is untouched.
+7. **No new `.pet.<cls>` animation, no CSS.** The moves are existing classes, so
+   `motion_rule.test.js` needs nothing (it lists `perk`, `settle`, `munch`, `rock`
+   already, from N1).
+
+**Not built (decided, section 16):** snack and clean lines; any change of timing, `perk` or
+`look` on a greeting; any line on `link_guest`; the `tuck` and `pat` keys; child lines;
+the dream layer (server); Hop flavour; the heating flag.
+
+**Existing pins to audit and update in the same ship**, listing each in the report
+(a constant-`Math.random` pin with no persona list for the key takes the species roll for
+r < 0.25). `scripts/card-check.js`: the idle order (~7541-7546); the greet/sunset pin
+(~7514; `_greet` and `sunset` take no species key, expected safe); the games pins
+(~3897, ~3911), `wish_granted` (~5495) and `how_day` (~7012), all expected unaffected
+(their keys do not opt in); ~12639; and `_linkStart` with `Math.random = () => 0`
+(~13194: a typed host's persona coin takes the persona first; a persona-less builder host
+would show the species hello). Plus any `tests/js` file that pins `Math.random` around
+`_lines`. The dev pet's species and stage decide which bite; the rule is to pin the
+expectation to the new order (section 5.4), never to loosen it.
+
+**Copy: 22 lines, FM-approved (section 16), copy scan PASS (s2793, 2026-11-03).**
+Re-run with `node scripts/copy-scan.js` (or `node --test tests/js/fresh_copy.test.js`)
+once the table is in; every line below was checked for the scan's rules (NAG words,
+`?`, `!!!`, digits, 40 characters with `{home}` = "vivarium") and for the banned words
+(favourite, fond, love, best): longest "\*came back with something\*" 26, then
+"\*nudges a bit into place\*", "\*glows a little brighter\*", "\*flickers in a tiny loop\*",
+"\*peeks first, then waves\*" 25.
+
+| Key | Lines |
+|---|---|
+| `idle` (16) | hoarder: "\*tucks something away\*" munch, "\*pats its cheeks\*". builder: "\*fixes up the {home}\*" settle, "\*nudges a bit into place\*". basker: "\*a long, slow stretch\*" settle, "\*soaks it in\*". groomer: "\*grooms\*" rock, "\*smooths itself down\*". explorer: "\*sniffs around\*" wander, "\*pokes at a corner\*". watcher: "\*watches closely\*" look, "\*stays very quiet\*". performer: "\*hums a little tune\*" perk, "\*does a tiny twirl\*". own firefly and lunamoth: "\*glows a little brighter\*" perk, "\*flickers in a tiny loop\*" |
+| `find` (2) | hoarder "\*stashes it, happily\*"; explorer "\*came back with something\*" |
+| `visit` (3) | solo "\*peeks first, then waves\*"; watcher "\*ears up\*"; explorer "\*sniffs the air\*" |
+| `link_host` (1) | builder "\*shows off the {home}\*" |
+
+The builder lists the working text in the report, as the dig's and Hop's did.
+
+**Acceptance** (section 10 has the full list): the JS tests and the bench shots there; the
+card-check sections `moments personality types visitors infrared` with the pins above
+updated; `scripts/gate --auto` for the worker, the first mate's batch gate as usual.
+
+**Bench changes this ship makes** (section 10 names the shots): `idle.species` and
+`link.rolls` (section 10), documented in `dev/bench/README.md`.
+
 - **Dreams: dropped from N2.** The server picks the dream kind every morning from
   `PLAIN_DREAMS`, a rotation shuffled per pet (`model.py:3163-3210`, `plain_dream` always
   returns a kind); the card maps kind to text (`ui-copy.js:299-330`) and keys its callbacks
@@ -571,46 +756,170 @@ The sky reaction rides the idle path and the clock flavour rides existing moment
   kinds to `PLAIN_DREAMS` is a server change (and `test_model.py:2312` pins `>= 15`
   distinct kinds), which this plan forbids. If the owner wants habit dreams, that is a
   separate plan with a server ship.
-- **Copy (DRAFT, about 27 lines):** the section 5.4 table has 23 filled cells (idle 14,
-  snack 2, clean 2, find 2, visitor/host 3; `visit` and `host` count as two keys, so a
-  habit has up to 6 keys but fills only some); company 2 x 2 = 4.
 - **Hop:** no habit flavour in Hop's win lines. They stay plain, as decided (section 1).
 
 ### N3: the field note and the Assist note (data + card + a small server change, tier 1, S-M)
 
 **Not "data + card".** N3 is server code, so `pick-sections` goes to `all` and the gate is
-`scripts/ci-gate` (AGENTS.md), not a partial card-check.
+`scripts/ci-gate` (AGENTS.md), not a partial card-check. N3 is **build-ready** once the one
+open line below (octopus) is settled: review s2795 and the first mate's decisions of
+2026-11-03 (the "N3 fold" section at the end; section 15 has each finding's fate) are
+folded in. Line numbers below are on `origin/main` `6d82439a`; names win over numbers.
+
+**Reconciled against what N2 shipped (s2794).** Nothing in N3's build changes; these are the
+assumptions that moved, one note each:
+
+- *The scan.* N3's notes live in `species.json`, not in the card's copy block, so
+  `copy-scan.js` (which N2 gave a `home` fill and a `move`-key skip) does not read them. The
+  data test stays the only check on them (60 characters, the banned words).
+- *Wording must agree with the lines.* The notes sit beside N2's action lines, so they must
+  not contradict them: the **firefly and lunamoth** say "glows a little brighter" and
+  "flickers in a tiny loop" (an `own` cell), not the performer's hum and twirl, so their
+  notes must not say "hums" or "sings". A **solo** species peeks first at a visitor ("peeks
+  first, then waves"), whatever its habit; a note must not call a solo watcher or explorer
+  "alert at visitors" or "sniffs the air at visitors" (only the social deer, corgi and
+  duckling say those). No note promises a frequency (the lines are at most 1 in 4, 12.5%
+  for a typed pet).
+- *`nature` is also a `_lines` option now.* `_lines(s, key, normal, arg, { nature })` means
+  "ask the species table", unrelated to the `nature()` data helper N3 reads (the helper
+  stays global; the option is a local name, `natureKey`, inside `_lines`). N3 adds no
+  `_lines` call and no `SPECIES_LINES` key.
+- *The status page is untouched by N2.* `_renderStatus` (`card-status.js`), the
+  "personality" row and its 420/330/300 and big-text shots are as N3 describes them.
+- *The bench.* N3's shot (the status row at 420, 330 and 300, in big text) is a new preset or
+  a `--preset nature` addition; `nature()` now has 39 more N2 shots after N1's, so a new
+  group name (`nature-note`) keeps its sheets apart. `idle.species` and `visitor.species`
+  do not matter to it.
+- *The gate.* Unchanged: server code, so `scripts/gate --auto` picks `all` and the batch
+  gate is `scripts/ci-gate`. The new N2 card-check cases sit in `personality`, `visitors`
+  and `infrared`, not in anything N3 reorders.
 
 - **The notes.** **30 hand-written lines, one per species** (decided, section 1), not a
-  template. They live in `species.json` as a sibling of `nature`:
-  `"field_note": "comes alive at dusk · perks up in rain · keeps a stash"` (draft). One text,
-  two readers (below). A species with no `field_note` has none (the beetle waits). The
-  data test (section 10) checks length (60 characters or fewer, so it fits the status row
-  at 330) and the banned wording.
+  template: the three-clause frame below, with a **species-specific third clause** so no two
+  notes are equal. They live in `species.json` as a sibling of `nature`, **on the line right
+  after `nature`** (`otter/species.json:36`), away from the `acts` line the pending
+  `art-128-*` branches rewrite in all 30 files (the same hazard as N4's `signature` key):
+  `"field_note": "up with the day · warms up in sun · hums and twirls"`. One text, two
+  readers (below). A species with no `field_note` has none (the beetle has no
+  `species.json` at all, so it is not in the catalog).
+- **The frame (decided, Q2).** `<clock> · <sky> · <species clause>`. Clock: day "up with the
+  day"; dusk "livelier at dusk"; night "livelier after dark" (never "wakes" or "awake at
+  night": section 4 says night means livelier after dark, not awake all night, and a model
+  rephrases "wakes at night" into "Pip is awake all night" beside a pet that is asleep, Q5).
+  Sky: sun "warms up in sun"; rain "perks up in rain"; snow "frisky in snow"; fog "goes
+  quiet in fog"; wind "stirs in the wind"; **fire "snug in a warm spot"** (house-neutral:
+  the fire sky shows as `fireside`, `cozy` or `sunny` in a house, section 16 item 1, so
+  "by the fire" would read as untrue in a house with no fire, Q7); moon "stirs at full
+  moon". The clock and sky of every note must match that species' `nature` block (section 4
+  table); a data test checks it.
+- **The 30 notes (copy, FM-approved 2026-11-03, final).** Lengths are characters.
+
+| species | len | note |
+|---|---|---|
+| bird | 51 | up with the day · warms up in sun · hums and twirls |
+| squirrel | 51 | up with the day · stirs in the wind · keeps a stash |
+| deer | 54 | livelier at dusk · goes quiet in fog · watches closely |
+| fox | 47 | livelier at dusk · frisky in snow · pokes about |
+| bananaslug | 53 | livelier after dark · perks up in rain · slides about |
+| gecko | 58 | livelier after dark · snug in a warm spot · licks its eyes |
+| tarantula | 57 | livelier after dark · snug in a warm spot · digs a burrow |
+| tortoise | 49 | up with the day · warms up in sun · basks a while |
+| beardeddragon | 51 | up with the day · warms up in sun · basks on a rock |
+| ballpython | 55 | livelier after dark · snug in a warm spot · keeps watch |
+| kitten | 57 | livelier at dusk · snug in a warm spot · kneads a blanket |
+| bunny | 56 | livelier at dusk · snug in a warm spot · grooms its ears |
+| corgi | 53 | up with the day · frisky in snow · herds things about |
+| hamster | 60 | livelier after dark · snug in a warm spot · fills its cheeks |
+| ferret | 56 | livelier at dusk · snug in a warm spot · hides treasures |
+| otter | 49 | up with the day · perks up in rain · grooms often |
+| octopus | 58 | livelier after dark · goes quiet in fog · slips into nooks |
+| seal | 53 | up with the day · warms up in sun · hauls out to bask |
+| hermitcrab | 54 | livelier after dark · perks up in rain · keeps a stash |
+| puffin | 51 | up with the day · stirs in the wind · digs a burrow |
+| treefrog | 56 | livelier after dark · perks up in rain · hums and twirls |
+| axolotl | 58 | livelier after dark · goes quiet in fog · drifts and waits |
+| pondturtle | 50 | up with the day · warms up in sun · basks on a log |
+| duckling | 50 | up with the day · perks up in rain · paddles about |
+| beaver | 57 | livelier after dark · frisky in snow · builds with sticks |
+| bat | 55 | livelier after dark · stirs at full moon · twirls about |
+| lunamoth | 57 | livelier after dark · stirs at full moon · flickers about |
+| owl | 53 | livelier after dark · goes quiet in fog · keeps watch |
+| firefly | 55 | livelier after dark · perks up in rain · glows brighter |
+| opossum | 58 | livelier after dark · snug in a warm spot · makes a hollow |
+
+  Checked 2026-11-03 (s2796): all 30 are distinct; none has a digit, `?`, `!`, a NAG word
+  or a banned word; all 30 are 60 characters or fewer. **Settled (first mate, 2026-11-03):**
+  the octopus clause is "slips into nooks" (58; "squeezes into nooks" was 61). Hamster is exactly 60. Several are over what two
+  lines hold at 330 (next bullet); the bench cap (Q4) is a ceiling, not a target, and the
+  longest note decides it.
 - **Wording rule.** The notes say what the body does, never a liking: "perks up in rain",
-  "warms up in sun", "stirs at the full moon". Never "favourite", "fond of", "loves",
-  "best". (Review S2: "fond of rain" would be rephrased by the model as "loves rain", the
-  favourite-weather line the voices plan dropped for the pet, `plan-2026-10-28-voices-and-lines.md:108`.)
-- **The surface (card).** The **status page** (`_renderStatus`, `card-status.js`): one row
-  under "personality", "nature", showing the field note of **the pet's own species** only.
-  That pet is already hatched, so its species is never a "???" locked tile and the note
-  leaks nothing a lock hides. Fit: a row like the others, wrapped, checked at 420, 330
-  and 300 and in big text (section 10). The journal's species tiles (name only,
-  `card-journal.js:143-160`, locked species "???") and the "every world" page get **no**
-  note: the forms book that would hold four portraits is deferred
-  (`plan-2026-10-28-forms-book.md:3`) and the note joins it if that book ships.
-- **The server (Assist).** `Catalog.species` already keeps the whole dict (`species.py:58-75`),
-  but the coordinator copies only named fields into per-species maps
-  (`coordinator.py:471-490`: `species_names`, `catchphrases`, `likes`,
-  `own_food_stages`). So N3 adds:
-  1. a map `species_notes: dict[str, str]` in `coordinator.py`, filled beside
-     `species_names` from each species' `field_note`;
-  2. a slot `species_note` in the status data at `intent.py:268` (beside `species`; today it
-     reads `pet.species_names` only), `None` when the species has no note;
-  3. one sentence in the LLM `PROMPT` (`llm.py`, built by `.format(names=...)`, so no braces
-     in it, `llm.py:37-56,75`) telling the model to colour, not to quote, the note.
-  `spoken_status` stays unchanged (a golden). The note names the species, not any person.
-  Tests in Python: the map, the slot, the golden, the prompt without a new brace.
+  "warms up in sun", "stirs at full moon". Never "favourite", "fond of", "loves", "best".
+  (Review S2: "fond of rain" would be rephrased by the model as "loves rain", the
+  favourite-weather line the voices plan dropped for the pet,
+  `plan-2026-10-28-voices-and-lines.md:108`.) No note promises a frequency, names a stat or
+  ranks; firefly and lunamoth do not say hum or sing; no solo species is "alert at visitors"
+  (N2's reconcile).
+- **The surface (card).** The **status page** (`_renderStatus`, `card-status.js`; not the
+  settings sheet, whose `favRows` and `memory` rows R3 and M2 changed): one row,
+  "nature", showing the field note of **the pet's own species** (`s.species`, the object
+  `card-build.js` sets from `species.json`, `:599-602`).
+  - **Placement.** Its own line right after the personality line (`card-status.js:159`),
+    **not** inside the `teenOrAdult` test, so it sits in the same place at every stage.
+    `row(null, "nature", ...)`, with `.replace('class="row"', 'class="row naturerow"')` as
+    `friendsrow` does (`:152`), so the bench's `scroll` can name it.
+  - **Stages (Q3): every hatched stage, never the egg.** It is a species fact, not a pet
+    line, so section 6 rule 6 (lines for teen and adult only) does not apply. The egg's html
+    branch has no rows (`:131-137`) and its `s.species` is the world's `roster[0]`
+    (`card-build.js:596`): **read the note only in the non-egg branch**, and the acceptance
+    list has an egg shot that shows no nature row.
+  - **No note, no row** (`if (note)`).
+  - Leaks nothing: that pet is hatched, so its species is never a "???" locked tile. The
+    journal's species tiles (name only, `card-journal.js:143-160`; "???" at `:151` and
+    `:473`) and the "every world" page get **no** note: the forms book that would hold four
+    portraits is deferred (`plan-2026-10-28-forms-book.md:3`) and the note joins it if that
+    book ships.
+  - **Fit (Q4).** The value column is a `minmax(0,1fr)` grid cell after an 18px icon and an
+    84px label (`style.js:1039`), 60px less in the porthole (`:1040`), so 60 characters do
+    not fit one line. The status page scrolls, so nothing clips, but the row adds height.
+    The builder benches the **longest note at 420, 330, 300 and big text** (and the
+    porthole), reads the line count, and **sets the data test's cap to what the bench shows
+    fits in two lines at 330**; the hard ceiling is 60 characters, whatever the bench says.
+    The measured number goes in the report and in the data test's comment. If the longest
+    note does not fit the measured cap, the builder reports it and does not reword.
+- **The server (Assist).** `Catalog.species` already keeps the whole dict (`species.py`,
+  `load_catalog`). So N3 adds:
+  1. a map `species_notes: dict[str, str]` in `coordinator.py`, filled **in the
+     `catalog.species` loop** (`:497-515`, where `catchphrases`, `likes` and
+     `own_food_stages` are filled) and **not beside `species_names`**, which is built over
+     `self.roster` only (`:492`): a pet whose species is outside the current roster (a
+     `next_world` change, `:3335-3342`) must still get its note. Keep a note only when
+     `isinstance(data.get("field_note"), str)` and it is non-empty. The map is a derived
+     copy of `species.json`, not a second source;
+  2. a slot `species_note` in the status data at `intent.py:283` (beside `species`), from
+     `species_notes.get(state.species or "")`, so an egg (`state.species` is `None`) and a
+     species with no note give `None`. The slot carries a species fact only, so the
+     privacy mask (`current_mood` returns `asleep` for away + privacy) leaks nothing new;
+  3. **one sentence in the LLM `PROMPT`** (`llm.py:37`, built by `.format(names=...)` at
+     `:75`, so no braces in it), placed **before "Care for it only when asked to."**
+     (`test_assist.py:467` pins `PROMPT.endswith("never guilt, nag or worry the
+     person.")`, so the ending stays and the test needs no edit; the `VOICE_NOTES` loop at
+     `:463` stays satisfied). The sentence (approved as copy, Q6, 194 characters):
+     > 'species_note' is how that kind of creature is built, not a taste: let it colour what you say now and then, never quote it, and never say the pet likes, loves or prefers something because of it.
+
+     The prompt already says "fond of snacks and naps" and "loves a little song", so the
+     model is primed to talk in liking words; the sentence forbids it outright. **A test
+     can only check the string is present; the model's behaviour is not testable by a
+     worker** (section 10 says so).
+  `spoken_status` stays unchanged (a golden; it takes no note, `intent.py:146`). The note
+  names the species, not any person.
+  Tests in Python: the map (equal to the `species.json` files, including a species outside
+  the roster), the slot (note, none, egg), the golden, the prompt without a new brace and
+  with the sentence before "Care for it only when asked to", and the data tests (section 10).
+- **Docs and cache.** `sprites/README.md` (under `custom_components/virtual_pet/frontend/`):
+  add a `field_note` row, and fix the `nature` row's `company` text, "(not read yet)" is
+  stale after N2. `loadJson` fetches `species.json?v=${VERSION}` (`ui-copy.js:689`), so the
+  edited files reach a cached browser only if `VERSION` moves in the ship: the builder
+  checks the release process does it, and if not, bumps it in N3.
 - No saved state, no new entity, no new service.
 
 ### N4: the adult signature pose (art, L)
@@ -662,7 +971,17 @@ The sky reaction rides the idle path and the clock flavour rides existing moment
   so the adult gets **one** `pose` copy (1 in 7), a one-line change. The "1 in 4 cap" of
   section 6 counts `mumble` lines and has nothing to do with the pose move.
 - **README.** `sprites/README.md:20` says `reactions` are "Child stage only"; with (b)
-  dropped that stays true. The README gets a `signature` row and a `nature` row.
+  dropped that stays true. The README gets a `signature` row. (The `nature` row and the
+  `field_note` row are done: N1 and N3 added them, N3 also fixed the `company` text.)
+- **The field notes sit beside the poses (N3 shipped, s2797).** The adult's status page now
+  reads a one-line note, and its third clause is a habit in words ("kneads a blanket"). A
+  signature pose should not contradict it. Table below against the notes: **agree** for
+  most; the art lead should look at the three that pull apart: **kitten** (note "kneads a
+  blanket"; pose `lick_paw`, while the child already has `knead`), **seal** (note "hauls
+  out to bask"; pose `banana`) and **tarantula** (note "digs a burrow"; pose `web_mend`).
+  Either side may move: a pose swap is N4's, a note change is copy (the first mate, and the
+  data test's checks apply). Nothing is changed here. `field_note` is the line right after
+  `nature` and `signature` goes before `waves`, so the two keys are never adjacent.
 - **Copy:** none.
 
 #### Ship 4's art brief inputs
@@ -746,14 +1065,19 @@ changes a number):
 - `nature(s)` and `paceOf(s)` (`lines.js`), pure helpers over `species.json`: a sequence
   may scale a beat's length by pace (a slow pet lingers, a quick one is brisk) or choose a
   gesture by `habit`. Timing and picture only, never a stat.
-- `this._natureLine(s, key)` (N2), returning an `*action*` line, a `[text, move]` pair, or
-  `null`. A sequence calls it where it wants the species' body in a beat and says its own
-  line when it gets `null`. The table already has `snack` and `clean` cells (section 5.4);
-  the helper accepts two more keys, **`tuck` and `pat`, empty in N2**, so the new
-  sequences can fill them without another layer. A habit with nothing for a key says
-  nothing, as today.
-- The `move` of a pair (`munch`, `settle`, `rock`, `perk`, `look`, `wander`) is an existing
-  CSS class (`style.js:357-362`); a sequence may use the habit's move for a beat.
+- `this._natureCells(s, key)` (N2), the lookup that returns the `{ text, move }` cells for
+  a species and key (empty when there are none). N2 ships cells for `idle`, `find`, `visit`
+  and `link_host` only. **There are no `snack`, `clean`, `tuck` or `pat` keys** (first mate,
+  2026-11-03; review s2792 B1, Q7): the care scenes already pick a gesture by
+  `nature().habit` and time a beat by pace, and say their own lines (`SNACK_LINES`, the
+  tuck's `LIGHTS_LINES`, the touch ladder's `PAT_RUN_LINES`; the clean scene says none), so
+  an empty key would have no caller and a test of it would prove nothing. A later ship
+  that wants a species line in a scene adds the key, the cells and its call in the same
+  change: for the snack, the species line replaces the `SNACK_LINES` pick when the habit
+  has one (same 1-in-4), and for the clean a new end beat of `SCENES.clean`.
+- The `move` of a cell (`munch`, `settle`, `rock`, `perk`, `look`, `wander`) is an existing
+  CSS class or idle move (`style.js:357-362`, `_idleMove`); a sequence may use the habit's
+  move for a beat.
 - The idle manner and the sky reaction are idle-path only; they never run during a
   sequence (the existing `_free(s)` gate and rule 7).
 
@@ -770,12 +1094,14 @@ changes a number):
   would read as eating, being tucked in or being petted gets another idea (a candidate
   list: `cheeks`, `stash`, `fish_bill`, `bottoms_up`; this is the art lead's call, not
   made here, and it is why N4 sits last).
-- **N2's `snack` and `clean` call sites are thin.** Each is one `_natureLine` call ahead of
-  the normal line in `card-moment.js`. If s2735's sequences land first, N2 builds only the
-  helper and the idle, find, visit and host keys, and the sequences call `_natureLine`
-  for `snack`/`clean`/`tuck`/`pat` themselves. N1 and the N3 notes are untouched either way.
+- **N2 has no `snack` or `clean` call site.** Care B1/B2 landed first: feed, snack, clean
+  and medicine are scenes (`card-care.js`), and for the person's own press `_care` offers
+  the scene first and `_react` never runs. A species line there would be a competitor in
+  an existing 1-in-4 slot (the snack's) or a new end beat (the clean's), which is the
+  scenes' territory. N2 builds the table and the four keys; N1 and the N3 notes are
+  untouched either way.
 - **The first mate sequences it:** N1 and N3 do not depend on the core-interactions design;
-  N2's snack/clean wait for it only if the first mate wants no duplicated call sites.
+  N2 no longer waits for it.
 
 ## 9. Interaction with Hop and the memory plan
 
@@ -833,12 +1159,34 @@ moments entry is all it takes and no `sun.sun` transition is needed).
   the newer presets run 300 and big text, `bench/README.md:22-24,37`). A baby and a child
   shot show **no** nature line. A sky reaction together with a trait flair for the same
   flag (storm_watcher on a rainy day) reads well.
-- **N2:** a species-line shot per habit (7), a solo and a social visitor greeting (2 x the
-  `visitors` preset's shape), a link host line for the builder. **Mono mode and big text
-  for the species with the longest `{home}` / `{food}` fill** ("bloodworms" or "dandelions"
-  for food, "kelp bed", "lily pad" or "vivarium" for home), not "one".
-- **N3:** the status page's "nature" row at 420, 330 and 300 and in big text, for one
-  species per world and the longest note; the Assist output is a test, not a shot.
+- **N2:** added to `--preset nature` (or a `--preset lines` beside it, the builder's call):
+  - an `idle` species-line shot per habit (7, first cell, an adult, 330) and the two light
+    performers' cells (firefly "\*glows a little brighter\*", lunamoth "\*flickers in a tiny
+    loop\*"), and the same lines at 300;
+  - a solo visitor greeting ("\*peeks first, then waves\*", e.g. fox), a social watcher's
+    ("\*ears up\*", deer) and a social explorer's ("\*sniffs the air\*", corgi), through the
+    `visitor` hook with the species roll pinned (the `visitors` preset's shape);
+  - a builder host's link line (`link.say: "host"`, tarantula or puffin, `{home}` =
+    "burrow");
+  - **mono mode and big text for the longest lines**, named: the longest line is
+    "\*came back with something\*" (26, `find`), then "\*nudges a bit into place\*",
+    "\*glows a little brighter\*" and "\*flickers in a tiny loop\*" (25); the longest
+    `{home}` among the builders is "burrow" or "hollow" (6: tarantula, puffin, opossum;
+    the 8-letter homes, "kelp bed", "lily pad", "vivarium", belong to species whose
+    lines take no fill). A child shot and a baby shot show **no** species line.
+  - The find line is proved in JS (below) and shot only if the bench already pins a V1
+    find; the builder adds no find hook.
+  - **Bench hooks N2 adds** (they cannot be pinned today): `idle.species` (true): the
+    persona coin forced to fail and the species roll forced to pass, so the pinned draws
+    are the delay 0, the move 0 (`mumble`), `pick(lines)` 0.1, the coin 0.9, the roll 0.1,
+    then `idle.draw` for the cell pick (the hook is for one pet, so no neighbour roll);
+    and `link.rolls` for the order of section 5.4 (`pick` of the normal hello, the persona
+    coin >= 0.5, the roll < 0.25, the cell pick, then the guest's draws). Both go in
+    `dev/bench/README.md`.
+- **N3:** `view: "status"` with `scroll: ".naturerow"` at 420, 330 and 300 and in big text
+  (and the porthole): one species per world, **the longest note** (its line count sets the
+  data test's cap, section 8 N3), and a teen or adult, a child and a baby. An **egg shot
+  shows no nature row.** The Assist output is a test, not a shot.
 - **N4:** a `--preset signature`: all 30 species, adult, both frames, 330 and 420; one
   contact sheet per world; with a seasonal costume on, with a flair on, and with the pose
   mid-move (`petAt`); a night and a mono pass for the whole 60. The art review reads the
@@ -854,15 +1202,20 @@ Sections that exist (`--list`): `moments`, `personality`, `types`, `visitors`, `
 infrared`; N4 adds `pat care` (not `react`: `_react` is untouched). New cases (sections
 named by the builder):
 
-- **No nature line at baby**, and a baby set wins a key over a species line.
-- **The sky reaction runs once** for a flag and **not twice in a day**, across a reload
-  (`localStorage`).
-- **No sky reaction** while asleep, lights out, away, resting, in a game.
-- **The cadence** of a quick and a slow species differs, and calm leaves both as today.
-- **The solo species' visitor greet** has the beat before the wave; the social one does not.
-- **No server call** from any nature behaviour (the card-check stubs count calls: none new).
-- The **existing idle expectations are updated** in the same ship (section 5.1): the
-  re-timed "idle life happens by itself" window, the `Math.random` order, `NORMAL_GREET`.
+- **No species line at baby or child** (N2: the idle, visit and link host lines; N1's
+  sky reaction already skips a child), and a baby set wins a key over a species line.
+- (N1, built; not N2's work:) **the sky reaction runs once** for a flag and **not twice in
+  a day**, across a reload (`localStorage`); **no sky reaction** while asleep, lights out,
+  away, resting, in a game; **the cadence** of a quick and a slow species differs.
+- N2 adds:
+  - **a solo species' visitor greet says the same timers and frames as a social one** (no
+    delay, no extra animation class; `greethop` plays once), and its line, when the roll
+    takes it, is "\*peeks first, then waves\*";
+  - **no server call** from any nature behaviour (the card-check stubs count calls: none
+    new).
+- The **existing idle expectations are updated** in the same ship (section 5.1 and the pin
+  audit in section 8, N2): the `Math.random` order and `NORMAL_GREET`; the re-timed "idle
+  life happens by itself" window is N1's and done.
 - N4: the idle `pose` move plays `signature` for an adult and nothing for a baby or teen;
   the house-flag pose for an adult is unchanged (still no pose at adult); `won` and a snack
   still play `acts.cheer` / `acts.eat` for an adult (unchanged).
@@ -878,39 +1231,76 @@ dev house, which no fixture provides. The test stubs the queue the builder finds
 - **Python (data test), N1:** every ready species has a valid `nature`; `voice.pace` derives
   the pace table of section 4; the exact table is the test's data (a changed row is a
   deliberate diff). A species with no `nature` is allowed (the beetle) and gives none.
-- **Python, N3:** the coordinator's `species_notes` map carries each `field_note`;
-  `intent.py`'s status data has `species_note` (None without a note); `spoken_status` is
-  byte-for-byte unchanged (a golden); the LLM prompt has no braces added; every
-  `field_note` is 60 characters or fewer and has none of the banned wording ("favourite",
-  "favorite", "fond", "love", "best").
+- **Python, N3:** the coordinator's `species_notes` map equals the `field_note` of every
+  `species.json` in `catalog.species` (including a species outside the current roster);
+  `intent.py`'s status data has `species_note` (None without a note and for an egg);
+  `spoken_status` is byte-for-byte unchanged (a golden); the LLM prompt has no braces
+  added, contains the species-note sentence before "Care for it only when asked to", and
+  `test_assist.py`'s `endswith("never guilt, nag or worry the person.")` still passes
+  untouched. **The data test over the 30 files:** each `field_note` is a non-empty string,
+  at most 60 characters (or the bench-set cap, section 8 N3, whichever is lower); all 30
+  are distinct (a duplicate fails); its clock and sky clauses match the species' `nature`
+  block (section 4 table); no digit, `?` or `!`; no NAG word; and none of the banned
+  words, matched on **word boundaries** (`\b(favou?rite|fond|loves?|best)\b`, so "glove" or
+  "clover" pass). **The model's behaviour is not testable by a worker**: the tests check
+  the sentence is present and the slot is filled, not that the model obeys it.
 - **Python, N4:** every `signature` sprite exists, its stage is in `stages` and is not
   `baby` or `child`, and the existing grid test covers the frames.
+- **JS, N3:** a test over the 30 `species.json` `field_note`s that reuses `NAG` from
+  `scripts/copy-scan.js` (**export it**: today only `scanFreshCopy`, `COPY_TABLES` and
+  `FILL` are exported, `:115`), so the card's copy rule and the data cannot drift; it also
+  checks the status page shows the row for a teen and a baby and not for an egg.
 - **JS (`node --test tests/js`):** a `nature_lines.test.js` reading the card source as
   `dream_lines.test.js` does: every sky has 2 lines, every clock 2 (per moment), every
-  habit all its keys (or an explicit `null`); none has a nagging word, a `?`, a digit,
-  "favourite", "favorite", "fond", or more than 40 characters with the longest `{home}` /
-  `{food}` fill; **no line contains `undefined` for any of the 30 species' `words`**;
-  `paceOf` thresholds; `SPECIES_ADDS` names only moves `_idle` handles and at most 3
-  copies; **the species-line cap**: a sweep of the random value over the `mumble` branch
-  gives a species line for `r < SPECIES_LINE_ODDS` of the draws that reach the roll and
-  never for a baby; the look rule (above); a missing nature gives nothing.
-- **Copy scan** (`scripts/copy-scan.js`) passes with the new tables named in `COPY_TABLES`
-  and the `home` / `food` fill kinds added.
+  habit its keys (an absent cell is absent, not an empty list); none has a nagging word, a `?`, a digit,
+  "favourite", "favorite", "fond", or more than 40 characters with the longest `{home}`
+  fill; **no cell text contains `undefined` or an unfilled brace for any of the 30
+  species' `words` (and stage words)**; `paceOf` thresholds; `SPECIES_ADDS` names only
+  moves `_idle` handles and at most 3 copies. N2 adds:
+  - **the cell shape**: every cell is `{ text, move? }`, `text` a string or a function,
+    `move` in `perk settle munch rock look wander` and only on `idle`;
+  - **the lookup order**: `own` over `company` over `habit`; the 15 solo species get
+    "peeks first" for `visit`, deer "ears up", corgi and duckling "sniffs the air", every
+    other social species none; firefly and lunamoth get the glow cells, bird, treefrog and
+    bat the hum and twirl; a missing `nature` or key gives no cell; a cell whose `{home}`
+    is missing is dropped and an empty pool draws nothing;
+  - **the cap**: a sweep of the random value through `_lines` with `nature` gives a species
+    line for `r < SPECIES_LINE_ODDS` of the draws that reach the roll and never otherwise;
+    never for an egg, a baby or a child (also with baby talk off), never after the persona's
+    coin took the line; **a call without `nature` draws exactly the `Math.random` count it
+    drew before** (count the calls) and returns no `move`; a key with no cell draws the same
+    count too;
+  - **the keys**: `idle` only for the `idle` key (not `idle_bored`, `idle_excited`, a
+    bodily mood, a resting pet or a neighbour line); `find` only on the V1 branch (a V3 find
+    with a visitor and a V2 first find keep their lines, with any roll); `visit` after the
+    guest, pair, favourite and friend lines; `link_host` replaces only the host's hello
+    (the guest's reply and `L.said`'s other entries unchanged), and only a builder host
+    has a cell;
+  - **the move dispatch**: `look` goes through `_look`, `wander` through `_wander`, the rest
+    through `_animate` (spy on all three); under `calm()` the line is said and no move is
+    made; `_idle`'s own move branches still call the extracted `_idleMove` with the same
+    classes and ms; no `.pet.<cls>` rule is added (`motion_rule.test.js` unchanged);
+  - the look rule (above); a missing nature gives nothing.
+- **Copy scan** (`scripts/copy-scan.js`) passes with `SPECIES_LINES` named in
+  `COPY_TABLES` (`fill: "home"`), the `home` fill kind added and `move` skipped.
 - **Save:** an existing save loads unchanged (nothing saved by nature); `PetState` unchanged
   (a diff check in review).
 
 ## 11. Copy budget
 
-All lines **DRAFT**; the first mate approves them. The count is the plan's, not a limit on
+N1's and N2's lines are approved (N1 as shipped, section 16; N2 by the first mate on
+2026-11-03, with the one new line noted in section 16); N3's 30 notes are **approved**
+(first mate, 2026-11-03, listed in section 8 N3), except that the octopus note is one
+character over the ceiling and waits for the first mate (section 8 N3). The count is the plan's, not a limit on
 the builder's fewer.
 
 | Ship | Lines | Made of |
 |---|---|---|
 | N1 | about 20 | sky 7 x 2 = 14; clock 3 x 2 = 6 variants of the existing sunset and good-morning lines |
-| N2 | about 27 | the section 5.4 table's 23 filled cells (idle 14, snack 2, clean 2, find 2, visitor/host 3); company 2 x 2 = 4. No dream lines |
+| N2 | 22 (FM-approved) | idle 16 (7 habits x 2, plus the 2 light-performer cells); find 2; visit 3; link host 1. No snack, clean, company-beat or dream lines |
 | N3 | 30 hand-written notes, plus 1 prompt sentence | one per species |
 | N4 | 0 | art only |
-| **Total** | about 47 lines, plus 30 notes | |
+| **Total** | about 48 lines (N1's 26 as shipped, N2's 22), plus 30 notes | |
 
 Each line: 40 characters at most with the longest fill, no digits, no `?` outside a
 question, no `!!!`, none of the nag words (the scan's list). The builder lists the working
@@ -938,8 +1328,9 @@ text in the report, as the dig's and Hop's did.
 - **Risk: `card-tick`'s `own` list changes shape for N4**, and `_idle` is the card's busiest
   function; the change is a few lines but needs the `pat` and `care` sections, listed above
   (`_react` is untouched).
-- **Risk: the sequences of the core-interactions effort** may reshape the snack and clean
-  call sites; section 8a keeps them thin so N2 gives way.
+- **Risk: the sequences of the core-interactions effort** (now landed as the care scenes)
+  own the snack and clean moments; N2 has no call site there (section 8a), so it cannot
+  collide with them.
 
 ## 13. Open questions: decided (first mate, 2026-11-02)
 
@@ -975,7 +1366,8 @@ file and line, not a feeling.
    the clock flavour add a second `sunset` or `good_morning` line, a detector, or a first-look
    entry? (It must only change the `normal` list of the existing cases.)
 6. **Babies and children.** Does a baby ever get a nature line, manner or cadence? Does the
-   child get the manner (it should not, only the cadence and lines)? Is there a stage test?
+   child get the manner or a species line (it should not: only the cadence)? Is there a
+   stage test, with baby talk on and off?
 7. **Calm.** Reduced motion and calm: no new movement, and the cadence scale off? Is the
    test real (it fails if the scale is applied in calm)?
 8. **The caps.** 1 in 4 of the `mumble` branch's lines (`SPECIES_LINE_ODDS`): does the
@@ -989,11 +1381,11 @@ file and line, not a feeling.
 11. **Resting, away, sick, asleep, lights out, game, egg:** each blocks every nature
     behaviour? Is there a test per state?
 12. **Priority of personality vs species** in `_lines`: is a persona line ever replaced by a
-    species line that was not rolled? Is the roll after the persona's, and is `fresh`'s
-    "never the same text twice" still true?
-13. **Company.** Is a solo greet ever cold, refusing, or sad? Does the beat delay a
-    visitor's own timers (`card-visitors.js`) or the link visit's handshake
-    (`card-link.js`) enough to break a state (a timeout, a double greet)?
+    species line that was not rolled? Is the roll after the persona's, and does a call
+    without `nature` draw exactly what it drew before (count `Math.random`)?
+13. **Company.** Is a solo greet ever cold, refusing, or sad? N2 adds no beat: does the
+    diff touch a visitor timer (`greetAt`, `VISIT_STAY_MS`), call `_look` or `_animate` on
+    a greeting, or move the link guest's reply (`t0+1800`)? (It must not.)
 14. **Data.** Closed lists enforced in Python? A bad value gives no nature, not a crash?
     A species with no `nature` (the beetle) still renders? Does the table in section 4 match
     the files exactly, and `voice.pace`'s derivation match it?
@@ -1018,7 +1410,7 @@ file and line, not a feeling.
     `COPY_TABLES`?
 21. **The counts.** Re-derive the section 4 counts from the table (clock 10/5/15; sky 8/6/5/4/
     3/2/2; company 15/15; pace 10/12/8; habit 5/5/4/4/4/4/4). Do the copy budgets in section 11
-    add up to the ship lines (N2's 23 cells + 4)?
+    add up to the ship lines (N2's 22: idle 16, find 2, visit 3, link host 1)?
 22. **Docs the build updates.** `sprites/README.md` (the `nature`, `field_note` and
     `signature` rows; the "extras are drawn for the child" and `reactions` "Child stage only"
     lines stay true), `docs/features.md`, the bench
@@ -1062,6 +1454,72 @@ reach, S10's alternative).
 
 Also folded from the brief: the **interplay with the core-interactions effort** (section 8a).
 
+### Review s2792 (N2): what became of each finding
+
+The adversarial review of N2 (`~/.local/state/crew/archive/hatch-at-home-s2792-20261103-0306/report.md`)
+was read against `origin/main` `f3099b1d`; the load-bearing claims were re-checked in the
+code by s2793 (`_lines` at `card-tick.js:239`, the `_idle` move branches, `_findLine`,
+`_visitorGreet`, `_linkStart`, `copy-scan.js`). All held. Verdict "ready after fold"; the
+first mate took every recommendation on 2026-11-03 (section 16). **Folded here, in the
+sections named.**
+
+| # | Finding | Fate | Where |
+|---|---|---|---|
+| B1 | Snack and clean call sites in `_care`/`_react` are dead paths since care B1/B2 (scenes own them; the clean says no line; the snack has a 1-in-4 `SNACK_LINES` slot; habit already picks the snack variant) | **Taken (Q1):** snack and clean are out of N2; N2 keys are `idle`, `find`, `visit`, `link_host`; 4 cells cut; counts fixed | 5.4, 8 N2, 8a, 11, 12 |
+| B2 | Company beat collides with `greethop` (a second one-shot class), the existing look at `inMs`, the 3 s stay, and the link reply at `t0+1800` | **Taken (Q2):** lines only; social unchanged; solo "peeks first" line on `visit`; nothing on `link_guest`; no delay, `perk` or `look` call; the `look`/`perk` rows and the card-check case that asserted a difference are cut | 5.5, 8 N2, 10, 14 (13) |
+| B3 | Three quoted lines fail the copy scan (`still`, `pleas*` twice) | **Taken (Q6):** "\*stays very quiet\*", "\*stashes it, happily\*"; the groomer clean cell is cut with B1. Scan PASS on all 22 lines | 5.4, 8 N2 |
+| B4 | `[text, move]` does not fit: `look`/`wander` are `_look`/`_wander`, not `_animate`; calm is unspecified | **Taken:** `_idleMove(s, move)` extracted from `_idle`'s own branches; the `mumble` branch calls it after `_write`, only when `!isCalm`; calm = line only | 5.4, 8 N2, 6 (8), 10 |
+| S1 | A roll inside `_lines` adds a draw to ~40 callers and has nowhere to return a move; keys do not match; "1 in 4" is only the ceiling | **Taken (Q4):** opt-in `_lines(..., { nature })`, `{text, baby, move}`; a call without it is byte-identical; keys mapped; the rates stated (12.5% typed, 25% for `find`) | 5.4, 6 (4), 10 |
+| S2 | Child lines contradict themselves (6 vs 10 vs 16) | **Taken (Q3):** teen and adult only; rule 6 and the tests fixed | 6 (6), 10, 14 (6) |
+| S3 | `host` is not a new call site; the line would replace "hi, {guest}!" | **Taken (Q5):** `link_host` opts in on the existing call; an alternate hello for the builder at the usual 1-in-4; guest reply unchanged; nothing on the guest | 5.4, 8 N2 |
+| S4 | `find` replaces informative V3/V2 lines; "wanders over first" claims an unplayed motion; solo vs habit `visit` overlap | **Taken:** `find` on the V1 branch only; `visit` lookup `own`, then `company`, then `habit` (solo wins); the explorer visit cell is reworded to "\*sniffs the air\*" (**the one new line, section 16**) | 5.4 |
+| S5 | Existing constant-`Math.random` pins in card-check; §5.1's draw order omits the neighbour roll and the `normal` pick | **Folded:** the pin list is the builder's audit, each listed in the report; §5.1 and §5.4 give the corrected order | 5.1, 5.4, 8 N2 |
+| S6 | `FILL` has no `home`; one fill per `COPY_TABLES` entry; no line uses `{food}` | **Folded:** one table, `fill: "home"` (= "vivarium", 8); `food` dropped; `move` skipped by the scan; the bench names the longest line and the longest builder home | 8 N1, 8 N2, 10 |
+| S7 | A cell that is a pair and a function of `words` needs one shape | **Taken:** one shape, `{ text, move }`, `text` a string or `(home) => string` | 5.4 |
+| S8 | Bored/excited/bodily moods | **Taken:** the `idle` key only (content and cozy); rule 7 is then automatic | 5.4 |
+| S9 | Acceptance needs a bench hook the plan did not name; the sky/cadence cases are N1's | **Folded:** `idle.species` and `link.rolls` named; N1's cases marked as built, not N2's | 10 |
+| S10 | Stale file:line claims | **Folded:** the ones N2 touches now cite names; §2 carries a note that its numbers are old | 2, 5.1, 5.4, 8 |
+| N-1 | The glow variant was unwritten | **Taken (Q6):** "\*glows a little brighter\*", "\*flickers in a tiny loop\*" for firefly and lunamoth (the `own` level) | 5.4 |
+| N-2 | Copy counts inconsistent (40 / 27) | **Folded:** 22 lines | 0, 8 N2, 11 |
+| N-3 | Table counts | Nothing to change | n/a |
+| N-4 | "\*went looking, and look!\*" reads as speech | **Taken (Q6):** "\*came back with something\*" | 5.4 |
+| N-5 | §16 item 6 "mumble branch only" | **Folded:** "an opted-in `_lines` call"; item 6 corrected | 16 |
+| N-6 | The `fresh` / `_lastPick` sentence is wrong for N2 | **Folded:** dropped; the checklist item changed to the draw-count check | 5.4, 14 (12) |
+| N-7 | A fill word missing: dropped or skipped? | **Folded:** the cell is dropped from the pool; an empty pool draws nothing | 5.4 |
+| C1 | §0 "never in behaviour" is no longer true of care (the scenes read habit and pace) | **Folded:** a clause in §0 | 0 |
+| C2 | Heating flag is "an N2 question" and not addressed | **Taken (Q8):** no flag, no server change; `cozy`/`sunny` stays | 8 N2, 16 |
+| Neg. | Empty `tuck`/`pat` keys have no consumer | **Taken (Q7):** dropped; a future ship adds key, cells and caller together | 8a |
+| Neg. | Hop win lines plain; no dream; babies get none | Consumers are named or untouched; kept | 8 N2, 6 |
+
+### Review s2795 (N3): what became of each finding
+
+The adversarial review of N3 (`~/.local/state/crew/archive/hatch-at-home-s2795-20261103-0415/report.md`,
+with `renders/proposed-notes-scan.txt`) was read against `origin/main` `6d82439a` and the N2
+branch. Verdict "not build-ready" (the notes did not exist); the first mate took every
+recommendation on 2026-11-03 (the "N3 fold" section at the end). **Folded here, in the
+sections named.**
+
+| # | Finding | Fate | Where |
+|---|---|---|---|
+| B1 | The 30 notes do not exist; the one example fits no species | **Taken (Q1):** the 30 drafts are in section 8 N3, with the fire sky "snug in a warm spot" and ten species clauses chosen by the first mate. 29 pass; **the octopus note is 61 characters and waits** for the first mate | 8 N3, 11 |
+| S1 | `test_assist.py:467` pins the prompt's last words | **Folded (Q6):** the sentence goes before "Care for it only when asked to"; no test edit | 8 N3, 10 |
+| S2 | Stale line numbers (`coordinator.py`, `intent.py`) | **Folded:** names first, numbers re-checked on `6d82439a` (`:492`, `:497-515`, `intent.py:283`) | 8 N3 |
+| S3 | The map is built beside `species_names` (roster only) | **Folded:** built in the `catalog.species` loop; a test compares the map to the files, including a species outside the roster | 8 N3, 10 |
+| S4 | The 60 cap is not derived from the layout | **Taken (Q4):** the bench measures the longest note at 420/330/300/big text and sets the cap; 60 stays the hard ceiling; the row gets `.naturerow` | 8 N3, 10 |
+| S5 | "wakes at night" against section 4 | **Taken (Q5):** "livelier after dark" / "livelier at dusk" | 8 N3 |
+| S6 | The scan does not read the notes; substring banned words hit "glove" | **Taken:** Python data test with word-boundary banned words and NAG; JS test reusing `NAG`, exported from `copy-scan.js` | 10 |
+| S7 | Notes from the nature block alone are templates (kitten = bunny, owl = axolotl) | **Taken (Q2):** a species clause per note; a test fails duplicates | 8 N3, 10 |
+| S8 | The prompt already primes "fond of", "loves"; model behaviour is untestable | **Taken (Q6):** the sentence forbids liking words; section 10 says a worker cannot test the model | 8 N3, 10 |
+| N-1 | Row placement; stages; egg | **Taken (Q3):** every hatched stage, own line after the personality line, never the egg (non-egg branch, an egg shot shows no row) | 8 N3, 10 |
+| N-2 | Rule 10 says the status screen is unchanged | **Folded:** "unchanged except the one nature row" | 6 |
+| N-3 | Settings sheet vs status page | **Folded:** "status page, not the settings sheet" | 8 N3 |
+| N-4 | `sprites/README.md` stale after N2 | **Folded:** N3 fixes the `company` text and adds `field_note` | 8 N3, 14 (22) |
+| N-5 | `species.json?v=${VERSION}` cache | **Folded:** the builder checks `VERSION` moves in the ship | 8 N3 |
+| N-6 | Merge hazard with `art-128-*` | **Folded:** `field_note` on the line right after `nature` | 8 N3 |
+| N-7 | Gate | Already stated: `ci-gate`; the LLM behaviour is out of reach | 8 N3 |
+| N-8 | Privacy | Checked fine; stated in the slot bullet | 8 N3 |
+| Held | `Catalog.species` keeps the dict; 30 `nature` blocks match section 4; no lock leaked; negative claims have consumers | Kept | 8 N3 |
+
 ## 16. N1 shipped: corrections for N2-N4
 
 N1 is built (branch `crew/hatch-at-home-s2742-n1-species-nature-data-idle-ma`, worker
@@ -1070,10 +1528,11 @@ s2742). Where the code differed from this plan, the code is right and N2-N4 read
 **First mate decisions on N1 (2026-11-02):**
 
 - **Fire fallback = `cozy`, then `sunny`.** The `fire` sky reacts to `fireside`, else the
-  `cozy` flag, else `sunny`. A real "heating on" flag (a server change) is an **N2
-  question**, not N1's.
+  `cozy` flag, else `sunny`. A real "heating on" flag (a server change) was an N2
+  question: **answered no, 2026-11-03** (below).
 - **A child skips the sky reaction** (section 10 wins over section 6 rule 6 for the sky).
-  The cadence still applies to a child. N2 decides for the action lines.
+  The cadence still applies to a child. N2's action lines: **none for a child**
+  (decided 2026-11-03, below).
 - **Clock copy is two lines per cell** (3 clocks x 2 moments x 2 = 12), not one, so a pet
   does not repeat its line every day. With the 14 sky lines N1 ships 26 lines, approved.
 
@@ -1093,8 +1552,8 @@ s2742). Where the code differed from this plan, the code is right and N2-N4 read
    `_note` sets for note kind `fav_weather`. If the memory plan's M0-b or M1b queue that line
    by another path, they must set the same key, or the reaction can land on that day.
 6. **The idle path.** `_skyReact` runs in `_idle` after the promise practice and before the
-   move pick, and takes that idle tick. N2's species line roll (after the persona coin, in
-   the `mumble` branch only) is unaffected. All idle changes sit in `_idle`, `_idleMoves`,
+   move pick, and takes that idle tick. N2's species line roll (after the persona coin, in an
+   opted-in `_lines` call, `idle` from the `mumble` branch) is unaffected. All idle changes sit in `_idle`, `_idleMoves`,
    `_speciesAdds` and `_idleScale`; `_reactFrames` is untouched, so care-reactions ship A has
    no overlap.
 7. **card-check.** `hush` stubs `_skyReact` off, the "idle life happens by itself" wait is 120 s
@@ -1106,3 +1565,157 @@ s2742). Where the code differed from this plan, the code is right and N2-N4 read
    draw that picks the sky line) now exist, with `--preset nature`. N2 and N3 shots can reuse
    them. Not shot in N1: a sky reaction together with a trait flair, and big text (a bubble
    does not change with it).
+
+### N2 shipped (s2794): where the code differed, the pins, the shots
+
+N2 is built as section 8 (N2) and 5.4 say. Where the code differed, the code is right and
+N3-N4 read from it.
+
+1. **Shape.** `SPECIES_LINES` (`lines-fresh.js`, 22 distinct lines; the firefly and lunamoth
+   `own` cells are two entries with the same two lines) and `SPECIES_LINE_ODDS` and
+   `IDLE_BODY_MOVES` (`lines.js`). `_lines` has `{ fresh, nature: natureKey }`; a call
+   that names `nature` always returns `{ text, baby, move }` (`move` is `null` unless a
+   cell with a move was taken), a call that does not returns `{ text, baby }` exactly as before.
+2. **Helpers.** `_natureCells(s, key)` (the lookup, the home fill, the dropped cells; `[]`
+   for a non-teen/adult or no nature) and `_natureCell(s, key)` (the roll, drawn only for a
+   non-empty pool, then the pick) in `card-tick.js`; `_idleMove(s, move)` plays `look`,
+   `wander`, `perk`, `settle`, `munch`, `rock` with the same ms (1800, 2200, 320, 2500, 1500,
+   600), and `_idle`'s own branch calls it for `IDLE_BODY_MOVES`.
+3. **The `mumble` branch** now takes the `_lines` result, writes it, then calls `_idleMove`
+   for the move unless `calm()`. A resting pet, a neighbour line and a bodily mood do not call
+   `_lines` at all, as before. The draw order is the one section 5.4 states.
+4. **Bench.** `link.rolls` already existed (it was only undocumented for this use);
+   `idle.species` is new and, not in the plan, **`visitor.species`** (`Math.random` pinned to 0
+   for the greet so the species cell is taken). 39 shots in `--preset nature`.
+   The idle species shots are calm (the line is the shot); the moves are proved by the JS tests
+   and card-check.
+5. **Pins audited** (card-check, by name; line numbers drift): the **idle order** in
+   "P2b idle mumble" (draws delay 0, move 0, then `r`: heads r 0.1 is the persona's coin
+   passing, tails r 0.9 fails the coin and the roll 0.9 is over 0.25, so no species line;
+   `bored`, `excited`, and the bodily moods never reach the roll): expectations unchanged,
+   the draw comment updated; the **neighbour check** ("gaps-seams 5b", `t.pet("adult", null)`:
+   untyped; r 0.1 for `alone` now takes the species roll and says a species line, which the
+   check does not forbid, `!/Nib/`): unchanged; the **greet/sunset side-by-side** (`show`,
+   `Math.random = 0.1`, ~7514: `_greet` and `_moment` take no species key): safe, unchanged; the
+   **games** pins (`_pickGame`, `_guess`, dig, lucky), `wish_granted`, `how_day`, the
+   **meal lines** (~12639: `_mealLine`, no `_lines` nature) and the **feed** pin
+   (`_react`, key `feed`): none opts in, safe; the **friend and favourite visitor** pins
+   (`Math.random = 0.2`, the E3 and F4 cases): the friend and favourite branches come before
+   the species line, and the "at 2 days, never a friend line" check passes on a species line
+   too (not a friend line, non-empty): unchanged; `_linkStart` with `Math.random = 0`
+   (kindred pair, mellow host): the typed host's persona coin passes first, no species line:
+   unchanged. **Changed, because a real roll bites:** "visitors: the pet greets it with its
+   wave frames ... and one of its lines" and the reduced-motion greet check (a real random
+   greet; a teen or adult now says a species visit cell up to 1 in 4): the allowed-line list
+   gains the species visit cells (read from `SPECIES_LINES`); the **V-C reveal's V1 check**
+   (a real-random reveal of a hoarder or explorer says its find cell 1 in 4): accepts the
+   species' own find line (`_natureCells(s, "find")`). Plus new cases: the species idle line
+   (adult, teen; its move; none for a child, bored or hungry), the greeting (solo "peeks
+   first", social watcher "ears up", the same classes and hold, none for a child, nothing sent)
+   and the builder host's alternate hello (teen, adult; a baby and a child say the usual one;
+   nothing sent).
+6. **JS pins.** `tests/js/nature_lines.test.js`: "SPECIES_ADDS names only moves `_idle`
+   handles" reads `_idle` **and** `_idleMove` now (the branches moved; the check is as strict).
+   `tests/js/turn_pick.test.js` extracts `_lines` by its signature prefix and still passes.
+   `tests/js/nature_species_lines.test.js` is new (section 10's N2 list).
+7. **Not shot:** the V1 find line (the bench pins no find; proved in JS and by the card-check
+   V-C case) except as a long-line text in mono and big text (said straight, like the find).
+
+## N2 fold: first mate decisions, 2026-11-03
+
+Recorded from the s2793 brief (the first mate's answers to review s2792; section 15 has each
+finding's fate). All eight recommendations were taken.
+
+- **Q1.** Snack and clean are out of N2 (the care scenes own them). N2's keys are `idle`,
+  `find`, `visit`, `link_host`.
+- **Q2.** Company is lines only, no beat: social unchanged; the solo "peeks first" line on
+  `visit`; nothing on `link_guest`; no delay, no `perk`, no `look` call.
+- **Q3.** Teen and adult only; section 6 rule 6 and section 10 fixed.
+- **Q4.** Opt-in per call site, `_lines(..., { nature })` returning a move. `idle` only on
+  content and cozy; `find` on the V1 branch only.
+- **Q5.** The builder host gets an alternate hello at 1 in 4; the guest's reply is unchanged.
+- **Q6.** Copy, final: watcher idle "\*stays very quiet\*"; hoarder find "\*stashes it,
+  happily\*"; the explorer find "\*came back with something\*"; the groomer clean cell cut;
+  the social company cell dropped; the performer idle glow variants for firefly
+  ("\*glows a little brighter\*") and lunamoth ("\*flickers in a tiny loop\*"). All other
+  quoted lines stand as approved.
+- **Q7.** The empty `tuck` and `pat` keys are dropped.
+- **Q8.** No heating flag, no server change.
+
+**Not in the decisions list, so for the first mate's nod:** the explorer's `visit` cell is
+**"\*sniffs the air\*"**, replacing the quoted "\*wanders over first\*" because review S4
+showed the card plays no such motion (a visiting pet is held by `flairUntil`). It passes the
+scan. If refused, the cell is deleted and corgi and duckling say the usual greeting.
+
+**Copy scan, 2026-11-03 (s2793): PASS** on all 22 N2 lines (NAG words, `?`, `!!!`,
+digits, 40 characters with `{home}` = "vivarium", and the banned words favourite, fond,
+love, best), run with the scan's own rules over the lines as written in section 8, N2. The
+builder re-runs the real scan once the table is in the card.
+
+## N3 fold: first mate decisions, 2026-11-03
+
+Recorded from the s2796 brief (the first mate's answers to review s2795; section 15 has each
+finding's fate). All recommendations were taken.
+
+- **Q1.** The 30 notes are the s2795 drafts, with "warms up by the fire" replaced by
+  "snug in a warm spot", and these third clauses: kitten "kneads a blanket"; bunny "grooms its
+  ears"; gecko "licks its eyes"; hamster "fills its cheeks"; ferret "hides treasures"; seal
+  "hauls out to bask"; axolotl "drifts and waits"; corgi "herds things about"; duckling
+  "paddles about"; octopus "slips into nooks" (FM, was "squeezes into nooks", 61). Others as drafted. Final copy.
+- **Q2.** Three-clause frame, each note distinct; a test fails duplicates.
+- **Q3.** The nature row shows at every hatched stage, never on the egg.
+- **Q4.** The cap is set by a bench measurement of the longest note at 330/300/big text; the
+  hard ceiling is 60 characters.
+- **Q5.** "livelier after dark" / "livelier at dusk", never "wakes" or "awake at night".
+- **Q6.** The Assist sentence is approved as the review wrote it, placed before "Care for it
+  only when asked to".
+- **Q7.** The fire sky reads "snug in a warm spot".
+- **S6.** A Python data test with word-boundary banned words, and a JS test reusing the copy
+  scan's `NAG` (exported).
+- Every other should-fix and nit folded as recommended (the map from `catalog.species`,
+  `test_assist.py`'s `endswith` untouched, stale server lines fixed).
+
+**Copy check, 2026-11-03 (s2796):** all 30 distinct; no digit, `?`, `!`, NAG word or banned
+word (word-boundary); all 30 are 60 characters or fewer after the first mate set the octopus
+clause to "slips into nooks" (58).
+
+## N3 shipped (s2797): where the code differed, the pins, the shots
+
+N3 is built as section 8 (N3) says (branch `crew/hatch-at-home-s2797-species-nature-n3-field-note-a`).
+Where the code differed, the code is right and N4 reads from it.
+
+1. **Data.** `field_note` on the line right after `nature` in all 30 `species.json`, the 30
+   approved notes exactly (octopus "slips into nooks"). No `VERSION` bump: 0.45.0 is
+   released and the release prep commit (`9b796054`) is what bumps it, so the edited files
+   reach a cached browser with the next release (`species.json?v=${VERSION}`).
+2. **Card.** `card-status.js` `_renderStatus`: `fieldNote` is read only when `!isEgg`,
+   from `s.species.field_note`; the row is `row(null, "nature", ...)` with `naturerow`,
+   right after the personality line in the hatched template, no stage test. No `_lines`
+   call, no copy-scan entry.
+3. **Server.** `coordinator.species_notes` (filled in the `catalog.species` loop),
+   `species_note` in the status slots (`intent.py`), the sentence in `PROMPT` before "Care
+   for it only when asked to". `test_assist.py`'s `endswith` check is untouched.
+4. **The cap (Q4), measured; FM decision 2026-11-03: keep 60, no shortening.** The bench's
+   new `lines` shot option counts a row's wrapped lines (`nature/note-*` shots, plus a
+   throwaway run over all 30). First measure: the value column is 122px at 420, 78 at 330,
+   54 at 300 and 44 in big text, so no note fit two lines at 330 and octopus was 3 / 5 / 8 / 9
+   lines at 420 / 330 / 300 / big text. **Fix (card CSS only, `style.js`):** where the
+   column is narrow (`.compact`, which is every viewport under 420, and big text) the
+   `.naturerow` stacks: the label on its own line, the note full width below; the 420 card
+   is unchanged. After it, the worst of all 30 is 3 / 2 / 3 / 3 lines (octopus 3 / 2 / 3 / 3;
+   hamster, 60 characters, 3 / 2 / 2 / 3). The data test's cap stays the hard ceiling, 60.
+   The full table is in the worker's `renders/note-line-counts.txt`.
+5. **Tests.** Python: `test_species.py` (each note: valid, at most 60, no digit or `?` or
+   `!`, no NAG or banned word on word boundaries, clock and sky clauses equal to the
+   species' `nature`; all 30 distinct; firefly and lunamoth do not hum or sing) and
+   `test_assist.py` (the map equals the files and has species outside the roster, the slot
+   with a note, none and an egg, `spoken_status`'s parameters unchanged, the prompt
+   sentence before "Care for it only when asked to" and no new brace). JS:
+   `tests/js/nature_notes.test.js` (the 30 files with `NAG` now exported from
+   `scripts/copy-scan.js`; the row's source: `!isEgg`, one row, after the personality line,
+   no stage test, `naturerow`). The egg, teen, child and baby cases are bench shots.
+6. **Bench.** `--preset nature` gains 34 shots (`--only nature/note-`): the longest note of
+   each of the 6 worlds at 420, 330, 300, big text and the porthole, and hamster as teen,
+   child, baby and egg (the egg shows no row, though its `s.species` is the world's first).
+7. **Not done / not testable.** The LLM's behaviour with the new sentence (a worker cannot
+   test the model); no card-check case (the plan lists none for N3).

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import timedelta
 import json
 from typing import Any
@@ -19,9 +20,10 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.virtual_pet import model
 from custom_components.virtual_pet.const import DOMAIN
+from custom_components.virtual_pet.device_fx import DEVICE_SIGNAL_MAP
 
 from .test_forget import a_user
-from .test_init import STORE_KEY, hatched_pet, settle, setup
+from .test_init import STORE_KEY, hatched_pet, settle, setup, setup_with_house
 
 LEVELS = model.R.BOND_LEVELS
 
@@ -112,6 +114,8 @@ async def test_each_person_hears_only_their_own_bond(
         "memory_on": False,  # memory plan M1a: two booleans, nothing kept
         "memory_allowed": True,
         "open_on": False,  # favourite §5.3: their card doesn't open on it
+        "rest_offer": False,  # favourite §6.4: not answered yet
+        "has_open_on": False,  # favourite R3 audit: a favourite on any pet, none yet
         "house_open_on": False,  # an admin's: shared screens don't either
         "gift": None,  # visitors v2 V-E: their waiting gift, none yet
         "fav_visitor": None,  # F4: their favourite of this world's visitors
@@ -481,3 +485,174 @@ async def test_the_evening_reaches_an_open_card_with_nothing_else_changing(
             e["mine"]["follow_evening"] for e in await pushed(client) if "mine" in e
         ]
     assert heard == [True]  # once, when the hour came
+
+
+WEATHER_ON = {
+    "rain": "rainy",
+    "snow": "snowy",
+    "fog": "fog",
+    "storm": "lightning",
+    "wind": "windy",
+}
+
+
+@dataclass(frozen=True)
+class Rig:
+    """What turns one key of DEVICE_SIGNAL_MAP on and off in a test house: the
+    options that map it, the entity, its two states, and the keys that one house
+    tells (the five weather keys all come from the one weather entity)."""
+
+    options: dict[str, Any]
+    entity: str
+    on: str
+    off: str
+    on_attrs: dict[str, Any] = field(default_factory=dict)
+    group: tuple[str, ...] = ()
+
+    def put(self, hass: HomeAssistant, state: str, entity: str | None = None) -> None:
+        attrs = self.on_attrs if state == self.on else {}
+        hass.states.async_set(entity or self.entity, state, attrs)
+
+
+def _rig(key: str, option: str, entity: str, on: str, off: str, **attrs: Any) -> Rig:
+    return Rig({option: entity}, entity, on, off, attrs, (key,))
+
+
+# One rig per key: a key cannot join the map without a row here (test_device_fx
+# checks), and every test over the map turns its key on and off through it.
+RIGS: dict[str, Rig] = {
+    **{
+        key: Rig(
+            {"weather": "weather.home"},
+            "weather.home",
+            condition,
+            "sunny",
+            group=tuple(WEATHER_ON),
+        )
+        for key, condition in WEATHER_ON.items()
+    },
+    "lights": _rig("lights", "room_lights", "light.lamp", "on", "off"),
+    "heating": _rig("heating", "heating", "switch.furnace", "on", "off"),
+    "cooling": _rig("cooling", "cooling", "switch.fan", "on", "off"),
+    "fireplace": _rig("fireplace", "fireplace", "switch.hearth", "on", "off"),
+    "tv": _rig("tv", "tv", "media_player.tv", "playing", "off"),
+    "music": _rig("music", "music", "media_player.speaker", "playing", "paused"),
+}
+fx_key = pytest.mark.parametrize("key", list(DEVICE_SIGNAL_MAP))
+
+
+def wire(key: str, on: bool) -> bool | str:
+    """The value `current[key]` carries for on or off (a bool, or the enum's)."""
+    return ("on" if on else "off") if DEVICE_SIGNAL_MAP[key].type != "bool" else on
+
+
+def kind_of(key: str, on: bool) -> list[str]:
+    """The kind a change of `key` sends, as a list: none for an ambient-only key."""
+    kinds = DEVICE_SIGNAL_MAP[key].kinds
+    return [kinds[0 if on else 1]] if kinds else []
+
+
+async def fx_house(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    now: float,
+    key: str,
+    on: bool | None = False,
+    **options: Any,
+) -> Any:
+    """A pet whose house can tell `key` (and nothing else), the entity in the state
+    `on` says (None: no entity yet), for the device bridge."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    rig = RIGS[key]
+    if on is not None:
+        rig.put(hass, rig.on if on else rig.off)
+    await setup_with_house(hass, **(rig.options | options))
+    return hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+
+
+@fx_key
+async def test_the_house_goes_out_before_the_device_onset_that_belongs_to_it(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+    freezer: FrozenDateTimeFactory,
+    key: str,
+) -> None:
+    """Plan 6.3 (M1): _sense_home only collects; the new `current` reaches the
+    card first and the `fx` message second, one per transition, top level (never
+    under `moment`, where an old card would keep it or say it). An ambient-only key
+    has the house and no `fx`."""
+    await fx_house(hass, hass_storage, now, key)
+    rig = RIGS[key]
+    client = await hass_ws_client(hass)
+    snapshot = await subscribe(client)
+    assert snapshot["house"]["device_fx"]["current"] == {
+        k: wire(k, False) for k in rig.group
+    }
+    rig.put(hass, rig.on)
+    await settle(hass, freezer)
+    got = await pushed(client)
+    onset = ["fx"] if kind_of(key, True) else []
+    assert [next(iter(e)) for e in got] == ["house", *onset]
+    assert got[0]["house"]["device_fx"]["current"][key] == wire(key, True)
+    assert [e["fx"]["kind"] for e in got if "fx" in e] == kind_of(key, True)
+    assert all(set(e) == {"fx"} for e in got[1:])
+    assert not [e for e in got if "moment" in e and "fx" in json.dumps(e["moment"])]
+
+
+@fx_key
+async def test_a_push_with_nothing_new_sends_nothing_with_the_bridge_on(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+    freezer: FrozenDateTimeFactory,
+    key: str,
+) -> None:
+    """B4: `recent` is never in the diffed house, so it expiring is no change."""
+    coordinator = await fx_house(hass, hass_storage, now, key)
+    client = await hass_ws_client(hass)
+    await subscribe(client)
+    RIGS[key].put(hass, RIGS[key].on)
+    await settle(hass, freezer)
+    await pushed(client)
+    assert bool(coordinator.device_fx.recent(coordinator._now())) == bool(
+        kind_of(key, True)
+    )
+    freezer.tick(timedelta(seconds=120))  # the ring empties between pushes
+    coordinator._push_watchers()
+    coordinator._push_watchers()
+    assert await pushed(client) == []
+    assert "device_fx_recent" not in json.dumps(coordinator._house_view())
+
+
+@fx_key
+async def test_the_onset_reaches_every_watcher_once_the_shared_screen_too(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+    freezer: FrozenDateTimeFactory,
+    key: str,
+) -> None:
+    await fx_house(hass, hass_storage, now, key)
+    mine = await hass_ws_client(hass)
+    shared = await hass_ws_client(hass)
+    await subscribe(mine)
+    await subscribe(shared, shared=True)
+    RIGS[key].put(hass, RIGS[key].on)
+    await settle(hass, freezer)
+    onset = ["fx"] if kind_of(key, True) else []
+    for client in (mine, shared):
+        got = await pushed(client)
+        assert [e["fx"]["kind"] for e in got if "fx" in e] == kind_of(key, True)
+        assert [next(iter(e)) for e in got] == ["house", *onset]
+    # A shared screen's snapshot: the same whitelist as a personal one.
+    again = await subscribe(await hass_ws_client(hass), shared=True)
+    assert again["house"]["device_fx"]["version"] == 1
+    assert again["house"]["device_fx"]["current"][key] == wire(key, True)
+    assert [e["kind"] for e in again["device_fx_recent"]] == kind_of(key, True)

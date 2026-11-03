@@ -93,7 +93,7 @@ class HatchPetCardLink extends HatchPetCardVisitors {
     const hostName = this._linkName(host);
     const guestName = this._linkName(guest);
     const hello = this._lines(host, "link_host", this._pick(["hi, {guest}!", "oh! {guest}! hello hello ♪"])
-      .replace("{guest}", () => guestName), guestName).text;
+      .replace("{guest}", () => guestName), guestName, { nature: "link_host" }).text;
     const reply = this._lines(guest, "link_guest", this._pick(["hi hi, {host}! ♪", "*waves* hi, {host}!"])
       .replace("{host}", () => hostName), hostName).text;
     // The kindred extra: its own roll, never through _lines (it has no normal line).

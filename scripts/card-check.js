@@ -40,8 +40,8 @@ const OUT = path.join(__dirname, "..", "dev", "card-check");
 const results = [];
 
 // The gated sections of main(), in file order.
-const SECTIONS = ["shelf", "shell", "play", "resume", "moments", "photos", "personality", "types",
-  "egg", "sharedscreen", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "winter", "care",
+const SECTIONS = ["shelf", "shell", "play", "resume", "board", "moments", "photos", "personality", "types",
+  "egg", "sharedscreen", "memorytags", "forget", "prefs", "channel", "devicefx", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "winter", "care",
   "editor", "boot", "infrared", "lowbattery", "restart", "gifts", "finds", "collection", "oldcard"];
 // oldcard asserts restart's seeded bond; finds taps the basket restart seeds; collection
 // opens the finds page on the collection restart seeds; gifts uses restart's bounce (and
@@ -2835,12 +2835,22 @@ async function main() {
     };
     const ids = (offer) => offer?.offered.map((r) => r.id).join();
     const rows = () => [...s.status.querySelectorAll(".layrow")].map((b) => b.textContent);
+    const isOpen = () => !!s.laySheet && s.screen.classList.contains("show-status") && !!s.status.querySelector(".laygo");
+    // Poll for the condition (bounded) rather than sleep a fixed time: the sheet draws in the click, but a
+    // draw already in flight (below) can land on it.
+    const until = async (cond, ms = 2000) => {
+      for (const end = Date.now() + ms; !cond() && Date.now() < end;) await wait(10);
+      return cond();
+    };
     const open = async () => {
       s.request.dataset.key = "lay_egg";
       s.request.click();
       await wait(30);
-      return s.laySheet && s.screen.classList.contains("show-status") && !!s.status.querySelector(".laygo");
+      return await until(isOpen, 500);
     };
+    // _goShared / _goPersonal start an async _update (it awaits worlds.json, and the channel answers later)
+    // that redraws the slide and clears its status. Let it finish before tapping, or it lands on the open sheet.
+    const settled = async () => { await el._update(); await wait(100); };
     const closed = () => !s.laySheet && !s.screen.classList.contains("show-status");
     const shut = () => { if (s.laySheet) el._closeLay(s); };
     el._press = (slide, key) => pressed.push(key);
@@ -2909,6 +2919,7 @@ async function main() {
       localStorage.setItem("hatch-shared-screen", "on");
       el._goShared();
       out.sharedExit = closed();
+      await settled();
       // Shared screens may lay: the sheet opens and lays there too.
       put({ raised: [a.id, c.id] });
       out.sharedOpens = await open();
@@ -2918,6 +2929,7 @@ async function main() {
       pressed.length = 0;
       localStorage.setItem("hatch-shared-screen", "off");
       el._goPersonal();
+      await settled();
       put({ raised: [a.id, c.id] });
       await open();
       put({ raised: [a.id, c.id], requests: [] });
@@ -4293,6 +4305,401 @@ async function main() {
     await tab.close();
   }
 
+  }
+  if (enter("board")) {
+  // Hop of the Day, ship 2b (plan 2026-11-02-hop-of-the-day): board mode behind the YAML-only
+  // experimental_hop key. The `hop` service is stubbed on the card (_hopFetch) with replies
+  // from tests/fixtures/hop_cases.json's boards, never a random draw. The real-HA run owns the
+  // wiring only (the last check: the row calls `board` and the reply has the right shape).
+  await pinAwake(card, "board");
+  {
+    const cases = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "tests", "fixtures", "hop_cases.json"), "utf8")).boards;
+    const replyOf = (name, id = name) => {
+      const { w, h, grid, family, specials } = cases[name];
+      return { result: "ok", day: "2026-11-03", id, w, h, grid, family, specials, world: "woodland", twist: null,
+        done: false, tidy: false };
+    };
+    const warnings = [];
+    page.on("console", (m) => { if (m.type() === "warning" && /hop board/.test(m.text())) warnings.push(m.text()); });
+    const flag = (on) => card.evaluate((el, on) => {
+      const config = { ...el._config };
+      if (on) config.experimental_hop = true;
+      else delete config.experimental_hop;
+      el.setConfig(config);
+      el.hass = el._hass;
+    }, on);
+    const stub = (reply) => card.evaluate((el, r) => { el.__hopCalls = 0; el._hopFetch = async () => { el.__hopCalls++; return r; }; }, reply);
+    const unstub = () => card.evaluate((el) => { delete el._hopFetch; });
+    const picker = async () => {
+      await inject(pet["sensor.energy"], { state: "80" });
+      await page.waitForTimeout(400);
+      await button(2).click();
+      await page.waitForTimeout(500);
+    };
+    const open = async (reply) => {
+      await stub(reply);
+      await picker();
+      await cur().locator(".ghop").click();
+      await page.waitForTimeout(500);
+    };
+    const quit = async () => {
+      if (await cur().locator(".game").isVisible()) await cur().locator(".gx").click();
+      await page.waitForTimeout(250);
+    };
+    const game = () => card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const g = s.game;
+      return g && { kind: g.kind, moves: g.moves?.length, list: g.moves && [...g.moves], pos: g.st?.pos, uses: g.st?.uses,
+        sunk: g.st?.sunk, lit: g.lit, cell: g.cell, done: g.done, picking: !!g.picking };
+    });
+    const centre = (i) => cur().locator(`.hc[data-i="${i}"]`).boundingBox().then((b) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 }));
+    const stored = () => card.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter((k) => k.startsWith("hatch-hop|"))
+      .map((k) => [k.replace(/^hatch-hop\|[^|]*\|/, ""), localStorage.getItem(k)])));
+    const targets = () => card.evaluate((el) => el._hopTargets(el._slides[el._index].game));
+    const key = (k) => cur().locator(`.hk[data-k="${k}"]`);
+
+    // Off by default: no row, no board; the picker's count is the old three.
+    await flag(false);
+    await stub(replyOf("sample"));
+    await picker();
+    check("flag off: the picker has three games and no Hop row", (await cur().locator(".gpick button").count()) === 3 &&
+      (await cur().locator(".ghop").count()) === 0);
+    await quit();
+
+    // The flag on: the row is a sibling of .gpick, the picker still counts three, no `hop` call yet.
+    await flag(true);
+    await stub(replyOf("sample"));
+    await picker();
+    const rowAt = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const row = s.gameBox.querySelector(".ghop");
+      return { inPick: !!row?.closest(".gpick"), sibling: row?.parentElement === s.gameBox, text: row?.textContent,
+        aria: row?.getAttribute("aria-label"), calls: el.__hopCalls };
+    });
+    check("flag on: the Hop row sits outside .gpick, the picker still counts three, and Play asked for no board",
+      (await cur().locator(".gpick button").count()) === 3 && rowAt.sibling && !rowAt.inPick && rowAt.text === "Hop of the Day" &&
+        rowAt.aria === "Play Hop of the Day" && rowAt.calls === 0, JSON.stringify(rowAt));
+    await quit();
+
+    // At each width (the viewport's, as every section here: a card in it is narrower, 226 px at 300), the Hop row
+    // overlaps nothing and sits no lower than the games do with the flag off; a game that already crowds the close
+    // button or the foot at that width with no row is not the row's doing (the baseline), and is reported as such.
+    const fitOf = () => card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const rect = (e) => e && !e.hidden && e.getClientRects().length ? e.getBoundingClientRect() : null;
+      const hit = (a, b) => a && b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      const box = s.gameBox.getBoundingClientRect();
+      const games = [...s.gameBox.querySelectorAll(".gpick button")].map(rect);
+      const row = rect(s.gameBox.querySelector(".ghop"));
+      const [gx, bub] = [rect(s.gameBox.querySelector(".gx")), rect(s.bubble)];
+      const bad = [];
+      for (const [i, g] of games.entries()) {
+        if (hit(g, gx)) bad.push(`game${i}+close`);
+        if (hit(g, bub)) bad.push(`game${i}+prompt`);
+        if (hit(g, row)) bad.push(`game${i}+row`);
+        if (g.bottom > box.bottom + 0.5) bad.push(`game${i} off the foot`);
+      }
+      if (hit(row, gx)) bad.push("row+close");
+      if (hit(row, bub)) bad.push("row+prompt");
+      if (row && row.bottom > box.bottom + 0.5) bad.push("row off the foot");
+      return { bad, cardW: Math.round(el.getBoundingClientRect().width), boxW: Math.round(box.width), boxH: Math.round(box.height),
+        low: Math.round(Math.max(...games.map((g) => g.bottom)) - box.bottom), rowLow: row && Math.round(row.bottom - box.bottom),
+        rowH: row && Math.round(row.height), cls: s.gameBox.querySelector(".ghop")?.className };
+    });
+    // 300 px is the 284 px card (LCD 182 x 136) and 340 a 324 px one: there no game may touch the close button, the prompt, the row or the
+    // foot, with the flag on or off and in big text too (s2804); the other widths keep the baseline rule.
+    const bigText = (on) => card.evaluate((el, on) => { el._card.classList.toggle("bigtext", on); }, on);
+    for (const [width, big] of [[300, false], [330, false], [420, false], [340, false], [340, true], [300, true], [330, true], [420, true]]) {
+      await page.setViewportSize({ width, height: 860 });
+      await page.waitForTimeout(500);
+      await bigText(big);
+      await flag(false);
+      await picker();
+      await page.waitForTimeout(2600); // a long line gives way to "pick a game!" after 2 s
+      const base = await fitOf();
+      await quit();
+      await flag(true);
+      await picker();
+      await page.waitForTimeout(2600);
+      const fit = await fitOf();
+      const mine = fit.bad.filter((b) => (!base.bad.includes(b) && b !== "row off the foot") || /^row[+]|[+]row/.test(b));
+      const label = `${width} px${big ? " big text" : ""} (a ${fit.cardW} px card)`;
+      if (fit.cardW <= 290 || width === 340) {
+        check(`${label}: every game and the Hop row sit inside the LCD and touch nothing, flag off and on`,
+          fit.bad.length === 0 && base.bad.length === 0 && fit.rowH >= 36, JSON.stringify({ fit, base }));
+      } else {
+        check(`${label}: the Hop row overlaps no game, the close button or the prompt, and sits no lower than the games did without it`,
+          fit.rowH !== null && mine.length === 0 && fit.rowH >= 43 && fit.rowLow <= Math.max(0, base.low), JSON.stringify({ fit, base }));
+      }
+      if (!big) await shot(`board-picker-${width}`);
+      await quit();
+    }
+    await bigText(false);
+    await page.setViewportSize({ width: 300, height: 860 });
+    await page.waitForTimeout(500);
+
+    // The keys come with the board and go with it; the care pad is not touched and no game key presses it.
+    const padOf = () => card.evaluate((el) => {
+      const s = el._slides[el._index];
+      return [...s.el.querySelectorAll(".toy")].map((b) => `${b.getAttribute("aria-label")}|${b.getAttribute("aria-disabled")}`);
+    });
+    const padBefore = await padOf();
+    await open(replyOf("sample"));
+    const up = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      return { kind: s.game?.kind, hopb: !!s.gameBox.querySelector(".hopb:not([hidden])"), keys: s.gameBox.querySelectorAll(".hk").length,
+        gl: s.gameBox.querySelector(".gl").hidden, gr: s.gameBox.querySelector(".gr").hidden, gpick: s.gameBox.querySelector(".gpick").hidden,
+        row: s.gameBox.querySelector(".ghop").hidden, labels: [...s.gameBox.querySelectorAll(".hk")].map((k) => k.getAttribute("aria-label")),
+        close: !s.gameBox.querySelector(".gx").hidden };
+    });
+    check("the keys show with the board: seven keys and the close button, the old keys and the picker gone",
+      up.kind === "hop" && up.hopb && up.keys === 7 && up.gl && up.gr && up.gpick && up.row && up.close, JSON.stringify(up));
+    check("the keys carry aria labels, and a blocked direction says why",
+      up.labels.every(Boolean) && up.labels.some((l) => /, (blocked|sunk)$/.test(l)) &&
+        up.labels.includes("Take back the last move") && up.labels.includes("Start the board again") &&
+        up.labels.some((l) => /^Special move, \d left$/.test(l)), JSON.stringify(up.labels));
+    check("the care pad is the same while a board is open", JSON.stringify(await padOf()) === JSON.stringify(padBefore));
+    await shot("board-300-start");
+    const calls = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const seen = [];
+      const real = el._hass.callService;
+      const press = el._press;
+      const lights = el._toggleLights;
+      el._hass.callService = (d, svc, ...r) => { seen.push(`${d}.${svc}`); return real.call(el._hass, d, svc, ...r); };
+      el._press = (...a) => { seen.push("_press"); return press.apply(el, a); };
+      el._toggleLights = (...a) => { seen.push("_toggleLights"); return lights.apply(el, a); };
+      try {
+        for (const k of s.gameBox.querySelectorAll(".hk")) k.click();
+        el._quitGame(s, null); // a board's quit: no play_game call
+      } finally {
+        el._hass.callService = real;
+        delete el._press;
+        delete el._toggleLights;
+      }
+      return { seen, gone: !s.game && !s.gameBox.querySelector(".hopb") && s.gameBox.hidden };
+    });
+    check("no care action fires from a game key, and quitting a board makes no play_game call (or any call)",
+      calls.seen.length === 0 && calls.gone, JSON.stringify(calls));
+    check("the keys go away with the board", (await padOf()).join() === padBefore.join());
+
+    // Tap, then confirm, at 300: a first tap lights the legal cell nearest, a second commits. An arrow key commits at once.
+    await open(replyOf("sample"));
+    let g = await game();
+    const t0 = await targets();
+    const aim = t0.plain[0];
+    const at = await centre(aim);
+    await page.mouse.click(at.x, at.y);
+    const lit = await game();
+    await page.mouse.click(at.x, at.y);
+    const done = await game();
+    check("300 px: the cells are under 44 px, so a first tap lights a cell and a second on it commits",
+      g.cell < 44 && lit.lit === aim && lit.moves === 0 && done.moves === 1 && done.pos === aim && done.lit === null,
+      JSON.stringify({ cell: g.cell, aim, lit, done }));
+    await shot("board-300-lit-commit");
+    // A tap far from every legal cell does nothing and says nothing.
+    const far = await cur().locator(".hc.wall, .hc.stone, .hc.sunk").first().boundingBox().catch(() => null);
+    const before = await game();
+    const sayBefore = await cur().locator(".bubble").innerText();
+    const legalNow = (await targets()).plain.concat((await targets()).special);
+    const dead = await card.evaluate((el, legal) => {
+      const s = el._slides[el._index];
+      const cells = [...s.gameBox.querySelectorAll(".hc")];
+      const pick = cells.map((c, i) => [c, i]).filter(([c, i]) => !legal.includes(i) && legal.every((l) => {
+        const a = c.getBoundingClientRect();
+        const b = cells[l].getBoundingClientRect();
+        return Math.hypot(a.left + a.width / 2 - b.left - b.width / 2, a.top + a.height / 2 - b.top - b.height / 2) > 23;
+      }));
+      const r = pick[0]?.[0].getBoundingClientRect();
+      return r && { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }, legalNow);
+    if (dead) await page.mouse.click(dead.x, dead.y);
+    const after = await game();
+    check("a tap farther than 22 px from every legal cell does nothing and says nothing",
+      !!dead && after.moves === before.moves && after.lit === before.lit && (await cur().locator(".bubble").innerText()) === sayBefore,
+      JSON.stringify({ dead, before, after, far: !!far }));
+    const arrows = await card.evaluate((el) => [...el._slides[el._index].gameBox.querySelectorAll('.hk[aria-disabled="false"]')].map((k) => k.dataset.k));
+    const arrow = arrows.find((k) => ["left", "up", "down", "right"].includes(k));
+    const beforeArrow = await game();
+    await key(arrow).click();
+    const afterArrow = await game();
+    check("an arrow key commits at once (no confirm)", !!arrow && afterArrow.moves === beforeArrow.moves + 1 && afterArrow.lit === null,
+      JSON.stringify({ arrow, beforeArrow, afterArrow }));
+    // One tap commits from 44 px up: the card reads the cell size it drew (here, a drawn size of 44).
+    await card.evaluate((el) => { el._slides[el._index].game.cell = 44; });
+    const t1 = await targets();
+    const aim1 = t1.plain[0];
+    const wasMoves = (await game()).moves;
+    if (aim1 !== undefined) {
+      const c1 = await centre(aim1);
+      await page.mouse.click(c1.x, c1.y);
+    }
+    check("from 44 px up one tap commits (the card reads the cell size it drew)", aim1 !== undefined && (await game()).moves === wasMoves + 1,
+      JSON.stringify(await game()));
+    // Undo restores a sunk pad and a spent use (the hop family's jump: the special, then a direction).
+    await quit();
+    await open(replyOf("hop2"));
+    const start = await game();
+    await key("special").click();
+    const sp = await targets();
+    const jump = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const g = s.game;
+      return g.el.keys.querySelector('.hk[data-k="left"][aria-disabled="false"], .hk[data-k="right"][aria-disabled="false"], .hk[data-k="up"][aria-disabled="false"], .hk[data-k="down"][aria-disabled="false"]')?.dataset.k;
+    });
+    if (jump) await key(jump).click();
+    const jumped = await game();
+    if (jumped?.moves) await key("undo").click();
+    const undone = await game();
+    check("undo restores a sunk pad and a spent use",
+      !!jump && jumped.moves === 1 && jumped.uses === start.uses - 1 && jumped.sunk !== 0 && undone.moves === 0 && undone.uses === start.uses &&
+        undone.sunk === 0 && undone.pos === start.pos, JSON.stringify({ start, sp: sp.special, jump, jumped, undone }));
+    await quit();
+
+    // Park and resume: every move is written, and every way out leaves the same moves for the way back.
+    const id = "board-id-1";
+    const home = await card.evaluate((el) => el._index);
+    await open(replyOf("sample", id));
+    for (let n = 0; n < 3; n++) {
+      const k = await card.evaluate((el) => [...el._slides[el._index].gameBox.querySelectorAll('.hk[aria-disabled="false"]')]
+        .map((b) => b.dataset.k).find((x) => ["left", "up", "down", "right"].includes(x)));
+      if (k) await key(k).click();
+    }
+    const parked = await game();
+    const key1 = `2026-11-03|${id}`;
+    const w1 = await stored();
+    check("each move is written to localStorage as it is made", parked.moves >= 2 && Object.keys(w1).length === 1 && Object.values(w1)[0].length === parked.moves &&
+      Object.keys(w1)[0] === key1, JSON.stringify({ parked, w1 }));
+    const same = async (how, label) => {
+      await how();
+      await page.waitForTimeout(300);
+      const gone = await card.evaluate((el, h) => !el._slides[h].game && !el._slides[h].gameBox.querySelector(".hopb"), home);
+      const kept = await stored();
+      await card.evaluate((el, h) => { if (el._index !== h) el._go(h); }, home); // the board's own slide again
+      await page.waitForTimeout(300);
+      await open(replyOf("sample", id));
+      const back = await game();
+      check(`${label}: the moves are kept and resume as they were`, gone && JSON.stringify(kept) === JSON.stringify(w1) &&
+        JSON.stringify(back.list) === JSON.stringify(parked.list) && back.pos === parked.pos, JSON.stringify({ gone, kept, back, parked }));
+    };
+    await same(() => cur().locator(".gx").click(), "the close button");
+    await same(() => page.keyboard.press("Escape"), "Escape on the card");
+    await same(() => card.evaluate((el) => el._endGame(el._slides[el._index], null)), "the card's own _endGame (card removal and the failed call)");
+    const two = await card.evaluate((el) => el._slides.length > 1);
+    if (two) {
+      await same(() => card.evaluate((el) => { el._go((el._index + 1) % el._slides.length); }), "a swipe to another pet");
+    }
+    await same(() => card.evaluate((el) => el._forget(el._slides[el._index])), "a slide reused (_forget)");
+    await same(() => card.evaluate((el) => {
+      // the pet falling asleep mid-board: the card's own refresh with the asleep sensor on
+      const real = el._state;
+      const s = el._slides[el._index];
+      el._state = function (slide, k) { const st = real.call(this, slide, k); return k === "binary_sensor.asleep" && st ? { ...st, state: "on" } : st; };
+      try { el._renderSlide(s); } finally { el._state = real; }
+      el._renderSlide(s); // and awake again (the pinned state), as the next section expects
+    }), "the pet falling asleep");
+    await quit();
+    // A different board id drops the parked moves without comment.
+    await open(replyOf("sample", "board-id-2"));
+    const fresh = await game();
+    const w2 = await stored();
+    check("a different board id drops the parked moves", fresh.moves === 0 && !Object.keys(w2).includes(key1), JSON.stringify({ fresh, w2 }));
+    await quit();
+
+    // A reply the rules cannot play shows nothing and logs once.
+    await page.evaluate(() => {});
+    for (const bad of [{ ...replyOf("sample"), family: "nope" }, { ...replyOf("sample"), grid: ["P.", "N"] }]) {
+      await open(bad);
+      const none = await card.evaluate((el) => { const s = el._slides[el._index]; return { game: !!s.game, hopb: !!s.gameBox.querySelector(".hopb"), hidden: s.gameBox.hidden }; });
+      check("a malformed board reply shows nothing", !none.game && !none.hopb && none.hidden, JSON.stringify(none));
+    }
+    check("... and logs once", warnings.length === 1, JSON.stringify(warnings));
+    // A refusal is the ordinary refusal line.
+    await open({ result: "too_tired" });
+    check("a refusal reuses the refusal line", (await cur().locator(".bubble").innerText()) === "too tired to play" && !(await game()));
+
+    // The scene engine: a feed scene live when the row is pressed leaves nothing in the LCD; a scene
+    // offered late during a board is not played over it.
+    await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      el._endGame(s, null);
+      el._sceneStart(s, "feed");
+    });
+    const live = await card.evaluate((el) => !!el._slides[el._index].scene);
+    await stub(replyOf("sample", "board-id-3"));
+    await card.evaluate((el) => { const s = el._slides[el._index]; el._startGame(s, s.buttons.play); });
+    await page.waitForTimeout(300);
+    await cur().locator(".ghop").click();
+    await page.waitForTimeout(500);
+    const clean = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      return { scene: !!s.scene, inScene: s.screen.classList.contains("in-scene"), els: s.screen.querySelectorAll(".sc, [class*=bowl]").length,
+        game: s.game?.kind };
+    });
+    check("a feed scene live when the row is pressed ends first: no bowl or prop is left in the LCD",
+      !live || (!clean.scene && !clean.inScene && clean.els === 0 && clean.game === "hop"), JSON.stringify({ live, clean }));
+    const late = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      s.sceneOwes = [{ kind: "feed", until: Date.now() + 10000, playOwed: true, late: false }];
+      el._sceneStart(s, "feed");
+      el._sceneStart(s, "clean");
+      const taken = el._sceneOffer(s, { action: "feed", result: "ok" }, true);
+      return { scene: !!s.scene, taken, owes: (s.sceneOwes || []).length, game: s.game?.kind };
+    });
+    check("a scene started or offered late during a board is not played over it (it waits for the board to close)",
+      !late.scene && late.game === "hop" && late.owes === 0 && late.taken === false, JSON.stringify(late));
+    await quit();
+
+    // Reduced motion: a move is a cut (no transition, the piece already on its cell).
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await open(replyOf("sample", "board-id-4"));
+    const kr = await card.evaluate((el) => [...el._slides[el._index].gameBox.querySelectorAll('.hk[aria-disabled="false"]')]
+      .map((b) => b.dataset.k).find((x) => ["left", "up", "down", "right"].includes(x)));
+    await key(kr).click();
+    const cut = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const piece = s.gameBox.querySelector(".hpiece");
+      const [x, y] = s.game.el.piece.style.translate.split(" ").map(parseFloat);
+      const want = s.gameBox.querySelector(`.hc[data-i="${s.game.st.pos}"]`);
+      const grid = s.gameBox.querySelector(".hgrid").getBoundingClientRect();
+      const r = want.getBoundingClientRect();
+      return { dur: getComputedStyle(piece).transitionDuration, running: piece.getAnimations().length,
+        onCell: Math.abs(piece.getBoundingClientRect().left - (r.left + (r.width - piece.getBoundingClientRect().width) / 2)) < 1.5 &&
+          Math.abs(piece.getBoundingClientRect().top - (r.top + (r.height - piece.getBoundingClientRect().height) / 2)) < 1.5, x, y, grid: grid.width };
+    });
+    check("reduced motion: a move is a cut (no transition, the piece already on its cell)", cut.running === 0 && /^0s/.test(cut.dur) && cut.onCell,
+      JSON.stringify(cut));
+    await quit();
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.waitForTimeout(300);
+
+    // Flag off again: nothing of the board or the row is built.
+    await flag(false);
+    await open(replyOf("sample")).catch(() => {});
+    check("flag off again: no row and no board are built", (await cur().locator(".ghop").count()) === 0 && (await cur().locator(".hopb").count()) === 0);
+    await quit();
+
+    // The real server's wiring (a real HA): the row's call is the `hop` service with action board,
+    // and the reply has the right shape (done and tidy false). Nothing is stubbed here.
+    await unstub();
+    await flag(true);
+    await picker();
+    await cur().locator(".ghop").click();
+    await page.waitForTimeout(1500);
+    const real = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const g = s.game;
+      return g && g.kind === "hop" && { w: g.board.w, h: g.board.h, family: g.board.family, specials: g.board.specials, key: g.key };
+    });
+    check("real HA: the row calls the hop service and opens a playable board",
+      !!real && real.w >= 4 && real.w <= 6 && real.h >= 3 && real.h <= 4, JSON.stringify(real));
+    await shot("board-real");
+    await quit();
+    await flag(false);
+    await page.setViewportSize({ width: 420, height: 860 });
+    await page.waitForTimeout(400);
+  }
+  await unpinAwake(card);
   }
   if (enter("moments")) {
   await pinAwake(card, "moments");
@@ -7610,7 +8017,9 @@ async function main() {
         s.bubble.textContent = "";
         for (let i = 0; i < 5 && !s.bubble.textContent; i++) { // the card's own tick may hold the pet a moment
           Object.assign(s, { sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0, nextIdle: 1 });
-          let calls = 0; // draws: the next-idle delay, the move (0: mumble, first of the list), then the coin
+          // draws: the next-idle delay, the move (0: mumble, first of the list), pick(lines), then the coin;
+          // a failed coin (0.9) goes on to the species roll (N2: 0.9 is over SPECIES_LINE_ODDS, so no species line)
+          let calls = 0;
           t.random(() => (calls++ < 2 ? 0 : r));
           const shelf = el._slides;
           el._slides = [s]; // no neighbour lines (gaps-seams 5b, checked on their own)
@@ -7637,6 +8046,60 @@ async function main() {
     }
     check("P2b idle mumble: the type's lines by mood (default, bored, excited) on the heads side, sleepy/hungry/dirty and the tails side stay normal",
       idleBad.length === 0, idleBad.join(" | "));
+    // Species nature N2: a failed persona coin goes on to the species roll (0.1 is under SPECIES_LINE_ODDS): the species'
+    // first idle cell, bare, with its move after it (not calm); no species line for a baby or a child, the bored or excited
+    // key, or a bodily mood; nothing is sent to the server.
+    const speciesIdle = await typeAs(async (el, s, t) => {
+      const out = {};
+      const calls = [];
+      const realCall = el._hass.callService;
+      el._hass.callService = (...a) => { calls.push(a[1]); return realCall.apply(el._hass, a); };
+      const moved = [];
+      const real = { animate: el._animate, look: el._look, wander: el._wander };
+      el._animate = function (sl, el2, cls, ...rest) { moved.push(cls); return real.animate.call(this, sl, el2, cls, ...rest); };
+      el._look = function (...a) { moved.push("look"); return real.look.apply(this, a); };
+      el._wander = function (...a) { moved.push("wander"); return real.wander.apply(this, a); };
+      const say = (stage, moodState) => {
+        t.pet(stage, "mellow");
+        s.moodState = moodState;
+        s.bubble.textContent = "";
+        moved.length = 0;
+        const seq = [0, 0, 0.1, 0.9, 0.1, 0]; // delay, move (mumble), pick(lines), coin (fails), roll (takes), pick(cell)
+        for (let i = 0; i < 5 && !s.bubble.textContent; i++) {
+          Object.assign(s, { sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0, nextIdle: 1 });
+          let n = 0;
+          t.random(() => seq[n++] ?? 0.9);
+          const shelf = el._slides;
+          el._slides = [s];
+          el._idle(s);
+          el._slides = shelf;
+        }
+        return { text: s.bubble.textContent, moved: moved.slice() };
+      };
+      try {
+        t.pet("adult", "mellow");
+        out.cells = Array.from(el._natureCells(s, "idle"), (c) => ({ text: c.text, move: c.move || null }));
+        out.calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        out.adult = say("adult", "content");
+        out.teen = say("teen", "content");
+        out.child = say("child", "content");
+        out.bored = say("adult", "bored");
+        out.hungry = say("adult", "hungry");
+      } finally {
+        Object.assign(el, { _animate: real.animate, _look: real.look, _wander: real.wander });
+        el._hass.callService = realCall;
+      }
+      out.calls = calls;
+      return out;
+    });
+    const sFirst = speciesIdle.cells[0];
+    const sTexts = speciesIdle.cells.map((c) => c.text);
+    check("species nature N2: an adult and a teen say the species' first idle cell bare, its move after it (none when calm); nothing sent",
+      sTexts.length >= 2 && speciesIdle.adult.text === sFirst.text && speciesIdle.teen.text === sFirst.text &&
+      (speciesIdle.calm || !sFirst.move ? speciesIdle.adult.moved.length === 0 : speciesIdle.adult.moved.length >= 1) &&
+      speciesIdle.calls.length === 0, JSON.stringify(speciesIdle));
+    check("species nature N2: no species idle line for a child, the bored key or a bodily mood",
+      ![speciesIdle.child, speciesIdle.bored, speciesIdle.hungry].some((o) => sTexts.includes(o.text)), JSON.stringify(speciesIdle));
     // gaps-seams 5b: with a neighbour on the shelf, the neighbour roll (1 in 6) names it,
     // never for a bodily mood; alone on the shelf, never.
     const near = await typeAs(async (el, s, t) => {
@@ -7764,6 +8227,13 @@ async function main() {
 
   }
   if (enter("egg")) {
+  // The pet's real stage, put back at the end of this section: the injections below leave it an
+  // egg, and a section that runs after this one without the sections between (a partial run, as
+  // `--only egg,care`) would find every care button disabled for an egg.
+  const stageBefore = await evaluate((id) => {
+    const st = document.querySelector("home-assistant").hass.states[id];
+    return { state: st.state, attributes: st.attributes };
+  }, pet["sensor.life_stage"]);
   // 5. The egg wiggles, then cracks, before it hatches.
   // A pet update can replace the injected egg, so inject until it shows (or 3 tries).
   for (const [minutes, frames] of [[12, "egg_wiggle"], [4, "egg_crack"]]) {
@@ -7865,6 +8335,8 @@ async function main() {
   const naming = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const realTimeout = window.setTimeout; // the expiry check swaps setTimeout for a while: waits keep the real one
     const wait = (ms) => new Promise((r) => realTimeout(r, ms));
+    // Poll for a state with a ceiling, not a fixed sleep: it passes the moment it holds, however loaded the runner.
+    const until = async (f, ms = 8000) => { const t0 = Date.now(); while (!f() && Date.now() - t0 < ms) await wait(50); };
     const s = el._slides[el._index];
     const realHass = el._hass;
     const lifeId = s.ids["sensor.life_stage"];
@@ -7908,6 +8380,10 @@ async function main() {
     const err = () => s.status.querySelector(".nameerr");
     const out = {};
     const timers = [];
+    // Home Assistant's frontend pushes its own hass to the card on any state change. A push inside the
+    // retry's 2 s wait would swap the stubbed callWS and states for the real ones (the retry then goes to
+    // the real server, the sheet closes): hold pushes off while this block runs; the finally puts HA's latest.
+    Object.defineProperty(el, "hass", { configurable: true, get: () => el._hass, set: () => {} });
     try {
       // The trigger: the sheet opens when the sensor shows an egg of the next generation, and not before.
       put("adult", gen);
@@ -7974,7 +8450,7 @@ async function main() {
       type("Moss");
       await save();
       out.retryWaits = sent.length === 1 && isOpen();
-      await wait(2300);
+      await until(() => sent.length === 2 && closed()); // the retry (NAME_RETRY_MS, 2 s), polled with a ceiling
       out.retryOnce = sent.length === 2 && closed() && s.bubble.textContent === "Moss! i like it ♥";
       await reopen();
       calls = 0;
@@ -7982,7 +8458,7 @@ async function main() {
       answer = () => { calls++; throw { code: "not_ready" }; };
       type("Moss");
       await save();
-      await wait(2300);
+      await until(() => sent.length === 2 && isOpen() && err()?.textContent === "hm, that name didn't stick ♪");
       out.retryThenFails = sent.length === 2 && isOpen() && err().textContent === "hm, that name didn't stick ♪";
       // The exits: keep (no call), Escape in the field, the status chip, a swipe, the shared-screen switch,
       // the pet leaving the baby stage, and another generation.
@@ -8082,6 +8558,7 @@ async function main() {
       el._toggleStatus(s);
     } finally {
       window.setTimeout = realTimeout;
+      delete el.hass; // the card's own setter again
       // Home Assistant's own hass as it is now, not the copy taken at the start (this block ran for seconds).
       el.hass = document.querySelector("home-assistant").hass;
       s.sayUntil = 0;
@@ -8098,6 +8575,8 @@ async function main() {
     return out;
   });
   for (const [name, ok] of Object.entries(naming)) check(`settings S3 name sheet: ${name}`, ok === true, JSON.stringify(naming));
+  await inject(pet["sensor.life_stage"], { state: stageBefore.state, attributes: { ...stageBefore.attributes, hatches_at: stageBefore.attributes.hatches_at ?? null } });
+  await page.waitForTimeout(1200);
 
   }
   if (enter("sharedscreen")) {
@@ -8140,6 +8619,37 @@ async function main() {
       e8s.sharedFav === null && typeof e8s.personalFav === "string" && e8s.again === null, JSON.stringify(e8s));
     check("fresh E8 (Sh-a): a visitor stays longer on a shared screen (its stay twice over)",
       e8s.shared - e8s.personal >= 2900, JSON.stringify(e8s));
+  }
+  // Memory M2 (plan sections 8, 10): a shared screen gets no tag chips, even with memory on
+  // in its mine; the big day's "yes" goes at once, with no box, no tag (no follow-up send).
+  {
+    const m2s = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const entity = s.ids?.["sensor.life_stage"];
+      const realWS = el._hass.callWS;
+      const sent = [];
+      const had = { mine: s.mine, follow: el._followOk, shared: localStorage.getItem("hatch-shared-screen") };
+      try {
+        el._hass.callWS = (msg) => { sent.push(msg); return msg.type === "virtual_pet/answer" ? Promise.resolve({ until: "2999-12-31" }) : realWS.call(el._hass, msg); };
+        s.mine = { ...(had.mine || {}), memory_on: true, memory_allowed: true };
+        el._followOk = true;
+        localStorage.setItem("hatch-shared-screen", "on");
+        el._askTextStart(s, entity, "big_day", "2999-12-30");
+        s.queue?.find((q) => q.ask)?.then();
+        return { step: !!s.textStep, chips: s.screen.querySelectorAll(".asktext .tags, .asktext button.tag").length,
+          answers: sent.filter((m) => m.type === "virtual_pet/answer") };
+      } finally {
+        el._hass.callWS = realWS;
+        s.mine = had.mine;
+        el._followOk = had.follow;
+        if (had.shared === null) localStorage.removeItem("hatch-shared-screen"); else localStorage.setItem("hatch-shared-screen", had.shared);
+        el._askTextEnd(s);
+        s.screen.querySelector(".askday")?.remove();
+        Object.assign(s, { queue: [], asking: false, textStep: null });
+      }
+    });
+    check("memory M2: no tag chips on a shared screen (memory on in its mine), and no tag sent",
+      !m2s.step && m2s.chips === 0 && m2s.answers.every((m) => !("tag" in m)), JSON.stringify(m2s));
   }
   // 5b. FA: turning on "shared screen" clears every personal line, typed or
   // typing, on every slide of every card on the page and in every tab (privacy P1).
@@ -8486,6 +8996,135 @@ async function main() {
       h8s.words.join() === "Shared words ♪" && h8s.pool.includes(h8s.delivery[0]), JSON.stringify(h8s));
   }
 
+  await unpinAwake(card);
+  }
+  if (enter("memorytags")) {
+  // Memory M2 (docs/plan-2026-11-02-memory.md sections 6a, 8 "Acceptance", 10 "Tags"): the
+  // tag chips inside the big day's typed step, in the real card. With memory on and allowed
+  // the box has the prompt and nine chips (no tag first, picked); a tap picks one; ok sends
+  // the one "yes" once, with the tag and shared: false; without memory there is no row and
+  // no tag; the labels are text. The answer is caught here (the server's side is
+  // pytest's: tests/test_memory.py, "M2: the tags").
+  await pinAwake(card, "memorytags");
+  {
+    const src = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+    const CHIPS = require("vm").runInNewContext(`(${src.match(/\nconst MEMORY_TAG_CHIPS = (\{[\s\S]*?\n\});/)[1]})`);
+    const m2 = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const entity = s.ids?.["sensor.life_stage"];
+      const realWS = el._hass.callWS;
+      const sent = [];
+      const had = { mine: s.mine, follow: el._followOk, shared: localStorage.getItem("hatch-shared-screen") };
+      const box = () => s.screen.querySelector(".askday.asktext");
+      const chips = () => [...(box()?.querySelectorAll("button.tag") || [])];
+      const open = (kind = "big_day", day = "2999-12-30") => {
+        el._askTextStart(s, entity, kind, day);
+        s.queue?.find((q) => q.ask)?.then();
+      };
+      const answers = () => sent.filter((m) => m.type === "virtual_pet/answer");
+      const out = {};
+      try {
+        el._hass.callWS = (msg) => { sent.push(msg); return msg.type === "virtual_pet/answer" ? Promise.resolve({ until: "2999-12-31" }) : realWS.call(el._hass, msg); };
+        el._followOk = true;
+        localStorage.removeItem("hatch-shared-screen");
+        s.mine = { ...(had.mine || {}), memory_on: true, memory_allowed: true };
+        open();
+        const b = box();
+        out.on = {
+          prompt: b?.querySelector(".tagq")?.textContent,
+          labels: chips().map((c) => c.textContent),
+          keys: chips().map((c) => c.dataset.tag),
+          pressed: chips().map((c) => c.getAttribute("aria-pressed")),
+          order: [...(b?.children || [])].map((c) => c.className || c.tagName),
+          shown: !!b && chips().every((c) => c.offsetParent !== null),
+          // Every chip inside the screen, none under another (the row fits).
+          inside: (() => {
+            const sr = s.screen.getBoundingClientRect();
+            return chips().every((c) => { const r = c.getBoundingClientRect(); return r.left >= sr.left - 1 && r.right <= sr.right + 1 && r.top >= sr.top - 1 && r.bottom <= sr.bottom + 1; });
+          })(),
+        };
+        // The mono LCD look turns the old yellow fill and the chip's cream into one tone, so the
+        // picked chip must differ from an unpicked one in colours (fill and text), not by hue alone.
+        {
+          const hadMono = el._card.classList.contains("mono");
+          el._card.classList.add("mono");
+          const cs = (c) => { const x = getComputedStyle(c); return { bg: x.backgroundColor, fg: x.color }; };
+          out.mono = { picked: cs(chips()[0]), unpicked: cs(chips()[1]) };
+          el._card.classList.toggle("mono", hadMono);
+        }
+        chips().find((c) => c.dataset.tag === "show")?.click();
+        out.tapped = { tag: s.textStep?.tag, pressed: chips().find((c) => c.dataset.tag === "show")?.getAttribute("aria-pressed"), sent: answers().length };
+        chips().find((c) => c.dataset.tag === "show")?.click();
+        out.untapped = s.textStep?.tag ?? null;
+        chips().find((c) => c.dataset.tag === "lesson")?.click();
+        const input = b?.querySelector("input");
+        if (input) input.value = "piano";
+        [...(b?.querySelectorAll(":scope > button") || [])].find((x) => x.textContent === "ok")?.click();
+        el._askTextEnd(s); // the tick's end after: nothing more
+        await new Promise((r) => setTimeout(r, 50));
+        out.sent = answers().map((m) => ({ ...m }));
+        out.gone = !box();
+        // Skip with a tag, and the timer's end (no tap on ok): one send each, the tag on it.
+        sent.length = 0;
+        open("weekend", null);
+        chips().find((c) => c.dataset.tag === "something_else")?.click();
+        s.textStep.until = 0;
+        el._askTextEnd(s);
+        out.timer = answers().map((m) => ({ ...m }));
+        // Memory off: no row, the box as it was, the send has no tag.
+        sent.length = 0;
+        s.mine = { ...(had.mine || {}), memory_on: false, memory_allowed: true };
+        open();
+        out.off = { chips: chips().length, prompt: !!box()?.querySelector(".tagq"), order: [...(box()?.children || [])].map((c) => c.tagName) };
+        [...(box()?.querySelectorAll(":scope > button") || [])].find((x) => x.textContent === "skip")?.click();
+        out.offSent = answers().map((m) => ({ ...m }));
+        // Not allowed on this pet: no row.
+        s.mine = { ...(had.mine || {}), memory_on: true, memory_allowed: false };
+        open();
+        out.disallowed = chips().length;
+        el._askTextEnd(s);
+        // The labels are the card's own constants (a module's, out of reach here), so the
+        // markup rule is checked as built: every chip and the prompt are one text node.
+        s.mine = { ...(had.mine || {}), memory_on: true, memory_allowed: true };
+        open();
+        out.markup = [box()?.querySelector(".tagq"), ...chips()].map((c) => c && c.childNodes.length === 1 && c.firstChild.nodeType === 3);
+        el._askTextEnd(s);
+      } finally {
+        el._hass.callWS = realWS;
+        s.mine = had.mine;
+        el._followOk = had.follow;
+        if (had.shared === null) localStorage.removeItem("hatch-shared-screen"); else localStorage.setItem("hatch-shared-screen", had.shared);
+        el._askTextEnd(s);
+        s.screen.querySelector(".askday")?.remove();
+        Object.assign(s, { queue: [], asking: false, textStep: null, sayUntil: 0, sayClass: 0 });
+      }
+      return out;
+    });
+    const keys = ["", "exam", "match", "show", "trip", "party", "lesson", "work_thing", "something_else"];
+    check("memory M2: with memory on the typed step's box has the prompt and nine chips, no tag first and picked, in the one box",
+      m2.on.prompt === CHIPS.q && JSON.stringify(m2.on.keys) === JSON.stringify(keys) &&
+        JSON.stringify(m2.on.labels) === JSON.stringify([CHIPS.none, ...Object.values(CHIPS.labels)]) &&
+        m2.on.pressed[0] === "true" && m2.on.pressed.slice(1).every((p) => p === "false") &&
+        JSON.stringify(m2.on.order) === JSON.stringify(["tagq", "tags", "INPUT", "BUTTON", "BUTTON"]) && m2.on.shown,
+      JSON.stringify(m2.on));
+    check("memory M2: every chip shows inside the screen", m2.on.inside, JSON.stringify(m2.on));
+    check("memory M2: in mono the picked chip's fill and text colours differ from an unpicked one (dark fill, light text)",
+      m2.mono.picked.bg !== m2.mono.unpicked.bg && m2.mono.picked.fg !== m2.mono.unpicked.fg, JSON.stringify(m2.mono));
+    check("memory M2: a tap picks the tag (and sends nothing); the same chip again clears it",
+      m2.tapped.tag === "show" && m2.tapped.pressed === "true" && m2.tapped.sent === 0 && m2.untapped === null, JSON.stringify(m2.tapped));
+    const one = m2.sent[0] || {};
+    check("memory M2: ok sends the one yes once, with the tag, the words and shared: false",
+      m2.sent.length === 1 && one.question === "big_day" && one.answer === "yes" && one.tag === "lesson" &&
+        one.shared === false && one.text === "piano" && one.day === "2999-12-30" && m2.gone, JSON.stringify(m2.sent));
+    check("memory M2: the step's time running out sends the one yes with the tag so far (the weekend's)",
+      m2.timer.length === 1 && m2.timer[0].question === "weekend" && m2.timer[0].tag === "something_else" && m2.timer[0].shared === false,
+      JSON.stringify(m2.timer));
+    check("memory M2: memory off or not allowed here, no chips and the box as it was; the yes has no tag",
+      m2.off.chips === 0 && !m2.off.prompt && JSON.stringify(m2.off.order) === JSON.stringify(["INPUT", "BUTTON", "BUTTON"]) &&
+        m2.offSent.length === 1 && !("tag" in m2.offSent[0]) && m2.disallowed === 0, JSON.stringify({ off: m2.off, sent: m2.offSent, no: m2.disallowed }));
+    check("memory M2: the prompt and every chip label are text (textContent), never markup",
+      m2.markup?.length === 10 && m2.markup.every(Boolean), JSON.stringify(m2.markup));
+  }
   await unpinAwake(card);
   }
   if (enter("forget")) {
@@ -9280,6 +9919,476 @@ async function main() {
     }, [off.toString("base64"), on.toString("base64")]);
   };
 
+  if (enter("devicefx")) {
+  // 7b. Device-alive slice 3B (docs/plan-2026-11-03-device-alive-interactions.md sections 6.6-6.8): the rain on the
+  // inner glass, driven through the card's own _channel with the wire 3A built (house.device_fx.current,
+  // snapshot.device_fx_recent, a live {"fx": entry}). It names the adapter (_dirLive, _dirView, _dirSync, _dirSwitch,
+  // _dirPause, _dirShown), _channel, _toggleStatus, _go and _onHidden so scripts/pick-sections picks it when one
+  // of them changes (a client-only follow-up would otherwise pick nothing, pick-sections:118-134). It names the
+  // part's constants too: HATCH_DEVICE_FX, HATCH_DIRECTOR, RECIPES, CLASSES, CLASSES_BY_LAYER, KINDS, WEATHER, KEY_LIST,
+  // MOON, moonOf, weatherRecipe, serverClockKnown, and the glass's lease clock (dir-glass-life). Slice 4B added the
+  // per-key block at the end of the section (snow, fog, storm, wind on the real CSS, the moon).
+  // A sleeping pet is a busy owner ("asleep"): an echo is refused for it, and the dev pets go to bed at night
+  // (CI's clock is not the desk's). Every echo check below needs a pet that is up, so pin it awake for the section.
+  await pinAwake(card, "devicefx");
+  await setLcd(true); // the harness runs with the effects off; the glass needs the switch on
+  await card.evaluate((el) => el._dirSwitch());
+  const fxWait = (ms) => page.waitForTimeout(ms);
+  const fxSetup = () => card.evaluate(async (el, me) => {
+    const s = el._slides[el._index];
+    for (let i = 0; i < 50 && !s.subscribed; i++) await new Promise((r) => setTimeout(r, 100));
+    window.__fx = { me, kept: { house: s.house, viewed: s.dirViewed, recent: s.dirRecent }, spoken: [], vib: 0 };
+    for (const name of ["_speak", "_queue"]) {
+      const real = el[name];
+      window.__fx[name] = real;
+      el[name] = function (slide, text, ...rest) {
+        if (slide === s && typeof text === "string") window.__fx.spoken.push(text);
+        return real.call(this, slide, text, ...rest);
+      };
+    }
+    navigator.vibrate = () => { window.__fx.vib++; return true; };
+    return { index: el._index, subscribed: s.subscribed };
+  }, me);
+  const fx = (body) => card.evaluate(new Function("el", `const F = window.__fx; const s = el._slides[el._index]; const me = F.me;
+    const glass = s.glass; const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    // The server's clock, as the card reads it (the entries are the server's stamps): the page's own Date.now() can be
+    // off it by whatever an earlier section's fake-clock skip left, and an echo is judged against the server's now.
+    const iso = (ago) => new Date(el._dirEnv().now - ago).toISOString();
+    const cls = () => [...glass.classList].filter((c) => c.startsWith("dir-") && !/^dir-(moon|newmoon)$/.test(c)).sort().join(); // the moon is the date's, not the test's
+    // A kind's cooldown (20 s, slice 4B) outlasts the checks' quick succession; production's onset after an onset is
+    // a held reverse 45 s on. cool() drops the slide's director state (cooldowns, seen ids) and paints the ambience again.
+    const cool = () => { el._director.detach(s); el._dirSync(s); };
+    const weatherHouse = (current) => ({ ...F.kept.house, device_fx: { version: 1, current } });
+    const rainHouse = (rain) => ({ ...F.kept.house, device_fx: { version: 1, current: { rain } } });
+    const ent = (kind, ago, id) => ({ id, kind, scope: "house", occurred_at: iso(ago), expires_at: iso(ago - 90000) });
+    const quiet = async () => { for (let i = 0; i < 60 && /dir-(drop|clear|frost-form|thaw|fog-in|fog-out|storm-in|storm-out|wind-gust|wind-die)/.test(cls()); i++) await wait(100); return cls(); };
+    return (async () => { ${body} })();`));
+  const setup = await fxSetup();
+  check("devicefx: the pet on show has been heard, for the section", setup.subscribed === true, JSON.stringify(setup));
+
+  // 17 (the TDZ case, and case 14's element): the card defined, a director on the card, a glass on every slide.
+  const base = await fx(`return {
+    defined: !!customElements.get("hatch-pet-card"), director: typeof el._director?.offer === "function" && typeof el._director?.enterView === "function",
+    glass: el._slides.every((x) => x.glass?.matches(".hw.glass")), n: el._slides.length };`);
+  check("devicefx 17: the card is defined, has a director, and every slide has its glass",
+    base.defined && base.director && base.glass && base.n >= 1, JSON.stringify(base));
+
+  // 1: the house says rain: the sheen; a live onset: one drop, no speech, no haptic, then back to the sheen.
+  const one = await fx(`
+    el._channel(s, { house: rainHouse(true) }, me);
+    const wet = cls();
+    s.dirViewed = true;
+    const said = F.spoken.length;
+    el._channel(s, { fx: ent("rain_started", 0, "cc-1") }, me);
+    const drop = cls();
+    const effect = s.dirEffect;
+    const after = await quiet();
+    el._channel(s, { fx: ent("rain_started", 0, "cc-1") }, me); // the same id again
+    return { wet, drop, effect, after, again: cls(), said: F.spoken.length - said, vib: F.vib, effectEnd: s.dirEffect };`);
+  check("devicefx 1: the house's rain paints the sheen; a live onset is one drop with no speech and no haptic",
+    one.wet === "dir-wet" && one.drop === "dir-drop,dir-wet" && one.effect > 0 && one.said === 0 && one.vib === 0, JSON.stringify(one));
+  check("devicefx 1: the drop ends by itself and leaves the sheen; the same id again plays nothing",
+    one.after === "dir-wet" && one.effectEnd === 0 && one.again === "dir-wet", JSON.stringify(one));
+
+  // 2 and 3: a first view 20 s on gives one shortened echo; 3 min on, ambience only.
+  const echo = await fx(`
+    cool();
+    s.dirViewed = false; s.dirRecent = [ent("rain_started", 20000, "cc-2")];
+    el._dirView(s);
+    const at20 = cls();
+    await quiet();
+    s.dirViewed = false; s.dirRecent = [ent("rain_started", 180000, "cc-3")];
+    el._dirView(s);
+    return { at20, at3min: cls(), viewed: s.dirViewed, recent: s.dirRecent,
+      why: { skew: el._dirEnv().now - Date.now(), env: el._dirEnv(), shown: el._dirShown(s), busy: el._director.busyOwners(s), sub: s.subscribed } };`);
+  check("devicefx 2: a first view 20 s after the change plays one echo, on the wet sheen",
+    echo.at20 === "dir-drop,dir-echo,dir-wet", JSON.stringify(echo));
+  check("devicefx 3: a first view 3 min after the change is the sheen only", echo.at3min === "dir-wet" && echo.viewed === true && echo.recent === null, JSON.stringify(echo));
+
+  // 7 and M7: a snapshot then the live copy (same id) is one pulse; a reconnect snapshot on a viewed slide never echoes.
+  const dedup = await fx(`
+    cool();
+    s.dirViewed = false;
+    const snap = (ring) => ({ moments: [], mine: s.mine, house: rainHouse(true), device_fx_recent: ring, now: iso(0) });
+    el._channel(s, snap([ent("rain_started", 15000, "cc-4")]), me);
+    const first = cls(); const effect = s.dirEffect;
+    el._channel(s, { fx: ent("rain_started", 15000, "cc-4") }, me);
+    const same = s.dirEffect === effect && cls() === first;
+    await quiet();
+    el._channel(s, snap([ent("rain_started", 10000, "cc-5")]), me); // a reconnect: viewed already
+    return { first, same, reconnect: cls(), viewed: s.dirViewed, held: s.dirRecent };`);
+  check("devicefx 7: the snapshot's ring and the live fx with the same id are one pulse", dedup.first === "dir-drop,dir-echo,dir-wet" && dedup.same, JSON.stringify(dedup));
+  check("devicefx M7: a reconnect snapshot on a viewed slide paints the state and never echoes", dedup.reconnect === "dir-wet" && dedup.viewed === true, JSON.stringify(dedup));
+
+  // 8: two slides, the same rain on both: the one on show plays, the other holds it (and plays nothing).
+  if (slides >= 2) {
+    const two = await fx(`
+      cool();
+      const o = el._slides.find((x) => x !== s);
+      const keptO = o.house;
+      el._channel(o, { house: { ...(keptO || {}), device_fx: { version: 1, current: { rain: true } } } }, me);
+      const entry = ent("rain_started", 0, "cc-6");
+      el._channel(o, { fx: entry }, me);
+      el._channel(s, { fx: entry }, me);
+      const out = { sel: cls(), other: [...o.glass.classList].filter((c) => c.startsWith("dir-")).sort().join(), pending: el._director.inspect(o)?.pending };
+      await quiet();
+      el._director.cancel(o, "check");
+      el._channel(o, { house: keptO }, me);
+      return out;`);
+    check("devicefx 8: the same rain on two slides: only the one on show plays; the other holds it for its first view",
+      two.sel === "dir-drop,dir-wet" && two.other === "dir-wet" && two.pending === "cc-6", JSON.stringify(two));
+  }
+
+  // 9 and 14: the status sheet open: no echo (busy), the glass is hidden under it; closed: the glass is the screen's
+  // size, deaf to the pointer, below the bubble, and a control under it takes the click.
+  const status = await fx(`
+    el._toggleStatus(s);
+    const open = s.statusOpen === true;
+    await wait(400); // the wipe has finished
+    const rect = s.screen.getBoundingClientRect();
+    const mid = el.shadowRoot.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    const covered = !!mid?.closest(".status");
+    const hidden = getComputedStyle(glass).display === "none";
+    s.dirViewed = false; s.dirRecent = [ent("rain_started", 10000, "cc-7")];
+    el._dirView(s);
+    const echoed = cls();
+    el._toggleStatus(s);
+    await wait(300);
+    return { open, covered, hit: mid ? mid.className || mid.tagName : null, hidden, echoed, closed: s.statusOpen === false };`);
+  check("devicefx 9, 14: with the status sheet open the sheet is on top, the glass is hidden and no echo plays",
+    status.open && status.covered && status.hidden && status.echoed === "dir-wet" && status.closed, JSON.stringify(status));
+  const shape = await fx(`
+    const g = glass.getBoundingClientRect(), sc = s.screen.getBoundingClientRect();
+    const cs = getComputedStyle(glass);
+    const below = (later) => !!later && !!(glass.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const wasHidden = s.pat.hidden;
+    s.pat.hidden = false;
+    const pr = s.pat.getBoundingClientRect();
+    const hit = pr.width > 0 ? el.shadowRoot.elementFromPoint(pr.left + pr.width / 2, pr.top + pr.height / 2) : null;
+    const control = pr.width > 0 && (hit === s.pat || s.pat.contains(hit));
+    s.pat.hidden = wasHidden;
+    const mid = el.shadowRoot.elementFromPoint(sc.left + sc.width / 2, sc.top + sc.height / 2);
+    return { same: Math.abs(g.width - sc.width) < 1 && Math.abs(g.height - sc.height) < 1 && Math.abs(g.left - sc.left) < 1 && Math.abs(g.top - sc.top) < 1,
+      pe: cs.pointerEvents, display: cs.display, z: cs.zIndex, never: mid !== glass,
+      order: [s.bubble, s.status, s.gameBox].every(below), control, patW: pr.width };`);
+  check("devicefx 14: the glass is the screen's box, pointer-events none, z 0, before the bubble, status and game in the DOM",
+    shape.same && shape.pe === "none" && shape.display === "block" && shape.z === "0" && shape.order, JSON.stringify(shape));
+  check("devicefx 14: a control under the glass (the pat box) takes the point; the glass is never the hit", shape.control && shape.never, JSON.stringify(shape));
+
+  // 12: reduced motion: the still sheen, no onset, no echo, no haptic; the switch off: nothing at all.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const calm = await fx(`
+    el._channel(s, { house: rainHouse(true) }, me);
+    el._channel(s, { fx: ent("rain_started", 0, "cc-8") }, me);
+    const live = cls();
+    s.dirViewed = false; s.dirRecent = [ent("rain_started", 5000, "cc-8b")];
+    el._dirView(s);
+    return { live, view: cls(), vib: F.vib, dry: (el._channel(s, { house: rainHouse(false) }, me), cls()) };`);
+  await page.emulateMedia({ reducedMotion: null });
+  check("devicefx 12: reduced motion draws the still sheen and no onset or echo, no haptic",
+    calm.live === "dir-wet" && calm.view === "dir-wet" && calm.vib === 0 && calm.dry === "", JSON.stringify(calm));
+  await setLcd(false);
+  const off = await fx(`
+    el._channel(s, { house: rainHouse(true) }, me);
+    el._dirSwitch();
+    const quietGlass = cls();
+    el._channel(s, { fx: ent("rain_started", 0, "cc-9") }, me);
+    const live = cls(); const shown = getComputedStyle(glass).display;
+    return { quietGlass, live, shown };`);
+  await setLcd(true);
+  const on = await fx(`el._dirSwitch(); return cls();`);
+  check("devicefx 12: the switch off draws nothing (no sheen, no onset); on again paints the sheen",
+    off.quietGlass === "" && off.live === "" && off.shown === "none" && on === "dir-wet", JSON.stringify({ off, on }));
+
+  // 13: a real IntersectionObserver: leaving and coming back is not a replay; the first sight of a slide that
+  // loaded below the fold is its first view (and plays its echo).
+  const io = async (viewed) => {
+    await fx(`cool(); s.dirViewed = ${viewed}; s.dirRecent = ${viewed ? "[ent('rain_started', 10000, 'cc-io-" + viewed + "')]" : "[ent('rain_started', 10000, 'cc-io-" + viewed + "')]"};
+      el.style.transform = "translateY(-200000px)";`);
+    await fxWait(500);
+    const away = await card.evaluate((el) => ({ visible: el._visible, off: el._card.classList.contains("offscreen") }));
+    await card.evaluate((el) => { el.style.transform = ""; });
+    await fxWait(600);
+    return { away, back: await fx(`return { cls: cls(), viewed: s.dirViewed, visible: el._visible };`) };
+  };
+  const seen = await io(true);
+  check("devicefx 13: scrolled out and back in, an already-viewed slide does not replay (the sheen stays)",
+    seen.away.visible === false && seen.away.off && seen.back.visible === true && seen.back.cls === "dir-wet", JSON.stringify(seen));
+  const first = await io(false);
+  check("devicefx 13: the first time a slide comes into view, the IntersectionObserver plays its echo",
+    first.away.visible === false && first.back.viewed === true && /dir-echo/.test(first.back.cls), JSON.stringify(first));
+
+  // 4B: the other weather keys on the real CSS (docs/plan section 13, the 4B row). Per key: the house says it, the glass
+  // takes its still class; a live onset puts the onset class on, the glass's own `dir-glass-life` (a real animation, a real
+  // animationend) ends it by itself and leaves the ambience; the glass has the lease clock and the layer a finite one-shot
+  // (a storm's never repeats); reduced motion keeps the still class and plays nothing; the switch off draws nothing.
+  const KEYS4 = { snow: ["dir-frost", "dir-frost-form", "dir-thaw", 2400], fog: ["dir-fog", "dir-fog-in", "dir-fog-out", 2400],
+    storm: ["dir-storm", "dir-storm-in", "dir-storm-out", 3000], wind: ["dir-wind", "dir-wind-gust", "dir-wind-die", 2000] };
+  for (const [key, [amb, start, end, ms]] of Object.entries(KEYS4)) {
+    const k = await fx(`
+      await quiet(); cool(); // the last check's echo may still be running
+      el._channel(s, { house: weatherHouse({ ${key}: true }) }, me);
+      const rest = cls();
+      s.dirViewed = true;
+      const said = F.spoken.length;
+      el._channel(s, { fx: ent("${key}_started", 0, "cc-${key}-1") }, me);
+      const onset = cls();
+      await wait(300);
+      const layer = glass.querySelector("b:nth-child(${{ snow: 1, fog: 2, storm: 3, wind: 4 }[key]})");
+      const life = getComputedStyle(glass).animationName, lcount = getComputedStyle(glass).animationIterationCount;
+      const inner = getComputedStyle(layer).animationName, icount = getComputedStyle(layer).animationIterationCount;
+      const mid = { running: s.dirEffect > 0, cls: cls() };
+      const t0 = Date.now();
+      const after = await quiet();
+      const took = Date.now() - t0 + 300;
+      cool(); // the held reverse comes 45 s on, past the cooldown
+      el._channel(s, { house: weatherHouse({ ${key}: false }) }, me);
+      el._channel(s, { fx: ent("${key}_stopped", 0, "cc-${key}-2") }, me);
+      const ending = cls();
+      const afterEnd = await quiet();
+      return { rest, onset, mid, life, lcount, inner, icount, after, took, effectEnd: s.dirEffect, ending, afterEnd, said: F.spoken.length - said, vib: F.vib };`);
+    check(`devicefx 4B ${key}: the house's ${key} paints ${amb}; a live onset is one ${start}, no speech, no haptic`,
+      k.rest === amb && k.onset === [start, amb].sort().join() && k.said === 0 && k.vib === 0, JSON.stringify(k));
+    check(`devicefx 4B ${key}: the glass's own dir-glass-life is the clock (the layer a finite one-shot) and it ends by itself on the ambience`,
+      k.life === "dir-glass-life" && k.lcount === "1" && /^dir-/.test(k.inner) && k.icount === "1" && k.mid.running && k.after === amb
+        && k.effectEnd === 0 && k.took >= ms * 0.7 && k.took < ms + 1500, JSON.stringify(k));
+    check(`devicefx 4B ${key}: the end plays ${end} and leaves the glass dry`, k.ending === end && k.afterEnd === "", JSON.stringify(k));
+    const calm4 = await (async () => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const r = await fx(`
+        el._channel(s, { house: weatherHouse({ ${key}: true }) }, me);
+        el._channel(s, { fx: ent("${key}_started", 0, "cc-${key}-3") }, me);
+        const live = cls();
+        s.dirViewed = false; s.dirRecent = [ent("${key}_started", 5000, "cc-${key}-4")];
+        el._dirView(s);
+        return { live, view: cls(), vib: F.vib };`);
+      await page.emulateMedia({ reducedMotion: null });
+      return r;
+    })();
+    check(`devicefx 4B ${key}: reduced motion keeps the still ${amb} and plays no onset or echo`, calm4.live === amb && calm4.view === amb && calm4.vib === 0, JSON.stringify(calm4));
+    await setLcd(false);
+    const off4 = await fx(`
+      el._channel(s, { house: weatherHouse({ ${key}: true }) }, me);
+      el._dirSwitch();
+      const quietGlass = cls();
+      el._channel(s, { fx: ent("${key}_started", 0, "cc-${key}-5") }, me);
+      return { quietGlass, live: cls(), shown: getComputedStyle(glass).display };`);
+    await setLcd(true);
+    await card.evaluate((el) => el._dirSwitch());
+    check(`devicefx 4B ${key}: the switch off draws nothing`, off4.quietGlass === "" && off4.live === "" && off4.shown === "none", JSON.stringify(off4));
+    await fx(`await quiet(); el._director.cancel(s, "check"); el._channel(s, { house: F.kept.house }, me); return 0;`);
+  }
+  // The storm and the rain together (lightning-rainy is both keys), and the storm layer is not a flash: its onset keyframes
+  // are one finite run (checked above), so here only that both still looks stack.
+  const both = await fx(`el._channel(s, { house: weatherHouse({ rain: true, storm: true }) }, me); const r = cls(); el._channel(s, { house: F.kept.house }, me); return r;`);
+  check("devicefx 4B: lightning-rainy is both looks at once (dir-storm and dir-wet)", both === "dir-storm,dir-wet", both);
+  // A missing key is nothing to paint, and a key the card does not know is ignored.
+  const none = await fx(`el._channel(s, { house: weatherHouse({ hail: true }) }, me); const r = cls();
+    el._channel(s, { fx: ent("hail_started", 0, "cc-hail") }, me); const live = cls(); el._channel(s, { house: F.kept.house }, me); return { r, live };`);
+  check("devicefx 4B: a key the card has no recipe for paints nothing and plays nothing", none.r === "" && none.live === "", JSON.stringify(none));
+  // The moon: from the server's clock alone (the card's _dirEnv), with no device_fx on the house; static; off with the switch.
+  const moon = await fx(`
+    const real = el._dirEnv;
+    const at = (iso) => { el._dirEnv = () => ({ ...real.call(el), now: Date.parse(iso) }); el._channel(s, { house: { ...F.kept.house, device_fx: undefined } }, me); return [...glass.classList].filter((c) => /moon/.test(c)).join(); };
+    const full = at("2026-11-24T12:00:00Z"), nw = at("2026-11-09T12:00:00Z"), none = at("2026-11-17T12:00:00Z");
+    const layer = getComputedStyle(glass.querySelector("b:nth-child(5)"));
+    el._dirEnv = () => ({ ...real.call(el), now: Date.parse("2026-11-24T12:00:00Z") });
+    el._channel(s, { house: { ...F.kept.house, device_fx: undefined } }, me);
+    const lit = { opacity: layer.opacity, animation: layer.animationName };
+    el._dirEnv = real; delete el._dirEnv;
+    el._channel(s, { house: F.kept.house }, me);
+    return { full, nw, none, lit };`);
+  check("devicefx 4B: the moon is a still halo on the full and the new day, from the clock, with no device_fx", moon.full === "dir-moon" && moon.nw === "dir-newmoon" && moon.none === "" && moon.lit.animation === "none", JSON.stringify(moon));
+
+  // 4D: the room's keys on the real CSS (docs/plan section 13, the 4D row): the fireplace and the lights on the rim, with the
+  // 4C wire's kinds (fireplace_started, lights_on/lights_off, `current.lights` the enum). Per key: the house's current paints
+  // the rim's still glow; a live onset puts the onset class on the rim, the rim's own `dir-rim-life` (a real animation, a real
+  // animationend) ends it by itself and leaves the glow; the glow is not wiped by the cue; reduced motion keeps the glow and
+  // plays no onset; the switch off draws nothing. Then the doorbell moment through the card's own _moment: one rim chime beside
+  // the screen's fx-chime.
+  const ROOM4 = { fireplace: ["dir-rim-fire", "dir-ember-in", "fireplace_started", { fireplace: true }, 1500],
+    lights: ["dir-rim-lit", "dir-lamp-on", "lights_on", { lights: "on" }, 1500] };
+  for (const [key, [amb, start, kind, cur4, ms]] of Object.entries(ROOM4)) {
+    const k = await fx(`
+      await quiet(); cool();
+      const rcls = () => [...s.rim.classList].filter((c) => c.startsWith("dir-")).sort().join();
+      const rquiet = async () => { for (let i = 0; i < 60 && /dir-(ember|lamp|chime|tick|wash|rotor)/.test(rcls()); i++) await wait(100); return rcls(); };
+      el._channel(s, { house: weatherHouse(${JSON.stringify(cur4)}) }, me);
+      const rest = rcls();
+      s.dirViewed = true;
+      const said = F.spoken.length;
+      el._channel(s, { fx: ent("${kind}", 0, "cc-${key}-1") }, me);
+      const onset = rcls();
+      await wait(300);
+      const life = getComputedStyle(s.rim).animationName, lcount = getComputedStyle(s.rim).animationIterationCount;
+      const mid = { running: s.dirEffect > 0 };
+      const t0 = Date.now();
+      const after = await rquiet();
+      const took = Date.now() - t0 + 300;
+      const glassClean = [...glass.classList].filter((c) => c.startsWith("dir-") && !/^dir-(moon|newmoon)$/.test(c)).join();
+      // a second start inside the cooldown (fireplace 60 s) plays nothing; the glow stays
+      el._channel(s, { fx: ent("${kind}", 0, "cc-${key}-2") }, me);
+      const again = rcls();
+      return { rest, onset, mid, life, lcount, after, took, again, glassClean, effectEnd: s.dirEffect, said: F.spoken.length - said, vib: F.vib };`);
+    check(`devicefx 4D ${key}: the house's ${key} paints ${amb} on the rim; a live onset is one ${start}, no speech, no haptic, nothing on the glass`,
+      k.rest === amb && k.onset === [start, amb].sort().join() && k.said === 0 && k.vib === 0 && k.glassClean === "", JSON.stringify(k));
+    check(`devicefx 4D ${key}: the rim's own dir-rim-life is the clock, it ends by itself on the glow, and a second start inside its cooldown plays nothing`,
+      k.life === "dir-rim-life" && k.lcount === "1" && k.mid.running && k.after === amb && k.effectEnd === 0 && k.took >= ms * 0.7 && k.took < ms + 1500 && k.again === amb, JSON.stringify(k));
+    const calm4 = await (async () => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const r = await fx(`
+        cool();
+        el._channel(s, { house: weatherHouse(${JSON.stringify(cur4)}) }, me);
+        el._channel(s, { fx: ent("${kind}", 0, "cc-${key}-3") }, me);
+        const rcls = () => [...s.rim.classList].filter((c) => c.startsWith("dir-")).sort().join();
+        const live = rcls();
+        const lamps = getComputedStyle(s.rim.querySelector("b")).display, rim = getComputedStyle(s.rim).display;
+        const glow = getComputedStyle(s.rim, "::before").opacity;
+        return { live, lamps, rim, glow, vib: F.vib };`);
+      await page.emulateMedia({ reducedMotion: null });
+      return r;
+    })();
+    check(`devicefx 4D ${key}: reduced motion keeps the still ${amb} (the glow drawn, the lamps hidden) and plays no onset`,
+      calm4.live === amb && calm4.lamps === "none" && calm4.rim === "block" && calm4.glow === "1" && calm4.vib === 0, JSON.stringify(calm4));
+    await setLcd(false);
+    const off4 = await fx(`
+      cool();
+      el._channel(s, { house: weatherHouse(${JSON.stringify(cur4)}) }, me);
+      el._dirSwitch();
+      const rcls = () => [...s.rim.classList].filter((c) => c.startsWith("dir-")).sort().join();
+      const quietRim = rcls();
+      el._channel(s, { fx: ent("${kind}", 0, "cc-${key}-5") }, me);
+      return { quietRim, live: rcls(), shown: getComputedStyle(s.rim).display };`);
+    await setLcd(true);
+    await card.evaluate((el) => el._dirSwitch());
+    check(`devicefx 4D ${key}: the switch off draws nothing on the rim`, off4.quietRim === "" && off4.live === "" && off4.shown === "none", JSON.stringify(off4));
+    await fx(`await quiet(); el._director.cancel(s, "check"); el._channel(s, { house: F.kept.house }, me); return 0;`);
+  }
+  // The lights' flip: on to off. The enum's member paints the rim lit, then dimmed; the end plays the lamps going out.
+  const flip = await fx(`
+    await quiet(); cool();
+    const rcls = () => [...s.rim.classList].filter((c) => c.startsWith("dir-")).sort().join();
+    el._channel(s, { house: weatherHouse({ lights: "on" }) }, me);
+    const lit = rcls();
+    s.dirViewed = true;
+    el._channel(s, { house: weatherHouse({ lights: "off" }) }, me);
+    el._channel(s, { fx: ent("lights_off", 0, "cc-flip-1") }, me);
+    const ending = rcls();
+    const glow = getComputedStyle(s.rim, "::before").opacity;
+    const unknown = (() => { el._channel(s, { house: weatherHouse({ lights: "dim" }) }, me); return rcls(); })();
+    el._channel(s, { house: F.kept.house }, me);
+    return { lit, ending, glow, unknown };`);
+  check("devicefx 4D lights: lit then off flips the glow, the lamps go out (dir-lamp-off), an unknown member paints nothing",
+    flip.lit === "dir-rim-lit" && flip.ending === "dir-lamp-off,dir-rim-dim" && flip.unknown === "dir-lamp-off" && Number(flip.glow) >= 0, JSON.stringify(flip));
+  // The heating's tint is still (no onset, no wire kind); the wash is the moment's. The doorbell moment: one chime on the rim
+  // with the screen's fx-chime, from the card's own _moment (the same callback), and a game (s.game) has neither.
+  const bell = await fx(`
+    await quiet(); cool();
+    const rcls = () => [...s.rim.classList].filter((c) => c.startsWith("dir-")).sort().join();
+    el._channel(s, { house: weatherHouse({ heating: true }) }, me);
+    const tint = rcls();
+    el._channel(s, { fx: ent("heating_started", 0, "cc-heat") }, me);
+    const noKind = rcls();
+    s.dirViewed = true;
+    s.game = { kind: "x" };
+    el._moment(s, { type: "doorbell_live", at: new Date().toISOString() });
+    const gameRim = rcls(), gameScreen = s.screen.classList.contains("fx-chime");
+    s.game = null;
+    el._moment(s, { type: "doorbell_live", at: new Date().toISOString() });
+    const chime = rcls(), screen = s.screen.classList.contains("fx-chime");
+    el._director.cancel(s, "check"); el._channel(s, { house: F.kept.house }, me);
+    return { tint, noKind, gameRim, gameScreen, chime, screen };`);
+  check("devicefx 4D: heating is a still tint with no onset; the doorbell moment is one rim chime beside the screen's fx-chime, and a game has neither",
+    bell.tint === "dir-rim-warm" && bell.noKind === "dir-rim-warm" && bell.gameRim === "dir-rim-warm" && !bell.gameScreen && bell.chime === "dir-chime,dir-rim-warm" && bell.screen, JSON.stringify(bell));
+
+  // 6 (slice 6, plan section 9 and "Slice 6 acceptance"): the rare glass mark, _rareGlass, through the real gate with a
+  // stubbed clock and pick, and its geometry on the real CSS at 420 and 330. Names _rareGlass, _markClear, _markEnd and the
+  // part's MARK, markDraw, markStart so scripts/pick-sections finds this section (the card's module keeps them out of reach: it goes through _rareGlass). It is placement proved by geometry
+  // (elementFromPoint skips pointer-events:none, so it only proves the mark is deaf): at each width every fixed spot,
+  // for every kind, is measured against the pet and the things read or pressed, each forced to its shown size.
+  // The pet is awake (pinAwake), the switch on, no game, no sheet.
+  const markRun = (width) => fx(`
+    // The card's module keeps HATCH_DEVICE_FX to itself: everything goes through the real gate. A spot is forced by
+    // answering the gate's own question (_markClear) for that spot only; the geometry is measured here, apart from it.
+    const KINDS = ["paw", "smudge", "edge"], SPOTS = ["bl", "br", "ml", "mr"];
+    const box = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? r : null; };
+    const hit = (a, b) => a && b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    const marks = () => [...s.mark.classList].filter((c) => c.startsWith("dir-mark-")).join();
+    // show what the screen can show, at its own size: a long line, the wish, the pat box, the basket, the request
+    const kept = [s.attention, s.bubble, s.pat, s.basket, s.request].map((e) => [e, e.hidden, e.style.cssText, e.className, e.textContent]);
+    s.attention.style.display = "block"; if (!s.attention.getAttribute("src")) s.attention.alt = "wants attention";
+    s.bubble.textContent = "a long line the pet is saying, long enough to fill the bubble to its widest, so it reaches as far as it ever does";
+    s.pat.hidden = false; s.pat.style.display = "block";
+    s.basket.hidden = false; s.basket.style.display = "block"; s.basket.classList.add("idle");
+    s.request.classList.add("show");
+    const things = { attention: s.attention, bubble: s.bubble, pat: s.pat, request: s.request, basket: s.basket, pet: s.pet };
+    const out = { width: ${width}, screen: s.screen.clientWidth, spots: {}, bad: [], seen: [] };
+    const realClear = el._markClear;
+    let asked = null;
+    const scr = s.screen.getBoundingClientRect();
+    for (const kind of KINDS) for (const spot of SPOTS) {
+      const key = kind + "/" + spot;
+      el._markEnd(s, true);
+      el._markClear = function (sl, k, c) { const r = realClear.call(this, sl, k, c); if (c === "dir-mark-" + spot) asked = r; return c === "dir-mark-" + spot; };
+      asked = null;
+      const t0 = Date.now();
+      s.glassSeen = true; s.glassViewed = 3600000; s.glassAt = t0 - 700;
+      el._rareGlass(s, t0, (l) => l.find((c) => c === "dir-mark-" + kind) || l[0]);
+      delete el._markClear;
+      const m = box(s.mark);
+      if (!m || !s.markUntil) { out.bad.push(key + ": not drawn " + marks()); continue; }
+      if (marks() !== "dir-mark-" + kind + ",dir-mark-" + spot + ",dir-mark-on" && marks() !== "dir-mark-" + spot + ",dir-mark-" + kind + ",dir-mark-on") out.bad.push(key + ": classes " + marks());
+      if (m.left < scr.left - 1 || m.right > scr.right + 1 || m.top < scr.top - 1 || m.bottom > scr.bottom + 1) out.bad.push(key + ": outside the screen");
+      out.spots[key] = [m.left, m.top, m.right, m.bottom].map(Math.round).join(",");
+      const over = Object.entries(things).filter(([, e]) => hit(m, box(e))).map(([n]) => n);
+      if (asked !== (over.length === 0)) out.bad.push(key + ": the gate says " + asked + ", the geometry says " + over.join("+"));
+      out.seen.push(key + (over.length ? "!" + over.join("+") : ""));
+      if (key === "paw/bl") {
+        // deaf to the pointer: the cheap check (elementFromPoint skips pointer-events:none, so it can only pass)
+        const under = document.elementFromPoint(m.left + m.width / 2, m.top + m.height / 2);
+        out.deaf = getComputedStyle(s.mark).pointerEvents === "none" && under !== s.mark;
+        out.life = getComputedStyle(s.mark).animationName + " " + getComputedStyle(s.mark).animationDuration + " " + getComputedStyle(s.mark).animationIterationCount;
+        out.dirEffect = s.dirEffect || 0; out.glass = cls();
+      }
+    }
+    for (const [e, h, css, cn, text] of kept) { e.hidden = h; e.style.cssText = css; e.className = cn; e.textContent = text; }
+    // the real gate, no forcing: nothing on the first view, one mark when due
+    el._markEnd(s, true);
+    const t1 = Date.now();
+    el._rareGlass(s, t1, (l) => l[1]);
+    out.first = marks();
+    s.glassViewed = 3600000;
+    el._rareGlass(s, t1 + 700, (l) => l[1]);
+    out.drawn = marks();
+    el._markEnd(s, true);
+    out.gone = marks();
+    return out;`);
+  for (const width of [420, 330]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.waitForTimeout(500);
+    const mk = await markRun(width);
+    check("devicefx 6 (_rareGlass) at " + width + ": every kind at every fixed spot is inside the screen, measured clear of the pet and the shown line, wish, pat box, basket and request, and the gate agrees with the geometry",
+      mk.bad.length === 0 && Object.keys(mk.spots).length === 12 && mk.deaf, JSON.stringify(mk));
+    check("devicefx 6 (_rareGlass) at " + width + ": the real gate draws nothing on the first view and one mark when due (kind, spot, on), with dir-mark-life 22 s, once, no lease and no glass class",
+      mk.first === "" && /^dir-mark-(paw|smudge|edge),dir-mark-(bl|br|ml|mr),dir-mark-on$|^dir-mark-(bl|br|ml|mr),dir-mark-(paw|smudge|edge),dir-mark-on$/.test(mk.drawn)
+        && mk.life === "dir-mark-life 22s 1" && mk.dirEffect === 0 && !/dir-mark/.test(mk.glass) && mk.gone === "", JSON.stringify(mk));
+  }
+  await page.setViewportSize({ width: 420, height: 860 });
+  await page.waitForTimeout(300);
+
+  // Put everything back.
+  await fx(`await quiet();
+    el._director.cancel(s, "check");
+    el._channel(s, { house: F.kept.house }, me);
+    s.dirViewed = F.kept.viewed; s.dirRecent = F.kept.recent;
+    for (const name of ["_speak", "_queue"]) el[name] = F[name];
+    delete navigator.vibrate; delete window.__fx;
+    return 0;`);
+  await setLcd(false);
+  await card.evaluate((el) => el._dirSwitch());
+  await unpinAwake(card);
+  check("devicefx: no page error from any of it", errors.length === 0, errors.slice(-3).join(" | "));
+  }
   if (enter("lcd")) {
   // The "screen effects here" row: on by default, per browser.
   await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
@@ -10182,6 +11291,94 @@ async function main() {
     return out;
   });
   check("motion 1: under reduced motion the pet does not settle", !m1calm.settles, JSON.stringify(m1calm));
+  // Motion ship 2 (the flip as a tool), on the awake pet. A stage that changes live turns edge-on
+  // (`turn`, .2 s) and leaves no class and no rotate behind; a closed sheet loses show-status at once
+  // (the pat box is back) and its wipe-up within 250 ms, a fast reopen cancels it; the counter's
+  // flip-clock; a find landing on the basket. Under reduced motion none of the new classes appears.
+  const motion2 = (calmRun) => card.evaluate(async (el, calmRun) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const real = el._state;
+    const force = {};
+    el._state = function (slide, key) {
+      const st = real.call(this, slide, key);
+      return st && key in force ? { ...st, state: force[key] } : st;
+    };
+    const out = { egg: s.egg, calm: calmRun };
+    const seen = new Set();
+    const watch = new MutationObserver(() => ["turn", "wipe-up", "flip", "lands", "lands-more"].forEach((c) => {
+      if (s.pet.classList.contains(c) || s.status.classList.contains(c) || s.gameNum.classList.contains(c) || s.basket.classList.contains(c)) seen.add(c);
+    }));
+    for (const e of [s.pet, s.status, s.gameNum, s.basket]) watch.observe(e, { attributes: true, attributeFilter: ["class"] });
+    // 1. a stage that changes live: turn, then nothing left behind
+    el._redraw(s);
+    await wait(300);
+    const was = s.stageSeen;
+    force["sensor.life_stage"] = was === "teen" ? "adult" : "teen";
+    el._redraw(s);
+    await wait(60);
+    out.turning = s.pet.classList.contains("turn");
+    out.turnAnim = s.pet.getAnimations().map((a) => a.animationName).join();
+    await wait(450);
+    out.turnLeft = [s.pet.className, getComputedStyle(s.pet).rotate];
+    force["sensor.life_stage"] = was; // and back: a plain pass, no stuck state
+    el._redraw(s);
+    await wait(500);
+    // 2. the sheet: close it, the box returns at once, the wipe is off in 250 ms; a reopen in 50 ms cancels it
+    el._toggleStatus(s);
+    await wait(30);
+    out.open = s.screen.classList.contains("show-status");
+    el._toggleStatus(s);
+    out.closedAtOnce = !s.screen.classList.contains("show-status");
+    out.wiping = s.status.classList.contains("wipe-up");
+    out.patBack = !s.pat.hidden;
+    await wait(250);
+    out.wipeOff = !s.status.classList.contains("wipe-up") && getComputedStyle(s.status).display === "none";
+    el._toggleStatus(s);
+    await wait(30);
+    el._toggleStatus(s); // close, and a fast reopen
+    await wait(50);
+    el._toggleStatus(s);
+    await wait(300);
+    out.reopened = s.screen.classList.contains("show-status") && !s.status.classList.contains("wipe-up") && getComputedStyle(s.status).display !== "none";
+    el._toggleStatus(s);
+    await wait(300);
+    // 3. the counter
+    el._flipNumber(s, 3, true);
+    await wait(120);
+    out.num = [s.gameNum.dataset.n, s.gameNum.querySelector("svg")?.getAttribute("aria-label"), s.gameNum.classList.contains("flip")];
+    await wait(600);
+    out.numLeft = [s.gameNum.className, getComputedStyle(s.gameNum).rotate];
+    // 4. a find lands on the basket
+    s.house = { ...(s.house || {}), basket: 0 };
+    el._basketSync(s);
+    s.house = { ...s.house, basket: 1 };
+    el._basketSync(s);
+    out.basketN = el._basketCount(s);
+    await wait(100);
+    out.lands = s.basket.classList.contains("lands");
+    await wait(1100);
+    out.landsLeft = s.basket.className;
+    s.house = { ...s.house, basket: 0 };
+    el._basketSync(s);
+    el._state = real;
+    watch.disconnect();
+    out.seen = [...seen];
+    return out;
+  }, calmRun);
+  await page.emulateMedia({ reducedMotion: null }); // m1calm left it on
+  const m2 = await motion2(false);
+  check("motion 2: a stage that changes live turns (turn), and leaves no class and no rotate behind",
+    m2.egg || (m2.turning && /turn-swap/.test(m2.turnAnim) && !/turn/.test(m2.turnLeft[0]) && (m2.turnLeft[1] === "none" || m2.turnLeft[1] === "0deg")), JSON.stringify(m2));
+  check("motion 2: a closed sheet loses show-status at once and the pat box is back, the wipe-up is gone in 250 ms; a fast reopen cancels it",
+    m2.open && m2.closedAtOnce && m2.wiping && m2.patBack && m2.wipeOff && m2.reopened, JSON.stringify(m2));
+  check("motion 2: the counter flips (flip), shows the new number, and leaves no class or rotate behind",
+    m2.num[0] === "3" && m2.num[1] === "3" && m2.num[2] && !/flip/.test(m2.numLeft[0]) && (m2.numLeft[1] === "none" || m2.numLeft[1] === "0deg"), JSON.stringify(m2));
+  check("motion 2: a find landing pops the basket in (lands), and the class goes", m2.basketN === 1 && m2.lands && !/lands/.test(m2.landsLeft), JSON.stringify(m2));
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const m2calm = await motion2(true);
+  check("motion 2: under reduced motion none of turn, wipe-up, flip, lands appears, and the numbers and sheet still change",
+    !m2calm.seen.length && m2calm.closedAtOnce && !m2calm.wiping && m2calm.num[0] === "3" && m2calm.num[1] === "3" && m2calm.basketN === 1, JSON.stringify(m2calm));
   await page.emulateMedia({ reducedMotion: null });
   await patReset();
   await unpinAwake(card);
@@ -10730,25 +11927,47 @@ async function main() {
   // virtual_pet/greeted (any screen); a counted-off start, a guest and a seasonal cross-over don't.
   {
     await vprep(V0);
-    const r = await card.evaluate(async (el, v) => {
+    // The card's timers (the look at inMs, the greet) run on the page's fake clock: skip() moves
+    // it on, so no real-time wait can let a hass update put the pet to sleep or the look lapse
+    // between the start and the sample (the CI flake: ltr [false,false], _visitorLive false).
+    const r = { ltr: null, rtl: null };
+    const inMs = V0.in || 1400;
+    await card.evaluate((el, id) => {
+      el.__f2plan = el._visitPlan;
+      el._visitPlan = () => ({ id });
+    }, V0.id);
+    try {
+      for (const ltr of [true, false]) {
+        // Pin every _visitorLive condition right at the start; the skips below add no real time.
+        await card.evaluate((el, [v, ltr]) => {
+          const s = el._slides[el._index];
+          Object.assign(s, { asleep: false, away: false, game: null, scene: null, linking: false, power: null, calling: false });
+          s.screen.classList.remove("show-status");
+          el._visitorEnd(s);
+          s.pet.classList.remove("look");
+          el._visitorStart(s, v, { ltr, count: false });
+        }, [V0, ltr]);
+        await skip(page, inMs + 400);
+        const arriving = await card.evaluate((el) => el._slides[el._index].pet.classList.contains("look"));
+        await skip(page, 1500); // past the greet (in + 1000)
+        const held = await card.evaluate((el) => {
+          const s = el._slides[el._index];
+          const h = s.pet.classList.contains("look");
+          el._visitorEnd(s);
+          s.pet.classList.remove("look");
+          return h;
+        });
+        r[ltr ? "ltr" : "rtl"] = [arriving, held];
+      }
+    } finally {
+      await card.evaluate((el) => { el._visitPlan = el.__f2plan; });
+    }
+    Object.assign(r, await card.evaluate(async (el, v) => {
       const s = el._slides[el._index];
-      const wait = (ms) => new Promise((res) => setTimeout(res, ms));
       const out = {};
       const realPlan = el._visitPlan;
       el._visitPlan = () => ({ id: v.id });
       try {
-        for (const ltr of [true, false]) {
-          el._visitorEnd(s);
-          s.pet.classList.remove("look");
-          el._visitorStart(s, v, { ltr, count: false });
-          const inMs = v.in || 1400;
-          await wait(inMs + 400);
-          const arriving = s.pet.classList.contains("look");
-          await wait(1500); // past the greet (in + 1000)
-          out[ltr ? "ltr" : "rtl"] = [arriving, s.pet.classList.contains("look")];
-          el._visitorEnd(s);
-          s.pet.classList.remove("look");
-        }
         const sent = [];
         const real = el._hass.callWS;
         el._hass.callWS = (m) => (m.type === "virtual_pet/greeted" ? (sent.push(m), Promise.resolve(null)) : real.call(el._hass, m));
@@ -10769,7 +11988,7 @@ async function main() {
         Object.assign(s, { sayUntil: 0, flairUntil: 0, poseUntil: 0, visitUntil: 0, queue: [] });
       }
       return out;
-    }, V0);
+    }, V0));
     check("UX8 F2: the pet faces a visitor from the left through the greet, and never turns from one on the right",
       r.ltr?.[0] === true && r.ltr?.[1] === true && r.rtl?.[0] === false && r.rtl?.[1] === false, JSON.stringify(r));
     check("UX8 F4: a played day visitor reports greeted for this pet; an uncounted start, a guest and a cross-over don't",
@@ -10888,7 +12107,10 @@ async function main() {
   });
   // A teen or adult may greet in its type's words (gaps-seams 4b).
   const VPERSONA = require("vm").runInNewContext(`(${vsrc.match(/const PERSONA = (\{[\s\S]*?\n\});/)[1]})`);
-  const lines = [...VLINES, ...V0.lines, ...Object.values(VPERSONA).flatMap((t) => t.visit)];
+  // Species nature N2: a teen or adult's greeting may be its habit's (or a solo species') action line, 1 time in 4 at most.
+  const VSPECIES = require("vm").runInNewContext(`(${vsrc.match(/\nconst SPECIES_LINES = (\{[\s\S]*?\n\});/)[1]})`);
+  const speciesVisit = [...Object.values(VSPECIES.habit), ...Object.values(VSPECIES.company)].flatMap((c) => (c.visit || []).map((x) => x.text));
+  const lines = [...VLINES, ...V0.lines, ...Object.values(VPERSONA).flatMap((t) => t.visit), ...speciesVisit];
   const waves = greeted.drawn !== "child" && greeted.waves;
   const greetFrame = greeted.drawn === "child" || (waves ? /_wave_\d/.test(greeted.src) : /_(cheer|excited)_\d/.test(greeted.src));
   check("visitors: the pet greets it with its wave frames (child: the greet as before; no waves: cheer or excited) and one of its lines",
@@ -10978,6 +12200,51 @@ async function main() {
     return { text };
   }, { key: babyKey, ms: (V0.in || 1400) + 1300 });
   check("visitors: a baby says baby talk (BABY.visit)", VBABY.some((l) => baby.text.includes(l)), JSON.stringify(baby));
+  // Species nature N2: a solo species' greeting is "peeks first", a social watcher's "ears up" (the roll pinned to
+  // take it); both play the same greet (one class set, the same hold, the same stay), a child says no species line,
+  // and nothing is sent beyond the greeted report. One visit per evaluate (a day's visit marker allows one start).
+  {
+    const speciesGreet = async (company, stage) => {
+      await vprep(V0);
+      return card.evaluate(async (el, { company, stage }) => {
+        const s = el._slides[el._index];
+        const species = s.species;
+        const real = { state: el._state, random: Math.random, mine: s.mine };
+        s.species = { ...species, nature: { clock: "day", sky: "sun", company, habit: "watcher" } };
+        el._state = function (slide, k) {
+          const st = real.state.call(this, slide, k);
+          return k === "sensor.life_stage" && st && slide === s ? { ...st, state: stage, attributes: { ...st.attributes, personality: null } } : st;
+        };
+        s.mine = { ...(real.mine || {}), fav_visitor: null };
+        Object.assign(s, { sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0, queue: [] });
+        try {
+          el.__vtick(s);
+          if (!s.visitor) return { none: true };
+          const before = (el.__vcalls || []).length;
+          Math.random = () => 0.1;
+          try { el._visitorGreet(s, s.visitor.v); } finally { Math.random = real.random; }
+          const out = { text: s.bubble.textContent || "", classes: [...s.pet.classList].sort().join(" "), hold: Math.round((s.sayUntil - Date.now()) / 500),
+            sent: (el.__vcalls || []).length - before };
+          el._stopTyping(s);
+          el._visitorEnd(s);
+          return out;
+        } finally {
+          s.species = species;
+          el._state = real.state;
+          s.mine = real.mine;
+          Math.random = real.random;
+          Object.assign(s, { sayUntil: 0, flairUntil: 0, poseUntil: 0, visitUntil: 0, queue: [] });
+          for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-")) localStorage.removeItem(k);
+        }
+      }, { company, stage });
+    };
+    const sp = { solo: await speciesGreet("solo", "adult"), social: await speciesGreet("social", "adult"),
+      soloTeen: await speciesGreet("solo", "teen"), soloChild: await speciesGreet("solo", "child") };
+    check("species nature N2: a solo species greets with 'peeks first', a social watcher with 'ears up', the same classes and hold; nothing sent",
+      sp.solo.text?.includes("*peeks first, then waves*") && sp.social.text?.includes("*ears up*") && sp.soloTeen.text?.includes("*peeks first, then waves*") &&
+      sp.solo.classes === sp.social.classes && Math.abs(sp.solo.hold - sp.social.hold) <= 1 && !sp.solo.sent && !sp.social.sent &&
+      !/\*(peeks|ears)/.test(sp.soloChild.text ?? "*"), JSON.stringify(sp)); // (the bubble may carry the pet's sound first)
+  }
   // Fresh-expand E3 (V-a): a visitor seen here on 3 days is a friend: half its greets are
   // its friend lines (random stubbed to the friend side). At 2, never. Two starts on one
   // day add 1. A new generation's tally starts at 0 (its key carries the generation).
@@ -11707,13 +12974,16 @@ async function main() {
     s.sayUntil = 0; s.flairUntil = 0; s.nextVisitCheck = 0;
     el._seasonVisitor(s, season);
     const gap = s.nextVisitCheck - s.flairUntil;
-    await new Promise((r) => setTimeout(r, 1800));
+    // Each beat is polled for (8 s ceiling), not slept for at a fixed 1.8 s / 3.7 s: a loaded runner
+    // runs the card's timers late, and a fixed sample would miss the 1.8 s the "oh!" is up.
+    const until = async (f, ms = 8000) => { const t0 = Date.now(); while (!f() && Date.now() - t0 < ms) await new Promise((r) => setTimeout(r, 25)); };
+    await until(() => s.bubble.textContent === "oh!");
     const walker = !!s.seasonBox.querySelector(".snowhare.walk.flap");
     // Motion 1: a hare coming from the left is faced (the art faces right); one from the right is not.
     const fromLeft = !!s.seasonBox.querySelector(".snowhare.ltr");
     const faced = s.pet.classList.contains("look");
     const startle = s.bubble.textContent;
-    await new Promise((r) => setTimeout(r, 1900));
+    await until(() => s.bubble.textContent === "hi, little hare!");
     const greet = s.bubble.textContent;
     el._react(s, { action: "snack", result: "ok", at: Date.now() / 1000 });
     return { walker, fromLeft, faced, startle, greet, gap, prop: s.prop.getAttribute("src") || "" };
@@ -12976,6 +14246,46 @@ async function main() {
             k.during && k.live && !k.after && k.left === 0 && k.hello, JSON.stringify(k));
         }
       }
+      // Species nature N2: a builder host, untyped, says its alternate hello when the roll takes it
+      // (draws: the normal hello's pick, the roll, the cell pick, then the guest's); a baby or a child never does;
+      // the guest's reply is the usual one and nothing is sent to the server.
+      const builder = (stage) => card.evaluate(async (el, stage) => {
+        const [host, guest] = [el._slides[0], el._slides[1]];
+        const before = el._state;
+        el._state = function (slide, key) {
+          const st = before.call(this, slide, key);
+          return key === "sensor.life_stage" && st && slide === host ? { ...st, state: stage, attributes: { ...st.attributes, personality: null } } : st;
+        };
+        const species = host.species;
+        const had = { persona: el._persona, babyStage: el._babyStage, babySet: el._babySet };
+        host.species = { ...species, nature: { clock: "day", sky: "sun", company: "social", habit: "builder" }, words: { ...species.words, home: "burrow" } };
+        el._persona = function (slide) { return slide === host ? null : had.persona.call(this, slide); };
+        el._babyStage = function (slide) { return slide === host ? null : had.babyStage.call(this, slide); }; // baby talk off
+        el._babySet = function (slide, key) { return slide === host ? null : had.babySet.call(this, slide, key); };
+        const calls = [];
+        const realCall = el._hass.callService;
+        el._hass.callService = (...a) => { calls.push(a[1]); return realCall.apply(el._hass, a); };
+        const nm = (s) => { const d = el._hass.devices[s.ids.device]; return d.name_by_user || d.name; };
+        const real = Math.random;
+        let n = 0;
+        const draws = [0.1, 0.1, 0, 0.9, 0.9, 0.9];
+        Math.random = () => draws[n++] ?? 0.9;
+        try { el._linkStart(host, guest); } finally { Math.random = real; }
+        const said = el._link?.said?.[0] ?? null;
+        el._linkEnd();
+        Object.assign(el, { _state: before, _persona: had.persona, _babyStage: had.babyStage, _babySet: had.babySet });
+        el._hass.callService = realCall;
+        host.species = species;
+        return { stage, said, guest: nm(guest), calls };
+      }, stage);
+      const adultHost = await builder("adult");
+      const teenHost = await builder("teen");
+      const babyHost = await builder("baby");
+      const childHost = await builder("child");
+      check("species nature N2: a builder host says its alternate hello (teen, adult); a baby or a child hosts as before; no call sent",
+        adultHost.said === "*shows off the burrow*" && teenHost.said === "*shows off the burrow*" &&
+        [babyHost, childHost].every((h) => h.said && !h.said.startsWith("*shows off") && h.said.includes(h.guest)) &&
+        [adultHost, teenHost, babyHost, childHost].every((h) => h.calls.length === 0), JSON.stringify([adultHost, teenHost, babyHost, childHost]));
     }
     // The swipes above kept a place in this browser (UX fix 2, F8: hatch-shelf-*, shared by every
     // tab of the origin). Put it back, or a later page load (restart's) would open on pet 2, not 1.
@@ -13815,7 +15125,8 @@ async function main() {
     el._pat = realPat;
     Object.assign(out, { shown: R?.shown || [], said: [...new Set(said.filter(Boolean))], patAt: s.patAt === patAt,
       quiet: !!R?.quiet, end: { reveal: !!s.reveal, hidden: s.basket.hidden, basket: s.house?.basket, visitUntil: s.visitUntil },
-      calls: el.__calls.slice(), baby: !!el._babySet(s, "find") });
+      calls: el.__calls.slice(), baby: !!el._babySet(s, "find"),
+      nature: Array.from(el._natureCells(s, "find"), (c) => c.text) }); // N2: a V1 find may be the species' own line
     return out;
   });
   const ids = seedB.map((f) => `${f.world}/${f.id}`);
@@ -13831,7 +15142,7 @@ async function main() {
   const v3 = `the ${leaverName} left ${aOf(seedB[2].id)} ♪`;
   const linesOk = tap.baby
     ? tap.said.some((t) => /yay yay!|hehe!/.test(t))
-    : tap.said.some((t) => v1.some((x) => t.includes(x))) && tap.said.some((t) => t.includes(v2)) &&
+    : tap.said.some((t) => v1.some((x) => t.includes(x)) || tap.nature.some((n) => t.includes(n))) && tap.said.some((t) => t.includes(v2)) &&
       tap.said.some((t) => t.includes(v3)); // the bubble may carry the pet's sound first
   check("V-C: the reveal's lines: V1 for a find met before, V2 for a first-ever one, V3 by the visitor's name (baby: BABY.find)",
     !tap.quiet && linesOk, JSON.stringify({ said: tap.said, want: tap.baby ? "baby" : [v1, v2, v3] }));

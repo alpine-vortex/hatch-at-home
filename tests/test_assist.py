@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import inspect
+import json
 from pathlib import Path
 import shutil
 from typing import Any
@@ -32,6 +34,9 @@ from custom_components.virtual_pet.llm import PROMPT
 from .test_init import STORE_KEY, hatched_pet, setup
 
 SENTENCES = Path(__file__).parent.parent / "docs/custom_sentences/en/virtual_pet.yaml"
+SPRITES = (
+    Path(__file__).parent.parent / "custom_components/virtual_pet/frontend/sprites"
+)
 
 
 @pytest.fixture
@@ -466,3 +471,77 @@ async def test_llm_prompt_has_the_voice_notes(
     assert "{" not in PROMPT.format(names="Pip")
     assert PROMPT.endswith("never guilt, nag or worry the person.")
     assert PROMPT.format(names="Pip") in api.api_prompt
+
+
+# Species nature, N3 (plan-2026-11-02-species-nature.md section 8): the field note.
+SPECIES_NOTE_SENTENCE = (
+    "'species_note' is how that kind of creature is built, not a taste: let "
+    "it colour what you say now and then, never quote it, and never say the "
+    "pet likes, loves or prefers something because of it."
+)
+
+
+def test_the_species_notes_map_is_the_files(pip: MockConfigEntry) -> None:
+    coordinator = pip.runtime_data
+    files = {
+        p.parent.name: json.loads(p.read_text())["field_note"]
+        for p in SPRITES.glob("*/species.json")
+        if "field_note" in json.loads(p.read_text())
+    }
+    assert len(files) == 30
+    assert coordinator.species_notes == files
+    # A species outside this world's roster still has its note (a world change
+    # leaves the old pet in place).
+    outside = set(files) - set(coordinator.roster)
+    assert outside, "the world's roster is all 30 species"
+    assert all(s in coordinator.species_notes for s in outside)
+
+
+async def test_status_data_carries_the_species_note(
+    hass: HomeAssistant, pip: MockConfigEntry
+) -> None:
+    coordinator = pip.runtime_data
+    coordinator.state.species = "owl"
+    response = await ask(hass, "VirtualPetStatus")
+    assert response.speech_slots["species_note"] == (
+        "livelier after dark · goes quiet in fog · keeps watch"
+    )
+    # A species fact only: the spoken status does not say it.
+    assert "keeps watch" not in speech(response)
+
+
+async def test_status_has_no_species_note_for_an_egg_or_a_species_without_one(
+    hass: HomeAssistant, pip: MockConfigEntry
+) -> None:
+    coordinator = pip.runtime_data
+    coordinator.state.species = None  # an egg
+    response = await ask(hass, "VirtualPetStatus")
+    assert response.speech_slots["species_note"] is None
+    coordinator.state.species = "owl"
+    del coordinator.species_notes["owl"]  # a species with no field_note
+    response = await ask(hass, "VirtualPetStatus")
+    assert response.speech_slots["species_note"] is None
+
+
+def test_spoken_status_takes_no_species_note() -> None:
+    from custom_components.virtual_pet.intent import spoken_status
+
+    # The golden (test_spoken_status_reads_well_aloud) is unchanged; the note
+    # is for the LLM's slots, not for the spoken sentence.
+    assert list(inspect.signature(spoken_status).parameters) == [
+        "name",
+        "mood",
+        "reason",
+        "traits",
+        "nickname",
+        "about",
+    ]
+
+
+def test_llm_prompt_has_the_species_note_sentence() -> None:
+    assert SPECIES_NOTE_SENTENCE in PROMPT
+    assert PROMPT.index(SPECIES_NOTE_SENTENCE) < PROMPT.index(
+        "Care for it only when asked to."
+    )
+    # The sentence added no brace: only {names} is a field.
+    assert PROMPT.count("{") == PROMPT.count("}") == 1

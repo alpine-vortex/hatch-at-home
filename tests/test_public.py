@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 import json
+import re
 from typing import Any
 
 from freezegun.api import FrozenDateTimeFactory
@@ -35,7 +36,9 @@ from custom_components.virtual_pet.const import (
     PERSONAL_EVENTS,
     PRIVATE_EVENT_FIELDS,
 )
+from custom_components.virtual_pet.device_fx import DEVICE_SIGNAL_MAP, KINDS
 
+from .test_channel import RIGS, fx_key, kind_of
 from .test_init import STORE_KEY, hatched_pet, settle, setup, setup_with_house
 
 LEVELS = model.R.BOND_LEVELS
@@ -104,6 +107,7 @@ async def scripted_day(
     # Their card opens on this pet, and so do shared screens (favourite §5).
     await pet.async_set_open_on(me.id, True)
     await pet.async_set_open_on(me.id, True, house=True)
+    await pet.async_set_rest_offer(me.id)  # and they answered the rest offer (§6.4)
     # A day's wish aimed at them (the pet's close friend with a person entity).
     monkeypatch.setattr(model.R, "WISH_FOR_CHANCE", 1.0)
     monkeypatch.setattr(pet, "wish_options", lambda: {"play"})
@@ -232,6 +236,8 @@ async def test_nothing_personal_on_the_bus(
             assert secret not in text, (e.event_type, secret)
         assert e.context.user_id is None, e.event_type
         assert "open_on" not in text, e.event_type  # the favourite (§5.2)
+        assert "rest_offer" not in text, e.event_type  # its offer's answer (§6.4)
+        assert "has_open_on" not in text, e.event_type  # their having a favourite
     made = [e for e in ours if e.event_type == f"{DOMAIN}_wish_made"]
     assert made[-1].data == {"kind": "play", "pet_id": pet.pet_id}  # the aimed one
     # Each of the bond's moments reached their own channel, without who...
@@ -325,11 +331,15 @@ async def test_nothing_personal_on_a_state(
 
     assert day["pet"].people.open_on(day["me"].id) == day["pet"].pet_id
     assert day["pet"].people.house_open_on() == day["pet"].pet_id
-    assert "open_on" not in text
+    assert day["pet"].people.data["people"][day["me"].id]["rest_offer"] is True
+    assert "open_on" not in text and "rest_offer" not in text
+    assert "has_open_on" not in text
     diagnostics = await async_get_config_entry_diagnostics(
         hass, day["pet"].config_entry
     )
     assert "open_on" not in json.dumps(diagnostics, default=str)
+    assert "rest_offer" not in json.dumps(diagnostics, default=str)
+    assert "has_open_on" not in json.dumps(diagnostics, default=str)
     stage = attrs["sensor.pip_life_stage"]
     assert "bonds" not in stage and "notify_users" not in stage
     assert set(stage["wish"]) == {"kind", "granted", "open"}
@@ -424,3 +434,171 @@ async def test_an_appliance_done_moment_holds_only_type_kind_and_at(
     # No entity id, and not its words, on the bus or the list.
     text = json.dumps([e.data for e in heard] + done, default=str)
     assert "upstairs" not in text and "binary_sensor" not in text
+
+
+@fx_key
+async def test_a_shared_screens_device_fx_is_the_whitelist_and_nothing_else(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+    freezer: FrozenDateTimeFactory,
+    key: str,
+) -> None:
+    """Slices 3A and 4A, cases 10 and 15: on a shared (wall) screen everything the
+    device bridge sends is a version, values of the map's types for keys of the
+    map, and ring entries of a fixed shape: no entity id, no name, no user, no
+    title, and no more than a personal screen's (the same house view). The
+    whitelist is built from DEVICE_SIGNAL_MAP, so a new key gets this audit."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    rig = RIGS[key]
+    entity = f"{rig.entity.split('.')[0]}.garden_of_zebulon"
+    rig.put(hass, rig.off, entity)
+    await setup_with_house(
+        hass,
+        **{option: entity for option in rig.options},  # (one entity, by id)
+    )
+    pet = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id(
+        {
+            "type": f"{DOMAIN}/subscribe",
+            "entity_id": "sensor.pip_life_stage",
+            "shared": True,
+        }
+    )
+    assert (await client.receive_json())["success"]
+    heard: list[dict[str, Any]] = [(await client.receive_json())["event"]]
+    for state in (rig.on, rig.off):  # an onset, and (after its block) its end
+        rig.put(hass, state, entity)
+        await settle(hass, freezer, 75)  # past the block (music: 60 s), in the ring
+        await client.send_json_auto_id({"type": "ping"})
+        while (msg := await client.receive_json())["type"] != "pong":
+            heard.append(msg["event"])
+    recent = bool(kind_of(key, True))  # an ambient-only key has no ring entry
+    assert bool(pet.device_fx.recent(pet._now())) == recent
+    assert audit_device_fx(heard) == set(DEVICE_SIGNAL_MAP[key].kinds)
+    assert (
+        bool(pet.device_fx.recent(pet._now())) == recent
+    )  # (the audit changed nothing)
+    text = json.dumps(heard)
+    for leak in ("weather.", "zebulon", "garden", hass_admin_user.id, "Zeb", "user"):
+        assert leak.lower() not in text.lower(), leak
+    # The house view a shared screen gets holds the same device_fx as a personal one.
+    assert (
+        pet._shared_house(pet._house_view())["device_fx"]
+        == pet._house_view()["device_fx"]
+    )
+
+
+def audit_device_fx(heard: list[dict[str, Any]]) -> set[str]:
+    """Every device_fx thing in `heard` is of the map: the view's keys and values
+    (a bool or a member of the row's enum), and the ring entries' fixed shape and
+    kinds. Returns the kinds that were sent."""
+    kinds: set[str] = set()
+    for message in heard:
+        view = (message.get("house") or {}).get("device_fx")
+        if view is not None:
+            assert set(view) == {"version", "current"} and view["version"] == 1
+            assert set(view["current"]) <= set(DEVICE_SIGNAL_MAP)
+            for name, value in view["current"].items():
+                assert DEVICE_SIGNAL_MAP[name].clean(value) == value, (name, value)
+        for entry in [
+            *message.get("device_fx_recent", []),
+            *([message["fx"]] if "fx" in message else []),
+        ]:
+            assert set(entry) == {"id", "kind", "occurred_at", "expires_at", "scope"}
+            assert entry["scope"] == "house" and entry["kind"] in KINDS
+            assert re.fullmatch(r"[0-9a-f]{8}-\d+", entry["id"])
+            kinds.add(entry["kind"])
+    return kinds
+
+
+async def test_a_canary_in_every_mapped_source_reaches_no_screen(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Plan 6.2a, rule 4 (the fuzz): every source the map reads is given a string
+    canary (as a state, an attribute, a title and an entity id), and the canary
+    must appear in no message, no snapshot and no `device_fx_recent`, on a shared
+    channel and a private one. The sources come from the map's `sources`, so a new
+    key's source is fuzzed with no edit here."""
+    canary = "Zebulon"
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    options = {
+        source: f"{'sensor' if source == 'rain' else source}.{canary.lower()}_{source}"
+        for spec in DEVICE_SIGNAL_MAP.values()
+        for source in spec.sources
+    }
+    assert set(options) == {s for v in DEVICE_SIGNAL_MAP.values() for s in v.sources}
+
+    def poison(state: str, only: tuple[str, ...] | None = None) -> None:
+        for entity_id in (options[o] for o in (only or options)):
+            hass.states.async_set(
+                entity_id,
+                state,
+                {
+                    "friendly_name": f"{canary}'s {entity_id}",
+                    "media_title": canary,
+                    "wind_speed": canary,
+                    "wind_gust_speed": canary,
+                    "device_class": canary,
+                    "unit_of_measurement": "mm/h",
+                },
+            )
+
+    poison(canary)  # known, and nothing in it
+    await setup_with_house(hass, **options)
+    pet = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    shared = await hass_ws_client(hass)
+    private = await hass_ws_client(hass)
+    heard: dict[str, list[dict[str, Any]]] = {"shared": [], "private": []}
+    for name, client in (("shared", shared), ("private", private)):
+        await client.send_json_auto_id(
+            {
+                "type": f"{DOMAIN}/subscribe",
+                "entity_id": "sensor.pip_life_stage",
+                "shared": name == "shared",
+            }
+        )
+        assert (await client.receive_json())["success"]
+        heard[name].append((await client.receive_json())["event"])
+    # The canary as every kind of reading, then each key's own "on" over it, one key
+    # at a time (one onset a pass), so every key has a turn at an onset while the
+    # other sources hold canaries; and the real "off" over all of them.
+    steps = [(canary, None)]
+    steps += [(RIGS[k].on, DEVICE_SIGNAL_MAP[k].sources) for k in DEVICE_SIGNAL_MAP]
+    steps += [(canary, None), ("sunny", None), (canary, None)]
+    for state, only in steps:
+        poison(state, only)
+        await settle(hass, freezer, 60)
+        for name, client in (("shared", shared), ("private", private)):
+            await client.send_json_auto_id({"type": "ping"})
+            while (msg := await client.receive_json())["type"] != "pong":
+                heard[name].append(msg["event"])
+    assert pet.device_fx._seq  # entries were made while the sources held canaries
+    for name, messages in heard.items():
+        sent = audit_device_fx(messages)
+        # Every key had an onset to leak, on both channels.
+        assert {s.kinds[0] for s in DEVICE_SIGNAL_MAP.values() if s.kinds} <= sent, name
+        # What the bridge sent. (Not the whole message: a TV mapped to a source with
+        # a title is the existing `house.media`, which names what the pet watched
+        # and is not the bridge's; it is the one place a title may already be.)
+        text = json.dumps(
+            [
+                [
+                    (m.get("house") or {}).get("device_fx"),
+                    m.get("device_fx_recent"),
+                    m.get("fx"),
+                ]
+                for m in messages
+            ]
+        )
+        for leak in (canary, *options.values(), hass_admin_user.id):
+            assert leak.lower() not in text.lower(), (name, leak)
+        assert "media_title" not in text, name

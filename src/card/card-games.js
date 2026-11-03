@@ -14,6 +14,7 @@ class HatchPetCardGames extends HatchPetCardCare {
       return;
     }
     if (s.screen.classList.contains("show-status")) this._toggleStatus(s);
+    this._rimCue(s, button?.dataset?.action); // play's two-point pulse
     s.screen.querySelector(".flair")?.remove();
     // A beat before the picker (care reactions, ship A): the ball drops in from the pad, the pet
     // perks at it, 600 ms. The picker does not wait: it opens now and the beat plays over its fade.
@@ -40,6 +41,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     // Built each time: the card's options decide which games are offered.
     s.gameBox.querySelector(".gpick").innerHTML = games.map((g) =>
       `<button data-game="${g.key}">${g.label}</button>`).join("");
+    this._hopRow(s); // behind experimental_hop: the Hop of the Day row, outside .gpick (plan section 5)
     this._gameView(s, "pick");
     // A narrow card has room for one short line beside the close button.
     this._pickerSay(s, s.game, s.game.prompt);
@@ -101,7 +103,17 @@ class HatchPetCardGames extends HatchPetCardCare {
     if (!pick || !gx || pick.hidden) return true;
     const box = s.gameBox.getBoundingClientRect();
     if (!box.height) return true;
-    pick.classList.remove("wrap", "tight");
+    pick.classList.remove("wrap", "tight", "snug");
+    // The Hop row (flag on) sits at the foot, outside .gpick: it is measured too, so no game
+    // button covers it, and the picker's room is the box less its strip.
+    const row = s.gameBox.querySelector(".ghop");
+    const rowOn = !!row && !row.hidden;
+    if (row) {
+      row.classList.remove("slot", "tight", "snug");
+      row.style.cssText = "";
+    }
+    pick.style.marginRight = "";
+    pick.querySelectorAll("button").forEach((b) => { b.style.marginRight = ""; });
     const buttons = [...pick.querySelectorAll("button")];
     // First the plain column where it has always been, if it covers nothing: not
     // the close button, not the prompt, and none cut off at the foot.
@@ -109,30 +121,102 @@ class HatchPetCardGames extends HatchPetCardCare {
     const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
     const keep = [gx, s.bubble].filter((el) => el && !el.hidden).map((el) => el.getBoundingClientRect())
       .filter((r) => r.height);
+    if (rowOn) keep.push(row.getBoundingClientRect());
     if (buttons.every((b) => {
       const r = b.getBoundingClientRect();
       return r.bottom + 4 <= box.bottom && !keep.some((k) => hit(r, k));
     })) return true;
-    pick.style.bottom = "2%";
+    // The row's strip: the picker ends above it.
+    const strip = () => (rowOn ? `${Math.round(box.bottom - row.getBoundingClientRect().top + 4)}px` : "2%");
     // The games' height, from the first one's top to the last one's foot, + the press shadow.
     const need = () => Math.max(...buttons.map((b) => b.offsetTop + b.offsetHeight)) -
       Math.min(...buttons.map((b) => b.offsetTop)) + 4;
+    // Last resort on the smallest LCD (a 284 px card: two rows of 44 px don't fit under the close
+    // button): `snug`, 36 px buttons and a 2 px gap. Only after the usual sizes have left a game
+    // under the close button, the row or past the foot.
+    let snugOk = false;
     const rows = () => {
-      pick.classList.remove("wrap", "tight");
+      pick.classList.remove("wrap", "tight", "snug");
       if (need() > pick.clientHeight) pick.classList.add("wrap");
       if (need() > pick.clientHeight) pick.classList.add("tight");
+      if (snugOk) pick.classList.add("snug"); // the last resort stays on once it was needed
       return need() <= pick.clientHeight;
     };
-    // Under the close button and, if it fits there, under a wrapped prompt too (F6).
-    const bubble = keep.find((r) => r.left < box.left + box.width / 2);
-    const under = Math.max(gx.getBoundingClientRect().bottom, bubble?.bottom || 0);
-    pick.style.top = `${Math.round(under - box.top + 6)}px`;
-    let clear = rows();
-    if (!clear) {
-      pick.style.top = `${Math.round(gx.getBoundingClientRect().bottom - box.top + 6)}px`;
-      rows();
+    const place = () => {
+      row?.classList.remove("slot", "tight", "snug");
+      if (row) row.style.cssText = "";
+      buttons.forEach((b) => { b.style.marginRight = b.style.gridColumn = b.style.justifySelf = b.style.width = ""; });
+      pick.style.bottom = strip();
+      // Under the close button and, if it fits there, under a wrapped prompt too (F6).
+      const bubble = keep.find((r) => r.left < box.left + box.width / 2);
+      const under = snugOk ? 0 : Math.max(gx.getBoundingClientRect().bottom, bubble?.bottom || 0);
+      const gap = snugOk ? 3 : 6;
+      pick.style.top = `${Math.round(Math.max(under, snugOk ? gx.getBoundingClientRect().bottom : 0) - box.top + gap)}px`;
+      let clear = rows();
+      if (!clear) {
+        pick.style.top = `${Math.round(gx.getBoundingClientRect().bottom - box.top + gap)}px`;
+        rows();
+      }
+      if (rowOn && !rows()) clear = this._fitHopSlot(s, row, pick, box, rows) && clear;
+      row?.classList.toggle("snug", pick.classList.contains("snug"));
+      return clear;
+    };
+    let clear = place();
+    // A game under the close button, the row, or past the foot: the snug sizes, once.
+    const sound = () => {
+      const kept = [gx, row].filter((el) => el && !el.hidden).map((el) => el.getBoundingClientRect());
+      return buttons.every((b) => {
+        const r = b.getBoundingClientRect();
+        return r.bottom <= box.bottom + 0.5 && !kept.some((k) => hit(r, k));
+      });
+    };
+    if (!sound()) {
+      snugOk = true;
+      place();
+      // Snug sits under the close button only: clear if the prompt is not under the games.
+      const bub = s.bubble && !s.bubble.hidden && s.bubble.getBoundingClientRect();
+      clear = sound() && !(bub?.height && buttons.some((b) => hit(b.getBoundingClientRect(), bub)));
     }
     return clear;
+  }
+
+  // The strip left no room for the games (a 300 px card): the row joins the last line of the
+  // wrapped games instead, to the right of the last button, shrunk to its label. The games go
+  // back to the foot; the last one steps left by half the row so the pair is centred. If even
+  // that has no room the row stays at the foot, label only.
+  _fitHopSlot(s, row, pick, box, rows) {
+    pick.style.bottom = "2%";
+    rows();
+    const buttons = [...pick.querySelectorAll("button")];
+    const last = buttons[buttons.length - 1];
+    row.classList.add("tight");
+    if (pick.classList.contains("snug") && buttons.length % 2) {
+      // Two even columns: the row takes the empty cell beside the last game.
+      last.style.gridColumn = "1";
+      last.style.justifySelf = "stretch";
+      last.style.width = "auto";
+      const at = last.getBoundingClientRect();
+      row.classList.add("slot");
+      row.style.cssText = `left:${Math.round(at.right + 3 - box.left)}px;top:${Math.round(at.top - box.top)}px;` +
+        `height:${Math.round(at.height)}px;bottom:auto;right:auto;width:${Math.round(at.width)}px`;
+      return rows();
+    }
+    row.style.cssText = "width: max-content; right: auto";
+    const need = row.offsetWidth + 4;
+    row.style.cssText = "";
+    const lr = last.getBoundingClientRect();
+    const sameLine = buttons.filter((b) => Math.abs(b.getBoundingClientRect().top - lr.top) < 4);
+    if (sameLine.length === 1 && box.width - lr.width - 8 >= need) {
+      last.style.marginRight = `${need}px`;
+      const at = last.getBoundingClientRect();
+      row.classList.add("slot");
+      row.style.cssText = `left:${Math.round(at.right + 4 - box.left)}px;top:${Math.round(at.top - box.top)}px;` +
+        `height:${Math.round(at.height)}px;bottom:auto;right:auto;width:${need - 4}px`;
+      return rows();
+    }
+    row.style.cssText = "";
+    pick.style.bottom = `${Math.round(box.bottom - row.getBoundingClientRect().top + 4)}px`;
+    return rows();
   }
 
   // Show the picker ("pick") or a game's buttons (its key) in the game overlay.
@@ -140,11 +224,16 @@ class HatchPetCardGames extends HatchPetCardCare {
     const box = s.gameBox;
     box.hidden = false;
     box.classList.toggle("dig", view === "dig");
+    box.classList.toggle("hop", view === "hop"); // the board's keys are the overlay's own (card-board.js)
     box.querySelector(".gpick").hidden = view !== "pick";
+    const row = box.querySelector(".ghop");
+    if (row) row.hidden = view !== "pick";
+    const hopb = box.querySelector(".hopb");
+    if (hopb) hopb.hidden = view !== "hop";
     s.gameNum.hidden = view !== "higher_lower" && view !== "dig";
     const [gl, gr] = [box.querySelector(".gl"), box.querySelector(".gr")];
-    gl.hidden = gr.hidden = view === "pick";
-    s.gameScore.hidden = view === "pick";
+    gl.hidden = gr.hidden = view === "pick" || view === "hop";
+    s.gameScore.hidden = view === "pick" || view === "hop";
     const hl = view === "higher_lower";
     const dig = view === "dig";
     gl.innerHTML = hl ? '<span class="hl">lo</span>' : dig ? '<span class="hl">keep</span>' : icon("prev", 22);
@@ -228,6 +317,17 @@ class HatchPetCardGames extends HatchPetCardCare {
     s.gameNum.dataset.n = String(n);
   }
 
+  // A new number as a flip-clock does it: the old digit tips away (rotateX 0 -> 90, two steps), the new one
+  // is swapped in while it is a line, and tips back, .16 s in all (`.gnum.flip`). A win keeps the perk
+  // after it (`.win`). data-n is the new number at once. Reduced motion: the number, instantly.
+  _flipNumber(s, n, win = false) {
+    if (calm()) return this._showNumber(s, n);
+    s.gameNum.dataset.n = String(n);
+    s.gameNum.classList.toggle("win", win);
+    this._animate(s, s.gameNum, "flip", win ? 500 : 250);
+    setTimeout(() => { if (s.gameNum.dataset.n === String(n)) s.gameNum.innerHTML = digit(n, 3); }, FLIP_SWAP_MS);
+  }
+
   // One play_game call; ends the game (with a line) on a failure or refusal.
   // A reply for a game that was stopped (or replaced) meanwhile is dropped.
   async _playCall(s, data) {
@@ -304,8 +404,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     g.wins = info.wins;
     g.lastAt = Date.now();
     if (kind === "higher_lower") {
-      this._showNumber(s, info.number);
-      this._animate(s, s.gameNum, "flip", 300);
+      this._flipNumber(s, info.number, !!info.correct);
       this._animate(s, s.pet, "perk", 300);
       this._write(s, info.correct ? `yes! ${info.number}` : `nope, ${info.number}!`);
     } else {
@@ -397,8 +496,9 @@ class HatchPetCardGames extends HatchPetCardCare {
 
   // Berry dig: the pile's leaves left in .gnum, the bank and basket on the
   // score line, keep only with something in the basket.
-  _digShow(s, info) {
-    this._showNumber(s, info.leaves);
+  _digShow(s, info, flip = false, win = false) {
+    if (flip) this._flipNumber(s, info.leaves, win);
+    else this._showNumber(s, info.leaves);
     s.gameNum.setAttribute("aria-label", `${info.leaves} leaves left`);
     s.gameScore.classList.add("two");
     s.gameScore.textContent = `round ${Math.min(info.round + 1, info.rounds)}/${info.rounds}\n` +
@@ -448,9 +548,8 @@ class HatchPetCardGames extends HatchPetCardCare {
     g.wins = info.wins;
     g.basket = info.basket;
     g.lastAt = Date.now();
-    this._digShow(s, info);
+    this._digShow(s, info, true, info.found !== "bee"); // a berry or a safe basket is a win: the counter perks
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
-    this._animate(s, s.gameNum, "flip", 300);
     if (info.found === "bee") {
       s.propEl.src = BEE_FRAMES[0];
       s.propEl.style.left = "10%"; // beside the pile, clear of the score and the buttons
@@ -506,8 +605,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     g.lastAt = Date.now();
     g.busy = false;
     g.prompt = "dig or keep?";
-    this._digShow(s, info);
-    this._animate(s, s.gameNum, "flip", 300);
+    this._digShow(s, info, true);
     this._write(s, GAME_COPY.dugThere, 60000);
     s.sayUntil = Date.now() + 60000;
     s.gameBox.querySelector(".gr").focus({ preventScroll: true });

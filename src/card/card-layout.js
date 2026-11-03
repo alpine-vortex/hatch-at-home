@@ -557,6 +557,7 @@ class HatchPetCardLayout extends HatchPetCardBuild {
       s.wasAsleep = asleep;
     }
 
+    let turning = false;
     const scene = this._sceneKey(this._hass.states, flags, asleep || lightsOut);
     if (!lightsScene) this._bgApply(s, scene);
     this._renderSeason(s);
@@ -580,8 +581,11 @@ class HatchPetCardLayout extends HatchPetCardBuild {
       if (calm() && s.framesKey !== key) s.frame = 0; // a new mood or stage: its first frame
       s.framesKey = key;
       const frames = this._frames(s);
-      this._show(s, s.pet, frames[s.frame % frames.length]);
+      // A stage that changes while it is on show comes in edge-on (_swapFlip, at the scale below).
+      turning = s.stageSeen !== undefined && s.stageSeen !== stage && !calm() && s === this._slides?.[this._index];
+      if (!turning) this._show(s, s.pet, frames[s.frame % frames.length]);
     }
+    if (stage) s.stageSeen = stage;
     // Excitement lasts a while (rates.py EXCITED_MINUTES), but the bounce only
     // celebrates its start; after that, idle life adds an occasional hop.
     // The bounce celebrates the start once: one greethop, not a 10 s loop (care reactions, ship A),
@@ -597,7 +601,14 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     // coming out shorter); species.json "scale" sizes them back up, feet fixed.
     const drawn = sp.stages?.includes(stage) ? stage : sp.stage_fallback?.[stage];
     s.drawn = drawn;
-    s.pet.style.scale = String(sp.scale?.[drawn] || 1);
+    const petScale = String(sp.scale?.[drawn] || 1);
+    if (turning) {
+      this._swapFlip(s, () => {
+        const f = this._frames(s);
+        if (f.length) this._show(s, s.pet, f[s.frame % f.length]);
+        s.pet.style.scale = petScale;
+      });
+    } else s.pet.style.scale = petScale;
     if (!lightsScene) this._drapeSync(s, asleep && lightsOut && !away && !s.egg);
     // A heavy pet is drawn a little wider (gaps-seams 2c, owner: x1.06, only while heavy).
     const weight = Number.parseFloat(this._state(s, "sensor.weight")?.state);
@@ -754,12 +765,16 @@ class HatchPetCardLayout extends HatchPetCardBuild {
 
   // A page change draws as a handheld's menu does: a four-step wipe, sideways between the
   // pages (UX fix 2, F13). Reduced motion turns the animation off (the global rule).
+  // Closing is "up": the same wipe backwards. The sheet is already closed in the card's own state
+  // (show-status is off, the pat box and the bubble are back); the page only lingers, drawn over them
+  // and deaf to taps (.wipe-up), until the timer takes it off. A timer, not animationend: reduced
+  // motion runs no animation (and _toggleStatus does not start one then). An open cancels it (below).
   _wipe(s, kind = "side") {
-    s.status.classList.remove("wipe-side", "wipe-down");
+    s.status.classList.remove("wipe-side", "wipe-down", "wipe-up");
     void s.status.offsetWidth; // restart it
     s.status.classList.add(`wipe-${kind}`);
     clearTimeout(s.wipeTimer);
-    s.wipeTimer = setTimeout(() => s.status.classList.remove("wipe-side", "wipe-down"), 220);
+    s.wipeTimer = setTimeout(() => s.status.classList.remove("wipe-side", "wipe-down", "wipe-up"), kind === "up" ? WIPE_UP_MS : 220);
   }
 
   _toggleStatus(s, lay = false, name = false) {
@@ -769,6 +784,8 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     if (open) this._stopTyping(s); // the bubble hides: the line is said whole
     if (open && s.game) this._quitGame(s, null); // the sheet covers it: nobody plays it unseen
     s.screen.classList.toggle("show-status", open);
+    s.statusOpen = open; // the director's `status` busy owner reads it (device-alive 5.3)
+    if (!open) this._restOffer = null; // the sheet closed without a button: not an answer (§6.3)
     s.journal = false;
     s.finds = false;
     s.everyWorld = false;
@@ -787,6 +804,7 @@ class HatchPetCardLayout extends HatchPetCardBuild {
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       this._wipe(s, "down");
     }
+    if (!open && !calm() && s === this._slides[this._index]) this._wipe(s, "up");
     this._patSync(s); // back at once when the status closes, not at the next tick
     if (wasSettings) this._settingsReact(s); // closed from the sheet: the pet's word on a change
     else if (!open) {
@@ -854,14 +872,14 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     return waves;
   }
 
-  // A species' own act frames (species.json "acts", never the child) for a stage, or null.
+  // A species' own act frames (species.json "acts": a stage only where it is listed) for a stage, or null.
   // Every sprite is probed once, remembered in _poseOk by species/stage/act (not the
   // wave's keys). Unknown plays; a failed load calls `apply` once so the caller swaps
   // back to the frames it had, and later calls get null. Never a broken image. A call
   // while the probe is out (stored as undefined) starts no new one: its `apply` waits too.
   _actPose(sp, stage, speciesId, act, apply) {
     const stages = sp?.acts?.[act];
-    if (!act || !stage || stage === "child" || !(stages === true || (Array.isArray(stages) && stages.includes(stage)))) return null;
+    if (!act || !stage || !(stages === true || (Array.isArray(stages) && stages.includes(stage)))) return null;
     const names = [`${stage}_${act}_1`, `${stage}_${act}_2`];
     this._poseOk ||= new Map();
     this._poseWait ||= new Map();

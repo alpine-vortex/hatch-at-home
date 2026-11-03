@@ -1,4 +1,4 @@
-class HatchPetCardSeason extends HatchPetCardGames {
+class HatchPetCardSeason extends HatchPetCardBoard {
   // --- Seasons --------------------------------------------------------------
 
   // The season's pieces in the scene (behind the pet): a lantern by its side,

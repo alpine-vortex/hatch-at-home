@@ -623,6 +623,158 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     s.robotTimer = setTimeout(() => s.screen.classList.remove("fx-robot"), 6000);
   }
 
+  // --- The device-alive rain adapter (plan 2026-11-03, slice 3B) --------------------------
+  // The director and the wire mapping are src/card/interaction-director.js and device-fx.js;
+  // these methods only hand them the card's facts. The glass classes are all `dir-`.
+
+  // What the director asks the card, read fresh each time: the "screen effects here" switch, the OS
+  // reduced-motion setting, whether the server clock has been read, and the server's now (the moon).
+  _dirEnv() {
+    return { lcdOn: lcdOn(), calm: calm(), clockKnown: serverClockKnown(), now: serverNow() };
+  }
+
+  // On show: the selected slide, the card on screen, the tab visible, the power-on screen gone.
+  _dirShown(s) {
+    return s === this._slides?.[this._index] && this._visible !== false && !document.hidden && !this._booting;
+  }
+
+  // A house view arrived (the snapshot, or a diff): the ambient state, painted.
+  _dirSync(s) {
+    HATCH_DEVICE_FX.sync(this._director, s, s.house, this._dirEnv());
+  }
+
+  // A live {"fx": entry}: a pulse now, or the best one held for the first view. It never redraws.
+  _dirLive(s, entry) {
+    HATCH_DEVICE_FX.live(this._director, s, entry, this._dirEnv());
+  }
+
+  // The slide is on show again (selected, back in view, tab back, power-on over, or its snapshot
+  // just came in): paint the ambience, and on the first view only, play at most one echo. A
+  // snapshot on a slide already viewed (a reconnect) never echoes (M7). Not "viewed" until the
+  // channel has been heard: a slide shown before its snapshot waits for it.
+  _dirView(s) {
+    if (!s || !this._director || !this._dirShown(s)) return;
+    const env = this._dirEnv();
+    HATCH_DEVICE_FX.paint(this._director, s, env);
+    if (s.dirViewed || !s.subscribed) return;
+    s.dirViewed = true;
+    HATCH_DEVICE_FX.enter(this._director, s, s.dirRecent, env);
+    s.dirRecent = null;
+  }
+
+  // The tab went hidden, or the card scrolled away: nothing runs; the state is painted on return.
+  _dirPause() {
+    for (const s of this._slides || []) this._director?.cancel(s, "paused", ["shellImpulse"]);
+  }
+
+  // The "screen effects here" switch changed: off draws nothing at once (the CSS also hangs on
+  // `lcd-on`); on paints the ambience again.
+  _dirSwitch() {
+    for (const s of this._slides || []) {
+      if (!lcdOn()) {
+        this._director?.cancel(s, "switch", ["shellImpulse"]);
+        this._markEnd(s); // the rare glass mark goes with the switch
+      }
+      HATCH_DEVICE_FX.paint(this._director, s, this._dirEnv());
+    }
+  }
+
+  // The rare glass mark (slice 6; plan section 9). A generic paw, smudge or edge shadow on the glass of the pet on
+  // show, about one per 20 minutes of viewed time, in memory only (s.glassViewed, s.glassAt, s.glassSeen, s.markUntil,
+  // s.markLast, s.markTimer: nothing saved, nothing on the wire). Called by _tick for the selected slide with the clock
+  // (`now`) and the random (`choose`) as parameters, so a test needs no wait. Not a lease: it never writes s.dirEffect
+  // and offers the director nothing; it only reads it (inspect: a running onset or echo; isBusy: the busy owners).
+  _rareGlass(s, now = Date.now(), choose = pick) {
+    const M = HATCH_DEVICE_FX.MARK;
+    if (!s?.mark) return;
+    if (s.markUntil && now >= s.markUntil) { // the tick is the clock; the animation and a timer are the backstops
+      this._markEnd(s);
+      s.glassAt = now; // the wait starts again from here, at zero
+      return;
+    }
+    // Viewed time: only a tick on the selected slide, in view, lights on, no busy owner (asleep and the status sheet
+    // are owners). Off-slide, hidden or busy time is not credited, and the next tick after it credits nothing.
+    const viewed = this._dirShown(s) && lcdOn() && !s.empty && !s.reloading && !this._director?.isBusy(s);
+    if (!viewed) {
+      s.glassAt = 0;
+      return;
+    }
+    const credit = s.glassAt ? Math.max(0, Math.min(now - s.glassAt, M.creditMs)) : 0;
+    s.glassAt = now;
+    if (s.markUntil) return; // one at a time; the wait starts again when it is gone
+    s.glassViewed = (s.glassViewed || 0) + credit;
+    const first = !s.glassSeen;
+    s.glassSeen = true; // a mark is never drawn on the first view
+    if (first || s.glassViewed < M.everyMs) return;
+    // Due. Waits (still due) while reduced motion is on, an onset or echo is on the glass or the rim, or no spot is clear.
+    if (calm() || this._director?.inspect(s)?.tracks?.shellImpulse) return;
+    const kind = choose(M.kinds.filter((k) => k !== s.markLast));
+    const spot = M.spots.find((c) => this._markClear(s, kind, c));
+    if (!spot || !HATCH_DEVICE_FX.markDraw(s, kind, spot)) {
+      HATCH_DEVICE_FX.markClear(s);
+      return;
+    }
+    HATCH_DEVICE_FX.markStart(s);
+    s.markLast = kind;
+    s.glassViewed = 0;
+    s.markUntil = now + M.showMs + M.fadeMs;
+    clearTimeout(s.markTimer);
+    s.markTimer = setTimeout(() => this._markEnd(s), M.showMs + M.fadeMs + 500);
+  }
+
+  // Is this spot free of the pet and of everything read or pressed on the screen, at its shown size right now? The
+  // mark is laid out (not yet drawn: opacity 0 until dir-mark-on) and measured; a spot that touches one is skipped.
+  _markClear(s, kind, spot) {
+    if (!HATCH_DEVICE_FX.markDraw(s, kind, spot)) return false;
+    const box = s.mark.getBoundingClientRect();
+    if (!box.width || !box.height) return false;
+    const hit = (el) => {
+      if (!el || el.hidden) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && r.left < box.right && r.right > box.left && r.top < box.bottom && r.bottom > box.top;
+    };
+    const watch = [s.pet, s.attention, s.bubble, s.pat, s.request, s.basket, s.gameBox, s.perch];
+    return !watch.some(hit);
+  }
+
+  // The mark is gone: its classes, its timer and the time it was showing. `full` (a forgotten pet) also zeroes the
+  // counter and the first-view flag, so another pet on the slide inherits nothing; a swipe or the switch off does not.
+  _markEnd(s, full = false) {
+    if (!s) return;
+    HATCH_DEVICE_FX.markClear(s);
+    clearTimeout(s.markTimer);
+    s.markTimer = 0;
+    s.markUntil = 0;
+    if (full) {
+      s.glassViewed = 0;
+      s.glassAt = 0;
+      s.glassSeen = false;
+      s.markLast = "";
+    }
+  }
+
+  // A rim cue for a toy's press (slice 3C): the data-action names it (feed, play, clean, lights;
+  // anything else has none). It is the press's own beat, called by the press (_press, _startGame) ahead of
+  // a scene's start and by a tuck's end (_sceneEnd), never from the cap's classes; _tapped runs after
+  // _sceneStart, when this press's own scene already counts as running and would win. The adapter makes
+  // no sound and no haptic, and offers nothing under reduced motion.
+  _rimCue(s, action) {
+    if (!s || !this._director) return;
+    this._rimSeq = (this._rimSeq || 0) + 1;
+    HATCH_DEVICE_FX.rim(this._director, s, action, `rim-${this._rimSeq}`, this._dirEnv());
+  }
+
+  // A rim cue for a moment the card has just handled (slice 4D; plan 6.6c): the doorbell, the appliance's tick (the
+  // kind says the lamp), the vacuum's rotor, the heating's or the cooling's wash. Called from the same callback as the
+  // moment's own screen effect (the _houseFx or _robotFx call it sits beside), never on its own and never from the idle
+  // _robotFx: one cue per event. A game (the handler breaks before both) and a catch-up (no callback) never reach it.
+  // A moment on a slide that is not on show has no cue to play later. No sound, no haptic.
+  _momentCue(s, moment, variant) {
+    if (!s || !this._director || !this._dirShown(s)) return;
+    this._rimSeq = (this._rimSeq || 0) + 1;
+    HATCH_DEVICE_FX.offerMoment(this._director, s, moment, `moment-${this._rimSeq}`, this._dirEnv(), variant);
+  }
+
   _sparkle(s) {
     const ring = document.createElement("span");
     ring.className = "burst big";

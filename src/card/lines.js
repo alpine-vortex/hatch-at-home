@@ -55,6 +55,10 @@ const MEMORY_LABELS = {
 // Idle life: something small every so often when nothing else is going on.
 const IDLE_MIN_MS = 20000;
 const IDLE_SPREAD_MS = 25000;
+// Species nature N2: the most a typed or untyped teen or adult says its habit's action line (a roll
+// made only on an opted-in _lines call, after the persona's coin has failed).
+const SPECIES_LINE_ODDS = 0.25;
+const IDLE_BODY_MOVES = new Set(["look", "wander", "perk", "settle", "munch", "rock"]); // what _idleMove plays
 // Species nature (docs/plan-2026-11-02-species-nature.md): four facts in species.json, flavour only.
 // A missing block or an unknown value is no nature at all, never an error. Pace is not a key:
 // it comes from voice.pace (40 or more quick, 29 or less slow, else steady).

@@ -256,7 +256,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
       return;
     }
     const friend = !rare && this._visitFriendLine(s, v);
-    const { text } = rare || friend ? { text: rare || friend } : this._lines(s, "visit", pick([...VISIT_LINES, ...v.lines]));
+    const { text } = rare || friend ? { text: rare || friend } : this._lines(s, "visit", pick([...VISIT_LINES, ...v.lines]), undefined, { nature: "visit" });
     this._line(s, FLAVOUR, text, 3000);
   }
 
@@ -361,6 +361,14 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
       if (img.getAttribute("src") !== src) img.src = src;
     }
     if (b.hidden === show) b.hidden = !show;
+    // A find lands: the basket pops in with its first and rocks once; a fuller one only rocks. Seen live
+    // (not on load: basketSeen starts undefined), and not under reduced motion.
+    const before = s.basketSeen;
+    s.basketSeen = n;
+    if (show && before !== undefined && n > before && !calm()) {
+      b.classList.remove("lands", "lands-more");
+      this._animate(s, b, before === 0 ? "lands" : "lands-more", 1000);
+    }
     const live = show && this._basketLive(s);
     b.classList.toggle("idle", !live);
     b.tabIndex = live ? 0 : -1;
@@ -469,7 +477,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
     const normal = who ? FIND_LINES.left[0](a, who)
       : f.new ? FIND_LINES.fresh[0](a)
         : dailyPick(FIND_LINES.find, `${f.world}|${f.id}`)(a);
-    return this._lines(s, "find", normal).text;
+    return this._lines(s, "find", normal, undefined, { nature: who || f.new ? null : "find" }).text;
   }
 
   _revealEnd(s) {

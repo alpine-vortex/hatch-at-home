@@ -222,6 +222,7 @@ test("no heart on a shared screen or with one pet; the row needs two pets", () =
     _hass: { user: { is_admin: admin } },
     _slides: Array.from({ length: n }, () => ({ ids: {} })),
     _linkName: () => "Pip",
+    _restOfferRow: () => "", // R3's offer: tests/js/rest_offer.test.js
   });
   const s = { mine: { open_on: true, house_open_on: false } };
   const two = ctx.out.rows(card(2, false), s);
@@ -246,7 +247,7 @@ test("no heart on a shared screen or with one pet; the row needs two pets", () =
 });
 
 test("forget my data takes the choice, its copy and the heart", () => {
-  assert.match(src, /for \(const key of \[[^\]]*"open_on"\]\) this\._setMine\(key, false\)/);
+  assert.match(src, /for \(const key of \[[^\]]*"open_on"[^\]]*\]\) this\._setMine\(key, false\)/);
   assert.match(src, /localStorage\.removeItem\(openOnKey\(user, false\)\)/);
   const { openOnKey } = load();
   assert.strictEqual(openOnKey("u1", false), "hatch-open-u1");

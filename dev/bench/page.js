@@ -149,7 +149,9 @@
       // The card asks once for a server clock reading; none arrives here.
       connection: { subscribeEvents: noop, subscribeMessage: noop },
       // `digReplies`: play_game answers, in order, for a `game: "dig"` shot (the server's dig is random).
+      // `hopReply`: the `hop` service's `board` answer (a canned reply from hop.py, see hopBoard).
       callService: async (domain, service) => ({ response: service === "visit" ? (shot.visit || { counted: true })
+        : service === "hop" ? (shot.hopReply || {})
         : service === "play_game" && shot.digReplies?.length ? shot.digReplies.shift() : {} }),
       callWS: async (msg) => {
         if (msg.type === "virtual_pet/photos") return { photos: [] };
@@ -217,6 +219,90 @@
         a.currentTime = 300;
       }
     }
+  }
+
+  // `deviceFx`: see the call in mount. Everything goes through the card's methods (_dirSync, _channel,
+  // _dirView), the clock is read (noteServerTime) as a snapshot's `now` would.
+  function deviceFxShot(card, s, shot) {
+    const fx = shot.deviceFx;
+    const key = fx.key || "rain"; // the weather key the onset and the echo are about (device-alive 4B)
+    noteServerTime(new Date(shot.time).toISOString());
+    // `fx.kinds` names the wire kinds when they are not `<key>_started`/`_stopped` (device-alive 4D: lights_on/lights_off).
+    const kindOf = (kind) => (fx.kinds ? fx.kinds[kind === "start" ? 0 : 1] : `${key}_${kind === "start" ? "started" : "stopped"}`);
+    const entry = (kind, agoMs, n) => ({ id: `bench-${n}`, kind: kindOf(kind), scope: "house",
+      occurred_at: new Date(Date.parse(shot.time) - agoMs).toISOString(), expires_at: new Date(Date.parse(shot.time) - agoMs + 90000).toISOString() });
+    s.subscribed = true;
+    s.house = { ...(s.house || {}) };
+    // `current` is the house's device_fx.current as the server sends it ({snow: true, wind: false}); `rain` is the
+    // 3B shorthand. Neither: no device_fx at all (nothing to paint, the moon aside).
+    const current = { ...(fx.rain !== undefined ? { rain: fx.rain } : {}), ...(fx.current || {}) };
+    if (Object.keys(current).length) s.house.device_fx = { version: 1, current };
+    card._dirSync(s);
+    if (fx.echo) {
+      s.dirViewed = false;
+      s.dirRecent = [entry(fx.echo, 20000, 1)];
+      card._dirView(s);
+    } else {
+      s.dirViewed = true;
+      if (fx.onset) card._channel(s, { fx: entry(fx.onset, 0, 2) });
+    }
+    // the glass, and the rim too (lights and the fireplace paint and cue on the rim, 4D)
+    for (const a of [...s.glass.getAnimations({ subtree: true }), ...s.rim.getAnimations({ subtree: true })]) {
+      if (typeof CSSTransition !== "undefined" && a instanceof CSSTransition) a.finish();
+      else { a.pause(); a.currentTime = fx.at ?? 600; }
+    }
+    window.bench.info = { glass: s.glass.className, rim: s.rim.className, effect: s.dirEffect || 0, canRender: card._director.inspect(s)?.tracks || null };
+  }
+
+  // `glassMark` (device-alive slice 6): {kind: "paw"|"smudge"|"edge", spot: "bl"|"br"|"ml"|"mr", at}. The rare glass mark through
+  // the card's own gate (_rareGlass, due, the pick fixed to the kind): the first spot clear of the pet, or with a `spot` that spot. Its `dir-mark-life` is paused `at` ms in (default 2000), so a frame is the same
+  // every run.
+  function glassMarkShot(card, s, shot) {
+    const g = shot.glassMark;
+    const want = `dir-mark-${g.kind}`;
+    // The card's module keeps HATCH_DEVICE_FX out of reach: a spot is forced by answering the gate's own question for it.
+    const realClear = card._markClear;
+    if (g.spot) card._markClear = function (sl, k, c) { realClear.call(this, sl, k, c); return c === `dir-mark-${g.spot}`; };
+    s.glassSeen = true;
+    s.glassViewed = 3600000;
+    card._rareGlass(s, Date.now(), (l) => l.find((k) => k === want) || l[0]);
+    card._markClear = realClear;
+    for (const a of s.mark.getAnimations()) {
+      a.pause();
+      a.currentTime = g.at ?? 2000;
+    }
+    const r = (el) => { const b = el.getBoundingClientRect(); return [b.left, b.top, b.right, b.bottom].map(Math.round); };
+    window.bench.info = { mark: s.mark.className, drawn: !!s.markUntil, box: r(s.mark), pet: r(s.pet), screen: r(s.screen), canRender: card._director.inspect(s)?.tracks || null };
+  }
+
+  // `rimCue` (device-alive 3C): {action, at}. The card's own `_rimCue` for the toy's data-action (feed, play,
+  // clean, lights; medicine and the rest have none), the rim's animations paused `at` ms in (default 500), so a
+  // frame is the same every run. After a `care` scene is seeked, a running scene wins (no cue).
+  function rimShot(card, s, shot) {
+    const cue = shot.rimCue;
+    s.subscribed = true;
+    card._rimCue(s, cue.action);
+    for (const a of s.rim.getAnimations({ subtree: true })) {
+      if (typeof CSSTransition !== "undefined" && a instanceof CSSTransition) a.finish();
+      else { a.pause(); a.currentTime = cue.at ?? 500; }
+    }
+    (window.bench.info ||= {}).rim = { classes: s.rim.className, effect: s.dirEffect || 0, scene: s.scene?.kind || null,
+      busy: card._director.busyOwners(s) };
+  }
+
+  // `momentCue` (device-alive 4D): {moment, variant, at}. The card's own `_momentCue` (what the doorbell, the appliance,
+  // the vacuum and the heating's wash call from their moment's callback), the rim layer's animations paused `at` ms in
+  // (default 500). Use `clip: "device"`. The switch comes from `lcd`, reduced motion from `motion`.
+  function momentShot(card, s, shot) {
+    const cue = shot.momentCue;
+    s.subscribed = true;
+    s.dirViewed = true;
+    card._momentCue(s, cue.moment, cue.variant);
+    for (const a of s.rim.getAnimations({ subtree: true })) {
+      if (typeof CSSTransition !== "undefined" && a instanceof CSSTransition) a.finish();
+      else { a.pause(); a.currentTime = cue.at ?? 500; }
+    }
+    (window.bench.info ||= {}).rim = { classes: s.rim.className, effect: s.dirEffect || 0, busy: card._director.busyOwners(s) };
   }
 
   // `look`: a look played over time by the card's own tick (the driver moves the pinned
@@ -530,7 +616,7 @@
     const beat = vis.beat || "greet";
     if (beat === "leave") V.el.classList.replace("in", "out");
     const random = Math.random;
-    if (vis.friend) Math.random = () => 0;
+    if (vis.friend || vis.species) Math.random = () => 0; // `species` (N2): the species roll taken (an untyped pet; the line is the first cell)
     try {
       if (beat === "greet") card._visitorGreet(s, v);
     } finally {
@@ -658,6 +744,63 @@
     };
   }
 
+  // Hop of the Day (ship 2b). `board: {fixture, moves, take, lit, special, reply}`: the fixture
+  // (dev/bench/hop-boards.json, built by scripts/hop_bench_boards.py from hop.py) names a canned
+  // `board` reply; `moves` is "win", "tidy" or move letters, played through the card's own
+  // _hopMove (`take`: only the first n); `lit` a cell lit (the first tap of a two-tap commit);
+  // `special` the special key armed; `reply` replaces the fixture's (a malformed one).
+  let HOP_FIXTURES;
+  async function hopBoard(shot) {
+    HOP_FIXTURES ||= await (await realFetch("/dev/bench/hop-boards.json")).json();
+    for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-hop|")) localStorage.removeItem(k); // no parked list from a shot before
+    const b = shot.board || {};
+    const fx = HOP_FIXTURES.boards[b.fixture || "hop-adult"];
+    if (!fx) throw new Error(`no hop fixture ${b.fixture}`);
+    shot.hopReply = b.reply || fx.reply;
+    return fx;
+  }
+  // What the shot measured, into the shot's .json: the cell and key sizes the board drew, and the
+  // picker's buttons and the Hop row's rects (overlap with the close button, the prompt, each other).
+  function hopInfo(card, s) {
+    const r = (el) => el && !el.hidden && el.getClientRects().length ? el.getBoundingClientRect() : null;
+    const box = s.gameBox.getBoundingClientRect();
+    const rel = (q) => q && [q.left - box.left, q.top - box.top, q.right - box.left, q.bottom - box.top].map((n) => Math.round(n * 10) / 10);
+    const hit = (a, b) => a && b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const info = { box: [Math.round(box.width * 10) / 10, Math.round(box.height * 10) / 10] };
+    if (s.game?.kind === "hop") {
+      info.cell = s.game.cell;
+      info.key = Math.round(s.gameBox.querySelector(".hk").getBoundingClientRect().width * 10) / 10;
+      info.oneTap = s.game.cell >= 44;
+      info.grid = rel(r(s.gameBox.querySelector(".hgrid")));
+      info.keys = rel(r(s.gameBox.querySelector(".hkeys")));
+      info.close = rel(r(s.gameBox.querySelector(".gx")));
+      info.moves = s.game.moves.length;
+      info.uses = s.game.st.uses;
+      info.done = s.game.done;
+      info.tidy = s.game.tidy;
+      info.keyState = Object.fromEntries([...s.gameBox.querySelectorAll(".hk")].map((k) => [k.dataset.k,
+        `${k.getAttribute("aria-disabled") === "true" ? "off" : "on"}: ${k.getAttribute("aria-label")}`]));
+    } else {
+      const gx = r(s.gameBox.querySelector(".gx"));
+      const bubble = r(s.bubble);
+      const row = r(s.gameBox.querySelector(".ghop"));
+      const games = [...s.gameBox.querySelectorAll(".gpick button")].map(r);
+      info.games = games.map(rel);
+      info.row = rel(row);
+      info.rowClass = row ? s.gameBox.querySelector(".ghop").className : null;
+      info.pick = s.gameBox.querySelector(".gpick").className;
+      info.overlaps = [];
+      const all = [["close", gx], ["prompt", bubble], ["row", row], ...games.map((g, i) => [`game${i}`, g])];
+      for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+        if (all[i][0] === "row" || all[j][0] === "row" || all[i][0] === "close" || all[i][0] === "prompt") {
+          if (hit(all[i][1], all[j][1])) info.overlaps.push(`${all[i][0]}+${all[j][0]}`);
+        }
+      }
+      info.offFoot = games.concat(row).filter(Boolean).some((q) => q.bottom > box.bottom + 0.5);
+    }
+    return info;
+  }
+
   let FINDS_DEFAULT;
   async function mount(shot) {
     await customElements.whenDefined("hatch-pet-card");
@@ -691,9 +834,18 @@
     if (FINDS_DEFAULT === undefined) FINDS_DEFAULT = Card.findsShown;
     Card.findsShown = shot.findsShown === undefined ? FINDS_DEFAULT : !!shot.findsShown;
 
+    if (shot.view === "board") await hopBoard(shot);
     const card = document.createElement("hatch-pet-card");
-    card.setConfig({ seasonal: shot.season === "auto" ? undefined : shot.season, ...(shot.config || {}) });
+    // `hop: true` (and any board shot) turns the YAML-only experimental_hop flag on.
+    card.setConfig({ seasonal: shot.season === "auto" ? undefined : shot.season,
+      ...(shot.hop || shot.view === "board" ? { experimental_hop: true } : {}), ...(shot.config || {}) });
     card.hass = buildHass(shot, WORLDS);
+    // The moon (device-alive 4B) follows the card's server clock, and the default pinned day is a real new
+    // moon, so every shot would carry the halo. The bench holds it off unless a shot asks: `moon: "full"` or
+    // `"new"` pins a full or a new day for the card's own `_dirEnv` (the part and the CSS are the card's).
+    const moonAt = { full: "2026-11-24T12:00:00Z", new: "2026-11-09T12:00:00Z" }[shot.moon];
+    const dirEnv = card._dirEnv.bind(card);
+    card._dirEnv = () => ({ ...dirEnv(), now: moonAt ? Date.parse(moonAt) : NaN });
     stage.append(card);
     await settled(card);
     await document.fonts.ready;
@@ -724,6 +876,17 @@
       let n = 0;
       // `idle.draw`: the draw after the delay, for the sky reaction's line pick (0 the first line, .99 the second).
       Math.random = () => { const i = n++; return i === 1 && shot.idle.draw !== undefined ? shot.idle.draw : i < 2 ? 0 : 0.1; };
+      // `idle.species` (species nature N2): the species' own action line. The persona's coin is forced to fail and the
+      // roll to pass: the delay 0, the move 0 (mumble), [the neighbour roll, with another pet on the shelf: over the odds],
+      // pick(lines) 0.1, [the coin 0.9, a typed pet only], the roll 0.1, then `idle.draw` (0 the first cell, .99 the second).
+      if (shot.idle.species) {
+        const seq = [0, 0];
+        if (card._slides.length > 1) seq.push(0.99);
+        seq.push(0.1);
+        if (card._persona(cur)?.idle) seq.push(0.9);
+        seq.push(0.1, shot.idle.draw ?? 0);
+        Math.random = () => (n < seq.length ? seq[n++] : (n++, 0.5));
+      }
       Object.assign(cur, { moodState: shot.idle.mood || "content", nextIdle: 1, sayUntil: 0, poseUntil: 0, movingUntil: 0 });
       card._idle(cur);
       Math.random = real;
@@ -747,6 +910,31 @@
       const over = (i) => (Array.isArray(shot.mine) ? shot.mine[i] || {} : typeof shot.mine === "object" ? shot.mine : {});
       slides.forEach((s, i) => { s.mine = { ...mine, ...over(i) }; });
     }
+    // `textStep`: the big day's (or weekend's) typed step through the card's own
+    // _askTextStart and _askText, its line in the bubble and the box held (no timer):
+    // {kind, day, tag}. With mine's memory_on and memory_allowed the box has memory's tag
+    // chips (plan M2), `tag` picked by a tap.
+    if (shot.textStep) {
+      const ts = shot.textStep;
+      card._followOk = true;
+      card._memoryOn = !!cur.mine?.memory_on;
+      cur.memoryAllowed = !!cur.mine?.memory_allowed;
+      card._askTextStart(cur, cur.ids?.["sensor.life_stage"], ts.kind || "big_day", ts.day || null);
+      const step = cur.textStep;
+      const line = step && cur.queue?.pop();
+      if (step) {
+        card._write(cur, line.text, 1e9);
+        card._askText(cur, step);
+        clearTimeout(step.timer);
+        step.until = Date.now() + 1e9;
+        const chip = ts.tag && cur.screen.querySelector(`.askday button.tag[data-tag="${ts.tag}"]`);
+        if (chip) {
+          chip.click();
+          chip.classList.remove("tap-feedback", "tapped", "pressed");
+        }
+        card._askPlace(cur, step.box);
+      }
+    }
     // The house view the channel would send (`house`, an object over it), and `basket`:
     // how many finds wait (house.basket, 0-3), so the basket shows through _basketSync.
     if (shot.house || shot.basket !== undefined) {
@@ -759,6 +947,14 @@
     // A seasonal costume put on through the card's own _costume: {season, art, frame}.
     // The seat it used is kept in bench.info (bench.js writes it beside the shot).
     window.bench.info = null;
+    // `deviceFx` (device-alive 3B, 4B): the weather on the glass, through the card's own adapter and channel.
+    // {rain: bool, current: {snow: bool, ...}, key: "snow", onset: "start"|"end", echo: "start"|"end", at: ms}.
+    // `rain` and `current` are the house's device_fx.current (missing: none; `key` names the weather the
+    // onset and the echo are about, rain by default). The moon follows the shot's `time`; `onset` a live {"fx"} entry with the slide already viewed;
+    // `echo` a ring entry from 20 s before, played at the slide's first view. `at` pauses the
+    // glass's animation that many ms in (default 600), so a frame is the same every run.
+    if (shot.deviceFx) deviceFxShot(card, cur, shot);
+    if (shot.glassMark) glassMarkShot(card, cur, shot);
     if (shot.costume) await dress(card, cur, shot.costume);
     if (["status", "settings", "picker"].includes(shot.view)) root.querySelector(".statusbtn").click();
     if (shot.view === "settings" || shot.view === "picker") root.querySelector(".gear").click();
@@ -826,6 +1022,29 @@
       if (shot.scrollEnd) cur.status.scrollTop = cur.status.scrollHeight; // the foot's links
     }
     if (shot.view === "games") card._startGame(cur, cur.buttons.play); // the button itself can be disabled
+    // `pickWait`: ms to hold the picker, so a long line has given way to "pick a game!" (2 s) before the shot.
+    if (shot.view === "games" && shot.pickWait) await new Promise((r) => setTimeout(r, shot.pickWait));
+    if (shot.view === "board") {
+      const fx = await hopBoard(shot);
+      card._startGame(cur, cur.buttons.play);
+      await card._hopOpen(cur);
+      const b = shot.board || {};
+      const list = b.moves === "win" ? fx.win : b.moves === "tidy" ? fx.tidy : b.moves || "";
+      const cells = [...list].map((ch) => HATCH_HOP_LETTERS.indexOf(ch)).slice(0, b.take ?? 1e9);
+      // `spent`: stop at the first move the winning list pays a use for (none: all of it).
+      for (const c of cells) {
+        const uses = cur.game.st.uses;
+        card._hopMove(cur, c);
+        if (b.spent && cur.game.st.uses < uses) break;
+      }
+      if (b.special) { cur.game.special = true; }
+      if (b.lit === "first") { // the first legal cell: the board's first tap of a two-tap commit
+        const t = card._hopTargets(cur.game);
+        cur.game.lit = [...t.plain, ...t.special][0];
+      } else if (b.lit !== undefined) cur.game.lit = b.lit;
+      if (b.special || b.lit !== undefined) card._hopDraw(cur, false);
+      card._hopPlace(cur, false); // the piece is on its cell, not on its way
+    }
     // `game: "dig"`: a Berry dig started through the card's own picker, then `digTaps`
     // ("dig" or "keep") played, each answered by the next of `digReplies` (scripted).
     // Held on the last reply, before its pause (a bee still shows).
@@ -844,6 +1063,13 @@
     }
     // `classes`: screen states the fake hass cannot pin (`lit`, `faded`...), put on last.
     for (const c of shot.classes || []) cur.screen.classList.add(c);
+    // `capClasses`: `{feed: ["pressed"], clean: ["failed"]}`, classes on a toy button by action key (`lights`
+    // too): the press states (`pressed`, `pending`, `failed`) the bench cannot hold with `:active`.
+    for (const [key, list] of Object.entries(shot.capClasses || {})) {
+      cur.buttons[key]?.classList.add(...list);
+      // `pending` pulses forever: held at its first frame, so a shot is the same every run.
+      for (const a of cur.buttons[key]?.querySelector(".cap")?.getAnimations() || []) { a.pause(); a.currentTime = 0; }
+    }
     // `petClasses`: classes on the pet itself (a reaction such as `droop`); `petAt` pauses
     // its animation that many ms in, so a mid-motion frame is the same every run.
     // `visitor`: one world visit pinned (see visitorShot).
@@ -869,6 +1095,30 @@
         a.pause();
         a.currentTime = shot.petAt;
       }
+    }
+    // `statusClose`: ms. The status sheet (`view: "status"`) closed through the card's own _toggleStatus, its
+    // wipe-up paused that many ms in (motion ship 2). Needs `view: "status"`; with `motion: reduce` it just closes.
+    if (shot.statusClose !== undefined) {
+      card._toggleStatus(cur);
+      clearTimeout(cur.wipeTimer); // the card's 170 ms timer would take the sheet off before the shot
+      for (const a of cur.status.getAnimations()) { a.pause(); a.currentTime = shot.statusClose; }
+    }
+    // `gnumFlip`: `{at, win}` (use with `game: "higher_lower"`): the counter as the next number comes in, through
+    // the card's own _flipNumber, paused `at` ms into its .16 s. The swap is a real timer at 80 ms: the bench
+    // waits it out, then shows the old digit for `at` under 80 and the new one from 80.
+    if (shot.gnumFlip) {
+      const old = cur.gameNum.innerHTML;
+      card._flipNumber(cur, (Number(cur.gameNum.dataset.n) % 9) + 1, !!shot.gnumFlip.win);
+      await new Promise((r) => setTimeout(r, 140));
+      if (shot.gnumFlip.at < 80 && shot.motion !== "reduce") cur.gameNum.innerHTML = old;
+      cur.gameNum.style.animation = getComputedStyle(cur.gameNum).animation; // outlives the card's class timer
+      for (const a of cur.gameNum.getAnimations()) { a.pause(); a.currentTime = shot.gnumFlip.at; }
+    }
+    // `basketLands`: `{at, more}` (with `basket: n`): a find landing, the basket's pop and rock paused `at` ms in
+    // (`more`: a fuller basket, the rock alone). Not under `motion: reduce` (the basket just shows).
+    if (shot.basketLands) {
+      cur.basket.classList.add(shot.basketLands.more ? "lands-more" : "lands");
+      for (const a of cur.basket.getAnimations()) { a.pause(); a.currentTime = shot.basketLands.at; }
     }
     // `attentionAt`: the call icon as it arrives (`.arrive`, the pop then the pulse), paused that many ms in.
     if (shot.attentionAt !== undefined) {
@@ -898,6 +1148,8 @@
     }
     // `care`: a care scene started through _sceneStart, paused and seeked to `careAt` ms (careSeek).
     if (shot.care) await careSeek(card, cur, shot);
+    if (shot.rimCue) rimShot(card, cur, shot);
+    if (shot.momentCue) momentShot(card, cur, shot);
     // `bowlStep`: the feed bowl on the floor at step 0 (full) to 3 of its clip, through the card's own
     // _bowlClip (plan care-reactions 5.1); `bowlRim` stands in for species.json "bowl_rim".
     if (shot.bowlStep !== undefined) {
@@ -965,13 +1217,15 @@
       if (a instanceof CSSTransition && !(shot.petAt !== undefined && a.effect.target === cur.pet)) a.finish();
     }
     // The status's LCD wipes (UX fix 2, F13) run to their end too: a shot never catches a half-drawn page.
-    for (const a of root.getAnimations()) if (/^lcd-wipe/.test(a.animationName || "")) a.finish();
+    for (const a of root.getAnimations()) if (/^lcd-wipe/.test(a.animationName || "") && !(shot.statusClose !== undefined && a.animationName === "lcd-wipe-up")) a.finish();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     await settled(card);
     window.bench.screenClass = cur.screen.className;
+    if (shot.view === "board" || shot.view === "games") (window.bench.info ||= {}).hop = hopInfo(card, cur);
     if (shot.lightsAlign) (window.bench.info ||= {}).lights = lightsInfo(cur);
     return true;
   }
 
+  const HATCH_HOP_LETTERS = "abcdefghijklmnopqrstuvwx";
   window.bench = { mount, step, lookEnd };
 })();

@@ -364,7 +364,7 @@ up to four parts, in this order:
   younger and older readers.
 - Every tap answers straight away: the button sinks, a ring pops out, the pet perks up
   and phones give a tiny vibration. Then the real reaction follows (a food bowl, a
-  sparkle, or a refusal like "i'm full!"). If HA rejects the press, the button shakes
+  sparkle, or a refusal like "i'm full!"). If HA rejects the press, the button goes dull for a moment
   and the pet says so.
 - The toy buttons press the pet's button entities, so anything you do here works
   from automations and voice too. A button glows when the pet needs it, for example
@@ -400,6 +400,10 @@ pet; it's only how the screen looks.
   dashes aside in a game. Only on the pet you're looking at, and
   never with reduced motion. The same "screen effects here" switch turns it off.
   It's off on a mono screen ("mono screen" in the settings), which keeps the grid.
+- **The press.** A toy button's cap sinks when you press it and springs back up a
+  little (each care has its own bounce), dims while the press is on its way to Home
+  Assistant, and returns dull if the press is rejected. With reduced motion on, it
+  only dims and sinks, without the spring.
 - **The backlight.** Every device has a little button on its shell: a nub on the
   egg's shoulder, the tank lid's right grip, a lamp on the house's chimney, the
   porthole's top-right rivet, a dewdrop on the lily pad's rim and a star on the
@@ -608,8 +612,8 @@ everyone's records and memory too).
 
 **Memory (off unless you turn it on).** With memory on, the pets keep a few
 things you told them for longer than a day, so they can bring them up later: the
-picks you made (tonight's dream, a game, a rain-or-sun guess, a great day) and, later,
-which kind of big day or weekend you had, each with its date. Only choices from fixed
+picks you made (tonight's dream, a game, a rain-or-sun guess, a great day) and which
+kind of big day or weekend you said was coming, each with its date. Only choices from fixed
 lists and dates: never typed words, never anyone's name, no times or places, and no
 tough days. It is per person and one switch for every pet, kept in the people store,
 until you forget it. Turn it on with "remember me" in settings (the gear on the status
@@ -619,6 +623,16 @@ on, so you can always turn it off). Turning it off
 record that they asked whether to remember (a yes-or-no and up to seven dates the question
 was offered, nothing you told them), so they don't ask again.
 
+**Tags.** With memory on, the box under "what is it?" (after a "yes" to "anything big
+this week?" or "anything fun this weekend?") also asks "what kind of day is it?", with
+one tag to pick: exam, match, show, trip, party, lesson, work thing or something else
+("no tag" is the default, and nothing is kept for it). The tag is kept with the day:
+the day you picked for a big day, the Saturday for a weekend; never what you typed. It
+rides on the same answer as the "yes", so a tag the pet can't keep (memory turned off
+on another screen, or this pet's option off) is just left out, and the big day stays.
+Tags are kept until you forget them, at most 120 (the oldest go first), and go with the
+rest of memory. "work thing" and "something else" are never said back.
+
 Once you and a pet are close (bond level 4), it asks once, on your own screen and only
 where its option allows it: "can i remember what you tell me?". "yes" turns memory on,
 as the settings row does; "not now" is kept as your answer. Either way no pet asks
@@ -627,8 +641,19 @@ again, and the settings row still works. It isn't asked while baby talk is on.
 **What the pets say from memory.** Only on your own screen, only while memory is on and
 that pet allows it, one a look and after the pet's other news: the morning after you
 told it your day was great ("yesterday was a great one! ♥"); a dream, guess or game you
-keep picking (at most once a week each, and only after a new pick); and, once, the first
-time a favourite weather or season you told it with memory on comes back. A shared
+keep picking (at most once a week each, and only after a new pick); once, the first
+time a favourite weather or season you told it with memory on comes back; and, from a
+big day's tag, a week after that day ("thinking of the show you told me about") and a
+year after it ("a year ago you told me about a show ♥", not for an exam). Each of those
+two is tied to its one day: with no look at the pet between 11:00 and 20:00 that day,
+it is skipped. If three of the last five big days you tagged as a match, a show or a
+lesson fell on the same weekday, the pet may wish you well on the eve of the next one
+("maybe a match tomorrow! go you ♥"), skipped the same way, and one such remark a month at
+most across all three; once the latest of them is more than eight weeks old, the pattern has
+ended. It is worked out from the tags kept and nothing else, so
+forgetting a tag can end it. On the day you have been friends for a whole year, the pet's line may
+name the most recent big day you tagged in that year ("a whole year! you told me about
+a show"). They say "you told me", never that the day happened, and never count. A shared
 screen never gets these: they come with the pet's private news, which the card asks
 for only on a screen that isn't shared. That is the card's own check, since the server
 can't see the shared-screen switch. "great" is kept only while memory is on (and never
@@ -652,6 +677,8 @@ Things to know:
   Assistant logs every message, the picks sent to the pets included.
 - After a downgrade to a version without memory, the record stays on disk, unread and
   no longer capped, until "forget my data" or a newer version.
+- Downgrading to a version before this one drops "exam" tags (and any tag the older list
+  lacks) the next time memory is saved.
 - **For admins:** "Pets may remember what people tell them" in each pet's People and
   privacy options (on by default) lets that pet keep, say and ask about memory. Off on
   one pet only quiets that pet. Off on every pet erases everyone's memory at once,
@@ -719,6 +746,13 @@ for hours. The sitter's freeze (nobody home) wins while it lasts; resting carrie
 when someone comes home. Every pet may rest at once (a holiday automation can flip
 the switches); nothing wakes it by itself. An egg can't rest, because it would never
 hatch.
+
+The first time you pick which pet your card opens on, and you have other pets that
+can rest, the settings sheet asks whether to rest them. "rest them" switches resting
+on for the other pets on that card; "not now" leaves them as they are. It asks until
+you answer, then not again ("Forget my data" starts it fresh). Resting pets won't
+get any hungrier and don't grow up until they're back, and anyone can wake one from
+its own settings.
 
 All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 
@@ -1148,7 +1182,8 @@ can open a card can already read your media players). What it notices about some
 they've been, their alarm and their answers are never an event: they go only to
 that person, in `virtual_pet.visit`'s response, and answers come in through the
 websocket command `virtual_pet/answer`, which (unlike a service call) puts nothing
-on the event bus.
+on the event bus. The visit service's door notes can carry a tag key (for example
+`"exam"`), so an automation that saves the response can see it.
 
 Events fired during a fast-forward carry `simulated: true`.
 

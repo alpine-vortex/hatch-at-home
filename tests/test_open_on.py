@@ -23,7 +23,7 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.virtual_pet import async_remove_entry, model
 from custom_components.virtual_pet.const import DOMAIN
-from custom_components.virtual_pet.people import STORE_KEY as PEOPLE_KEY
+from custom_components.virtual_pet.people import STORE_KEY as PEOPLE_KEY, People
 
 from .test_channel import command, pushed, subscribe
 from .test_forget import a_user, people_store, saved_people
@@ -149,17 +149,29 @@ async def test_mine_says_it_only_to_its_person_and_never_on_a_shared_screen(
     wall = await hass_ws_client(hass, token)
     pip_wall = await subscribe(wall, shared=True)
     assert pip_me["mine"]["open_on"] is False and bo_me["mine"]["open_on"] is False
+    assert (
+        pip_me["mine"]["has_open_on"] is False and bo_me["mine"]["has_open_on"] is False
+    )
     # An admin's own view says where shared screens open (their row); no one
     # else's does, and a personal screen's house view never does.
     assert pip_me["mine"]["house_open_on"] is False
     assert "house_open_on" not in pip_them["mine"]
     assert "house_open_on" not in pip_me["house"]
+    assert (
+        "has_open_on" not in pip_me["house"] and "has_open_on" not in pip_wall["house"]
+    )
+    assert "has_open_on" not in pip_them["house"]
     assert pip_wall["mine"] is None and pip_wall["house"]["house_open_on"] is False
     await pushed(me), await pushed(them), await pushed(wall)
 
     assert (await open_on(me, "sensor.pip_life_stage", True))["success"]
     mine = [p["mine"] for p in await pushed(me) if "mine" in p]
-    assert [m["open_on"] for m in mine] == [True]  # Pip's; Bo's didn't change
+    # Pip's says yes; Bo's hears only that they now have a favourite somewhere (R3
+    # audit: the offer's edge), and not which.
+    assert sorted((m["open_on"], m["has_open_on"]) for m in mine) == [
+        (False, True),
+        (True, True),
+    ]
     assert all("mine" not in p for p in await pushed(them))  # not theirs
     assert all("mine" not in p and "house" not in p for p in await pushed(wall))
 
@@ -393,3 +405,77 @@ async def test_the_birthday_comes_from_the_chosen_pet(
         pet._birthday_morning()
     await hass.async_block_till_done(wait_background_tasks=True)
     assert [c.data["message"] for c in phone] == ["Pip says: happy birthday, pal! ♥"]
+
+
+# --- 30: the rest offer's answer (plan favourite-resting §6.4, R3) -------------------
+
+
+async def rest_offer(client: Any, entity: str, **extra: Any) -> Any:
+    return await command(
+        client, "rest_offer", entity_id=entity, **{"shared": False, **extra}
+    )
+
+
+async def test_the_rest_offer_answer_is_the_persons_saved_at_once(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+    now: float,
+) -> None:
+    await two_pets(hass, hass_storage, now)
+    people = hass.data[DOMAIN]["people"]
+    ada, token = await a_user(hass)
+    me, them = await hass_ws_client(hass), await hass_ws_client(hass, token)
+    pip_me = await subscribe(me)
+    bo_me = await subscribe(me, entity_id="sensor.bo_life_stage")
+    pip_them = await subscribe(them)
+    wall = await hass_ws_client(hass, token)
+    pip_wall = await subscribe(wall, shared=True)
+    assert (
+        pip_me["mine"]["rest_offer"] is False and bo_me["mine"]["rest_offer"] is False
+    )
+    assert pip_them["mine"]["rest_offer"] is False
+    assert pip_wall["mine"] is None and "rest_offer" not in pip_wall["house"]
+    assert "rest_offer" not in pip_me["house"]
+    await pushed(me), await pushed(them), await pushed(wall)
+    # 30a: a shared screen answers for no one; nor a card that sends no flag; nor
+    # one that sends `enabled` (it only ever sets true); an entity no pet owns.
+    assert (await rest_offer(me, "sensor.pip_life_stage", shared=True))["error"][
+        "code"
+    ] == "shared"
+    await me.send_json_auto_id(
+        {"type": f"{DOMAIN}/rest_offer", "entity_id": "sensor.pip_life_stage"}
+    )
+    assert (await me.receive_json())["error"]["code"] == "invalid_format"
+    reply = await rest_offer(me, "sensor.pip_life_stage", enabled=False)
+    assert reply["error"]["code"] == "invalid_format"
+    assert (await rest_offer(me, "sensor.nobody"))["error"]["code"] == "no_pet"
+    assert "rest_offer" not in people.data["people"].get(hass_admin_user.id, {})
+    # 30b: set, saved at once (no 60 s wait: the store already has it, and a
+    # reload, as a restart, reads it), and every pet's channel says so.
+    assert (await rest_offer(me, "sensor.pip_life_stage"))["success"]
+    assert people.data["people"][hass_admin_user.id]["rest_offer"] is True
+    assert saved_people(hass_storage)[hass_admin_user.id]["rest_offer"] is True
+    again = People(hass)
+    await again.async_load()
+    assert again.data["people"][hass_admin_user.id]["rest_offer"] is True
+    mine = [p["mine"]["rest_offer"] for p in await pushed(me) if "mine" in p]
+    assert mine == [True, True]  # Pip's and Bo's: a second slide won't offer again
+    assert all(
+        p.get("mine", {}).get("rest_offer") is not True for p in await pushed(them)
+    )
+    assert all("mine" not in p and "house" not in p for p in await pushed(wall))
+    assert "rest_offer" not in people.data["people"].get(ada.id, {})
+    # It flips no switch and touches no choice.
+    assert people.open_on(hass_admin_user.id) is None
+    assert hass.states.get("switch.pip_resting").state == "off"
+    assert hass.states.get("switch.bo_resting").state == "off"
+    # 30d: "forget my data" erases it (the offer may come once more), and a
+    # restart then has none.
+    assert (await command(me, "forget_me"))["success"]
+    assert "rest_offer" not in people.data["people"].get(hass_admin_user.id, {})
+    assert hass_admin_user.id not in saved_people(hass_storage)
+    after = People(hass)
+    await after.async_load()
+    assert "rest_offer" not in after.data["people"].get(hass_admin_user.id, {})

@@ -44,8 +44,10 @@ class HatchPetCardMoment extends HatchPetCardVisit {
           const first = sharedScreen() ? null : short(this._hass.user?.name?.trim().split(/\s+/)[0], 16);
           say(first ? `hello, ${first}! ♥` : "hello!", 4500, () => {
             this._chirp(s, "hatch");
-            this._animate(s, s.pet, "born", 500);
-            this._sparkle(s);
+            this._afterTurn(s, () => {
+              this._animate(s, s.pet, "born", 500);
+              this._sparkle(s);
+            });
           });
           if (!capture) {
             this._line(s, KEPT, "nice to meet you ♥", 4500, { type: m.type });
@@ -58,8 +60,10 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         say(m.stage === "adult"
           ? "all grown up! ♥" // the upbringing is on the status screen, not announced
           : `i'm a ${m.stage} now!`, 4500, () => {
-          this._animate(s, s.pet, "stretch", 1100);
-          this._sparkle(s);
+          this._afterTurn(s, () => {
+            this._animate(s, s.pet, "stretch", 1100);
+            this._sparkle(s);
+          });
         });
         // A new teen tells its personality, in a bubble of its own after this one
         // (kept too, so it waits its turn).
@@ -79,8 +83,10 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         break;
       case "egg_laid":
         say("see you in the journal!", 4500, () => {
-          this._animate(s, s.pet, "born", 500);
-          this._sparkle(s);
+          this._afterTurn(s, () => {
+            this._animate(s, s.pet, "born", 500);
+            this._sparkle(s);
+          });
         });
         break;
       case "woke_up":
@@ -183,6 +189,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         speak(pick(HOUSE_LINES[kind]), 4500, () => {
           this._animate(s, s.pet, "perk", 320);
           this._houseFx(s, kind === "heating" ? "fx-heat" : "fx-cool");
+          this._momentCue(s, "house_answered", kind); // the wash on the rim, with the screen's
         });
         break;
       }
@@ -192,6 +199,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         speak(pick(HOUSE_LINES[m.type]), 4500, () => {
           this._animate(s, s.pet, "perk", 320);
           if (m.type === "robot_out") this._robotFx(s);
+          this._momentCue(s, m.type); // the rotor turns (robot_out) or slows (robot_home), on the rim
         });
         break;
       }
@@ -202,6 +210,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         speak(pick(lines), 4500, () => {
           this._animate(s, s.pet, "perk", 320);
           this._houseFx(s, kind === "dryer" ? "fx-tumble" : "fx-suds");
+          this._momentCue(s, "appliance_done", kind); // one tick on the rim, the lamp by the kind
         });
         break;
       }
@@ -212,6 +221,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         now(() => {
           this._animate(s, s.pet, REACT_POSE.startle.move, REACT_POSE.startle.ms);
           this._houseFx(s, "fx-chime");
+          this._momentCue(s, "doorbell_live"); // the chime mark on the rim, with the screen's
         });
         speak(pick(HOUSE_LINES.doorbell), 4500);
         break;

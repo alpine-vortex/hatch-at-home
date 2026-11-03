@@ -281,6 +281,8 @@ class StatusIntent(intent.IntentHandler):
                 "flags": flags,
                 "stage": model.life_stage(state),
                 "species": pet.species_names.get(state.species or "", state.species),
+                # How that kind of creature is built (a species fact, none for an egg).
+                "species_note": pet.species_notes.get(state.species or ""),
                 **{stat: round(getattr(state, stat)) for stat in model.STATS},
                 # Learned habits, 1-3 stars each, in the order it learned them.
                 "traits": {t: model.trait_level(state, t) for t in state.traits},

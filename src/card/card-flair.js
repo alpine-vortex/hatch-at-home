@@ -198,6 +198,7 @@ class HatchPetCard extends HatchPetCardLink {
     s.propEl.style.bottom = ""; // the dig's bee sits higher
     s.gameScore.classList.remove("two");
     s.gameNum.removeAttribute("aria-label"); // the dig's "n leaves left"
+    this._hopEnd(s); // the board's grid, keys and observers (card-board.js)
     s.game = null;
     s.gameTimers?.forEach(clearTimeout);
     s.gameTimers?.clear();

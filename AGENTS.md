@@ -27,6 +27,8 @@ Where things live:
 | prefs | VERSION, BOOT_VERSION, icons, actions, games, sound/lcd/mono/shared prefs, chirps |
 | world | odds, ms, flair, SEASONS, hanukkah, turn/visitor day, once-per-day, season helpers |
 | hop-engine | `HATCH_HOP`, Hop of the Day's rules (one frozen namespace; hop.py's twin, no `this`) |
+| interaction-director | `HATCH_DIRECTOR`, the device-alive director: track leases, generation tokens, `BUSY_OWNERS` (one frozen namespace, pure, no `this`, no DOM; the card creates one per card in `_build`, device-fx.js is its first adapter) |
+| device-fx | `HATCH_DEVICE_FX`, the adapter for the director (slices 3B, 3C): wire entry to cue, the rain recipe (`dir-*` classes on the slide's `.hw.glass`), ambience paint, `live`, `enter`; and the rim cues (feed, play, clean, the confirmed tuck: `RIM`, `rim`, `dir-*` classes on the slide's `.hw.rim`) (one frozen namespace, no `this`, no DOM beyond the glass and the rim; the card's `_dir*` methods and `_rimCue` in card-visit call it) |
 | lines | poses, wishes, BABY, PERSONA |
 | lines-fresh | the fresh-expand copy block (scripts/copy-scan.js's COPY_TABLES) |
 | ui-copy | screen copy, kindred, follow text, QUESTIONS, notes, dreams, moment consts, helpers |
@@ -45,6 +47,7 @@ Where things live:
 | card-actions | actions, the care scenes' shared frame (`_sceneStart`, `_sceneRender`, `_sceneEnd`, the answer) |
 | card-care | `SCENES` (one entry per care scene: medicine, clean, feed), the bowl clip (`bowlCuts`), `_sceneFrames`, `_sceneArt` |
 | card-games | games, dig |
+| card-board | Hop of the Day's board mode (`HatchPetCardBoard`; behind `experimental_hop`): the picker row, the board and its keys in the `gameBox` overlay, park/resume, undo |
 | card-season | seasons, party, costume |
 | card-visitors | world visitors, basket, reveal |
 | card-link | infrared link |
@@ -55,6 +58,36 @@ Where things live:
 `scripts/split-card.js` cut the old one-file card and ports a branch made before the
 move: `node scripts/split-card.js --port <merge-base> <branch>` (see
 docs/plan-2026-11-02-card-split.md section 6). It goes once no such branch is left.
+
+## Privacy bar (owner, 2026-11-03)
+
+Hatch is a game inside one household's own Home Assistant. Plan and build to two
+privacy concerns only: **nothing leaves the household** (network calls, push text sent
+off the box, shipped logs, public commits or art), and **free-text answers are never
+shared** (shown to another person, put on a sensor, or logged). Anything Home Assistant
+already shows the household is fair game for the card, including echoes of what happened
+while nobody watched. Existing player-facing privacy options (keep presence private, keep
+house words off sensors, remember me) keep working as built. Don't add privacy reviews,
+owner questions or limits beyond these two.
+
+## Motion on the card (composition rule)
+
+The pet's `transform` is shared, so two moves can silently cancel each other. The rule:
+
+- **Persistent state uses the individual properties.** `translate` = position (wander,
+  go-left/right, the link slide), `rotate` = a flip or a lean (`look`, `twirl`, `spin`),
+  `scale` = size (the species scale, `--k`). They compose with each other and with a
+  keyframe on `transform`.
+- **A one-shot body move is one `.pet.<cls> { animation }` on `transform`**, one at a
+  time. `_animate` restarts only the class it is given, it does not clear another one. Two
+  classes with an `animation` on at once means the later rule in the CSS wins and the
+  other move is lost, so a new move waits for, or replaces, the last.
+- A new flip is a `@keyframes` (the bench's `petAt` can pause it), never only a
+  `transition`. A new one-shot is not an infinite loop; every motion honours the OS
+  reduced-motion rule at the top of `style.js`, and a JS-started one checks `calm()`.
+- `tests/js/motion_rule.test.js` fails when a `.pet.<cls>` rule with an `animation` is
+  not on its list. A new class goes on the list only after you have checked it cannot be
+  on with another one (or says so in a comment next to the rule).
 
 ## Screenshots: use the card bench, not Home Assistant
 

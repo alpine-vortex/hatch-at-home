@@ -1,6 +1,7 @@
 # Plan: board mode and Hop of the Day (2026-11-02)
 
-Status: plan only; no code changes. The build is five numbered ships, seven builds (section
+Status: ships 1 and 2a are built (2a: s2779, `73564bfb`, awaiting the batch gate); the rest is
+plan. The build is five numbered ships, seven builds (section
 9: 1, 2a, 2b, 3a, 3b, 4, 5). **Ship 3a is tier 2** (it adds a saved field, `PetState.hop_day`);
 the others are tier 1. The owner picked Hop on 2026-11-02 from scout s2713's five concepts.
 The decisions made on 2026-11-02 are recorded at the end ("Decided"); nothing is left open
@@ -9,6 +10,12 @@ every finding was checked against the code at `7fe09174` before it was written i
 Folded again on 2026-11-02 (s2772, ship 1) from review s2771's P1-P13 and the first mate's
 answers to its four questions (Decided 8-11): the rules ship 1 pinned are in sections 2-2b,
 the generator, solver and bots as built in section 4, the API later ships call in ship 1.
+Reconciled on 2026-11-03 (s2781) after ship 2a (s2779, `73564bfb`, on branch
+`crew/hatch-at-home-s2779-hop-of-the-day-ship-2a-the-boa`) and review s2778's 19 problems
+and Q1-Q5: ship 2a is marked shipped and its text matches the build; Decided 12-15 record
+the first mate's answers; ship 2b carries the review's card findings. **Q3 (where the keys
+live) was decided by the owner on 2026-11-03: Option A, the keys in the `gameBox` overlay
+(Decided 16)**; section 1 and ship 2b were edited to match (s2800).
 
 Sources: scout s2713's report (Pick, Shared base, section 1, Owner decisions) and its
 `renders/hop-sample-solver.py` (the sample board below is its board, rules adjusted in
@@ -57,8 +64,8 @@ static-reach prune) solve in a few ms each. Measured:
 
 ## 0. Summary
 
-- **Board mode** (ships 2a-2b): while a board game is on, the care buttons become that game's
-  keys and the LCD shows a grid. Cells under 44 px (every card up to about 376 px) use tap,
+- **Board mode** (ships 2a-2b): while a board game is on, the game's keys sit in the game
+  overlay, as the dig's do (the care pad is untouched), and the LCD shows a grid. Cells under 44 px (every card up to about 376 px) use tap,
   then confirm. ✕ parks the board. The bench gets `view: "board"`.
 - **Hop of the Day** (ships 1-5): once a day the pet gets one board, the same on every
   screen. The pet is the piece. Its species picks one special move (six families) and its
@@ -90,12 +97,13 @@ the card: about 35 px at 300, 38 at 330, 49 at 420 (the 210 px LCD is 70% of the
 6 columns). One tap commits from about 377 px up; below that a tap lights and a second
 tap commits, and that covers most phones.
 
-**The pad becomes the game's keys.** While a board is open the pad belongs to the board,
-and so does the screen: the Hop row (section 5) lives in the picker's view and is gone once
-a board is open, so a game key never has to share the screen with it. The care buttons (`ACTIONS` in `prefs.js`: seven, plus
-the lights key; the scout counted eight in a 2×4 block, to verify in the build) are replaced
-while a board is open, as a handheld's buttons are. The pad's own `aria-label`s change with
-them. Hop's keys (all draft labels):
+**The keys sit in the `gameBox` overlay, as the dig's do** (owner, 2026-11-03, Decided 16).
+While a board is open the screen belongs to the board: the Hop row (section 5) lives in the
+picker's view and is gone once a board is open, so a game key never has to share the screen
+with it. The keys are part of the `gameBox` view, built in `_gameView` beside the dig's
+(`.gl`, `.gr`, `.gx`). The care pad (`ACTIONS` in `prefs.js`), `_press`, the lights key, the
+`wants` pulse and the pad's `aria-label`s are not touched, so no care action can fire from a
+game key by construction. Hop's keys (all draft labels), eight in a 2×4 block:
 
 | key | does | notes |
 |---|---|---|
@@ -128,12 +136,15 @@ no key: it is the second tap on the lit cell.
 **Park and resume.** The move list is written to `localStorage` **on every move** (and on
 undo and restart), under `hatch-hop|<pet id>|<day>|<board id>`, so no quit path has to
 remember to park it. Not every path goes through `_quitGame`: `_endGame` is called directly
-when the card is removed (`card-base.js:182`), when a slide is reused (`_forget`,
-`card-build.js:707`), when the pet falls asleep, goes away or is an egg mid-board
-(`card-layout.js:624`), and on a failed call (`card-games.js:238`, `:260`). Writing on every
+when the card is removed (`card-base.js`), when a slide is reused (`_forget`,
+`card-build.js`), when the pet falls asleep, goes away or is an egg mid-board
+(`card-layout.js`), and on a failed call (`card-games.js`). Writing on every
 move makes all of them safe. Escape is a `keydown` on `gameBox` only
-(`card-build.js:234-236`) and the keys sit on the pad, outside it, so for a board the
-Escape handler moves to the card.
+(`card-build.js`); the keys are inside the overlay, so that handler already sees them. (Line numbers drift: the review found every one
+in this section stale within a day. Grep for the name, e.g. `grep -n "_endGame(" src/card/*.js`.)
+**The board's state is `s.game`, not a new flag** (review problem 9): every one of those
+paths, and the status sheet, the idle drop and the power-off checks, tests `s.game`; a
+separate `s.board` would skip all of them. See ship 2b.
 Why the card and not the server: the board has no hidden information and no luck, so a
 parked game can't be fished. A player who ✕s and comes back sees the same fixed board and
 their own moves, which they could redo for free anyway. Nothing is lost if the browser
@@ -143,14 +154,15 @@ the solved view (section 6). No timer anywhere, so there is no idle drop and the
 never sees a half-played board.
 
 **Everything else.**
-- Turn-based. Under `prefers-reduced-motion` the pet's hop tween becomes a cut; nothing else
-  moves. Sound is off unless the player opted in.
+- Turn-based. Under `prefers-reduced-motion` (and `calm()`) the hop piece's move becomes a
+  cut; nothing else moves. The piece's motion follows the composition rule in `AGENTS.md`
+  ("Motion on the card"; ship 2b says how). Sound is off unless the player opted in.
 - The pet reacts to each move with the frames it already has (`acts.ready` at the start, a
   hop frame per special, the `won` pose at the nest; the existing cheer or `aww` frames
   stand in). No new art in any ship. A line is never required to play.
-- The pad remap is a card-side view like the game overlay's `_gameView`: the care buttons
-  keep their handlers and the overlay swaps what a press means while `s.board` is set, so
-  no care action can fire from a game key.
+- The keys are part of the `gameBox` view, `_press` and the pad are untouched, so no care
+  action can fire from a game key and the pad's `wants` pulse and aria labels need no
+  handling.
 - Where the code goes: a **pure engine** top-level in a new part, `src/card/hop-engine.js`
   (before the class chain: it holds no `this`; ship 1), and the board view as a new class
   link, `src/card/card-board.js` (`HatchPetCardBoard`, between `card-games` and
@@ -158,9 +170,6 @@ never sees a half-played board.
   `extends HatchPetCardGames` and is repointed to `HatchPetCardBoard`. Board CSS goes in the
   `style` part. Per `AGENTS.md`, run `scripts/card-check` after the first build: a manifest
   order mistake shows there (a TDZ error), not in `node --check`.
-- The pad's `wants` pulses (`ACTIONS` `wants`, `prefs.js`) would land on remapped keys: while
-  a board is open the pulse is suppressed, and card-check shows a calling pet's pulse does
-  not light a game key.
 - **Bench:** `view: "board"` plus `board: {...}` pins any state: the grid, the family and
   specials, the world twist, the moves made so far, a lit cell, solved or tidy. A
   `--preset hop` contact sheet shows one board per world and one per family at 300, 330
@@ -370,7 +379,8 @@ documents as stable across versions: a pick is `seq[int(rng.random() * len(seq))
 shuffle is a sort on drawn keys; `choice`, `shuffle` and `randrange` are not used. It sorts
 every collection before it picks from it, so dictionary or set order can't change a board.
 The pinned golden boards (ship 1) would catch a drift in CI anyway. The server builds the
-board once per (pet, day) and serves it, so two screens of one pet get the same board
+board once per cache key (the coordinator is the pet; the key is `(day, world, family,
+specials, w, h)`, Decided 13; 2a, `async_hop_day_board`) and serves it, so two screens of one pet get the same board
 because the card never generates one (the JS engine has no generator). `pet_id` is the
 config entry id (`coordinator.pet_id`), `day` is `_today(now)[0]` (the local date).
 
@@ -479,7 +489,7 @@ measure; the row is new surface that needs its own fit rule.
 
 **The row.** One button, `.ghop`, a sibling of `.gpick` in `gameBox`, shown in the picker's
 view (`_gameView(s, "pick")`) and hidden in every other view, so it does not exist once a
-board is open (the pad is remapped then; section 1). Its label is draft ("Hop of the Day")
+board is open (the keys sit in the overlay then; section 1). Its label is draft ("Hop of the Day")
 and it carries the state:
 
 | state | row says (draft) | press does |
@@ -488,7 +498,7 @@ and it carries the state:
 | solved, not tidy | "Hop ✓" | opens the solved view with "try for tidy" |
 | tidy | "Hop ✓ tidy" | opens the solved view with "back tomorrow" |
 
-**How it fits.** `_fitPicker` (`src/card/card-games.js:93-131`) measures only the `.gpick`
+**How it fits.** `_fitPicker` (`src/card/card-games.js`) measures only the `.gpick`
 buttons against the close button, the prompt and the screen's foot, and drops to `wrap`,
 then `tight`, to fit. A row outside `.gpick` would not be measured and could overlap. So:
 the row is measured first and takes a strip at the foot (`bottom: 2%`, one button high,
@@ -498,10 +508,12 @@ own last step: if the picker still doesn't clear at `tight`, the row shrinks to 
 only, never to nothing. Ship 2b adds a bench shot of the picker plus the row at 300, 330 and
 420 and a card-check that no game button or the row overlaps the close button or the
 prompt at each width. Existing checks that count `.gpick button` as 3
-(`scripts/card-check.js:3410`, `:3488`) stay valid because the row is not inside `.gpick`.
+(`grep -n 'gpick button' scripts/card-check.js`: the two that assert a count of 3) stay valid
+because the row is not inside `.gpick`.
 
 **Where the row learns its state.** The card does not call `board` on every Play press: that
 call writes the save at a day rollover (section 8) and runs the generator in the executor.
+(As built in 2a, `board` writes nothing; the write at a rollover is 3a's, section 8.)
 Instead ship 3a **publishes `hop_day` as an attribute** next to `games` on the mood sensor
 (`sensor.py:314`, and in the unrecorded list at `~160`): `{day, done, tidy}`, nothing
 personal. The card treats a `day` other than today as "open". Until ship 3a ships the
@@ -516,8 +528,12 @@ pick in `card-games.js`, `lines-fresh.js:162`, `people.py:67`, `ANSWERS["game"]`
 never picks it, and the F6 "which game" question does not list it. A row outside the picker
 is reached from the same Play press, so a daily puzzle is one tap from the pet.
 
-The row and the board sit behind a card config flag (`experimental_hop`, as Catch's
-`experimental_catch` once did) until ship 3b settles and pays, then 3b removes the flag.
+The row and the board sit behind a card config flag, `experimental_hop`, until ship 3b
+settles and pays, then 3b removes the flag. **It is a YAML-only key** (Decided 14): read in
+`setConfig` (`card-base.js`), no field in the visual editor (`editor.js`), no
+`getStubConfig` entry, so it is off by default. There is no `experimental_*` key in the card
+today (Catch's is gone), so 2b adds the first. With the flag off the Hop row does not exist,
+so every existing card-check count stays valid. 2b's card-check runs with and without it.
 
 ## 6. Settling: the card plays, the server replays and pays
 
@@ -581,7 +597,7 @@ stubbing the card-check uses for the dig works.
 
 | `action` | in | reply |
 |---|---|---|
-| `board` | | `{result, day, id, w, h, grid (rows), family, specials, world, twist, done, tidy}` |
+| `board` | | `{result: "ok", day, id, w, h, grid (rows), family, specials, world, twist, done, tidy}`; a refusal is `{result: "<code>"}`. As built in 2a: `twist` is `null` (ship 4 fills it), `done` and `tidy` are `false` (3a fills them from `hop_day`) |
 | `settle` | `id`, `moves` (a string, one letter per move: the **stepped-on** cell's index in reading order, `a`-`x`) | `{result, won, tidy, paid, found?, already}` or `illegal` (with the index of the first bad move), `board_changed`, `too_long` |
 | `hint` | `id`, `moves` so far | ship 5: `{result, next}` the next cell of some **winning** list from there (not a tidy one: that would make tidy free) |
 
@@ -589,18 +605,25 @@ Targets, not move kinds: the server derives the move from where the pet was to t
 cell (the pet has one family, so a two-cell straight move is unambiguous), and applies the
 board's rules (a rug's slide, a stump's twin, so the landing cell) itself. `moves` is capped
 at 200 letters.
-`shared`, privacy and the person work as in `play_game`: a shared screen's call is the
-household's; the private-pet `away` answer is rewritten to `asleep`; the same refusals
-(`egg`, `asleep`, `away`, `too_tired`) apply at `board` and `settle`. A refusal at `settle`
+**`settle`:** `shared`, privacy and the person work as in `play_game`: a shared screen's call
+is the household's; the private-pet `away` answer is rewritten to `asleep`. **`board` takes no
+`shared` and no person** (as built in 2a: the board is the pet's, the same for every caller,
+and nothing is read from or written to a person; the only privacy rule is the `away` →
+`asleep` rewrite). So `shared` is a field of `settle` alone: 3a adds it to the schema for
+that action (optional, ignored by `board`), not 2a. The same refusals (`egg`, `asleep`,
+`away`, `too_tired`) apply at `board` and `settle`. A refusal at `settle`
 leaves the moves in the card's parked list so the player can retry. `board` refuses
-**without writing the care log** (`start_game` logs every refusal, `model.py:2288-2295`; a
-row opened on a tired pet would fill the capped log); `settle` writes one care entry on a
+**without writing the care log** (`start_game` logs every refusal and fires a `care` event;
+a row opened on a tired pet would fill the capped log; 2a calls `model._refuse_play(state)`
+directly, after `_advance(now)`, and no `start_game`, `_fire`, `_save` or `_publish`); `settle` writes one care entry on a
 paid settle, like a finished game, and none on a refusal.
 
 **No race on the pay.** `async_play_game` awaits `_who` and `_person` and then mutates
 synchronously (`coordinator.py:2820-2870`). The settle does the same: everything that
 awaits (the board rebuild, which runs the generator in the executor if it is not cached,
-and the replay) comes first; then, in one synchronous block with no `await`, it re-reads
+and the replay) comes first (the rebuild is `PetCoordinator.async_hop_day_board(day, family,
+specials, w, h)`, built in 2a: settle calls it so it replays the board the screen was shown,
+and concurrent callers share one build); then, in one synchronous block with no `await`, it re-reads
 `hop_day`, decides paid / `already`, and writes. Two screens settling at once both finish
 the awaited part, and only the first through the block pays. A pytest settles twice
 concurrently (`asyncio.gather`) and asserts one pay.
@@ -616,8 +639,9 @@ concurrently (`asyncio.gather`) and asserts one pay.
 - **A list for another pet or day:** the board id binds (pet, day, generator, family,
   specials); a mismatch answers `board_changed`/`illegal`.
 - **Cost of a bad request:** capped at 200 moves, a replay is O(moves); no search runs on
-  `settle`. `board` generates at most once per (pet, day) (cached in memory, rebuildable);
-  it runs in the executor, never on the event loop. `hint` (ship 5) runs a search, so it
+  `settle`. `board` generates at most once per cache key `(day, world, family, specials, w, h)` (the
+  coordinator is the pet; today's keys only; in memory, rebuildable; one shared in-flight
+  build, Decided 13); it runs in the executor, never on the event loop. `hint` (ship 5) runs a search, so it
   has the same state cap and the executor, and a per-minute limit per pet
   (`R.HOP_HINTS_PER_MIN`), since `settle` is not the only call the plan has to bound.
 - **What the server no longer sees:** the number of undos, the time taken, the moves
@@ -675,7 +699,8 @@ hop_day: dict = field(default_factory=dict)   # {"day": "2026-11-02", "stage": "
   **first asked for**; it pins the specials and the size for the whole day, so growing up
   mid-day changes tomorrow's board, not today's. `done`: a win has paid today. `tidy`: a
   tidy has paid today.
-- A `board` call for a new day (`day != today`) overwrites the map with
+- **Ship 3a changes `board`** (in 2a it writes nothing and reads the stage live). A `board`
+  call for a new day (`day != today`) overwrites the map with
   `{"day": today, "stage": stage_now, "done": False, "tidy": False}`. A stale `day` is read
   as empty and rewritten on the next call (no sweep needed).
 - **Counts:** `games["hop"]` joins the existing map as `{"played": days won, "won": days
@@ -782,54 +807,210 @@ Acceptance (pytest, `tests/test_hop.py`; `node --test`, `tests/js/hop_engine.tes
   N5 the fallback seed text above; N6 `Board` checks `specials` is 0-3, `HATCH_HOP.valid`
   mirrors the `Board` checks, and the fixture's `bad_boards` pin both.
 
-### Ship 2a: the `board` service (server, tier 1, S-M)
+### Ship 2a: the `board` service (server, tier 1, S-M) — SHIPPED (s2779, `73564bfb`)
 
-`virtual_pet.hop` with `action: board` only: the service schema in `__init__.py`, a
-coordinator method that builds the board off the event loop and caches it per (pet, day),
-the same refusals as `play_game` (`egg`, `asleep`, `away`, `too_tired`, `away` rewritten to
-`asleep` for a private pet) **without writing the care log**, `shared` and the person as in
-`play_game`, and its `services.yaml` / `strings.json` / `translations/en.json` text in this
-ship (a registered service with no description fails hassfest, `.github/workflows/validate.yml`).
-No save field: the stage is read live until 3a. Nothing is paid.
+Built on 2026-11-03 on branch `crew/hatch-at-home-s2779-hop-of-the-day-ship-2a-the-boa`
+(7 files, +411; `scripts/test` green before the merge; the first mate gates the batch).
+What is there, so later ships read the build and not the first draft:
+- `virtual_pet.hop` with `action` only `board` (`HOP_SCHEMA`: `entity_id`, `action` as
+  `vol.In(["board"])`, so 3a adds a value in one line). **No `shared` and no person:** the board
+  is the pet's, the same on every screen. `SupportsResponse.OPTIONAL`, as `play_game`.
+  Text in `services.yaml`, `strings.json`, `translations/en.json`; a test makes the three
+  agree (it stands in for hassfest, which runs only in CI).
+- `PetCoordinator.async_hop_board()`: `_advance(now)`, then `model._refuse_play(state)`
+  (`egg`, `asleep`, `away`, `too_tired`; **`too_tired` is refused**, Decided 12), `away`
+  rewritten to `asleep` when `self.privacy`. It does **not** call `start_game`, `_who`,
+  `_person`, `_fire`, `_save` or `_publish`, so the care log, `state.to_dict()` and the bus
+  are unchanged by any call, refused or not. No save field, no sensor attribute, no card
+  file; the stage is read live (`model.life_stage`) until 3a.
+- **The reply:** `{result: "ok", day, id, w, h, grid, family, specials, world, twist: null,
+  done: false, tidy: false}` (`**board.to_dict()` plus `result`, `day` and three constants);
+  a refusal is `{result: "<code>"}`. `twist` is ship 4's; `done` and `tidy` are 3a's, so
+  until 3a a board already settled today still says `done: false`. **2b must not render the
+  row's or the board's solved/tidy states from these two.** It holds no user id and no entry
+  id.
+- **The cache lives in the coordinator.** `async_hop_day_board(day, family, specials, w, h)`
+  builds in the executor (`hass.async_add_executor_job(hop.hop_board, ...)`) and caches in
+  `_hop_boards`, keyed `(day, world, family, specials, w, h)` (Decided 13), today's keys
+  only (other days' keys are dropped on each call). One in-flight future per key is shared
+  and each awaiter shields it, so three simultaneous calls run the generator once; a failed
+  build is dropped and the next call retries. **This is the entry 3a's `settle` reuses**
+  (section 6) to rebuild the board the screen was shown.
+- Left for later, on purpose: 3a fills `done`/`tidy`, pins the stage (section 8) and adds
+  `shared`, `id`, `moves` to the schema for `settle`; ship 5 adds `n` to the key and the
+  arguments (see ship 5). The "a generator version changes the id" check is ship 1's golden
+  test, not a 2a test (`GEN_VERSION` is a module constant). Player-facing docs
+  (`docs/features.md`, `docs/guide.md`) are 2b's and 3a's.
 
-Acceptance (pytest): the reply shape (`day, id, w, h, grid, family, specials, world, twist,
-done, tidy`); the same pet and day answer the same board; a new day, a stage change and a
-generator version each change the id; every refusal, with no care-log entry written; a
-private pet's `away` becomes `asleep`; `shared` and privacy as `play_game`; an unknown
-species falls back to the default family; the executor, not the loop, builds it (a test
-that the call does not block, by the repo's pattern). The care log stays unchanged.
+Tests (`tests/test_hop_service.py`, 20): the reply keys and a `Board.from_dict` round trip;
+same pet and day, same board, and the second call is the cache; a new day, a stage change
+(`age_hours`), a world change and a Wednesday (one column narrower) each change the id or
+size; each refusal (parametrized) returns its code with the care log, `to_dict()` and
+`virtual_pet*` events unchanged and no build; a private pet's `away` is `asleep`; an unknown
+species gets the `hop` family; `hop_board` runs off the loop thread (the monkeypatch records
+the thread, no timing); three concurrent calls build once (`asyncio.gather`); a failed build
+is not cached; only `board` is accepted; the three text files agree.
 
 ### Ship 2b: board mode and a playable board (card, tier 1, M)
 
-`card-board.js`, CSS, the Hop row (section 5), the pad remap, tap-then-confirm, park/resume,
-the Escape handler on the card, `card-season.js` repointed, all behind `experimental_hop`.
-Nothing is paid and nothing is settled.
+Built **after** motion ship 2 (landed `9062364a`, Decided 15), so `AGENTS.md`'s "Motion on
+the card" rule and `tests/js/motion_rule.test.js` are on main when it starts. Nothing is paid
+and nothing is settled. The first job is the picker-plus-row fit at 300 / 330 / 420 (section
+5; the plan has not seen it drawn).
+
+`card-board.js` (the class link between `card-games` and `card-season`, repointed), CSS in
+`style`, the Hop row (section 5), the keys (in the overlay, below), tap-then-confirm,
+park/resume, the Escape handler, all behind `experimental_hop`. Grep the names below; the
+line numbers in the review had all moved within a day.
+
+**The board is `s.game`, not a new flag** (review problem 9). `_startGame` for the row sets
+`s.game = {kind: "hop", ...}`. Every quit path already tests `s.game`: card removal, slide
+reuse (`_forget`), swipe away, Escape, sleep/away/egg, the status sheet, and the power-off
+checks. A separate `s.board` would skip all of them, and the park-on-every-move safety does
+not restore the overlay. `SERVER_GAMES` is derived from `GAMES` (`prefs.js`) and hop is not
+in it, so `_quitGame` sends no `play_game end` and the idle drop skips it. Card-check: quitting
+a board makes **no** `play_game` call. `_endGame` also clears whatever the board adds:
+listeners, the hop piece, and its timers (through `s.gameTimers`).
+
+**The care scene engine** (`card-care.js`, `s.scene`; `_sceneStart`/`_sceneEnd` in
+`card-actions.js`; review problem 10). A scene (feed, medicine, clean, lights) can be alive
+when the row is pressed, or be offered late (`_sceneOffer` from `s.sceneOwes`: the server's
+answer to a care tap arrives after the tap's own scene ended), and `_sceneEnd` restores
+frames and props on top of the grid. So:
+- `_startGame` for hop ends a live scene first: `if (s.scene) this._sceneEnd(s, {quiet: true})`.
+- `_sceneStart` is not entered while `s.game?.kind === "hop"`; a scene offered late
+  (`_sceneOffer`) during a board is held until the board closes or its owe runs out
+  (`SCENE_OWE_MS`).
+- The pet's frames (`_reactFrames`) share one sprite with the scene engine, so the board's
+  `ready`/reaction frames go through the same call `_pickGame` uses.
+- Card-check: a feed scene live when the row is pressed leaves no bowl or prop in the LCD;
+  a scene offered late during a board waits until the board closes.
+
+**Motion** (`AGENTS.md` "Motion on the card"; review problem 11). The "pet's hop tween" is a
+sprite inside the board layer, **not a `.pet` class**: position is `translate` on that
+element (a CSS `translate` transition or a Web Animation), and the real `.pet` sprite stays
+still and only swaps frames. No `.pet.<cls>` rule with an `animation` is added; if one is
+wanted after all, it goes on `tests/js/motion_rule.test.js`'s list with a comment saying
+why it cannot be on with another one. `go-left`/`go-right` (translate classes, cleared in
+`_endGame`) are not used for the board. A one-shot is not an infinite loop. The move is gated
+on `calm()` and the OS reduced-motion rule: card-check with `emulateMedia({reducedMotion:
+"reduce"})` asserts a cut (no transition, the piece already on the cell). A flip, if any, is
+a `@keyframes`, not a `transition`, and the bench's `petAt` can pause it.
+
+**The flag.** `experimental_hop` is a YAML-only key (Decided 14; section 5): read in
+`setConfig`, no editor field, no stub entry. With it off nothing of the board or the row is
+built, so existing card-check counts (`.gpick button` as 3) are untouched. Card-check runs
+the board section with it on and one check that it is off by default.
+
+**The keys: in the `gameBox` overlay, as the dig does** (owner, 2026-11-03, Decided 16). The
+dig and the other games draw their keys in `gameBox` (`.gl`, `.gr`, `.gx`), over the LCD,
+swapped by `_gameView`; the care pad (`ACTIONS`, seven keys and the lights key) is a separate
+row whose presses go through `_press` (`card-actions.js`). Eight keys in a 2×4 block inside
+the overlay (◀ ▲ ▼ ▶, special, undo, restart, and a blank for ship 5's hint), built in
+`_gameView` beside the dig's. `_press`, `_toggleLights`, the `wants` pulse and the pad's
+`aria-label`s are not touched. The cost: the overlay must hold the grid *and* the keys at
+300 px, so 2b's bench shots decide whether the 2×4 block fits under a 6×4 grid or the keys go
+beside it.
+
+**Copy** (all draft; review problem 14). The worker reports the working text, as the dig's
+did. Drafts to start from: keys `◀ ▲ ▼ ▶` with aria "Step left/up/down/right" (disabled:
+"… blocked" / "… sunk"); `special ×n`, aria "Special move, n left"; `undo`, aria "Take back
+the last move"; `restart`, aria "Start the board again"; the row "Hop of the Day", aria "Play
+Hop of the Day". The refusal lines reuse the existing refusal copy. A `board` reply with an
+unknown `family` or a malformed grid (`HATCH_HOP.valid` rejects it) shows nothing and logs
+once with `console.warn`. Until 3a, `done`/`tidy` in the reply are not read.
+
+**Bench** (review problem 16): `dev/bench/page.js` has no `view: "board"` (it has settings,
+picker, lay, name, journal, everyworld, collection, games). 2b adds the view, a `board` state
+field, and `--preset hop`, and the README lists the field. The bench fakes `callService`, so a
+board shot takes a **canned reply built from `hop.py` once** (`Board.to_dict`, committed as a
+fixture), never a hand-typed grid.
 
 Acceptance:
 - **bench:** `view: "board"` shots at 300, 330 and 420 for each family (a board, a lit cell,
   a spent special, a solved view, a tidy view), a "blocked key" shot, each stating the
   measured cell size; the picker with the Hop row at the three widths. `--preset hop` is
-  added.
+  added. (The solved and tidy shots pin the state by the bench field, not by `done`/`tidy`.)
 - **card-check** (new section `board`, after `resume`, with stubbed `callService` replies,
   not a random draw): the row sits outside `.gpick` and the picker still counts three
   buttons; no button or the row overlaps the close button or the prompt at 300, 330 and
-  420; the pad remaps and restores; a lit cell then a second tap commits at 300; one tap
-  commits at 420; an arrow key commits at once; undo restores a sunk pad and a use; each
-  move is written to `localStorage` and ✕, Escape on the card, a swipe to another pet, **a
-  slide reused (`_forget`)** and **the pet falling asleep mid-board** all leave the same
-  moves to resume; a different board id drops them; no care action fires from a game key and
-  a calling pet's pulse does not light one; the keys carry aria labels; reduced motion cuts
-  the hop tween.
+  420; the keys show and go away with the overlay's view, and the care pad is unchanged; a lit cell then a second tap commits at 300; one tap commits at 420; an
+  arrow key commits at once; undo restores a sunk pad and a use; each move is written to
+  `localStorage` and ✕, Escape on the card, a swipe to another pet, **a slide reused
+  (`_forget`)** and **the pet falling asleep mid-board** all leave the same moves to resume;
+  a different board id drops them; quitting makes no `play_game` call; no care action fires
+  from a game key; the keys
+  carry aria labels; the scene collisions above; reduced motion cuts the move; the flag off
+  builds nothing.
+- Taps at 300 use Playwright `mouse.click` at the measured centre of the cell, not
+  `.click()`. "A swipe to another pet" and "a slide reused" need two pets: if the card-check
+  prelude has only one, those two are JS/bench tests that call `_go` and `_forget` directly.
 - A `board` reply with an unknown `family` or a malformed grid shows nothing and logs once
   (a card-check stub case).
 - The real-HA run owns the wiring only (the row calls `board` and the reply has the right
-  shape).
+  shape; `done`/`tidy` are false).
+
+**Built as shipped (s2800, branch `crew/hatch-at-home-s2800-hop-ship-2b-board-mode-keys-in`).**
+- `src/card/card-board.js` (`HatchPetCardBoard`, between `HatchPetCardGames` and
+  `HatchPetCardSeason`), the Hop CSS in `style.js`, small hooks in `card-games.js`
+  (`_startGame` adds the row, `_gameView` has a `hop` view, `_fitPicker` measures the row) and
+  `card-flair.js` (`_endGame` calls `_hopEnd`). The board is `s.game = {kind: "hop"}`; no
+  `play_game` call is made and no `.pet.<cls>` animation was added.
+- **The keys are a 2×4 column at the right of the board**, in the overlay (Decided 16): ◀ ▲ ▼ ▶,
+  `✦n` (special), undo, restart, and the close button as the eighth. There is no blank for
+  ship 5's hint: ship 5 shares the restart slot or takes the cell the close button leaves. The
+  keys are sized from the overlay's height (24-44 px) and the grid takes the rest.
+- **Cell sizes are 19 / 22 / 28 px at card widths 300 / 330 / 420 (6×4 board)**, not the
+  35-49 px this plan expected: the LCD is 198×148 px at 300 (228×171 at 330, 272×204 at 420) and the keys take a column of
+  it. Every adult board is therefore tap-then-confirm; one tap commits only where the drawn
+  cell is 44 px or more (the code reads the size it drew, so a wider card gets it).
+- The row is a `.ghop` button outside `.gpick` (strip at the foot where the games fit on one
+  line, else in the last line of the wrapped games, label-only at 300). The picker's game count
+  is still three.
+- The fetch is one method, `_hopFetch(id)`, the seam card-check stubs. A refusal answers
+  `REFUSALS[result]`; a reply `HATCH_HOP.valid` rejects shows nothing and logs once.
+- Park/resume: `hatch-hop|<device>|<day>|<board id>` in `localStorage`, written on every move,
+  undo and restart, dropped when the board id changes. A board that was won parks nothing.
+- Until 3a the Hop row's label never changes, and the solved view is the bubble ("solved" or
+  "tidy") with a restart key reading "try for tidy" (aria) while tidy is not set; `done` and
+  `tidy` in the reply are not read.
+- Copy: no line beyond the plan's quotes. The visible key labels are glyphs; the quoted words
+  are the aria labels. "solved" and "tidy" (the bubble) and "blocked"/"sunk" (aria) are the
+  plan's drafts, used as they stand. Open questions are in the s2800 report.
+- Proof: `tests/js/hop_board.test.js` (9), card-check section `board` (33 checks, 0 fail,
+  `scripts/gate -- --only board`), bench `--preset hop` (102 shots) with `<shot>.json` giving
+  each cell and key size and overlap.
+- At the card-check width of 300 (a 284 px card, LCD 180×135) the **three games with no Hop row
+  already** wrap to two lines that run 6 px below the LCD's foot and touch the close button; the
+  row adds nothing to that. That is the picker's and the dig's own fit at the smallest width,
+  not 2b's; it is on the device queue.
 
 ### Ship 3a: settle, pay, saved state (server, tier 2, M)
 
 `settle` in `virtual_pet.hop`, the replay in `hop.py`, `settle_hop` and the pay (section 7),
 the `hop_day` map, its published attribute and `games["hop"].tidy`, the tidy find, the
 privacy mapping, the service text for `settle`.
+
+What 2a left for it (shipped `73564bfb`; ship 2a above):
+- **The schema.** `HOP_SCHEMA` has `entity_id` and `action` (`vol.In(["board"])`). 3a adds
+  `settle` to the list and the optional fields `id`, `moves` and `shared` for it; `board`
+  ignores them. `shared` and the person exist for `settle` only (section 6). `services.yaml`,
+  `strings.json` and `translations/en.json` get the new fields in the same ship (a test in
+  `tests/test_hop_service.py` already checks the three agree).
+- **The board for the replay** is `await self.async_hop_day_board(day, family, specials, w, h)`
+  (2a): the same cache, the same shared build. Its arguments come from the pinned stage
+  (`hop_day["stage"]`) once 3a lands, so `async_hop_board` changes too: it reads the stage from
+  `hop_day` (writing it on the day's first ask, section 8) and not live from `life_stage`.
+  The cache key (Decided 13) then changes only with the world or the day.
+- **`done` and `tidy`** in the `board` reply (`false` in 2a) are filled from `hop_day`.
+  `twist` stays `null` until ship 4.
+- **What 2b fixed for 3a (card side).** The card sends `id` (the `board` reply's), `moves`
+  (`HATCH_HOP.encode(g.moves)`, letters a-x) and `shared`; the `board` reply's shape is
+  `{result, day, id, w, h, grid, family, specials, world, twist, done, tidy}`, which the card's
+  `valid` check reads without `done`/`tidy`/`twist`. No server change comes from 2b.
+- `board` stops being write-free at a day rollover (section 8); every other `board` call, and
+  every refusal, still writes nothing and logs nothing. The "board refuses without the care
+  log" test of 2a stays.
 
 Acceptance:
 - pytest (`tests/test_hop.py` and `tests/test_finds.py`'s pattern): settle with a
@@ -839,7 +1020,8 @@ Acceptance:
   **two concurrent settles pay once** (`asyncio.gather`); an illegal list, a too-long list,
   another pet's board id and a stale generator id each answer their code and pay nothing;
   every refusal (`egg`, `asleep`, `away`, `too_tired`, and `away` rewritten to `asleep` for
-  a private pet) pays nothing and writes no log; a new day resets `done` and `tidy`; `shared`
+  a private pet, all through `model._refuse_play` as 2a's `board` does) pays nothing and
+  writes no log; a new day resets `done` and `tidy`; `shared`
   goes to the household and the bond to the person; `game_record` and `favourite_game` are
   not called; no `next_find_at` change.
 - Save: an old save loads (`hop_day` `{}`); a new one round-trips; a damaged `hop_day` (wrong
@@ -854,7 +1036,32 @@ Acceptance:
 The card sends the move list when the pet enters the nest, shows the solved view with its
 restart ("try for tidy"), reads `hop_day` for the row's label, shows the settle replies
 (win, tidy with a find, `already`, `illegal`, `board_changed`, each refusal), and removes
-`experimental_hop`; `strings`/guide/README/how-to-play lines (draft).
+`experimental_hop` (a YAML-only key; with it gone no config key is left to remove, and the
+card-check run "flag off builds nothing" is dropped); `strings`/guide/README/how-to-play
+lines (draft). It reads `done` and `tidy` from `hop_day`, as the sensor attribute, and from
+the `board` reply once 3a fills them (2b ignores both).
+
+**What 2b left for 3b (reconciled after 2b shipped).**
+- **Where it plugs in.** `_hopMove` in `card-board.js`: on entering the nest it sets
+  `g.done`/`g.tidy` (local `HATCH_HOP.isTidy`), clears the parked list, reacts and says
+  "solved"/"tidy". 3b adds the settle call there with the `_hopFetch` pattern (a seam of its
+  own, `_hopSettle`, for card-check). The **parked list must not be cleared at the nest any
+  more**: it is cleared when the settle answers `ok`/`found`/`already`, and kept for a
+  refused settle (the acceptance row below), so the line in `_hopMove` (`_hopStore(g.key, null)`)
+  moves into the settle's reply handler.
+- **Already built in 2b, not 3b's:** the solved view's keys (undo off once `g.done`, restart on
+  only while `!g.tidy`, aria "try for tidy"), `_hopRestart`, the bubble lines. 3b changes the
+  *source* of `tidy` (the settle reply, then `hop_day`) and the bubble's text per settle code.
+- **The row's label is one constant** (`HOP_COPY.row`; `_hopRow` in `card-board.js`); 3b adds
+  open / solved / tidy to it and the row's `aria-label`, and a reload on the same day must start
+  on the solved view: today `_hopStart` resumes a parked list only when it is legal and *not*
+  won, so a won board on reload would open fresh unless 3b passes `done` in.
+- **The flag.** Removing `experimental_hop` takes out `_hopOn()` (one line), the flag-off
+  checks in card-check's `board` section ("flag off: the picker has three games and no Hop row"
+  and "flag off again"), and the bench's `hop: true`/`experimental_hop` lines in `page.js`.
+  The card-check `board` baseline in the picker-fit check (flag off first) goes with them.
+- **Cell size.** The tap-then-confirm path is the common case (cells 19-28 px), so 3b's
+  settle must not assume a one-tap commit anywhere.
 
 Acceptance:
 - card-check on stubbed replies: the settle contract above; a plain win then a restart then a
@@ -889,7 +1096,10 @@ tidy free and pay the find). It runs the solver with the same state cap, in the 
 with a per-minute limit per pet (`R.HOP_HINTS_PER_MIN`), because a search per call is a cost
 `settle` never has.
 Practice boards (decided: daily first, unpaid practice in this last ship): `action: board`
-takes `n`, the board is the same function with `n` in the seed, and the settle for a
+takes `n`, the board is the same function with `n` in the seed (the coordinator's cache key
+`(day, world, family, specials, w, h)` from 2a gets `n` appended and `async_hop_day_board`
+takes it as a defaulted argument `n=0`, so the day's entry is unchanged and practice boards
+are kept by the same rule, today's only, with a cap on the keys per day), and the settle for a
 practice board is **free and unpaid** (answers `practice`), which has no cheat surface
 because it pays nothing. They fill the row's idle time after the day's board is done.
 
@@ -908,9 +1118,27 @@ Only a phone shows these. Each ship above stands without them; they tune numbers
   or does the first tap need to move the light more visibly?
 - Whether the 35 × 34 px cell reads at arm's length, and whether 6×4 should be 5×4 at the
   smallest width (the server size is fixed, so this would be a global cap).
-- Whether the pad remap is understood without a line telling the player.
+- Whether the keys are understood without a line telling the player (keys inside
+  the overlay, as the dig's are, need it least).
 - How long a board takes: this plan guesses 2-5 minutes at child and 5-10 at adult.
 - The first week of `played`/`tidy` counts, against the bots' brackets (section 4).
+- **Cell size with the keys in the LCD (2b).** The grid shares the overlay with a 2×4 key
+  column, so the drawn cell is 19 / 22 / 28 px at 300 / 330 / 420 (6×4 board), not the 35-49
+  px this plan first expected. Every adult board is therefore tap-then-confirm; the one-tap
+  path (cell ≥ 44 px) is real but only a very wide card reaches it. Does a 19 px cell read at
+  arm's length, does the first tap find the cell, and is it better to let the keys overlap
+  the grid's own edge or to shrink the grid cap to 5×4 at 300?
+- Keys of 24-44 px (the overlay sizes them from its height): are the glyph keys (◀ ▲ ▼ ▶,
+  ✦n, undo, restart, ✕) understood without words, and are the smallest ones (24 px at 300)
+  hit reliably with a thumb?
+- The Hop row at 300: in the "slot" (beside the last game's button, label only) it is 44 px
+  high and sits close to the close button; does it read as a game or as a stray button?
+- The piece's 140 ms glide, the dotted path and the arc (hop, glide) on a real LCD: too
+  quick, too slow, or invisible at 19 px?
+- Glide's diagonal special has no key; it is tapped only. Is that found without a hint?
+- The picker at the smallest width (a 284 px card, LCD 180×135): the three games already run
+  6 px past the LCD's foot and the second touches the close button (found by 2b's baseline, not
+  caused by the row). Is that visible on a phone, and does the picker need its own 300 px fix?
 
 ## 10. Docs the build updates
 
@@ -927,7 +1155,12 @@ page. All with draft copy.
   few in kind (about 40% of candidates pass), but none fell back in 6,000 baby boards. The
   careful bot is tidy far above 70% at a budget of 300 moves tried; whether tidy should be
   harder is the owner's call after the first week of real counts (`TRAP_MARGIN`, `TIDY_MAX`).
-- The 2×4 pad and the 35 × 34 px cell come from the scout's single 300 px render.
+- The 2×4 pad and the 35 × 34 px cell come from the scout's single 300 px render. The 8 keys must also fit inside the overlay with the grid; 2b's bench shots
+  at 300 px are the first look.
+- Ship 2a is built and tested; what it did not do: no real-HA run of the service (the
+  batch gate does it) and no hassfest (CI only; the service text test stands in). The cost
+  of a build stays in the executor, which the GIL does not make free: the worst board (0.87 s,
+  squeeze adult) still slows the loop a little. Accepted.
 - The picker-plus-row fit (section 5) has no bench shot yet; the review took none either.
   Ship 2b's first job is the 300 / 330 / 420 shots, and the row's strip may need a design
   pass if the picker at `tight` has no room for it.
@@ -980,3 +1213,31 @@ Also settled by this fold, for the first mate to veto: a nest entry ends the boa
 settles at once, a plain win does not lock the day, and the solved view offers a free restart
 for tidy (section 6); a board that crosses midnight or bedtime is lost, with no grace window;
 the saved map is `hop_day`, not `hop` (section 8).
+
+## Decided (2026-11-03)
+
+The first mate answered review s2778's Q1, Q2, Q4 and Q5 on 2026-11-03, after ship 2a (s2779)
+shipped. The numbering continues the list above. Item 16 is the owner's answer to Q3,
+made later the same day.
+
+12. **`board` refuses `too_tired`** (first mate, Q1), with `egg`, `asleep` and `away`, through
+    `model._refuse_play`. A tired pet shows no Hop; the row and the card's own `_startGame`
+    (energy under 15) agree. Built in 2a.
+13. **The cache is keyed on the full argument tuple, today only** (first mate, Q2): `(day,
+    world, family, specials, w, h)` in the coordinator (the pet is the coordinator), other
+    days' keys dropped on each call, so memory does not grow and a stage change, a world
+    change or a Wednesday's narrower board changes the key by construction. Built in 2a
+    (`PetCoordinator._hop_boards`, `async_hop_day_board`); ship 5 appends `n`.
+14. **`experimental_hop` is a YAML-only key** (first mate, Q4): read in `setConfig`, not in
+    the visual editor, no stub default, removed by 3b. Ship 2b adds it (section 5).
+15. **Ship 2b is built after motion ship 2** (first mate, Q5). It landed as `9062364a`, so
+    the composition rule in `AGENTS.md` and `tests/js/motion_rule.test.js` are on main, and
+    2b follows them (ship 2b, "Motion").
+
+### Owner decision
+
+16. **Q3: the board's keys live in the `gameBox` overlay, as the dig's do (Option A)**
+    (owner, 2026-11-03). Less code: the care pad, `_press`, the lights key, the `wants` pulse
+    and the aria labels are untouched, so no care action can fire from a game key by
+    construction. Option B (the real care pad becomes the keys) is dropped with its guards.
+    Section 1 and ship 2b were edited to match and the "pending Q3" marks cleared (s2800).

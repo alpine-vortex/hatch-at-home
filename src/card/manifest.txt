@@ -1,6 +1,8 @@
 prefs.js
 world.js
 hop-engine.js
+interaction-director.js
+device-fx.js
 lines.js
 lines-fresh.js
 ui-copy.js
@@ -19,6 +21,7 @@ card-journal.js
 card-actions.js
 card-care.js
 card-games.js
+card-board.js
 card-season.js
 card-visitors.js
 card-link.js
