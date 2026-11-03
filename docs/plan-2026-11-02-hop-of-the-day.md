@@ -5,7 +5,7 @@ plan. The build is five numbered ships, seven builds (section
 9: 1, 2a, 2b, 3a, 3b, 4, 5). **Ship 3a is tier 2** (it adds a saved field, `PetState.hop_day`);
 the others are tier 1. The owner picked Hop on 2026-11-02 from scout s2713's five concepts.
 The decisions made on 2026-11-02 are recorded at the end ("Decided"); nothing is left open
-except what section 11 lists and Q3 (Decided 16). Folded on 2026-11-02 (s2722) from adversarial review s2718:
+except what section 11 lists. Folded on 2026-11-02 (s2722) from adversarial review s2718:
 every finding was checked against the code at `7fe09174` before it was written in.
 Folded again on 2026-11-02 (s2772, ship 1) from review s2771's P1-P13 and the first mate's
 answers to its four questions (Decided 8-11): the rules ship 1 pinned are in sections 2-2b,
@@ -13,8 +13,9 @@ the generator, solver and bots as built in section 4, the API later ships call i
 Reconciled on 2026-11-03 (s2781) after ship 2a (s2779, `73564bfb`, on branch
 `crew/hatch-at-home-s2779-hop-of-the-day-ship-2a-the-boa`) and review s2778's 19 problems
 and Q1-Q5: ship 2a is marked shipped and its text matches the build; Decided 12-15 record
-the first mate's answers; ship 2b carries the review's card findings; **Q3 (where the keys
-live) is open for the owner** and every line it touches is marked "pending Q3".
+the first mate's answers; ship 2b carries the review's card findings. **Q3 (where the keys
+live) was decided by the owner on 2026-11-03: Option A, the keys in the `gameBox` overlay
+(Decided 16)**; section 1 and ship 2b were edited to match (s2800).
 
 Sources: scout s2713's report (Pick, Shared base, section 1, Owner decisions) and its
 `renders/hop-sample-solver.py` (the sample board below is its board, rules adjusted in
@@ -63,9 +64,8 @@ static-reach prune) solve in a few ms each. Measured:
 
 ## 0. Summary
 
-- **Board mode** (ships 2a-2b): while a board game is on, the care buttons become that game's
-  keys (pending Q3: or the keys sit in the game overlay, as the dig's do) and the LCD shows
-  a grid. Cells under 44 px (every card up to about 376 px) use tap,
+- **Board mode** (ships 2a-2b): while a board game is on, the game's keys sit in the game
+  overlay, as the dig's do (the care pad is untouched), and the LCD shows a grid. Cells under 44 px (every card up to about 376 px) use tap,
   then confirm. ✕ parks the board. The bench gets `view: "board"`.
 - **Hop of the Day** (ships 1-5): once a day the pet gets one board, the same on every
   screen. The pet is the piece. Its species picks one special move (six families) and its
@@ -97,14 +97,13 @@ the card: about 35 px at 300, 38 at 330, 49 at 420 (the 210 px LCD is 70% of the
 6 columns). One tap commits from about 377 px up; below that a tap lights and a second
 tap commits, and that covers most phones.
 
-**The pad becomes the game's keys (pending Q3: the owner chooses between this and keys in
-the `gameBox` overlay; ship 2b lays out both, and the wording here stays until the owner
-answers).** While a board is open the pad belongs to the board,
-and so does the screen: the Hop row (section 5) lives in the picker's view and is gone once
-a board is open, so a game key never has to share the screen with it. The care buttons (`ACTIONS` in `prefs.js`: seven, plus
-the lights key; the scout counted eight in a 2×4 block, to verify in the build) are replaced
-while a board is open, as a handheld's buttons are. The pad's own `aria-label`s change with
-them. Hop's keys (all draft labels):
+**The keys sit in the `gameBox` overlay, as the dig's do** (owner, 2026-11-03, Decided 16).
+While a board is open the screen belongs to the board: the Hop row (section 5) lives in the
+picker's view and is gone once a board is open, so a game key never has to share the screen
+with it. The keys are part of the `gameBox` view, built in `_gameView` beside the dig's
+(`.gl`, `.gr`, `.gx`). The care pad (`ACTIONS` in `prefs.js`), `_press`, the lights key, the
+`wants` pulse and the pad's `aria-label`s are not touched, so no care action can fire from a
+game key by construction. Hop's keys (all draft labels), eight in a 2×4 block:
 
 | key | does | notes |
 |---|---|---|
@@ -141,8 +140,7 @@ when the card is removed (`card-base.js`), when a slide is reused (`_forget`,
 `card-build.js`), when the pet falls asleep, goes away or is an egg mid-board
 (`card-layout.js`), and on a failed call (`card-games.js`). Writing on every
 move makes all of them safe. Escape is a `keydown` on `gameBox` only
-(`card-build.js`) and, if the keys sit on the pad (pending Q3), they are outside it, so for a
-board the Escape handler moves to the card. (Line numbers drift: the review found every one
+(`card-build.js`); the keys are inside the overlay, so that handler already sees them. (Line numbers drift: the review found every one
 in this section stale within a day. Grep for the name, e.g. `grep -n "_endGame(" src/card/*.js`.)
 **The board's state is `s.game`, not a new flag** (review problem 9): every one of those
 paths, and the status sheet, the idle drop and the power-off checks, tests `s.game`; a
@@ -162,13 +160,9 @@ never sees a half-played board.
 - The pet reacts to each move with the frames it already has (`acts.ready` at the start, a
   hop frame per special, the `won` pose at the nest; the existing cheer or `aww` frames
   stand in). No new art in any ship. A line is never required to play.
-- **Pending Q3.** If the keys are the real care pad: the care buttons keep their handlers and
-  `_press` (and the lights key) get a guard that swaps what a press means while a hop board
-  is the game, so no care action can fire from a game key. This is **not** a view like
-  `_gameView`: `gameBox` is a separate overlay, and `_press` has no seam for it today (review
-  problem 8). If the keys are in the overlay (the FM's recommendation): the board's keys are
-  part of the `gameBox` view, `_press` and the pad are untouched, and this bullet and the
-  `wants` bullet below fall away.
+- The keys are part of the `gameBox` view, `_press` and the pad are untouched, so no care
+  action can fire from a game key and the pad's `wants` pulse and aria labels need no
+  handling.
 - Where the code goes: a **pure engine** top-level in a new part, `src/card/hop-engine.js`
   (before the class chain: it holds no `this`; ship 1), and the board view as a new class
   link, `src/card/card-board.js` (`HatchPetCardBoard`, between `card-games` and
@@ -176,9 +170,6 @@ never sees a half-played board.
   `extends HatchPetCardGames` and is repointed to `HatchPetCardBoard`. Board CSS goes in the
   `style` part. Per `AGENTS.md`, run `scripts/card-check` after the first build: a manifest
   order mistake shows there (a TDZ error), not in `node --check`.
-- Pending Q3 (real pad only): the pad's `wants` pulses (`ACTIONS` `wants`, `prefs.js`) would
-  land on remapped keys: while a board is open the pulse is suppressed, and card-check shows
-  a calling pet's pulse does not light a game key.
 - **Bench:** `view: "board"` plus `board: {...}` pins any state: the grid, the family and
   specials, the world twist, the moves made so far, a lit cell, solved or tidy. A
   `--preset hop` contact sheet shows one board per world and one per family at 300, 330
@@ -868,7 +859,7 @@ and nothing is settled. The first job is the picker-plus-row fit at 300 / 330 / 
 5; the plan has not seen it drawn).
 
 `card-board.js` (the class link between `card-games` and `card-season`, repointed), CSS in
-`style`, the Hop row (section 5), the keys (pending Q3, below), tap-then-confirm,
+`style`, the Hop row (section 5), the keys (in the overlay, below), tap-then-confirm,
 park/resume, the Escape handler, all behind `experimental_hop`. Grep the names below; the
 line numbers in the review had all moved within a day.
 
@@ -911,27 +902,15 @@ a `@keyframes`, not a `transition`, and the bench's `petAt` can pause it.
 built, so existing card-check counts (`.gpick button` as 3) are untouched. Card-check runs
 the board section with it on and one check that it is off by default.
 
-**The keys: OPEN OWNER QUESTION Q3.** Section 1 says the pad becomes the keys. The review
-found that is not how games work today (problem 8): the dig and the other games draw their
-keys in `gameBox` (`.gl`, `.gr`, `.gx`), over the LCD, swapped by `_gameView`; the care pad
-(`ACTIONS`, seven keys and the lights key) is a separate row whose presses go through
-`_press` (`card-actions.js`), with no seam for "a board is open, so this press means
-something else". 2b is written so either answer builds; the owner picks, the first mate
-edits section 1 to match, and the other option's bullets go.
-- **Option A, the keys in the `gameBox` overlay, as the dig does** (FM recommendation:
-  less code, the care pad untouched). Eight keys in a 2×4 block inside the overlay
-  (◀ ▲ ▼ ▶, special, undo, restart, and a blank for ship 5's hint), built in `_gameView`
-  beside the dig's. `_press`, `_toggleLights`, the `wants` pulse, and the pad's `aria-label`s
-  are not touched, so no care action can fire from a game key *by construction*, and the
-  `wants`-pulse suppression and aria remap from section 1 are not built. The cost: the
-  overlay must hold the grid *and* the keys at 300 px, so 2b's bench shots decide whether the
-  2×4 block fits under a 6×4 grid or the keys go beside it.
-- **Option B, the real care pad becomes the keys** (section 1 as written). Needs `_press` and
-  the lights key (`_toggleLights`, `card-flair.js`) guarded while `s.game?.kind === "hop"`;
-  the `wants` pulse suppressed (`card-layout.js`, the `wanted` logic); the pad's `aria-label`s
-  remapped and restored; the pad's lights shown or hidden; and card-check that no care action
-  fires from a game key and a calling pet's pulse does not light one. It also touches the pad
-  the scene engine owns (see above), so the scene guard is stricter.
+**The keys: in the `gameBox` overlay, as the dig does** (owner, 2026-11-03, Decided 16). The
+dig and the other games draw their keys in `gameBox` (`.gl`, `.gr`, `.gx`), over the LCD,
+swapped by `_gameView`; the care pad (`ACTIONS`, seven keys and the lights key) is a separate
+row whose presses go through `_press` (`card-actions.js`). Eight keys in a 2×4 block inside
+the overlay (◀ ▲ ▼ ▶, special, undo, restart, and a blank for ship 5's hint), built in
+`_gameView` beside the dig's. `_press`, `_toggleLights`, the `wants` pulse and the pad's
+`aria-label`s are not touched. The cost: the overlay must hold the grid *and* the keys at
+300 px, so 2b's bench shots decide whether the 2×4 block fits under a 6×4 grid or the keys go
+beside it.
 
 **Copy** (all draft; review problem 14). The worker reports the working text, as the dig's
 did. Drafts to start from: keys `◀ ▲ ▼ ▶` with aria "Step left/up/down/right" (disabled:
@@ -955,13 +934,12 @@ Acceptance:
 - **card-check** (new section `board`, after `resume`, with stubbed `callService` replies,
   not a random draw): the row sits outside `.gpick` and the picker still counts three
   buttons; no button or the row overlaps the close button or the prompt at 300, 330 and
-  420; the keys show and go away (Option A: the overlay's view; Option B: the pad remaps
-  and restores); a lit cell then a second tap commits at 300; one tap commits at 420; an
+  420; the keys show and go away with the overlay's view, and the care pad is unchanged; a lit cell then a second tap commits at 300; one tap commits at 420; an
   arrow key commits at once; undo restores a sunk pad and a use; each move is written to
   `localStorage` and ✕, Escape on the card, a swipe to another pet, **a slide reused
   (`_forget`)** and **the pet falling asleep mid-board** all leave the same moves to resume;
   a different board id drops them; quitting makes no `play_game` call; no care action fires
-  from a game key (Option B adds: and a calling pet's pulse does not light one); the keys
+  from a game key; the keys
   carry aria labels; the scene collisions above; reduced motion cuts the move; the flag off
   builds nothing.
 - Taps at 300 use Playwright `mouse.click` at the measured centre of the cell, not
@@ -1079,8 +1057,8 @@ Only a phone shows these. Each ship above stands without them; they tune numbers
   or does the first tap need to move the light more visibly?
 - Whether the 35 × 34 px cell reads at arm's length, and whether 6×4 should be 5×4 at the
   smallest width (the server size is fixed, so this would be a global cap).
-- Whether the keys are understood without a line telling the player (pending Q3: a remapped
-  care pad needs it most; keys inside the overlay, as the dig's are, need it least).
+- Whether the keys are understood without a line telling the player (keys inside
+  the overlay, as the dig's are, need it least).
 - How long a board takes: this plan guesses 2-5 minutes at child and 5-10 at adult.
 - The first week of `played`/`tidy` counts, against the bots' brackets (section 4).
 
@@ -1099,8 +1077,7 @@ page. All with draft copy.
   few in kind (about 40% of candidates pass), but none fell back in 6,000 baby boards. The
   careful bot is tidy far above 70% at a budget of 300 moves tried; whether tidy should be
   harder is the owner's call after the first week of real counts (`TRAP_MARGIN`, `TIDY_MAX`).
-- The 2×4 pad and the 35 × 34 px cell come from the scout's single 300 px render. Under
-  Q3's Option A the 8 keys must also fit inside the overlay with the grid; 2b's bench shots
+- The 2×4 pad and the 35 × 34 px cell come from the scout's single 300 px render. The 8 keys must also fit inside the overlay with the grid; 2b's bench shots
   at 300 px are the first look.
 - Ship 2a is built and tested; what it did not do: no real-HA run of the service (the
   batch gate does it) and no hassfest (CI only; the service text test stands in). The cost
@@ -1162,8 +1139,8 @@ the saved map is `hop_day`, not `hop` (section 8).
 ## Decided (2026-11-03)
 
 The first mate answered review s2778's Q1, Q2, Q4 and Q5 on 2026-11-03, after ship 2a (s2779)
-shipped. The numbering continues the list above. Q3 is not decided: it is an open owner
-question, below.
+shipped. The numbering continues the list above. Item 16 is the owner's answer to Q3,
+made later the same day.
 
 12. **`board` refuses `too_tired`** (first mate, Q1), with `egg`, `asleep` and `away`, through
     `model._refuse_play`. A tired pet shows no Hop; the row and the card's own `_startGame`
@@ -1179,14 +1156,10 @@ question, below.
     the composition rule in `AGENTS.md` and `tests/js/motion_rule.test.js` are on main, and
     2b follows them (ship 2b, "Motion").
 
-### Open owner question
+### Owner decision
 
-16. **Q3: where do the board's keys live?** *Not decided.* Option A: in the `gameBox`
-    overlay, as the dig's are (less code; the care pad, `_press`, the lights key, the
-    `wants` pulse and the aria labels are untouched; no care action can fire from a game key
-    by construction). Option B: the real care pad becomes the keys (section 1 as written;
-    needs guards in `_press` and `_toggleLights`, the pulse suppressed, an aria remap, and a
-    stricter scene guard). **First mate's recommendation: Option A.** Section 1 keeps its
-    original wording, marked "pending Q3", until the owner answers; the first mate then
-    edits section 1, drops the other option's bullets in ship 2b and clears the marks. Ship
-    2b is written so either answer builds.
+16. **Q3: the board's keys live in the `gameBox` overlay, as the dig's do (Option A)**
+    (owner, 2026-11-03). Less code: the care pad, `_press`, the lights key, the `wants` pulse
+    and the aria labels are untouched, so no care action can fire from a game key by
+    construction. Option B (the real care pad becomes the keys) is dropped with its guards.
+    Section 1 and ship 2b were edited to match and the "pending Q3" marks cleared (s2800).
