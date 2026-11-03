@@ -6,7 +6,9 @@
 §5 tracks, §7 press profiles and §12 authoring model are folded in below).
 **Basis:** `origin/main` `5fc36152` (card code unchanged since `ca19f71f`). Every
 "built" claim carries a file and line; recheck when a slice starts.
-**Review it answers:** the s2803 scout review, findings F1-F19 (cited as F#).
+**Review it answers:** the s2803 scout review, findings F1-F19 (cited as F#). Slice 3 was
+reviewed again before it started (the s2811 adversarial review, findings B1-B4, M1-M7,
+m1-m8, cited as B#, M#, m#); section 13 folds it in and splits slice 3 into 3A, 3B and 3C.
 
 The goal: the device reads as a small physical object that notices the house. The order
 of value is (1) real Home Assistant changes show on the shell and glass, (2) the
@@ -23,11 +25,13 @@ delays care, navigation, dialogue, questions or games.
 | Q4 | **The server `device_fx` slice comes before any art.** |
 | Q5 | **Screen morphs come last, optional, CSS only.** |
 | FM1 | Generic rim/glass treatments are fine in every world for slices 3-4; world flavour can come later (first mate, 2026-11-03, reversible). |
-| FM2 | Rare glass (slice 6) comes before morphs and depends on slice 3's glass layer. |
+| FM2 | Rare glass (slice 6) comes before morphs and depends on slice 3B's glass layer. |
 | FM3 | No labels: matrix rows stay letterless glyphs; any wording goes to the first mate as a DRAFT question. |
 | FM4 | `_houseFx`/`_robotFx` stay as they are through slice 3. The director leases only the new glass/rim classes (named `dir-*`, never `fx-*`) so it cannot clear a `fx-*` class. Whether `_houseFx` moves under a lease is a slice-4 decision; decide it there with the matrix rows (heat/cool/chime overlap rows). (First mate, 2026-11-03, from the slice-1 review F4; reversible.) |
 | FM5 | **Slice 2 is CSS only, on the cap.** No director, no `canRender`, no adapter, no TDZ card-check case, no `pick-sections` entry. The per-action rim cues wait for slice 3; section 7's table has no rim-cue column (first mate, 2026-11-03, from the slice-2 review; reversible). |
 | FM6 | **Press feel details** (first mate, 2026-11-03, reversible): no minimum pending time (a fast reply may never show it, fine); a refusal gets no cap cue (the care scenes already push away); the nav arrows are out of scope; snack, scold and praise get the default rebound. |
+| FM7 | **Slice 3 decisions** (first mate, 2026-11-03, from the slice-3 review; reversible). **B1:** `occurred_at` is the server pass time, not the sensor's time (section 6.4). **B2:** leading-edge accept, plus "a reverse is blocked for N s, then re-evaluated", run by an explicit `async_call_later` timer; the onset latency is given as a number (section 6.4, 6.5). **B3:** unknown is its own state, not dry: no onset into or out of unknown (section 6.2, 6.5). **M3:** no visual quiet hours; a silent rain drop may play at night; reduced motion = static ambience, no onset and no echo motion; the "screen effects here" switch off = nothing drawn (section 6.7, case 12). **m1:** slice 3 ships only a `rain` boolean on the wire; the schema example is cut to `rain` (section 6.2). **M7:** a reconnect snapshot on an already-viewed slide never echoes (section 6.7). |
+| FM8 | Order 3A (server) then 3B (client rain adapter) then 3C (rim cues, which use 3B's adapter). The rain reverse block is N = 45 s. (First mate, 2026-11-03, reversible.) |
 
 Consequences: the first four slices need no art. The plan has no new player copy; any
 wording a slice finds it needs goes to the first mate as a DRAFT question, not into the
@@ -130,13 +134,16 @@ one on its own track. **Nothing queues. A missed cue is never owed.**
   is `tests/js/interaction_director.test.js`, copying `hop_engine.test.js:19-31`: in the
   built card, before `class HatchPetCardBase`; one frozen namespace; the part's only
   top-level declaration is `const HATCH_DIRECTOR`. The TDZ card-check case and any
-  pick-sections change move to the first slice with an adapter (slice 3).
+  pick-sections change move to the first slice with an adapter (3B or 3C, whichever lands first, section 13).
 - **`_houseFx` / `_robotFx` are not adopted (FM4).** `_houseFx` (`card-visit.js:610-616`)
   already does the `shellImpulse` job for the `fx-*` screen classes (one class, one
   2.5 s timer, no busy test); `_robotFx` keeps a second timer (6 s). They stay as they
-  are through slice 3. The director leases only the classes it adds, named `dir-*`, never
-  `fx-*`, so it cannot clear one. The slice-3 rain pulse lands on `.hw`, not on the
-  `.screen` classes `_houseFx` toggles. Whether `_houseFx` moves under a lease is slice
+  are through slices 3A-3C. The director leases only the classes it adds, named `dir-*`, never
+  `fx-*`, so it cannot clear one. The slice 3B rain pulse lands on the new glass
+  element (section 6.6), not on the `.screen` classes `_houseFx` toggles, and not on
+  `.device` (`_layout` rewrites `dev.className`, `card-layout.js:455`, and would wipe a
+  `dir-*` class there). A source test greps the adapter for `fx-` and fails on a hit, so the
+  two families stay apart (m5). Whether `_houseFx` moves under a lease is slice
   4's call, with the heat/cool/chime overlap rows of the matrix.
 - Data stays declarative (section 5.4), with generic fallbacks so a new species, an
   unknown kind or a future shell still works.
@@ -172,9 +179,18 @@ Inputs are injected, so the part stays pure:
 - `schedule(ms, fn) -> cancel` is the only timer. The director never calls `setTimeout`
   itself; tests drive it with a fake. There is no new `setInterval` (section 3): `tick(now)`
   rides the card's existing `_tick`.
-- `canRender(slide)` is `lcdOn() && !calm()` (`prefs.js:251,188`; the Q3 switch) plus
-  on-show and visible. When it is false there is no onset, no echo and no pulse, but
-  `setAmbient` still stores the state so a later switch-on paints it.
+- `canRender(slide)` is `lcdOn()` (`prefs.js:251`; the Q3 switch, per browser) plus
+  on-show and visible; the adapter does **not** put `!calm()` in it (M3). When it is false
+  there is no onset, no echo and no pulse, and `setAmbient` returns `render:false`
+  (`interaction-director.js:178-182`) so no ambience is painted either, but it still stores
+  the state so a later switch-on paints it. Reduced motion is a different gate: it needs
+  static ambience drawn and no onset or echo motion, so under `calm()`
+  (`prefs.js:188`) the adapter calls `setAmbient` with `canRender` true and never calls
+  `offer` or `enterView`; or, equivalently, the `dir-*` motion rules sit under
+  `@media (prefers-reduced-motion: reduce)` with a still fallback (the pattern at
+  `style.js:975,999,1000`). Three gates, then: switch off = nothing; reduced motion = static
+  only; busy owners = the director (FM7/M3). The bench and card-check read the switch from
+  `lcdOn()`, not from a copy of its key (m6).
 - `slide` is the slide object `s` itself, not a string key. Per-slide state sits in a
   `WeakMap`, so `_forget` (`card-build.js`) is `detach` and a dropped slide is freed.
 
@@ -226,7 +242,7 @@ Each entry is `{ name, busy(s) }` over plain slide fields, and `busy` is a pure 
 
 (The `status` row is the one owner with no field today. Slice 1 only reads
 `s.statusOpen`; the one line in `_toggleStatus` that sets it is an adapter, so it lands
-with the first slice that has adapters (slice 3). Until then the table test sets it by
+with the first slice that has adapters (3B or 3C, section 13). Until then the table test sets it by
 hand. No other owner needs one.)
 
 **How slice 1 checks the list is complete** (a source test, no device). The card already
@@ -287,59 +303,152 @@ takes those as they are.
 
 ### 6.2 Schema and the signal map
 
+Slice 3 ships the rain row and nothing else on the wire (m1):
+
 ```json
 {
   "device_fx": {
     "version": 1,
-    "current": { "rain": true, "snow": false, "night": true, "room_light": "dim", "fireplace": true },
+    "current": { "rain": true },
     "recent": [{ "id": "generation-sequence-218", "kind": "rain_started",
-                 "occurred_at": "2026-11-03T19:30:00-08:00",
-                 "expires_at": "2026-11-03T19:31:30-08:00", "scope": "house" }]
+                 "occurred_at": "2026-11-03T19:30:00+00:00",
+                 "expires_at": "2026-11-03T19:31:30+00:00", "scope": "house" }]
   }
 }
 ```
 
-A proposed schema. `current` is whitelisted booleans and enums, never an HA string.
+A proposed schema. `current` is whitelisted booleans and enums, never an HA string. Later
+slices may add keys (snow, lights, fireplace) one row at a time; slice 3 does not send
+`snow`, `night`, `room_light` or `fireplace`. Room-light and fireplace state with
+timestamps on a **shared** wall tablet is presence-adjacent (section 3), and `night` in
+`Readings` is the bedtime window (`home.py:50`), not dawn or dusk. Rain adds nothing new
+publicly: `flags` already carries it. Timestamps are UTC ISO from `dt_util.utcnow()`, like
+the rest of the channel (`coordinator.py:1190,2913`), not a local offset (m3).
+`occurred_at` is the server pass time (B1, FM7; section 6.4).
+
 `device_fx.py` owns normalization, transition detection, per-category hysteresis, TTL, a
 bounded in-process ring (about 16 events, 90 s), a monotonic sequence plus a generation
-nonce, and the serialized snapshot. On restart it rebuilds `current` and **never invents
-a recent transition**. A source without an exact onset sends only ambience. Old clients
-ignore additive fields; a version mismatch fails closed to static baseline ambience.
+nonce, and the serialized snapshot. Each pet has its own coordinator, watcher and
+debouncer (`coordinator.py:350-366`), so each gets its own `DeviceFx` (m7). The whole
+`device_fx` key is **omitted** when neither a weather entity nor a rain sensor is mapped,
+so those houses' `_house_view()` equals main (case 16). On restart it rebuilds `current`
+and **never invents a recent transition**. A source without an exact onset sends only
+ambience. Old clients ignore additive fields; an unknown `version` is ignored by the
+client: no ambience, no echo (m2; there is no static baseline for rain to fall back to).
+
+**Rain is known, or it is unknown (B3, FM7).** `Watcher._get` holds the last good value
+`HOME_HOLD_MINUTES = 10` (`rates.py:301`) and then returns `None`; with no rain sensor
+and no weather reading `is_raining` is `False` (`home.py:115-117`), so calling it alone
+would turn an 11-minute outage into `rain_stopped` and the recovery into `rain_started`.
+So `device_fx` first asks whether the reading is known: **known iff
+`r.rain_rate is not None or r.condition is not None`** (the guard `HouseMoments._weather`
+already uses, `home.py:551-558`). Known: rain is `is_raining(r)`, so `flags`, speech and
+`device_fx` share one truth. Unknown is its own state, not dry:
+
+- entering unknown keeps the last accepted value, adds no ring entry and sends no live
+  message; a hysteresis block still running is dropped;
+- the first known reading after unknown is **silent**: `current.rain` takes the new value
+  (ambience is truth) and nothing enters the ring, even if it differs from the value held
+  before (no onset out of unknown). The same rule covers the very first known reading
+  after a restart (the `self.raining is not None` pattern, `home.py:554`);
+- `current` **omits** `rain` while it has never been known (not `false`), or the card would
+  see dry, then wet, at startup; the card reads a missing key as "nothing to paint".
+
+Tests: one for each of: unavailable for under and over the 10 min hold, then back (same
+and changed value); never known; first reading after a restart.
 
 A machine-checked `DEVICE_SIGNAL_MAP` lists every supported kind with its recipe; a
 future kind gets an approved fallback only, never a generic flash. A test fails when a
 kind the server can send has no map row.
 
-### 6.3 Delivery on the real channel (F5)
+### 6.3 Delivery on the real channel (F5, B4, M1)
 
 `_channel` returns early when a message has neither `mine` nor `house`
 (`card-base.js:344`), and `_push_watchers` diffs only `(mine, house)` held in `_sent`
 (`coordinator.py:2943-2970`). So a bare `device_fx` key would be dropped. The spec:
 
-- **Current state rides in `_house_view()`** (`coordinator.py:2884`, "what every screen
+- **Only `current` rides in `_house_view()`** (`coordinator.py:2884`, "what every screen
   sees"; `_shared_house` at `:2878` covers shared screens). It diffs and resends with
   `house` as any house change does, and the snapshot carries it. No change to the `_sent`
-  tuple shape.
-- **Onsets are a new live message type** (a sibling of `msg.moment`), handled in
-  `_channel` **before** the early return, and sent through `_to_channel`
-  (`coordinator.py:2999`). Both sides go in the same PR as a pair, with a
-  `tests/test_channel.py` case for each.
-- The `recent` ring in the snapshot feeds the first-view echo only.
+  tuple shape. `recent` is **not** in `_house_view()` and not in `_sent`:
+  `channel_snapshot` stores the house it sends in `self._sent[token]`
+  (`coordinator.py:2917-2920`) and `_push_watchers` compares each later `_house_view()` to
+  it, so a `recent` on one side only (or one that expires between pushes) is a spurious
+  `{"house": ...}` (B4).
+- **`recent` rides beside the house on the snapshot**, as `snapshot["device_fx_recent"]`
+  (or `snapshot["fx"]`, the implementer's name), built **after** `_sent` is stored and never
+  diffed. It feeds the first-view echo only. A `tests/test_channel.py` case: after
+  subscribe, a no-change `_push_watchers` sends nothing (the existing tests at `:179` and
+  `:459` rely on exact push lists).
+- **Onsets are a new top-level live message key**, `{"fx": {...}}`, **not** under
+  `moment`. Old cards run `_keepMoment` and `_channelMoment` on anything under `moment`
+  (`card-base.js:329-339`) and could keep or say it; a top-level unknown key is dropped by
+  an old card at `card-base.js:344`. The new handler goes in `_channel` **before** that
+  early return and before `s.statusHtml = null; this._redraw(s)`: an onset must not redraw
+  the slide. It is sent through `_to_channel` (`coordinator.py:2999`). Both sides go in
+  the same PR (3A has the server half, 3B the handler), with a `tests/test_channel.py`
+  case for each.
+- **Order (M1).** `_sense_home` runs before `_publish()` (`coordinator.py:897-904,662`).
+  If an onset were sent inside `_sense_home`, it would reach the card **before**
+  `house.device_fx.current` changes, and the director's `admit` does not check `stillTrue`
+  for live offers (only `enterView` does, `interaction-director.js:234-238,296`), so the
+  card would paint an onset against an old ambient. So `_sense_home` only **collects**
+  fresh ring entries, and they are sent at the end of `_push_watchers`, **after** the house
+  diff, in one flush that both callers share. Test: the house `current` goes out first,
+  the `fx` message second.
 
-### 6.4 Time (F7)
+### 6.4 Time (F7, B1, B2)
 
 State changes pass `_home_debouncer` (10 s, `rates.py:302`; `coordinator.py:359-366`)
-before the home pass, and the card's live gate for moments is 15 s. So a live onset
-arrives **10 s or more after the sensor**, not "0.4-1.2 s". The echo window is **90 s
-from the server `occurred_at`** (the sensor's own change time, not the debounce end), so
-in practice a first view sees about 80 s of it. Measure the debounce before promising a
-number to the owner. A doorbell keeps its own fast path.
+before the home pass, and the card's live gate for moments is 15 s. HA's `Debouncer`
+(`helpers/debounce.py`, with `immediate=False`) runs the function 10 s after the first
+change, then starts another 10 s cooldown after each run; a change inside the cooldown
+runs at its end. So the pass comes **0 to 10 s after the sensor** for a change that
+`device_fx` accepts at once, not "0.4-1.2 s" and not "10 s or more" (B2). This is a
+number to state in the device queue; the test for it drives the debouncer with
+`freezer`/`settle` as `test_channel.py:459+` does and asserts the bound, not an exact
+second.
 
-### 6.5 Hysteresis and chatter
+**`occurred_at` is the accepting pass's `now`** (`_sense_home`'s `now`,
+`coordinator.py:906`; B1, FM7), not the sensor's change time. `Readings`
+(`home.py:49-86`) carries no timestamps, the state-change listener throws the event away
+(`def changed(_)`, `coordinator.py:741-743`), and `last_changed` of a rain-rate sensor moves
+on every value change, not when rain started. So the echo window is **90 s from the
+accepting pass**, up to 10 s after the sensor, and a first view sees the full 90 s of it
+(the earlier "about 80 s" is gone). A doorbell keeps its own fast path.
 
-Rain oscillation 30-60 s; lights 3-5 s; temperature on a meaningful step only; music and
-TV on state change, never track metadata. Unknown/unavailable and an HA reconnect invent
-no onset; the last accepted state holds. Better a missed flicker than a flicker stream.
+### 6.5 Hysteresis and chatter (B2, B3)
+
+Lights 3-5 s; temperature on a meaningful step only; music and TV on state change, never
+track metadata. Better a missed flicker than a flicker stream.
+
+**Rain oscillation: leading-edge accept, reverse blocked for N s, then re-evaluated
+(B2, FM7).** The only things that call `_sense_home` are the debouncer (a state change)
+and `_tick`, every 5 minutes (`rates.py:12`, `coordinator.py:662`), so a "steady for 45 s"
+dwell has no pass at 45 s and would fire at the next tick, up to 5 min late, outside the
+90 s ring. So:
+
+1. The first pass that sees a different known rain value **accepts it at once**: it
+   updates `current`, adds the ring entry and the live message. Onset latency: **0 to 10 s**
+   after the sensor (section 6.4).
+2. From that pass, a **reverse is blocked for N s** (N = 45 s, a constant in
+   `device_fx.py` inside the 30-60 s range; a starting value to tune on the device). A
+   pass inside the block that sees the old value again changes nothing and sends nothing.
+3. At the end of the block the module re-evaluates, with an **explicit timer**:
+   `async_call_later(hass, N, ...)`, registered with `config_entry.async_on_unload` (it is
+   cancelled on unload and not persisted: a restart has no pending block), whose callback
+   calls `self._home_debouncer.async_schedule_call()`. The resulting pass compares the
+   latest known reading to the accepted value: equal (the flap undid itself) sends
+   nothing; different accepts the reverse as a new onset. Latency of a held reverse:
+   **N + 0 to 10 s** (45-55 s with the constant above) after the first accepted change;
+   a reverse that first appears after the block is accepted like any first change, in 0-10 s.
+4. A timer in this module is the only new clock. Tests drive it with `freezer`/`settle`
+   (`test_channel.py:459+`) and cover: no flap, one flap inside the block (nothing
+   sent), a flap that settles on the reverse (one onset at N + 0-10 s), unload cancelling
+   the timer, and unknown arriving during a block (the block is dropped, section 6.2).
+
+Unknown/unavailable and an HA reconnect invent no onset, into or out of unknown
+(section 6.2, B3, FM7); the last accepted state holds.
 
 ### 6.6 Coverage matrix (a target, not a claim a row exists)
 
@@ -373,25 +482,81 @@ screen glow, shell-only.
 
 World recipes differ by world id and share semantics (rain is a leaf bead in Woodland, a
 porthole streak in Tidepool, a ring in Pond, and so on), a family and not six engines.
-Recipes start generic in slice 3 and 4; a world flavour is CSS variables, not art.
+Recipes start generic in slices 3 and 4; a world flavour is CSS variables, not art.
+
+**The glass element (M4).** There is no "glass" to draw on today: `.hw` is
+`display:none; z-index:-1` (`style.js:791`), hidden entirely without CSS `round()`
+(`style.js:840`), and sits behind the body face. Slice 3B adds a new element, `.hw.glass`
+(or a child of `.bezel`; the implementer picks, the plan fixes the rules):
+`pointer-events:none`; a stated z-index above the `.screen` content and **below** the
+dialogue, the status view, the `gameBox` and the focus ring (section 3, case 14); shown
+only under `@supports (width: round(1px,1px))`. The `dir-*` classes go on this element,
+never on `.device`. The bench pins the open-dialogue and open-status states.
+
+**Rain on the card has two sources, and the screen wins (M2).** The in-screen rain follows
+`flags` (`.screen.raining`, `card-layout.js:620-628`, from `evaluate()` on the same pass);
+the new sheen follows `current.rain`, after hysteresis. Under flapping the screen could be
+dry while the glass is wet, or the reverse. Rule: `current.rain` is derived from the same
+`is_raining(readings)` as `flags` (section 6.2), and the glass is allowed to lag the
+screen by the block of section 6.5; it is never ahead of a reversal the screen has not
+shown. Case 11 checks that an echo is dropped when the two disagree.
 
 ### 6.7 Client algorithm
 
 Per slide: `ambientState`, `seenFxIds`, one `pendingEcho`, `activeFx`, a generation.
 Snapshot: paint ambience, collect eligible recents, replay no moment. Live onset on a
 selected, visible, unbusy slide: one pulse now; body busy means shell only. While hidden:
-keep only the newest best candidate. First view (intersection, visibility, slide
-selection, boot end; the card tracks `this._visible` and the selected slide, not a
-per-slide visibility, so slice 3 adds that hook): if within 90 s by `serverNow()` and still true, one shortened
-echo; mark it seen whether played or skipped. A user action at the same instant drops the
-echo; a game, question or scene updates ambience only. If the server clock is not
-trusted (`trusted` false), ambience only. Slice 3 adds `serverClockKnown()` to
-`shell-data.js` (true after one accepted reading; `serverNow()` has no "unknown" state
-today, `shell-data.js:288-293`) and passes it as `trusted`; slice 1's `enterView` takes
-the argument. Reconnect: snapshot and delta share one dedup path in either
-order. Each card dedups for itself. Reduced motion: static state, no echo motion, no
-flashing. Echo rank: doorbell and appliance done, weather onset, lights/fire/heating,
-media, astronomy; ties by recency.
+keep only the newest best candidate.
+
+**First view (M7).** `enterView` is for a first view only. The hooks are slide
+selection (`_go`), the IntersectionObserver callback (`card-build.js:104-109` today has
+only a card-wide `_visible`), and the visibility return (`_onHidden`, `card-base.js:111`);
+boot end is the same as selection. A per-slide "viewed" mark is new code in those three.
+A **reconnect snapshot** (`_channel` receives a full snapshot on every reconnect,
+`card-base.js:303-320`) on a slide that has already been viewed calls `setAmbient` only and
+**never** `enterView`: it never echoes (FM7). A snapshot before the first view is stored
+and the first-view hook plays it. Within the window (90 s by `serverNow()` from the
+accepting pass) and still true: one shortened echo; mark it seen whether played or skipped.
+A user action at the same instant drops the echo; a game, question or scene updates
+ambience only.
+
+**The three gates (M3, FM7).**
+
+- The "screen effects here" switch off (`lcdOn()` false): nothing drawn, no ambience,
+  no onset, no echo.
+- Reduced motion (`calm()`): static ambience drawn, no onset or echo motion; the adapter
+  calls `setAmbient` and never `offer` or `enterView` (section 5.3).
+- No visual quiet hours. The card's `QUIET_HOURS = [21, 8]` (`prefs.js:130`) is for sound
+  only. A silent rain drop may play at 22:00 on a wall tablet; the pulse makes no sound
+  and no haptic. An asleep pet is the `asleep` busy owner, which keeps the body still and
+  nothing else.
+
+**Clock (M5).** If the server clock is not trusted, ambience only, for both paths.
+`trusted` is checked by `enterView` only, not `offer`, and `offer` expires a cue past
+`occurredAt + ttlMs` on `now()` (`interaction-director.js:213-218`); on a device clock
+more than 90 s off with no accepted reading, every live onset would be silently expired and
+marked seen. So in the adapter, for a **live onset** `occurredAt` and `ttlMs` are left
+unset (receipt time is within 10 s of the truth, and the adapter has it), and the server
+ISO strings are passed only for **ring entries**; the adapter also gates `offer` on
+`serverClockKnown()`. Slice 3B adds `serverClockKnown()` to `shell-data.js` (true after one
+accepted reading; `serverNow()` has no "unknown" state today, `shell-data.js:288-293`) and
+passes it as `trusted`. Test in node with a skewed fake clock.
+
+**Mapping (M6).** The wire has no `data.key`/`value` or `direction` (section 6.2), and
+`stillTrue` defaults to `st.ambient[key] === value` only when `cue.data` has both, else it
+returns `true` (`interaction-director.js:138-143`), so an echo's "still true" would pass
+silently. The adapter maps `rain_started` to `{kind:"rain", direction:"start",
+data:{key:"rain", value:true}}` and `rain_stopped` to `direction:"end"`,
+`data:{key:"rain", value:false}`, both with the same `collapseKey`. (The director's
+`direction` is `start|end`, section 5.3; the review's `on`/`off` names are the same
+thing.) In the snapshot path `setAmbient` goes **before** `enterView`, or `stillTrue`
+compares an old ambient. Test: an echo with the ambient flipped does not play (case 11).
+
+Reconnect: snapshot and delta share one dedup path in either order. Each card dedups for
+itself; with N pets sharing one weather entity, N identical onsets go to N slides: the
+non-selected ones get `pending` (`canRender` false), only the selected plays (case 8).
+Echo rank: doorbell and appliance done, weather onset, lights/fire/heating, media,
+astronomy; ties by recency.
 
 ### 6.8 Acceptance cases (kept intact from the first plan)
 
@@ -402,17 +567,17 @@ media, astronomy; ties by recency.
 5. HA restarts in rain: ambient rain returns, **no fake onset**.
 6. Source unavailable, then restored: no fabricated signal; only a true later change pulses.
 7. Reconnect delivers one event in snapshot and delta: one physical pulse.
-8. Two cards, many slides: no neighbour animates; the selected one reacts on its own.
+8. Two cards, many slides: no neighbour animates; the selected one reacts on its own. Includes two slides with the *same* rain: both get `pending`, only the selected plays (m7).
 9. The player opens a game with an echo pending: the game wins with no delay.
 10. A shared wall tablet: no identity, media title or private message leaks.
-11. Flapping weather coalesces; an echo never contradicts current truth.
-12. Reduced motion, quiet hours, asleep pet: static lighting, no haptic, no audio.
+11. Flapping weather coalesces (leading edge plus the block, section 6.5); an echo never contradicts current truth, including when the in-screen rain (`flags`) and `current.rain` disagree (M2).
+12. Reduced motion, the switch, asleep pet: reduced motion draws static ambience with no onset or echo motion; the "screen effects here" switch off draws nothing; an asleep pet keeps its body still; no haptic, no audio. There are no visual quiet hours (FM7/M3): a silent rain drop may play at night.
 13. IntersectionObserver toggles on a scroll: the event is not replayed.
 14. Ambience updates under an open dialogue without covering it.
 
 Added by the review: 15. a server test beside `tests/test_channel.py` and
 `tests/test_public.py` that audits a shared screen's `device_fx`; 16. a recorded week with
-the bridge on equals main (no save field); 17. the card-check TDZ-order case for the director, in the first slice with an adapter (slice 3; slice 1 has none, section 5.2).
+the bridge on equals main (no save field); 17. the card-check TDZ-order case for the director, in the first slice with an adapter (3B or 3C, whichever lands first; slice 1 has none, section 5.2).
 
 ## 7. Press feel: the gaps only (F2, LD section 7)
 
@@ -450,7 +615,7 @@ there is no minimum pending time (FM6).
 
 The per-action **shell cues** (a delivery-path glow, a two-point pulse, one clearing
 sweep, the lamps dimming in sequence once the tuck is confirmed) are `shellImpulse` rim
-effects and so move to slice 3 with the other rim cues (FM5).
+effects and so move to slice 3C with the other rim cues (FM5).
 
 Motion rule: the cap's animations are not `.pet.<cls>` rules, so `motion_rule.test.js`'s
 `ALLOWED` list needs no entry (a stale entry would fail its own test). Reduced motion
@@ -493,7 +658,7 @@ A per-world exclusive beat is a separate decision for after N4 (it would be art)
 
 A paw mark, a leaf caught on the glass, a rim shadow, at most one per long viewing
 interval, no reward, no requirement, clipped to the shell and never over a button
-affordance. CSS on the glass layer slice 3 adds. Only if slices 1-5 read well on the
+affordance. CSS on the glass layer slice 3B adds. Only if slices 1-5 read well on the
 phone.
 
 ## 10. Screen morphs (last, optional, CSS only)
@@ -544,12 +709,81 @@ art. **Do not run two workers on the card chain or `manifest.txt` at once.**
 |---|---|---|---|---|---|
 | 0 | This rewrite | 0 | M | docs only | none |
 | 1 | **Director core**: pure `interaction-director.js`, track leases, generation tokens, `BUSY_OWNERS`, injected `schedule`, `node --test`; a manifest line, one AGENTS.md table row. No adapter, no card-check case, no `pick-sections` entry. **No visual change.** Acceptance below. | 1 | S-M | `scripts/gate --auto` (picks no card-check section; the JS tests are the guard) | none (nothing to see) |
-| 2 | **Press release feel**: section 7 only, CSS on the cap (FM5, FM6). Rebound, restyled `.pending`/`.failed`, cleanup, per-action rebound curves via `data-action` and `--rebound`; `failed` joins `PASSING_CLASSES`; bench `alive` preset. No director, no `canRender`, no adapter, no TDZ card-check case, no `pick-sections` entry; the rim cues wait for slice 3. | 1 | S | `gate --auto` | Press feed, play, clean and meds caps and the lights toy; hold a cap and drag off it (touch and mouse); Space on a focused cap (does it pop up, then down?); a quick double tap; iOS `:active`; the feel of the 90-140 ms rebound; one refusal (the cap does nothing special). |
-| 3 | **Signal bridge, rain**: `device_fx.py` (current, ring, hysteresis), `current` in `_house_view`, the live message, the client `ambient`/`echo`, one glass-drop pulse on the `.hw` family. The 14 cases for the rain row, plus 15-17. No new copy. **Also from slice 2 (FM5): the per-action rim cues of section 7** (feed's delivery glow, play's two-point pulse, clean's one sweep, the tuck's lamps dimming once confirmed) as `shellImpulse` leases through the director, gated by `canRender` (a press with screen effects off still has its cap feel from slice 2; only the rim cue goes). They key off the toy's `data-action` that slice 2 already sets (`feed`, `play`, `clean`, `medicine`, `lights`; snack, scold and praise have none and get no rim cue, as FM6 gave them the default), fire from `_tapped` or the scene's own beat and never from the cap's classes, and add no `transform`, `animation` or `filter` to `.cap` or `.toy` (slice 2 owns the cap's `translate`, `filter` and transition; a rim cue lives on `.hw` or the rim layer). The rim cues can split into their own PR if the slice is too large. The adapter owns the wire-to-cue mapping (`occurred_at`/`expires_at` ISO to `occurredAt`/`ttlMs` on `serverNow`, `rain_started` to a recipe kind and a `direction`), passes `deviceNow` (`Date.now`) and `trusted` (`serverClockKnown()`), sets `s.statusOpen` in `_toggleStatus`, and calls `release` from `animationend`. | 1 (server) | L | `scripts/ci-gate` (pick-sections picks `all`) | Rain on a wall tablet (shared) and a phone; open at 20 s and at 3 min; HA restarted in rain. |
+| 2 | **Press release feel**: section 7 only, CSS on the cap (FM5, FM6). Rebound, restyled `.pending`/`.failed`, cleanup, per-action rebound curves via `data-action` and `--rebound`; `failed` joins `PASSING_CLASSES`; bench `alive` preset. No director, no `canRender`, no adapter, no TDZ card-check case, no `pick-sections` entry; the rim cues wait for slice 3C. | 1 | S | `gate --auto` | Press feed, play, clean and meds caps and the lights toy; hold a cap and drag off it (touch and mouse); Space on a focused cap (does it pop up, then down?); a quick double tap; iOS `:active`; the feel of the 90-140 ms rebound; one refusal (the cap does nothing special). |
+| 3A | **Signal bridge, rain: server.** `custom_components/virtual_pet/device_fx.py` (`current`, ring, leading-edge hysteresis with the `async_call_later` block, unknown state; sections 6.2, 6.4, 6.5), the `_sense_home` call, `current` (only) in `_house_view()`, `recent` beside the house on the snapshot, the `{"fx": ...}` live message flushed at the end of `_push_watchers` after the house diff (section 6.3), `tests/test_device_fx.py`, `test_channel.py`, `test_public.py`. Wire: `{"version":1,"current":{"rain":bool}}` and the rain ring entries, nothing else (FM7/m1). Old cards ignore all of it, so 3A can land alone and bake. **Tier 1** (nothing stored: the ring, nonce and state are in memory and join no `PetState.to_dict`, diagnostics, debug sensor or bus). No new copy. | 1 | M | `scripts/ci-gate` (pick-sections prints `all` for any non-test `.py`, `scripts/pick-sections:84-86`) **plus a privacy review of its PR** (case 15 is the shared-screen audit; a second pair of eyes on it) | Rain on a wall tablet (shared) and a phone: nothing visible changes yet (3A has no client); confirm the card still loads and a rain flip leaves no console error. HA restarted in rain: same. |
+| 3B | **Signal bridge, rain: client adapter.** The first adapter *if it lands first*; else it reuses 3C's. Creates the director (`create` with `now` = `serverNow`, `deviceNow`, `trusted`, `canRender` = `lcdOn()` + on-show + visible, `schedule`); `s.statusOpen` set in `_toggleStatus`; `release` from `animationend`; `serverClockKnown()` in `shell-data.js`; the `{"fx"}` handler in `_channel` before the early return and before the redraw; the wire-to-cue mapping (section 6.7: `direction`, `data.key/value`, the same `collapseKey`, `occurredAt`/`ttlMs` only for ring entries); the `.hw.glass` element and its rules (section 6.6); the rain recipe, ambience and echo; the first-view hooks in `_go`, the IO callback and `_onHidden` (M7); bench `alive` rain shots; card-check section `devicefx`. Needs 3A for a real wire; its tests drive `_channel` directly with a fake `device_fx`. | 1 | M-L | `gate --auto`, plus the new card-check section (below) | The wet look and the drop on a phone and a wall tablet against each finish; open at 20 s and at 3 min by eye; the 0-10 s onset delay and, on a flap, the 45-55 s held reverse (m4: the pet says "rain!" and the glass is dry 45 s later is the **expected** result); rain with reduced motion on (still sheen); rain at night (the drop plays, silent); the switch off. |
+| 3C | **Rim cues from section 7** (from slice 2, FM5): feed's delivery glow, play's two-point pulse, clean's one sweep, the tuck's lamps dimming once confirmed, as `shellImpulse` leases through the director, gated by `canRender` (a press with screen effects off still has its cap feel from slice 2; only the rim cue goes). They key off the toy's `data-action` that slice 2 already sets (`feed`, `play`, `clean`, `medicine`, `lights`; snack, scold and praise have none and get no rim cue, as FM6 gave them the default), fire from `_tapped` or the scene's own beat and never from the cap's classes, and add no `transform`, `animation` or `filter` to `.cap` or `.toy` (slice 2 owns the cap's `translate`, `filter` and transition; a rim cue lives on the rim layer, `dir-*`). Needs only the adapter, no wire, no server. Reduced motion: no cue (it is an onset). | 1 | S-M | `gate --auto` plus the `devicefx` section if it is the first adapter | Press feed, play, clean and the lights toy; each cue once against each finish; the cue with the switch off (none); the cue with a care scene running (scene wins). |
 | 4 | **Expand the matrix**: snow, fog, storm, wind, lights, fireplace, heating/cooling, media, TV, vacuum, appliance, moon, `DEVICE_SIGNAL_MAP` machine-checked. Two PRs. | 1 | M | `ci-gate` for the server half, `gate --auto` for the rest | Each row once on the phone: lights, fireplace, heating, doorbell, a storm with reduced motion on. |
 | 5 | **Idle delta**: section 8's three rows, only if N4 leaves them open. | 1 | S-M | `gate --auto` | A ten-minute idle watch on the phone; a game then idle. |
 | 6 | **Rare glass**: section 9. | 1 | S | `gate --auto` | A long idle watch; confirm it is rare and never over a control. |
 | 7 | **Screen morphs**, last, optional: section 10. | 1 | L | `gate --auto` | The flagship morph, then navigating fast through it; the Hop board and a question open. |
+
+**Slice 3 is three PRs (s2811 review).** Order: **3A, then 3C or 3B, then the other.**
+3B and 3C both need the adapter and neither depends on the other, so whichever lands
+first carries the adapter foundation: the director created per card, `canRender`,
+`statusOpen`, the `animationend` release, `serverClockKnown()`, the manifest line for any
+new part (after `interaction-director.js`, before the `card-*` chain if it holds top-level
+code; AGENTS.md "Where things live" gets a row), the TDZ card-check case and the
+manifest-order guard. The review recommends 3C first (the smaller one), then 3B. The first
+mate picks. **Do not run 3B and 3C at once** (card chain rule, the line above the table).
+
+The three card-check/pick-sections facts for 3B and 3C: a new section is written in the
+`if (enter("devicefx"))` form so pick-sections finds its range
+(`scripts/pick-sections:46-47`), and it must **name** the adapter methods and
+`_channel`, `_toggleStatus`, `_go`, or a client-only follow-up picks nothing (`:118-134`);
+say so in the section's comment. `_toggleStatus` is already named by the status sections,
+so a change there picks them. The real-HA end-to-end line needs the **rain rate**, not only
+the weather (`is_raining` prefers the rain sensor, `home.py:115`; dev config has
+`input_select.fake_weather` and `input_number.fake_rain_rate`); a real flip costs the
+debounce plus, on a flap, the block. Drive `_channel(s, msg)` directly for the timing
+cases and use one real flip for the end-to-end line. `scripts/copy-scan.js` should see no
+diff (m8: no new strings anywhere in section 6).
+
+**Slice 3 acceptance.** The 14 cases of section 6.8 plus 15-17, split by PR. Every case is
+provable without a device; the device queue above is for the look and feel only.
+
+3A (server; pytest, run by `ci-gate`):
+
+| Case | Proof |
+|---|---|
+| 1 (server half) | one live `fx` plus `current.rain` true, no speech |
+| 2 (server half) | `recent` present at 20 s (`freezer`) |
+| 3 (server half) | the ring is empty after 90 s |
+| 5 | fresh coordinator with rain: `current.rain` true, empty ring, no live message; the reload variant through `async_start_channel` (`coordinator.py:2930`) |
+| 6 | unavailable then restored, including the over-10-min hold expiry and the never-known case (B3): no ring entry, no live message, first known reading silent |
+| 7 (server half) | one event, once in the snapshot ring and once as the live message, same id |
+| 10, 15 | shared channel: `device_fx` holds only the whitelisted keys and no id, title or user (`test_public.py`, `test_channel.py`) |
+| 11 (server half) | leading edge, the block, the timer, the unload cancel (section 6.5) |
+| 16 | a seeded week with `device_fx` on and stubbed out: equal `state.to_dict()` and bus events, and no `self.rng` draw; a house with no weather or rain sensor has no `device_fx` key |
+| channel | after subscribe, a no-change `_push_watchers` sends nothing (B4); `current` goes before `fx` (M1) |
+
+3B (client rain; `node --test`, card-check, the bench):
+
+| Case | Proof |
+|---|---|
+| 1 | node: one `offer`, `_channelMoment` untouched; bench shot for the wet look |
+| 2, 3 | node: `enterView` inside the window gives one admit; after it, `nothing-to-echo` |
+| 4 | node: two offers with `canRender` false, `pending` holds one, `enterView` decides from the ambient (`interaction-director.js:218-224,296`) |
+| 7 | node: director `seen` dedup in both orders; card-check: `_channel` snapshot then `fx` (the `channel` section's `_mineFor`) |
+| 8 | card-check, two slides, the same rain on both: only the selected plays |
+| 9 | node: `isBusy` game, `enterView` returns `busy`; card-check for "no delay" |
+| 11 (client half) | node: collapse and `stillTrue`; an echo with the ambient flipped does not play; `flags` and `current.rain` disagree (M2) |
+| 12 | CSS source test and bench with reduced motion; node: `calm()` means no `offer` or `enterView` and ambience still set; switch off means no ambience; no quiet-hours branch; source test: no `vibrate` and no audio in the adapter |
+| 13 | card-check (a real IntersectionObserver in Chromium); node cannot. A reconnect snapshot on a viewed slide does not echo (M7) |
+| 14 | bench shot with the dialogue and the status open; card-check: the glass's bounding box, `pointer-events:none`, `elementFromPoint` on a control |
+| 17 | node: the part-order guard like `hop_engine.test.js:19-31`; card-check: no `pageerror`, `customElements.get("hatch-pet-card")` defined, the slide has a director (a TDZ error stops the card defining at all, so the prelude already fails loudly; the dedicated case is cheap) |
+| clock (M5) | node: a skewed fake clock, a live onset is not silently expired; `offer` gated on `serverClockKnown()` |
+| fx / dir (m5) | source test: no `fx-` in the adapter |
+
+3C (rim cues; `node --test`, the bench, card-check only if first adapter):
+
+| Case | Proof |
+|---|---|
+| 12 (the rim half) | reduced motion or the switch off: no cue; no haptic and no audio from the cue |
+| 14 (the rim half) | the cue sits on the rim layer, `pointer-events:none`, never over a control |
+| 17 | as 3B, if 3C lands first |
+| rule | source test: no `transform`, `animation` or `filter` on `.cap` or `.toy` from a rim rule; the cue starts from `_tapped` or the scene beat, never from the cap's classes; `dir-*` only |
+| shared frame | node: a care scene running wins over a rim cue (`BUSY_OWNERS` `scene`) |
 
 **Slice 1 acceptance** (each checked by `node --test` or a source test; none needs a
 device, card-check or the bench):
@@ -571,11 +805,12 @@ f. `motion_rule.test.js` passes untouched (slice 1 adds no `.pet.<cls>`).
 
 Anything a slice would otherwise check only by eye (the bench shot per owner, a pulse on
 screen) belongs to that slice's device queue and starts with the first slice that has an
-adapter (slice 3).
+adapter (3B or 3C).
 
-Whether slice 5 ships at all is the owner's call after N4. Slice 6 depends on slice 3's
+Whether slice 5 ships at all is the owner's call after N4. Slice 6 depends on slice 3B's
 glass layer, not on slice 7. The full gate is the first mate's, once per merged batch;
-slice 3 is the only one that needs `scripts/ci-gate` at once.
+3A is the only one that needs `scripts/ci-gate` at once (and its PR gets the privacy
+review).
 
 **In flight:** Hop 3a/3b touch `card-board.js` and `card-games.js` (3a saves `hop_day`,
 tier 2); slice 1 may land at any time: it touches no file they touch, and a
@@ -602,20 +837,21 @@ world-exclusive idle poses. The internals art (parked) is not counted.
 - **JS (`node --test`, `tests/js`):** slice 1: the acceptance list in section 13
   (`interaction_director.test.js`). Later: signal-map completeness (slice 4),
   `motion_rule`.
-- **Python:** `tests/test_device_fx.py` for hysteresis, ring age, restart with no fake
-  onset, the sanitiser, HA-unavailable chatter, and the `_house_view` carry; `test_channel.py`
+- **Python:** `tests/test_device_fx.py` for hysteresis and the block timer, ring age,
+  restart with no fake onset, the sanitiser, HA-unavailable chatter and the unknown rule
+  (B3), and the `_house_view` carry (only `current`, B4); `test_channel.py`
   and `test_public.py` for the shared screen.
 - **Bench:** a new `alive` preset: rest, pressed, rain current, echo pending, a
   protected state (Hop board open, status open), reduced motion, 420 and 330 px. The
   bench cannot test the channel or a restart (its README Limits).
-- **card-check:** from slice 3, a section for the echo (a fake `device_fx` over the real
+- **card-check:** from 3B (or 3C, whichever lands first), a section for the echo (a fake `device_fx` over the real
   channel), the TDZ-order case, restart. Slice 1 has none. Use a real HA only for behaviour (AGENTS.md).
 
 ## 16. Risks
 
 | Risk | Mitigation |
 |---|---|
-| Effects collide with pet transforms, lines, scenes, games, visitors | One pet-body track, the `BUSY_OWNERS` table and its completeness test, `dir-*` classes (never `fx-*`), `ALLOWED` discipline, card-check from slice 3 |
+| Effects collide with pet transforms, lines, scenes, games, visitors | One pet-body track, the `BUSY_OWNERS` table and its completeness test, `dir-*` classes (never `fx-*`), `ALLOWED` discipline, card-check from 3B/3C |
 | A stale moment plays as if the house just changed | State/edge/echo split; server `occurred_at`; `current` wins; catch-up never pulses |
 | Sensor noise becomes toy notifications | Hysteresis, one pulse at most, quiet ambience |
 | The detector disagrees with the speech moments | It reads `Readings`, not moments; they may differ on purpose |
@@ -629,6 +865,6 @@ world-exclusive idle poses. The internals art (parked) is not counted.
    rim/glass treatments. Is a generic rim the right first look in every world, or does
    the owner want the world flavour before slice 4?
 2. Slice order puts rare glass before morphs (the brief's order); the review had it
-   after. Slice 6 therefore rides on slice 3's glass layer. Confirm.
+   after. Slice 6 therefore rides on slice 3B's glass layer. Confirm.
 3. Any wording: none is needed by this plan. If the owner wants a label on the echo or
    the quiet-hours behaviour, it needs a DRAFT line from the first mate.
