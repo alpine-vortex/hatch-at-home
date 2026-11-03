@@ -809,6 +809,11 @@ async def test_full_memory_is_on_no_sensor_view_log_bus_dump_or_assist(
     bus = async_capture_events(hass, MATCH_ALL)
     me = hass_admin_user.id
     pet = await start(hass, hass_storage, {me: {"memory": full_memory()}})
+    # Set up everything that registers an HTTP view before hass_ws_client starts the
+    # HTTP app: after that the router is frozen and a late view fails the test at random.
+    assert await async_setup_component(hass, "homeassistant", {})
+    assert await async_setup_component(hass, "intent", {})
+    assert await async_setup_component(hass, "llm", {})
     client = await hass_ws_client(hass)
     assert (await switch(client, True, shared=False))["success"]
     assert (await answer(client, "dream", "snacks", shared=False))["success"]
@@ -816,9 +821,6 @@ async def test_full_memory_is_on_no_sensor_view_log_bus_dump_or_assist(
     await pet.async_visit(me)
     await hass.async_block_till_done()
     assert pet.people.memory(me)["picks"]["dream"][-1]["day"] == today()
-    assert await async_setup_component(hass, "homeassistant", {})
-    assert await async_setup_component(hass, "intent", {})
-    assert await async_setup_component(hass, "llm", {})
     spoken = await intent.async_handle(
         hass, "test", "VirtualPetStatus", {}, context=Context(user_id=me)
     )

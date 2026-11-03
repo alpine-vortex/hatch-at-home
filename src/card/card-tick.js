@@ -13,7 +13,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
       if (s.patPoseUntil && Date.now() > s.patPoseUntil) s.patPoseUntil = 0;
       const frames = this._frames(s);
       const seen = Math.abs(i - this._index) <= 1; // the pet on show and the peeking ones
-      if (seen && frames.length && !s.scene && !(s.asleep && this._ticks % 2)) {
+      if (seen && frames.length && !s.scene && !(s.asleep && this._ticks % 2) && !(s.turnUntil > Date.now())) {
         const was = s.pet.getAttribute("src");
         s.frame = (s.frame + 1) % frames.length;
         this._show(s, s.pet, frames[s.frame]);
@@ -173,6 +173,28 @@ class HatchPetCardTick extends HatchPetCardLayout {
     if (side === "wander-l") s.pet.classList.add("look");
     this._moving(s, ms + 900); // out, and the slide back
     setTimeout(() => s.pet.classList.remove(side, "look"), ms);
+  }
+
+  // A new sprite for a changed stage (a hatch, a stage-up, an egg laid) goes in edge-on: the paper flip
+  // turns the old one away (rotate y 0 -> 90, .1 s), `put` swaps the art and the scale while it is a
+  // line, and the new one turns back (90 -> 0, .1 s): `@keyframes turn-swap`, the `turn` class. The
+  // moment's born/stretch and sparkle wait for it (_afterTurn): both are an `animation` on the pet.
+  // Callers have checked calm(). A hat waits as for a look (_moving).
+  _swapFlip(s, put) {
+    this._moving(s, TURN_MS + 250);
+    s.turnUntil = Date.now() + TURN_MS;
+    s.pet.classList.remove("turn");
+    void s.pet.offsetWidth; // restart
+    s.pet.classList.add("turn");
+    setTimeout(put, TURN_MS / 2);
+    setTimeout(() => s.pet.classList.remove("turn"), TURN_MS);
+  }
+
+  // Run `fn` now, or when a swap flip has finished (the moment's pop and sparkle land on the new sprite).
+  _afterTurn(s, fn) {
+    const wait = (s.turnUntil || 0) - Date.now();
+    if (wait > 0) setTimeout(fn, wait);
+    else fn();
   }
 
   // Idle life: every so often, something small. Calm when motion is reduced.

@@ -10182,6 +10182,94 @@ async function main() {
     return out;
   });
   check("motion 1: under reduced motion the pet does not settle", !m1calm.settles, JSON.stringify(m1calm));
+  // Motion ship 2 (the flip as a tool), on the awake pet. A stage that changes live turns edge-on
+  // (`turn`, .2 s) and leaves no class and no rotate behind; a closed sheet loses show-status at once
+  // (the pat box is back) and its wipe-up within 250 ms, a fast reopen cancels it; the counter's
+  // flip-clock; a find landing on the basket. Under reduced motion none of the new classes appears.
+  const motion2 = (calmRun) => card.evaluate(async (el, calmRun) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const real = el._state;
+    const force = {};
+    el._state = function (slide, key) {
+      const st = real.call(this, slide, key);
+      return st && key in force ? { ...st, state: force[key] } : st;
+    };
+    const out = { egg: s.egg, calm: calmRun };
+    const seen = new Set();
+    const watch = new MutationObserver(() => ["turn", "wipe-up", "flip", "lands", "lands-more"].forEach((c) => {
+      if (s.pet.classList.contains(c) || s.status.classList.contains(c) || s.gameNum.classList.contains(c) || s.basket.classList.contains(c)) seen.add(c);
+    }));
+    for (const e of [s.pet, s.status, s.gameNum, s.basket]) watch.observe(e, { attributes: true, attributeFilter: ["class"] });
+    // 1. a stage that changes live: turn, then nothing left behind
+    el._redraw(s);
+    await wait(300);
+    const was = s.stageSeen;
+    force["sensor.life_stage"] = was === "teen" ? "adult" : "teen";
+    el._redraw(s);
+    await wait(60);
+    out.turning = s.pet.classList.contains("turn");
+    out.turnAnim = s.pet.getAnimations().map((a) => a.animationName).join();
+    await wait(450);
+    out.turnLeft = [s.pet.className, getComputedStyle(s.pet).rotate];
+    force["sensor.life_stage"] = was; // and back: a plain pass, no stuck state
+    el._redraw(s);
+    await wait(500);
+    // 2. the sheet: close it, the box returns at once, the wipe is off in 250 ms; a reopen in 50 ms cancels it
+    el._toggleStatus(s);
+    await wait(30);
+    out.open = s.screen.classList.contains("show-status");
+    el._toggleStatus(s);
+    out.closedAtOnce = !s.screen.classList.contains("show-status");
+    out.wiping = s.status.classList.contains("wipe-up");
+    out.patBack = !s.pat.hidden;
+    await wait(250);
+    out.wipeOff = !s.status.classList.contains("wipe-up") && getComputedStyle(s.status).display === "none";
+    el._toggleStatus(s);
+    await wait(30);
+    el._toggleStatus(s); // close, and a fast reopen
+    await wait(50);
+    el._toggleStatus(s);
+    await wait(300);
+    out.reopened = s.screen.classList.contains("show-status") && !s.status.classList.contains("wipe-up") && getComputedStyle(s.status).display !== "none";
+    el._toggleStatus(s);
+    await wait(300);
+    // 3. the counter
+    el._flipNumber(s, 3, true);
+    await wait(120);
+    out.num = [s.gameNum.dataset.n, s.gameNum.querySelector("svg")?.getAttribute("aria-label"), s.gameNum.classList.contains("flip")];
+    await wait(600);
+    out.numLeft = [s.gameNum.className, getComputedStyle(s.gameNum).rotate];
+    // 4. a find lands on the basket
+    s.house = { ...(s.house || {}), basket: 0 };
+    el._basketSync(s);
+    s.house = { ...s.house, basket: 1 };
+    el._basketSync(s);
+    out.basketN = el._basketCount(s);
+    await wait(100);
+    out.lands = s.basket.classList.contains("lands");
+    await wait(1100);
+    out.landsLeft = s.basket.className;
+    s.house = { ...s.house, basket: 0 };
+    el._basketSync(s);
+    el._state = real;
+    watch.disconnect();
+    out.seen = [...seen];
+    return out;
+  }, calmRun);
+  await page.emulateMedia({ reducedMotion: null }); // m1calm left it on
+  const m2 = await motion2(false);
+  check("motion 2: a stage that changes live turns (turn), and leaves no class and no rotate behind",
+    m2.egg || (m2.turning && /turn-swap/.test(m2.turnAnim) && !/turn/.test(m2.turnLeft[0]) && (m2.turnLeft[1] === "none" || m2.turnLeft[1] === "0deg")), JSON.stringify(m2));
+  check("motion 2: a closed sheet loses show-status at once and the pat box is back, the wipe-up is gone in 250 ms; a fast reopen cancels it",
+    m2.open && m2.closedAtOnce && m2.wiping && m2.patBack && m2.wipeOff && m2.reopened, JSON.stringify(m2));
+  check("motion 2: the counter flips (flip), shows the new number, and leaves no class or rotate behind",
+    m2.num[0] === "3" && m2.num[1] === "3" && m2.num[2] && !/flip/.test(m2.numLeft[0]) && (m2.numLeft[1] === "none" || m2.numLeft[1] === "0deg"), JSON.stringify(m2));
+  check("motion 2: a find landing pops the basket in (lands), and the class goes", m2.basketN === 1 && m2.lands && !/lands/.test(m2.landsLeft), JSON.stringify(m2));
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const m2calm = await motion2(true);
+  check("motion 2: under reduced motion none of turn, wipe-up, flip, lands appears, and the numbers and sheet still change",
+    !m2calm.seen.length && m2calm.closedAtOnce && !m2calm.wiping && m2calm.num[0] === "3" && m2calm.num[1] === "3" && m2calm.basketN === 1, JSON.stringify(m2calm));
   await page.emulateMedia({ reducedMotion: null });
   await patReset();
   await unpinAwake(card);

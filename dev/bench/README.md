@@ -39,6 +39,7 @@ node scripts/bench.js --preset everyworld # 10 shots: the journal's "every world
 node scripts/bench.js --preset dig        # 22 shots: the Berry dig at 420/330/300, calm bee, the picker at 300-420
 node scripts/bench.js --preset feed       # care B1: 135 shots of the feed scene: variants A-D every 200 ms, the push-away before and after the gate, the hold and exit, 300 px with poops, the child ladder, water and night-sky worlds, extras, breakfast and supper, resting, big text, mono, reduced motion
 node scripts/bench.js --preset bowls      # care B1: 480 close-ups, every feed bowl at full, 2/3, 1/3, gone (330/420, day/night), a sheet per world and scene, and the clip's pass rule (bowl-pass.json); care B2: and, for the 25 species with no bowl_rim, the feed scene just before, at, and after a bite's whole-bowl dip (a sheet per world, `bowls-<world>-dip`)
+node scripts/bench.js --preset motion2    # motion ship 2: 35 shots at 330, the edge-on swap (egg, baby, teen, adult at 0-150 ms), the sheet closing, the counter flipping, a find landing, each paused mid-motion and once under reduced motion
 node scripts/bench.js --preset mono       # the mono screen: 2498 shots, ~2.5 min, plus the pass rule
 ```
 
@@ -100,6 +101,9 @@ A shot (all optional):
 | `classes` | an array of classes put on `.screen` last, before the transitions finish: `faded`, `raining`, `lit`... (the bench's `scene: "rain"` is woodland's rain backdrop without `raining`) |
 | `petClasses`, `petAt` | classes put on the pet itself (`["droop"]`), and `petAt` ms to pause its animations at (keyframes and the pet's own CSS transitions: `look`, `wander-l`), so a mid-motion frame is the same every run |
 | `attentionAt` | ms: the call icon as it arrives (`.attention.arrive`: the pop, then the pulse), paused that many ms in. Needs a calling pet (`mood: "calling"`) |
+| `statusClose` | ms (with `view: "status"`): the sheet closed through the card's own `_toggleStatus`, its wipe-up (motion ship 2) paused that many ms in; its 170 ms timer is stopped. With `motion: reduce` it just closes |
+| `gnumFlip` | `{at, win}` (with `game: "higher_lower"`): the game counter as the next number comes in, through `_flipNumber`, paused `at` ms into its .16 s flip-clock (the old digit before 80, the new from 80; `win` adds the perk after it) |
+| `basketLands` | `{at, more}` (with `basket: n`): a find landing, the basket's `lands` pop and rock paused `at` ms in; `more`: a fuller basket, the rock alone. The `motion2` preset has every one |
 | `petStretch` | a mockup only (gaps-seams Q2): the pet drawn that many times wider (`1.06`), its height kept, over the species' own scale |
 | `react` | `fed`, `praised`, `refused` or `tucked`: that care reaction (PR 3c, teen/adult/baby only) started through the card's own `_reactFrames`: the stage's excited/bored/cozy frame and its move; `petAt` pauses the move mid-way |
 | `patBox` | `true`: the pat's clear hit box (PR 3b) outlined in dashed magenta; it moves with `petClasses` such as `go-left` or `wander-r`, and a state that hides it shows no outline |

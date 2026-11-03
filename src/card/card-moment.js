@@ -44,8 +44,10 @@ class HatchPetCardMoment extends HatchPetCardVisit {
           const first = sharedScreen() ? null : short(this._hass.user?.name?.trim().split(/\s+/)[0], 16);
           say(first ? `hello, ${first}! ♥` : "hello!", 4500, () => {
             this._chirp(s, "hatch");
-            this._animate(s, s.pet, "born", 500);
-            this._sparkle(s);
+            this._afterTurn(s, () => {
+              this._animate(s, s.pet, "born", 500);
+              this._sparkle(s);
+            });
           });
           if (!capture) {
             this._line(s, KEPT, "nice to meet you ♥", 4500, { type: m.type });
@@ -58,8 +60,10 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         say(m.stage === "adult"
           ? "all grown up! ♥" // the upbringing is on the status screen, not announced
           : `i'm a ${m.stage} now!`, 4500, () => {
-          this._animate(s, s.pet, "stretch", 1100);
-          this._sparkle(s);
+          this._afterTurn(s, () => {
+            this._animate(s, s.pet, "stretch", 1100);
+            this._sparkle(s);
+          });
         });
         // A new teen tells its personality, in a bubble of its own after this one
         // (kept too, so it waits its turn).
@@ -79,8 +83,10 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         break;
       case "egg_laid":
         say("see you in the journal!", 4500, () => {
-          this._animate(s, s.pet, "born", 500);
-          this._sparkle(s);
+          this._afterTurn(s, () => {
+            this._animate(s, s.pet, "born", 500);
+            this._sparkle(s);
+          });
         });
         break;
       case "woke_up":

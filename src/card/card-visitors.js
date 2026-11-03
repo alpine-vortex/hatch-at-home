@@ -361,6 +361,14 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
       if (img.getAttribute("src") !== src) img.src = src;
     }
     if (b.hidden === show) b.hidden = !show;
+    // A find lands: the basket pops in with its first and rocks once; a fuller one only rocks. Seen live
+    // (not on load: basketSeen starts undefined), and not under reduced motion.
+    const before = s.basketSeen;
+    s.basketSeen = n;
+    if (show && before !== undefined && n > before && !calm()) {
+      b.classList.remove("lands", "lands-more");
+      this._animate(s, b, before === 0 ? "lands" : "lands-more", 1000);
+    }
     const live = show && this._basketLive(s);
     b.classList.toggle("idle", !live);
     b.tabIndex = live ? 0 : -1;
