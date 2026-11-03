@@ -56,6 +56,69 @@
       "echo": true,
       "echo_ttl_s": 90.0,
       "echo_rank": 2
+    },
+    "lights": {
+      "type": [
+        "off",
+        "on"
+      ],
+      "kinds": [
+        "lights_on",
+        "lights_off"
+      ],
+      "block_s": 45.0,
+      "echo": true,
+      "echo_ttl_s": 90.0,
+      "echo_rank": 3
+    },
+    "heating": {
+      "type": "bool",
+      "kinds": [],
+      "block_s": 120.0,
+      "echo": false,
+      "echo_ttl_s": null,
+      "echo_rank": null
+    },
+    "cooling": {
+      "type": "bool",
+      "kinds": [],
+      "block_s": 120.0,
+      "echo": false,
+      "echo_ttl_s": null,
+      "echo_rank": null
+    },
+    "fireplace": {
+      "type": "bool",
+      "kinds": [
+        "fireplace_started",
+        "fireplace_stopped"
+      ],
+      "block_s": 45.0,
+      "echo": true,
+      "echo_ttl_s": 90.0,
+      "echo_rank": 3
+    },
+    "tv": {
+      "type": "bool",
+      "kinds": [
+        "tv_started",
+        "tv_stopped"
+      ],
+      "block_s": 45.0,
+      "echo": true,
+      "echo_ttl_s": 90.0,
+      "echo_rank": 4
+    },
+    "music": {
+      "type": "bool",
+      "kinds": [
+        "music_started",
+        "music_stopped"
+      ],
+      "block_s": 60.0,
+      "echo": true,
+      "echo_ttl_s": 90.0,
+      "echo_rank": 4
     }
   }
 }

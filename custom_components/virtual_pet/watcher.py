@@ -77,6 +77,14 @@ SINGLE = (
     CONF_MOON_ILLUMINATION,
     CONF_MOON_ALTITUDE,
 )
+# The plain-bool readings `known` can vouch for, by the option that maps them.
+KNOWN_OPTIONS = {
+    "fireplace": CONF_FIREPLACE,
+    "tv": CONF_TV,
+    "music": CONF_MUSIC,
+    "heating": CONF_HEATING,
+    "cooling": CONF_COOLING,
+}
 # A fireplace can be a switch, light, climate, fan or sensor: these mean lit.
 LIT = {"on", "heat", "heating", "burning", "playing"}
 
@@ -331,6 +339,18 @@ class Watcher:
     def _one(self, key: str, now: float) -> State | None:
         ids = self._ids(key)
         return self._get(ids[0], now) if ids else None
+
+    def known(self, key: str, now: float) -> bool:
+        """Whether some mapped entity of this key answers now (the last good state
+        is held 10 minutes). A plain-bool reading (``fireplace``, ``tv``, ``music``,
+        ``heating``, ``cooling``) is ``False`` both when off and when nothing
+        answers; this tells them apart. A pure read: it changes nothing."""
+        option = KNOWN_OPTIONS.get(key)
+        if option is None:
+            return False
+        if option in SINGLE:
+            return self._one(option, now) is not None
+        return bool(self._all(option, now))
 
     def _cycle_done(self, eid: str, state: State, now: float, watts_max: float) -> bool:
         """Whether this reading ends a cycle the watcher saw run. Called on every

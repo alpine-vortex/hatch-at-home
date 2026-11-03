@@ -377,3 +377,62 @@ def test_appliances_are_listened_to_and_no_entity_leaves_the_watcher(
     r = watcher.read(11 * 60, night=False)
     assert r.appliances_done == ("dishwasher",)
     assert "dishwasher" in str(r) and "binary_sensor" not in str(r)
+
+
+# (option, entity, an answering state, how a lone entity of it reads when off)
+KNOWN_ROWS = [
+    ("fireplace", "switch.hearth", "on"),
+    ("tv", "media_player.tv", "playing"),
+    ("music", "media_player.speaker", "playing"),
+    ("heating", "switch.furnace", "on"),
+    ("cooling", "switch.fan", "on"),
+]
+
+
+@pytest.mark.parametrize(("key", "entity", "answer"), KNOWN_ROWS)
+async def test_known_says_whether_a_mapped_entity_answers(
+    hass: HomeAssistant, key: str, entity: str, answer: str
+) -> None:
+    """The plain-bool readings (fireplace, tv, music, heating, cooling) are False
+    both when off and when nothing answers; `known` tells them apart (6.5)."""
+    hold = R.HOME_HOLD_MINUTES * 60
+    # Unmapped: nothing to ask, so nothing is known.
+    assert not Watcher(hass, {}).known(key, 0)
+    watcher = Watcher(hass, {key: [entity] if key != "fireplace" else entity})
+    # Mapped but the entity does not exist (yet).
+    assert not watcher.known(key, 0)
+    # Mapped and answering, on or off: known.
+    hass.states.async_set(entity, answer)
+    assert watcher.known(key, 1)
+    hass.states.async_set(entity, "off")
+    assert watcher.known(key, 2)
+    # Unavailable: the last good state holds for the 10 minute hold, then it is
+    # unknown (and the reading beside it says "off", which is not the same thing).
+    hass.states.async_set(entity, "unavailable")
+    assert watcher.known(key, 2 + hold - 1)
+    assert not watcher.known(key, 2 + hold + 1)
+    # Back: known again.
+    hass.states.async_set(entity, answer)
+    assert watcher.known(key, 3 + hold)
+
+
+async def test_known_with_two_entities_needs_only_one_to_answer(
+    hass: HomeAssistant,
+) -> None:
+    watcher = Watcher(hass, {"tv": ["media_player.a", "media_player.b"]})
+    hass.states.async_set("media_player.a", "unavailable")
+    assert not watcher.known("tv", 0)
+    hass.states.async_set("media_player.b", "off")
+    assert watcher.known("tv", 0)
+
+
+async def test_known_is_for_the_five_plain_bool_readings_only(
+    hass: HomeAssistant,
+) -> None:
+    watcher = Watcher(hass, {"weather": "weather.home", "tv": ["media_player.tv"]})
+    hass.states.async_set("weather.home", "sunny")
+    assert not watcher.known("weather", 0)  # not a plain-bool reading
+    assert not watcher.known("doorbell", 0)
+    assert watcher._good == {}  # asking about them reads no entity
+    hass.states.async_set("media_player.tv", "off")
+    assert watcher.known("tv", 0)
