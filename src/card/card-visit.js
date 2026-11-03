@@ -234,7 +234,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
         if (typeof reply.birthday_phone === "boolean") this._birthdayPhone = reply.birthday_phone;
         // Memory (plan M1a): two booleans, as the channel's mine has them; never what is kept.
         if (typeof reply.memory_on === "boolean") this._memoryOn = reply.memory_on;
-        if (typeof reply.memory_allowed === "boolean") this._memoryAllowed = reply.memory_allowed;
+        if (typeof reply.memory_allowed === "boolean") s.memoryAllowed = reply.memory_allowed; // this pet's own option
         if (reply.follow === 1) this._followOk = true; // F1: it takes typed text and follow-ups
         (reply.notes || []).forEach((note) => this._note(s, note, !!reply.made_room));
         const ask = reply.ask;

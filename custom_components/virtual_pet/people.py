@@ -236,7 +236,7 @@ class People:
         weather = loaded.get("weather")
         self.data = {
             "people": {
-                user: _person(record)
+                user: _person(record, model_today(self._hass))
                 for user, record in _mapping(loaded.get("people")).items()
                 if isinstance(user, str) and isinstance(record, dict)
             },
@@ -440,7 +440,7 @@ class People:
     def mark_memory_said(self, user: str, key: str, day: str) -> bool:
         """A door's line said today; nothing without a memory record."""
         mem = self.memory(user)
-        if mem is None or not _MEMORY_SAID.fullmatch(key) or not _iso(day):
+        if mem is None or not _MEMORY_SAID.fullmatch(key) or not _memory_day(day):
             return False
         mem.setdefault("said", {})[key] = day
         self.save()
@@ -682,7 +682,7 @@ _PERSON_KEYS: dict[str, Any] = {
     # The memory ask (memory plan M1): answered, and the days it was offered unshown.
     "memory_asked": lambda v: isinstance(v, bool),
     "memory_chosen_days": lambda v: (
-        isinstance(v, list) and len(v) <= 7 and all(_iso(d) for d in v)
+        isinstance(v, list) and len(v) <= 7 and all(_memory_day(d) for d in v)
     ),
 }
 
@@ -702,6 +702,14 @@ def _iso(v: Any) -> date | None:
         return date.fromisoformat(v) if isinstance(v, str) else None
     except ValueError:
         return None
+
+
+def _memory_day(v: Any, today: str | None = None) -> bool:
+    """A day in memory's records: the canonical YYYY-MM-DD only (`fromisoformat` also
+    takes 20261101 and 2026-W44-1, which would twin a day and sort oddly), and, at load,
+    none after today (a clock set wrong once would pin a future day as the newest)."""
+    d = _iso(v)
+    return d is not None and d.isoformat() == v and (today is None or v <= today)
 
 
 _EVENT_KEYS = {"kind", "asked", "due", "until", "said", "choice", "pet"}
@@ -748,9 +756,9 @@ def _memory_key(kind: str, entry: dict[str, Any]) -> tuple[Any, ...]:
     )
 
 
-def _memory_entry_ok(kind: str, v: Any) -> bool:
+def _memory_entry_ok(kind: str, v: Any, today: str | None = None) -> bool:
     """A remembered entry: exactly its keys, a real date, a fixed-list value."""
-    if not isinstance(v, dict) or not _iso(v.get("day")):
+    if not isinstance(v, dict) or not _memory_day(v.get("day"), today):
         return False
     if kind == "tags":
         return (
@@ -784,14 +792,14 @@ def _cap_memory(mem: dict[str, Any]) -> bool:
     return changed
 
 
-def _memory(v: Any) -> dict[str, Any] | None:
+def _memory(v: Any, today: str | None = None) -> dict[str, Any] | None:
     """A saved memory record as loaded (R5, R6): only while on; each entry kept
     or dropped on its own; one per key (the later wins); the caps applied. None:
-    no memory (missing, off, or not a record)."""
+    no memory (missing, off, or not a record). With `today` (the load), no day after it."""
     if not isinstance(v, dict) or v.get("on") is not True:
         return None
     out: dict[str, Any] = {"on": True}
-    if _iso(v.get("since")):
+    if _memory_day(v.get("since"), today):
         out["since"] = v["since"]
     lists: dict[str, list[dict[str, Any]]] = {}
     raw_picks = _mapping(v.get("picks"))
@@ -799,7 +807,7 @@ def _memory(v: Any) -> dict[str, Any] | None:
         raw = v.get("tags") if kind == "tags" else raw_picks.get(kind)
         seen: dict[tuple[Any, ...], dict[str, Any]] = {}
         for entry in raw if isinstance(raw, list) else []:
-            if _memory_entry_ok(kind, entry):
+            if _memory_entry_ok(kind, entry, today):
                 key = _memory_key(kind, entry)
                 seen.pop(key, None)
                 seen[key] = dict(entry)
@@ -813,14 +821,14 @@ def _memory(v: Any) -> dict[str, Any] | None:
     since_told = {
         k: d
         for k, d in _str_dict(v.get("since_told")).items()
-        if _SINCE_TOLD.fullmatch(k) and _iso(d)
+        if _SINCE_TOLD.fullmatch(k) and _memory_day(d, today)
     }
     if since_told:
         out["since_told"] = since_told
     said = {
         k: d
         for k, d in _str_dict(v.get("said")).items()
-        if _MEMORY_SAID.fullmatch(k) and _iso(d)
+        if _MEMORY_SAID.fullmatch(k) and _memory_day(d, today)
     }
     if said:
         out["said"] = said
@@ -828,7 +836,7 @@ def _memory(v: Any) -> dict[str, Any] | None:
     if (
         isinstance(heard, dict)
         and set(heard) == {"day", "pet"}
-        and _iso(heard["day"])
+        and _memory_day(heard["day"], today)
         and isinstance(heard["pet"], str)
         and _PET_ID.fullmatch(heard["pet"])
     ):
@@ -836,14 +844,14 @@ def _memory(v: Any) -> dict[str, Any] | None:
     return out
 
 
-def _person(record: dict[str, Any]) -> dict[str, Any]:
+def _person(record: dict[str, Any], today: str | None = None) -> dict[str, Any]:
     """One person's record as loaded, with the shapes its readers expect."""
     out = dict(record)
     for key, ok in _PERSON_KEYS.items():
         if key in out and not ok(out[key]):
             del out[key]
     if "memory" in out:
-        memory = _memory(out["memory"])
+        memory = _memory(out["memory"], today)
         if memory is None:
             del out["memory"]
         else:
@@ -1271,4 +1279,9 @@ async def async_erase_unless_allowed(hass: HomeAssistant, leaving: str) -> int:
     people: People | None = hass.data.get(DOMAIN, {}).get("people")
     if people is None:
         return 0
-    return await people.forget_all_memory()
+    gone = await people.forget_all_memory()
+    # Every loaded pet tells its watchers, so a card's memory_on is never stale (it shows
+    # on any pet while on, whatever that pet allows).
+    for pet in hass.data.get(DOMAIN, {}).get("pets", {}).values():
+        pet._push_watchers()
+    return gone

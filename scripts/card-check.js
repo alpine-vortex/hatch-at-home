@@ -8736,6 +8736,22 @@ async function main() {
     s.mine.memory_allowed = false; // a pet whose option is off: no row
     draw();
     out.notAllowed = !!bell();
+    // Memory on while this pet's option is off: the row stays, and a double tap turns it off
+    // (the server always allows off), so the person is never stuck with it on.
+    s.mine.memory_on = true;
+    draw();
+    out.onDisallowed = { row: !!bell(), text: bell()?.textContent };
+    calls.length = 0;
+    conn.sendMessagePromise = function (msg) { calls.push(msg); return realSend.call(this, msg); };
+    if (bell()) {
+      bell().click();
+      await wait(700);
+      bell()?.click();
+      for (let i = 0; i < 40 && s.mine?.memory_on; i++) await wait(100);
+    }
+    conn.sendMessagePromise = realSend;
+    out.onDisallowed.after = s.mine?.memory_on;
+    out.onDisallowed.calls = calls.filter((m) => m.type === "virtual_pet/memory").map((m) => `${m.enabled}/${m.shared}`);
     s.mine.memory_allowed = allowed;
     localStorage.setItem("hatch-shared-screen", "on"); // a shared screen: no row
     draw();
@@ -8756,6 +8772,10 @@ async function main() {
     JSON.stringify(memory));
   check("remember me has no row where the pet doesn't allow it, nor on a shared screen",
     !memory.notAllowed && !memory.shared, JSON.stringify(memory));
+  check("remember me stays on a pet that doesn't allow it while it is on, and two taps turn it off",
+    memory.onDisallowed.row && memory.onDisallowed.text === "on" && memory.onDisallowed.after === false
+      && memory.onDisallowed.calls.join() === "false/false",
+    JSON.stringify(memory.onDisallowed));
   // Quiet samples: _mayPlay's rules, and the tap still unlocks audio.
   const samples = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));

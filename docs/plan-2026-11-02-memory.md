@@ -92,6 +92,11 @@ built on it.
 
 - **M0 audit (s2739, tier 2): 0 player-impact findings, 6 nits.** (The R1 tally belongs in
   the favourite plan, not here.)
+- **M1a audit (s2758, tier 2): 1 player-impact finding, 5 nits** ("player-impact 1, nits
+  5"). The fixes shipped in s2759: the row shows while memory is on (finding 1), the
+  admin erase pushes to every loaded pet (5), the row's fallback is the viewed pet's own
+  option and the row hides until it is known (4), memory's days are canonical ISO and
+  none after today at load (2); findings 3 and 6 are the notes in section 12 and the guide.
 
 ## 2. What was checked against the code
 
@@ -765,7 +770,9 @@ false; B's data is untouched.
   `memory_chosen_days` (at most 7 ISO days) in `_PERSON_KEYS`; `People.forget` keeps both
   with `birthday_skipped`.
 - **Card**: the settings row "remember me" (first-mate copy, 2026-11-02) beside "my day",
-  personal screens only and hidden unless `memory_allowed`; off is a two-tap confirm
+  personal screens only and hidden unless `memory_allowed` or memory is on (audit
+  finding 1: on a pet that disallows memory, an on row can only be turned off; the server
+  always allows off); off is a two-tap confirm
   (`memory_off`). `memoryRow` (ui-copy) draws it, `_setMemory` (card-sheets) sends
   `virtual_pet/memory` with `shared: false`. Its two status lines sit in `SETTINGS_AGAIN`
   beside `forgotMe` (over the fresh block's 40 characters, and "forgotten"). The card
@@ -777,6 +784,11 @@ false; B's data is untouched.
   stores the new options, could leave one record on with no pet allowing it. Nothing
   can write to it (every write checks this pet's option), but only "forget my data" or
   another off-save clears it. Small window; not fixed in M1a.
+- **Remainder (two options saves at once)**: each flow's erase check reads the other pet
+  entry's stored options before either has saved, so two admins (or two tabs) turning off
+  two different pets' options at the same moment can each see the other "on", and neither
+  erases. Known race, accepted (M1a audit finding 3): no pet allows memory, so nothing
+  writes, and the next options save or "forget my data" clears it.
 
 **M1b (tier 2): the ask and the doors.**
 - The ask as section 5, with its three guards (not in `ONCE_KINDS`, the `shown` write,
