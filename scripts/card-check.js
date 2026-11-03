@@ -12000,6 +12000,27 @@ async function main() {
     await page.waitForTimeout(1200);
     const feedMid = await feedLook();
     await shot("care-feed-mid");
+    // A meal takes a stray tap on the screen, but not the taps of the status sheet opened over it.
+    const overMeal = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      s.screen.click();
+      await new Promise((r) => setTimeout(r, 50));
+      const out = { sceneAfterTap: s.scene?.kind || null, statusAfterTap: s.screen.classList.contains("show-status") };
+      el._toggleStatus(s);
+      const probe = document.createElement("button");
+      let heard = 0;
+      probe.addEventListener("click", (e) => { e.stopPropagation(); heard++; });
+      s.status.appendChild(probe);
+      probe.click();
+      probe.remove();
+      out.heard = heard;
+      out.scene = s.scene?.kind || null;
+      el._toggleStatus(s);
+      return out;
+    });
+    check("feed: a meal takes a stray screen tap, and the status sheet opened over it keeps its taps",
+      overMeal.sceneAfterTap === "feed" && !overMeal.statusAfterTap && overMeal.heard === 1 && overMeal.scene === "feed",
+      JSON.stringify(overMeal));
     const feedDone = await feedEnd();
     check("feed: a tap starts the bowl scene; a second tap is ignored (one call, the scene goes on)",
       feedStart.scene === "feed" && feedStart.bowl && feedStart.calls === feedCalls + 1 && feedMid.scene === "feed" &&

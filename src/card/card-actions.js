@@ -149,8 +149,10 @@ class HatchPetCardActions extends HatchPetCardJournal {
     this._patSync(s);
     for (const el of [s.pet, s.perch]) el.style.transition = "none";
     // A tap on the screen ends a skippable one; a meal's takes the tap and does nothing.
-    // Either way it doesn't open the status.
+    // Either way it doesn't open the status. The status sheet, opened over it, keeps its own
+    // taps: a meal plays for seconds, and its settings must not go dead under it.
     sc.stop = (e) => {
+      if (s.status?.contains(e.target)) return;
       e.stopImmediatePropagation();
       if (entry.skippable) this._sceneEnd(s);
     };
