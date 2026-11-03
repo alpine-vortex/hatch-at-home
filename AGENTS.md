@@ -56,6 +56,25 @@ Where things live:
 move: `node scripts/split-card.js --port <merge-base> <branch>` (see
 docs/plan-2026-11-02-card-split.md section 6). It goes once no such branch is left.
 
+## Motion on the card (composition rule)
+
+The pet's `transform` is shared, so two moves can silently cancel each other. The rule:
+
+- **Persistent state uses the individual properties.** `translate` = position (wander,
+  go-left/right, the link slide), `rotate` = a flip or a lean (`look`, `twirl`, `spin`),
+  `scale` = size (the species scale, `--k`). They compose with each other and with a
+  keyframe on `transform`.
+- **A one-shot body move is one `.pet.<cls> { animation }` on `transform`**, one at a
+  time. `_animate` restarts only the class it is given, it does not clear another one. Two
+  classes with an `animation` on at once means the later rule in the CSS wins and the
+  other move is lost, so a new move waits for, or replaces, the last.
+- A new flip is a `@keyframes` (the bench's `petAt` can pause it), never only a
+  `transition`. A new one-shot is not an infinite loop; every motion honours the OS
+  reduced-motion rule at the top of `style.js`, and a JS-started one checks `calm()`.
+- `tests/js/motion_rule.test.js` fails when a `.pet.<cls>` rule with an `animation` is
+  not on its list. A new class goes on the list only after you have checked it cannot be
+  on with another one (or says so in a comment next to the rule).
+
 ## Screenshots: use the card bench, not Home Assistant
 
 The default for any screenshot, render, contact sheet or visual review of the card
