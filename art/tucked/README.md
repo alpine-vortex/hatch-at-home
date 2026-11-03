@@ -1,25 +1,30 @@
-# Tucked-in blanket probe (2026-11-03, s2777)
+# Tucked-in blanket set (s2799; probe s2777)
 
-A probe, not shipped: bespoke tucked-in blanket art per species, to replace the shared
-`ui/drape_*` (owner rejected it: "flat cream slab, no fold or pattern, the kitten sinks into it").
-Nothing here is wired into the card, `species.json` or any copy.
+Bespoke tucked-in blanket art per species and stage, to replace the shared `ui/drape_*` (owner
+rejected it 2026-11-03; chose bespoke over no blanket). Art only: nothing here is wired into the
+card, `species.json` or any copy yet.
 
-Five pets, one blue quilt-patch blanket (checkerboard of two blues, cream stitch dots, lighter
-hem binding, dark navy outline, a fold): kitten baby, gecko adult, owl teen, octopus adult, fox adult.
+One blue quilt-patch blanket on every pet: checkerboard of two dusty blues, cream stitch dots,
+lighter hem binding, dark navy outline, one fold. One contiguous piece lying over the body.
 
-Per pet:
+Per `<species>_<stage>` (every hatched stage of every species that has an asleep frame):
 
-- `<species>_<stage>_tucked.png`: the full replacement sprite. Sol (`gpt-6.1-sol`) redrew the
-  pet's asleep frame with the blanket on it (the asleep frames were the image references);
-  `cut_tucked.py` keys the grey, scales to the asleep frame's width, puts the feet on y=224 and snaps
-  to the 4 px art grid (28 colours).
-- `<species>_<stage>_tucked_comp.png`: the same blanket pasted over the ORIGINAL asleep frame
-  (`comp.py`: blue pixels of the tucked frame, closed and hole-filled, replace the original's pixels).
-  Face, fur and eyes are exactly the shipped sprite's. It keeps the original's finer-than-4 px detail,
-  so it is not a uniform 4 px grid (the shipped sprites are not either).
-- `fox_adult_tucked_B*.png`: fox rework (tail kept visible; the blanket shrank to a saddle patch).
-- `source/*_raw.png`: Sol's raw output on flat grey. `SHA256SUMS` lists every file.
-- `sheet.py OUT.png .` renders the review sheet (existing | old shared drape | tucked day | tucked
-  at `brightness(.8)` on the dim room | composite).
+- `<species>_<stage>_tucked_comp.png`: **the one to use.** The SHIPPED `<stage>_asleep_1.png`
+  with only the blanket composited over it (256x256, feet y=224 as shipped). Face, fur, eyes and
+  everything outside the blanket are exactly the shipped sprite's pixels. `comp.py` builds it:
+  blanket mask = blue/navy pixels of the tucked frame below, closed on the 64x64 art grid, holes
+  filled, largest piece only, clipped to the original's silhouette (so it never widens the pet).
+  On the water pets (duckling, otter) pixels already water-blue in the original are not blanket.
+- `<species>_<stage>_tucked.png`: the source of that mask. Sol (`gpt-6.1-sol`) redrew the asleep
+  frame (asleep_1 and asleep_2 as references) with the blanket on it; `cut_tucked.py` keys the
+  grey, scales to the asleep frame's width, puts the feet on y=224 and snaps to the 4 px art grid
+  (28 colours). Not for use itself: the redraw loses the original's finer detail.
+- `source/*_raw.png`: Sol's raw output on flat grey, stored at 512x512 and 64 colours to keep the
+  repo small (the full 1024 px files are in the worker archive).
+- `SHA256SUMS` lists every file. `sheet.py` is the probe's 5-pet review sheet (kept for reference).
 
-Prompts and the call log are not committed (see the private notes).
+Reworked frames (the first try failed the reject rule: tiny blanket, blanket over the tail,
+blanket hanging below the body) are listed in the s2799 report. Prompts and the call log are
+not committed.
+
+Beetle has only a baby stage, so it has one frame.
