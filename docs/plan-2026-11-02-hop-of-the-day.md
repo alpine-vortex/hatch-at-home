@@ -1136,6 +1136,9 @@ Only a phone shows these. Each ship above stands without them; they tune numbers
 - The piece's 140 ms glide, the dotted path and the arc (hop, glide) on a real LCD: too
   quick, too slow, or invisible at 19 px?
 - Glide's diagonal special has no key; it is tapped only. Is that found without a hint?
+- The picker at the smallest width (a 284 px card, LCD 180×135): the three games already run
+  6 px past the LCD's foot and the second touches the close button (found by 2b's baseline, not
+  caused by the row). Is that visible on a phone, and does the picker need its own 300 px fix?
 
 ## 10. Docs the build updates
 
