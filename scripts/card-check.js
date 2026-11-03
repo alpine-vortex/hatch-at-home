@@ -11947,37 +11947,38 @@ async function main() {
       }
     }
     // Care B1, the feed scene (plan care-reactions 5.1, 13). A pet awake with room to eat.
-    const feedState = async (p, hunger = "60") => {
+    const feedState = async (p, hunger = "60", kind = "feed") => {
       await put(p, "binary_sensor.asleep", { state: "off" });
       await put(p, "switch.lights_out", { state: "off" });
       await put(p, "binary_sensor.calling", { state: "off" });
       await put(p, "sensor.mood", { state: "content", attributes: { flags: [], requests: [] } });
       await put(p, "sensor.hunger", { state: hunger });
-      await put(p, "button.feed", { state: "unknown" });
+      await put(p, `button.${kind}`, { state: "unknown" });
       await page.waitForTimeout(600);
       await card.evaluate((el) => {
         const s = el._slides[el._index];
         s.sayUntil = 0; s.poseUntil = 0; s.propUntil = 0; s.prop.style.display = "none"; s.queue = [];
         s.pet.classList.remove("look", "wander-l", "wander-r", "hop");
-        s.pinVariant = { feed: "A", "feed.extra": "none" };
+        s.pinVariant = { feed: "A", "feed.extra": "none", snack: "A" };
       });
     };
-    const feedTap = (twice = false) => card.evaluate(async (el, twice) => {
+    const feedTap = (twice = false, kind = "feed") => card.evaluate(async (el, [twice, kind]) => {
       const s = el._slides[el._index];
       window.__feedSeen = [];
       clearInterval(window.__feedWatch);
       window.__feedWatch = setInterval(() => window.__feedSeen.push(s.pet.getAttribute("src") || ""), 50);
-      s.buttons.feed.click();
+      s.buttons[kind].click();
       if (twice) {
         await new Promise((r) => setTimeout(r, 40));
-        s.buttons.feed.click();
+        s.buttons[kind].click();
       }
-    }, twice);
+    }, [twice, kind]);
     const feedLook = () => card.evaluate((el) => {
       const s = el._slides[el._index];
       const sc = s.scene;
       return { scene: sc?.kind || null, calls: el.__calls.length, result: sc?.result || null, refuseAt: sc?.refuseAt ?? null,
         answerAt: sc?.answerAt ?? null, gate: sc?.gate ?? null, bowl: !!s.screen.querySelector(".scene-bowl"),
+        snack: !!s.screen.querySelector(".scene-snack"), greethops: window.__greethops || 0,
         els: s.screen.querySelectorAll(".scene, .scene-crumb, .scene-spark").length, line: s.bubble.textContent,
         translate: s.pet.style.translate, rotate: s.pet.style.rotate, look: s.pet.classList.contains("look"),
         fade: s.sceneFade?.kind || null, owes: (s.sceneOwes || []).map((o) => `${o.kind}${o.late ? ":late" : ""}`).join(),
@@ -12000,13 +12001,14 @@ async function main() {
     await page.waitForTimeout(1200);
     const feedMid = await feedLook();
     await shot("care-feed-mid");
-    // A meal takes a stray tap on the screen, but not the taps of the status sheet opened over it.
+    // A meal leaves screen taps alone (plan 4.3, FM decision 2026-11-02): the tap reaches the screen's own
+    // handler (it opens the status) and the meal plays on; the sheet opened over it keeps its taps.
     const overMeal = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
       s.screen.click();
       await new Promise((r) => setTimeout(r, 50));
       const out = { sceneAfterTap: s.scene?.kind || null, statusAfterTap: s.screen.classList.contains("show-status") };
-      el._toggleStatus(s);
+      if (!out.statusAfterTap) el._toggleStatus(s);
       const probe = document.createElement("button");
       let heard = 0;
       probe.addEventListener("click", (e) => { e.stopPropagation(); heard++; });
@@ -12018,8 +12020,8 @@ async function main() {
       el._toggleStatus(s);
       return out;
     });
-    check("feed: a meal takes a stray screen tap, and the status sheet opened over it keeps its taps",
-      overMeal.sceneAfterTap === "feed" && !overMeal.statusAfterTap && overMeal.heard === 1 && overMeal.scene === "feed",
+    check("feed: a meal leaves a screen tap alone (the status opens, the meal plays on), and the sheet keeps its taps",
+      overMeal.sceneAfterTap === "feed" && overMeal.statusAfterTap && overMeal.heard === 1 && overMeal.scene === "feed",
       JSON.stringify(overMeal));
     const feedDone = await feedEnd();
     check("feed: a tap starts the bowl scene; a second tap is ignored (one call, the scene goes on)",
@@ -12076,6 +12078,66 @@ async function main() {
     await page.emulateMedia({ reducedMotion: null });
     check("feed under reduced motion: no scene element, the news fades in, the pose still changes",
       !calmTap.scene && calmTap.els === 0 && calmTap.fade === "feed" && calmDone.pose, JSON.stringify({ calmTap, calmDone }));
+    // Care B2, the snack scene (plan 5.2): the same shape as the meal. The toss, one greethop across the
+    // scene, a double tap sends one call, the pet eats, the line is said, nothing is left behind.
+    // Every greethop the card adds (the scene's delight, or the layout's own for the mood it brings).
+    const snackCount = (on = true) => card.evaluate((el, on) => {
+      window.__greethops = 0;
+      if (on && !el.__animate) {
+        el.__animate = el._animate;
+        el._animate = function (s, e, cls, ms) {
+          if (cls === "greethop") window.__greethops++;
+          return el.__animate.call(this, s, e, cls, ms);
+        };
+      } else if (!on && el.__animate) {
+        el._animate = el.__animate;
+        delete el.__animate;
+      }
+    }, on);
+    await feedState(pet, "60", "snack");
+    const snackCalls = (await feedLook()).calls;
+    await snackCount();
+    await feedTap(true, "snack");
+    await page.waitForTimeout(80);
+    const snackStart = await feedLook();
+    await answer(pet, "snack");
+    await page.waitForTimeout(1000);
+    const snackMid = await feedLook();
+    await shot("care-snack-mid");
+    const snackDone = await feedEnd();
+    const snackHops = (await feedLook()).greethops;
+    await snackCount(false);
+    check("snack: a tap starts the toss; a second tap is ignored (one call, the scene goes on)",
+      snackStart.scene === "snack" && snackStart.snack && snackStart.calls === snackCalls + 1 && snackMid.scene === "snack" &&
+      snackMid.result === "ok" && snackDone.calls === snackCalls + 1, JSON.stringify({ snackStart, snackMid }));
+    check("snack: the pet eats (eat frames), says its line, hops once, and leaves no scene, translate, rotate or look",
+      snackDone.eat && !snackDone.scene && snackDone.els === 0 && !snackDone.translate && !snackDone.rotate && !snackDone.look &&
+      snackDone.line.length > 0 && !/full|didn't work/.test(snackDone.line) && snackHops === 1, JSON.stringify({ snackDone, snackHops }));
+    // A spoiled reply (a fake call whined for it) is eaten: one scene, a smug line, no snack on the floor.
+    await feedState(pet, "60", "snack");
+    await feedTap(false, "snack");
+    await page.waitForTimeout(150);
+    await answer(pet, "snack", "spoiled");
+    await page.waitForTimeout(1500);
+    const smug = await feedLook();
+    const smugEnd = await feedEnd();
+    check("snack: a spoiled reply is eaten in the scene (result ok), then smug; nothing is left on the floor",
+      smug.scene === "snack" && smug.result === "ok" && !smugEnd.scene && smugEnd.els === 0 && smugEnd.prop === "" &&
+      smugEnd.eat, JSON.stringify({ smug, smugEnd }));
+    // A stale card: the push-away, the refusal said, one call.
+    await feedState(pet, "60", "snack");
+    const snackStaleCalls = (await feedLook()).calls;
+    await feedTap(false, "snack");
+    await page.waitForTimeout(150);
+    await answer(pet, "snack", "full");
+    await page.waitForTimeout(700);
+    const snackStale = await feedLook();
+    const snackStaleEnd = await feedEnd();
+    check("snack: a stale card's full is a push-away, its line said, one call",
+      snackStale.scene === "snack" && snackStale.result === "full" && snackStale.refuseAt !== null && /full/.test(snackStale.line) &&
+      snackStaleEnd.calls === snackStaleCalls + 1 && !snackStaleEnd.scene && snackStaleEnd.els === 0 && !snackStaleEnd.look,
+      JSON.stringify({ snackStale, snackStaleEnd }));
+    await card.evaluate((el) => { delete el._slides[el._index].pinVariant; });
     // The real server, once: the tap to the answer, logged, and over the gate (650 ms) fails (plan 13).
     await feedState(pet);
     const measured = await card.evaluate(async (el) => {

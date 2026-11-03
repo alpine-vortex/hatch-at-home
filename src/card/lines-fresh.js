@@ -453,11 +453,17 @@ const CLOCK_LINES = {
     night: ["five more minutes... ♥", "*curls up tighter* too early..."],
   },
 };
-// Care reactions B1 (plan-2026-11-02-care-reactions.md 14, DRAFT): a meal's 1-in-4 extra at
+// Care reactions B1 (plan-2026-11-02-care-reactions.md 14, approved): a meal's 1-in-4 extra at
 // its end, said bare in place of the meal line. tummy goes with the heart; burp only when heavy.
 const FEED_LINES = {
   lick: ["*licks its lips*"],
   tummy: ["*pats its tummy*"],
   burp: ["*burp* ...pardon me"],
+};
+// Care reactions B2 (plan 14; "*gotcha!*" and "*pounce!*" approved, the smug row struck by the FM):
+// a snack scene's line, said bare at the delight beat. catch: variants A, C and D; miss: B.
+const SNACK_LINES = {
+  catch: ["*gotcha!*"],
+  miss: ["*pounce!*"],
 };
 // --- end fresh-expand copy ---

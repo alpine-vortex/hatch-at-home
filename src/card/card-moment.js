@@ -321,7 +321,11 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         if (!seasonNow(this._config)?.snack) {
           const food = short(m.food, 16);
           const said = this._lines(s, "favourite_snack", `${food}, my favourite!!`, food);
-          line(said.text, 4500, null, { catch: !said.baby, perk: true });
+          // A snack scene playing it has the day's bighop and sparkle at its delight (plan 5.2): the
+          // moment's own perk would be a second hop.
+          const scene = s.scene?.kind === "snack" ? s.scene : null;
+          if (scene) scene.fav = true;
+          line(said.text, 4500, null, { catch: !said.baby, perk: !scene });
         }
         break;
       case "tv_off_late":

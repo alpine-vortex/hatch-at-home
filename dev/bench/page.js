@@ -277,9 +277,40 @@
   // step it began on. Timers still pending at `careAt` are dropped.
   // The scene's own prop is decoded first: the card measures it at the tap, and an image
   // still loading has no width (a first tap in a browser can differ; the bench must not).
+  async function snackBox(cur, sc) {
+    const img = cur.pet;
+    await img.decode().catch(() => {}); // the beat's frame may have just been set
+    const c = document.createElement("canvas");
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height).data;
+    let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+    for (let y = 0; y < c.height; y++) {
+      for (let x = 0; x < c.width; x++) {
+        if (d[(y * c.width + x) * 4 + 3] > 8) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+    }
+    const r = img.getBoundingClientRect();
+    const flipped = img.classList.contains("look");
+    const sx = r.width / c.width;
+    const sy = r.height / c.height;
+    const left = flipped ? r.left + (c.width - 1 - x1) * sx : r.left + x0 * sx;
+    const right = flipped ? r.left + (c.width - x0) * sx : r.left + (x1 + 1) * sx;
+    const s = sc.snack.getBoundingClientRect();
+    return { cx: s.left + s.width / 2, cy: s.top + s.height / 2, box: [left, r.top + y0 * sy, right, r.top + (y1 + 1) * sy], head: cur.species?.head?.[cur.drawn] || null };
+  }
+
   async function careSeek(card, cur, shot) {
     const at = shot.careAt ?? 1500;
-    const own = { medicine: cur.species?.props?.medicine || "bird/medicine", feed: cur.species?.props?.feed || "bird/bowl_food" }[shot.care];
+    const own = { medicine: cur.species?.props?.medicine || "bird/medicine", feed: cur.species?.props?.feed || "bird/bowl_food",
+      snack: cur.species?.props?.snack || "snack" }[shot.care];
     if (own) {
       const img = new Image();
       img.src = spriteSrc(cur.speciesId, own);
@@ -353,6 +384,9 @@
         }
         // What one frame of the scene costs here (plan 8: the first mate reads it once).
         window.bench.info = { renderMs: renders ? renderMs / renders : 0, els: sc.els.length };
+        // `snackCatch` (care B2): where the snack's centre is and the pet's opaque box is, in screen px, at
+        // this beat: the catch point's pass rule (bench.js snackCatchPass) is the first inside the second.
+        if (shot.snackCatch && sc.snack && cur.scene === sc) window.bench.info.snack = await snackBox(cur, sc);
       }
     } finally {
       window.setTimeout = realSet;

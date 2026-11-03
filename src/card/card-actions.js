@@ -278,9 +278,10 @@ class HatchPetCardActions extends HatchPetCardJournal {
     if (!sc) return;
     const entry = SCENES[sc.kind];
     if (sc.answerAt == null) sc.answerAt = at;
-    if (result === "ok") {
+    if (isYes({ action: sc.kind, result })) {
       sc.answered = true;
       sc.result ??= "ok";
+      if (result === "spoiled") sc.spoiled = true; // eaten, then smug (the entry's end beat)
       return;
     }
     if (!entry?.refuse) {
@@ -318,7 +319,7 @@ class HatchPetCardActions extends HatchPetCardJournal {
   // Someone else's care never answers a scene. Under reduced motion the news fades in.
   _sceneOffer(s, entry, claimed) {
     const kind = sceneKind(entry.action);
-    const ok = entry.result === "ok";
+    const ok = isYes(entry);
     const sc = s.scene;
     if (sc?.kind === kind && claimed && sc.failAt == null) {
       if (ok && sc.answered) return false; // a second ok: the floor's

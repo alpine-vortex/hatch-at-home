@@ -223,17 +223,7 @@ const SCENES = {
       sc.fullAt = at; // the satisfied beat: step back, content, a breath
       sc.leaveAt = at + 500;
       sc.ms = sc.leaveAt + 400;
-      // Frames: the species' own where it has them, else the ladder (plan 7): a child's own feed
-      // pose (rung 1), else its mood frames (rung 3).
-      const mood = (m) => s.species.moods?.includes(m) && s.drawn
-        ? Array.from({ length: s.species.frames || 1 }, (_, i) => `${s.drawn}_${m}_${i + 1}`) : null;
-      const pose = s.drawn === "child" && s.species.extras?.[s.species.reactions?.feed];
-      sc.eat = this._sceneFrames(s, "eat") || (pose ? [].concat(pose) : null) || mood("excited");
-      sc.refuse = this._sceneFrames(s, "refuse") || mood("bored");
-      sc.hungry = mood("hungry");
-      sc.excited = mood("excited");
-      sc.content = mood("content");
-      sc.sleepy = mood("sleepy");
+      this._careFrames(s, sc, "feed");
       // The bowl: the prop's place (left 67%, 22% high, a square sprite); the pet steps up until
       // its front (most of the way across its frame) is at the bowl's middle.
       sc.bowl = add("img", "scene scene-bowl");
@@ -399,11 +389,208 @@ const SCENES = {
       return null;
     },
   },
+
+  // Snack (plan 5.2): tossed and caught. The snack flies in from the bottom-left in an arc to the
+  // pet's catch point (catchPoint), the pet catches it (A), or it misses and bounces and the pet
+  // pounces (B), or it lands in front and is nibbled, a round bite at a time (C), or it is caught
+  // and stashed in the cheeks (D, a hoarder's). Gate 650: the toss is the pet noticing; the
+  // catch ends at 700 (the snack goes into the mouth, hidden). A full before the gate has the
+  // snack drop and roll out; after it, the catch (or the bite in progress) is finished first.
+  snack: {
+    ms: 1950,
+    gate: 650,
+    skippable: false,
+    playOwed: true,
+    refuseMs: 900,
+    due(s) {
+      const hunger = Number.parseFloat(this._state(s, "sensor.hunger")?.state);
+      return Number.isFinite(hunger) && hunger < FEED_FULL_AT;
+    },
+    setup(s, sc, { add, box, pet }) {
+      const sw = box.width;
+      const sh = box.height;
+      const habit = nature(s.species)?.habit;
+      // The variants (4.7, no-repeat): D (stash) is a hoarder's, nobody else's unless pinned; the
+      // nature hook: a hoarder stashes, a performer pounces, a watcher or basker savours, half the time.
+      const pinned = s.pinVariant?.snack;
+      const pool = ["A", "B", "C", ...(habit === "hoarder" || pinned === "D" ? ["D"] : [])];
+      const own = { hoarder: "D", performer: "B", watcher: "C", basker: "C" }[habit];
+      sc.variant = !pinned && own && s.lastVariant?.snack !== own && Math.random() < 0.5
+        ? ((s.lastVariant ||= {}).snack = own) : this._careVariant(s, "snack", pool);
+      const v = sc.variant;
+      sc.fired = new Set();
+      const pace = Math.min(1.2, Math.max(0.8, PACE_SCALE[paceOf(s.species)] || 1)); // +-20% at most (4.8)
+      // The line (5.2 hooks), said once at the delight beat: a season's own, else the heavy line
+      // (half the time), else (unless the favourite-snack moment says its own) SNACK_LINES.
+      const weight = Number.parseFloat(this._state(s, "sensor.weight")?.state);
+      sc.heavy = isHeavy(Number.isFinite(weight) ? weight : null);
+      const season = seasonNow(this._config);
+      sc.candy = season?.snack ? `../ui/season_${season.key}_${season.snack}` : null;
+      sc.line = sc.candy ? pick(season.snackLines || ["a treat! ♪"])
+        : sc.heavy && Math.random() < 0.5 ? pick(HEAVY_SNACK) : null;
+      // Where it goes: the catch point; B and C land on the floor in front of the pet.
+      sc.mouth = catchPoint(s, pet, box);
+      sc.floorY = pet.top - box.top + (pet.height * 224) / 256 - 0.04 * sh; // the feet line, and a snack's half height
+      sc.dir = sc.mouth.x >= pet.left - box.left + pet.width / 2 ? 1 : -1; // the way it faces
+      const floor = v === "B" || v === "C";
+      sc.land = floor ? { x: Math.min(0.92 * sw, Math.max(0.08 * sw, sc.mouth.x + sc.dir * 0.1 * sw)), y: sc.floorY } : sc.mouth;
+      sc.pounceX = v === "B" ? sc.dir * 0.07 * sw : 0;
+      // The beats, ms on the scene's clock. The catch is over at 700 (B: the pounce, 700-850); a
+      // heavy pet looks at it for 400 ms first; then the chews (C: three nibbles); D then puffs its cheeks.
+      let at = v === "B" ? 850 : 700;
+      sc.hideAt = v === "B" ? 800 : v === "C" ? Infinity : 700;
+      if (sc.heavy) {
+        sc.lookAt = at;
+        at += 400;
+      }
+      const len = Math.round(300 * pace);
+      sc.chews = Array.from({ length: v === "C" ? 3 : v === "D" ? 1 : 2 }, (_, i) => ({ at: at + i * len, len }));
+      at += sc.chews.length * len;
+      if (v === "D") {
+        sc.puffAt = at;
+        at += 450;
+      }
+      if (v === "C") sc.hideAt = at;
+      sc.delightAt = at;
+      sc.settleAt = at + 450;
+      sc.ms = sc.settleAt + 200;
+      this._careFrames(s, sc, "snack");
+      sc.snack = add("img", "scene scene-snack");
+      this._sceneArt(s, sc.snack, sc.candy || s.species.props?.snack || "snack");
+      sc.pos = { x: 0, y: 0, rot: 0, shown: false };
+    },
+    render(s, sc, t, { sw, sh, ramp, ease }) {
+      const once = (key) => !sc.fired.has(key) && sc.fired.add(key);
+      const v = sc.variant;
+      const { mouth, land } = sc;
+      // The snack: thrown from the bottom-left edge in a parabola (a turn and a half), then held at
+      // the mouth (A, D), or bouncing once on the floor (B), or sitting there (C) under its nibbles.
+      const k = ramp(100, 550);
+      const from = { x: -0.06 * sw, y: 0.92 * sh };
+      let x = from.x + (land.x - from.x) * k;
+      let y = from.y + (land.y - from.y) * k - 4 * 0.3 * sh * k * (1 - k);
+      if (v === "B") y -= 0.07 * sh * Math.sin(Math.PI * ramp(550, 700));
+      if (v === "C") y -= 0.025 * sh * Math.sin(Math.PI * ramp(550, 650));
+      const shown = t >= 100 && t < sc.hideAt;
+      const into = v === "B" ? ease(750, 800) : v === "C" ? 0 : ease(600, 700); // into the mouth
+      sc.pos = { x, y, rot: 540 * k, shown };
+      sc.snack.style.opacity = shown ? "1" : "0";
+      sc.snack.style.translate = `calc(${x}px - 50%) calc(${y}px - 50%)`;
+      sc.snack.style.rotate = `${540 * k}deg`;
+      sc.snack.style.scale = String(1 - 0.35 * into);
+      if (v === "C") {
+        // Each nibble takes a round bite out of it (a mask, no art); the last takes what is left.
+        const cuts = sc.chews.map((b, i) => [SNACK_NIBBLES[i], ease(b.at + 60, b.at + 160)]).filter(([, e]) => e > 0);
+        sc.snack.style.maskImage = cuts.map(([[cx, cy, r], e]) => `radial-gradient(circle at ${cx}% ${cy}%, transparent ${r * e}%, #000 ${r * e + 1}%)`).join(",");
+        sc.snack.style.maskComposite = "intersect";
+        sc.snack.style.webkitMaskComposite = "source-in";
+      }
+      // The pet: watches the pad, hops up to catch it (A, D), hops at it where it fell (B), leans
+      // into each chew, looks round while the cheeks are full (D).
+      let px = 0;
+      let py = 0;
+      if (v === "A" || v === "D") py = -0.05 * sh * Math.sin(Math.PI * ramp(550, 700));
+      if (v === "B") {
+        px = sc.pounceX * (ease(700, 850) - ease(sc.delightAt, sc.delightAt + 250));
+        py = -0.06 * sh * Math.sin(Math.PI * ramp(700, 850));
+      }
+      s.pet.style.translate = `${px}px ${py}px`;
+      s.perch.style.translate = `${px}px 0`;
+      let lean = -4 * (ease(0, 100) - ease(200, 300)); // a look toward the pad
+      for (const b of sc.chews) lean += (v === "C" ? 5 : 3) * (ease(b.at, b.at + 60) - ease(b.at + 120, b.at + 200));
+      if (sc.lookAt != null) lean -= 3 * (ease(sc.lookAt, sc.lookAt + 100) - ease(sc.lookAt + 300, sc.lookAt + 400));
+      if (sc.puffAt != null) lean += 3 * Math.sin(2 * Math.PI * ramp(sc.puffAt, sc.puffAt + 450));
+      s.pet.style.rotate = `${lean}deg`;
+      for (const b of sc.chews) {
+        if (t >= b.at + 120 && once(`chomp${b.at}`)) this._animate(s, s.pet, "chomp", 280);
+      }
+      if (sc.puffAt != null && t >= sc.puffAt && once("puff")) this._animate(s, s.pet, "puff", 450);
+      // The delight: one greethop (the favourite snack's day: a bighop and the sparkle), a heart; a
+      // spoiled one is eaten, then smug: two rocks and the existing line, no hop. The ok is in by
+      // now (the gate saw to it). Sets excitedSince at the end (clear) so the layout does not hop again.
+      if (t >= sc.delightAt && once("delight")) {
+        if (sc.spoiled) this._animate(s, s.pet, "rock2", 1250);
+        else this._animate(s, s.pet, sc.fav ? "bighop" : "greethop", 1400);
+        if (sc.fav) this._sparkle(s);
+        if (!sc.spoiled && !s.asleep) this._bondHearts(s, "carehearts", sc.fav ? 2 : 1);
+        const said = sc.spoiled ? this._lines(s, "REFUSALS.spoiled", REFUSALS.spoiled).text
+          : sc.line || (sc.fav || Math.random() >= SNACK_LINE_ODDS ? null : pick(SNACK_LINES[v === "B" ? "miss" : "catch"]));
+        if (said && sc.result === "ok") this._line(s, MINE, said, Math.max(3000, MINE_MS), { write: true, type: "care" });
+      }
+      // Frames, beat by beat.
+      const eat = (b) => sc.eat && [sc.eat[t < b.at + 120 ? 0 : Math.min(1, sc.eat.length - 1)]];
+      if (t < 550) return null;
+      if (v === "B" && t < 700) return sc.excited;
+      if (v !== "B" && t < 700) return sc.eat && [sc.eat[0]];
+      if (v === "B" && t < 850) return sc.excited;
+      for (const b of sc.chews) if (t >= b.at && t < b.at + b.len) return eat(b);
+      if (sc.lookAt != null && t >= sc.lookAt && t < sc.lookAt + 400) return sc.excited && [sc.excited[0]];
+      if (sc.puffAt != null && t >= sc.puffAt && t < sc.puffAt + 450) return sc.eat && [sc.eat[0]];
+      return t >= sc.delightAt && t < sc.settleAt ? sc.cheer || sc.excited : null;
+    },
+    // Full: before the gate the snack drops and rolls out; after it, the catch (to 700), or the
+    // chew in progress, is finished first (the snack is gone by then, or what is left of C's rolls
+    // out). Then the pet turns away from it.
+    refuseAt(s, sc, te) {
+      if (te < sc.gate || (te === sc.gate && sc.answerAt >= sc.gate)) return Math.max(te, 550);
+      if (te < sc.chews[0].at) return sc.variant === "C" ? te : sc.chews[0].at - (sc.heavy ? 400 : 0);
+      const b = sc.chews.find((x) => te >= x.at && te < x.at + x.len);
+      return b ? b.at + b.len : te;
+    },
+    refuse(s, sc, u, { sw, ramp, ease }) {
+      const pre = sc.refuseAt <= sc.gate;
+      const [sx, sy] = (s.pet.style.translate || "0px 0px").split(" ").map(Number.parseFloat); // render(refuseAt)'s
+      const back = 1 - ease(pre ? 250 : 0, pre ? 550 : 300);
+      s.pet.style.translate = `${sx * back}px ${(sy || 0) * back}px`;
+      s.perch.style.translate = `${sx * back}px 0`;
+      const sniff = pre ? 5 * (ease(0, 100) - ease(150, 250)) : 0;
+      const turned = u >= 250 && u < 750;
+      sc.looked = true;
+      s.pet.style.transition = turned || u >= 750 ? "rotate .2s ease-out" : "none";
+      s.pet.classList.toggle("look", turned);
+      s.pet.style.rotate = turned ? "" : `${sniff}deg`;
+      this._snackRollOut(sc, u, { sw, ramp, ease });
+      if (u < 250 && pre) return sc.hungry;
+      return sc.refuse;
+    },
+    // It gave up (no answer in 2 s) or the call failed: the snack, if it is still there, drops and
+    // rolls out, and the pet steps back to its own frame.
+    exit(s, sc, u, { sw, ramp, ease }) {
+      const back = 1 - ease(0, 300);
+      const [sx, sy] = (s.pet.style.translate || "0px 0px").split(" ").map(Number.parseFloat);
+      s.pet.style.translate = `${sx * back}px ${(sy || 0) * back}px`;
+      s.perch.style.translate = `${sx * back}px 0`;
+      s.pet.style.rotate = "";
+      this._snackRollOut(sc, u, { sw, ramp, ease });
+      return null;
+    },
+    clear(s, sc) {
+      // The mood the snack brings is first seen by the redraw after the scene: its hop was the
+      // delight's one greethop, not a second one from the layout (plan 5.2, B2).
+      if (sc.fired?.has("delight")) s.excitedSince = Date.now();
+    },
+  },
 };
 
 const FEED_GOBBLE = 30; // under this hunger the feed may be a gobble (variant C)
 const FEED_MAX_MS = 3200; // a feed scene never runs longer, whatever the pace (plan 8)
 const FEED_EXTRA_ODDS = 0.25; // a heart, a lick or a burp at the end of a meal
+const SNACK_LINE_ODDS = 1; // how often a snack scene says its SNACK_LINES line (the FM may thin it)
+const SNACK_NIBBLES = [[90, 25, 38], [8, 45, 40], [50, 55, 75]]; // C's three bites: centre (% of the snack) and radius
+
+// Where a snack is caught (plan 5.2, B2): species.json "head" is the crown of the head (a back,
+// wing or shell for some), in the 256 px frame of the drawn stage; the mouth is a fixed 8% of the
+// pet's height below it. Where a species gives "face" (the face's centre, for the five whose head
+// point is not a head) that is the point, 3% down. The pet's rect is its drawn box (the stage's
+// scale is in it); a flipped pet (.look) is mirrored. In px, from the screen's top left. Both
+// rects are the caller's.
+function catchPoint(s, pet, box) {
+  const face = s.species?.face?.[s.drawn];
+  const [hx, hy] = face || s.species?.head?.[s.drawn] || [128, 96];
+  const k = pet.height / 256;
+  const flipped = !!s.pet?.classList?.contains("look");
+  return { x: pet.left - box.left + (flipped ? 256 - hx : hx) * k, y: pet.top - box.top + hy * k + (face ? 0.03 : 0.08) * pet.height };
+}
 
 // The bowl's food shrinks by a stepped clip from the top (plan care-reactions 5.1): three
 // cuts that take a third, two thirds and all of the food above species.json "bowl_rim" (the
@@ -474,6 +661,37 @@ function bowlCuts(rows, rim) {
 }
 
 class HatchPetCardCare extends HatchPetCardActions {
+  // The frames a meal's scenes use: the species' own where it has them, else the ladder (plan 7):
+  // a child's own pose for this care (rung 1), else its mood frames (rung 3). `care` is the care's
+  // key in species.json "reactions" (feed, snack).
+  _careFrames(s, sc, care) {
+    const mood = (m) => s.species.moods?.includes(m) && s.drawn
+      ? Array.from({ length: s.species.frames || 1 }, (_, i) => `${s.drawn}_${m}_${i + 1}`) : null;
+    const pose = s.drawn === "child" && s.species.extras?.[s.species.reactions?.[care]];
+    sc.eat = this._sceneFrames(s, "eat") || (pose ? [].concat(pose) : null) || mood("excited");
+    sc.refuse = this._sceneFrames(s, "refuse") || mood("bored");
+    sc.hungry = mood("hungry");
+    sc.excited = mood("excited");
+    sc.content = mood("content");
+    sc.sleepy = mood("sleepy");
+  }
+
+  // A snack that is still there when the scene turns away (a full before the catch, a give-up):
+  // it drops where it was and rolls out toward the pad, spinning, and is gone (u ms in).
+  _snackRollOut(sc, u, { ramp, ease, sw }) {
+    const p = sc.pos;
+    if (!p?.shown) {
+      sc.snack.style.opacity = "0";
+      return;
+    }
+    const drop = ease(0, 220);
+    const roll = ease(220, 700);
+    sc.snack.style.opacity = String(1 - ramp(550, 700));
+    sc.snack.style.translate = `calc(${p.x - roll * 0.7 * sw}px - 50%) calc(${p.y + (sc.floorY - p.y) * drop}px - 50%)`;
+    sc.snack.style.rotate = `${p.rot - roll * 720}deg`;
+    sc.snack.style.scale = "1";
+  }
+
   // The bowl's food at step 0 (full) to 3 (all of it above the rim gone): a stepped clip.
   _bowlClip(s, img, step) {
     const cuts = bowlCuts(bowlRows(img), s.species?.bowl_rim);

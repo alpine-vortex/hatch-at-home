@@ -222,7 +222,7 @@ function sceneCard({ registry, now = 0 } = {}) {
     REFUSALS: { full: "i'm full!", not_sick: "i feel fine!", not_sleepy: "not sleepy yet" },
   };
   const line = (name) => src.match(new RegExp(`\\nconst ${name} = [^\\n]*`))[0];
-  const consts = ["SCENE_KIND_OF", "sceneKind", "SCENE_HOLD_MS", "SCENE_EXIT_MS", "SCENE_OWE_MS"].map(line).join("");
+  const consts = ["SCENE_KIND_OF", "sceneKind", "SCENE_HOLD_MS", "SCENE_EXIT_MS", "SCENE_OWE_MS", "SPOILED_BY", "isYes"].map(line).join("");
   const methods = ["_sceneClock", "_sceneOver", "_sceneAnswer", "_sceneFail", "_sceneOffer", "_sceneEnd", "_sceneRefusalLine",
     "_care", "_press"].map(method).join(",\n");
   vm.runInNewContext(`${consts}\nthis.api = {${methods}};`, ctx);
@@ -444,6 +444,8 @@ function feedSlide({ hunger = "60", missing = false, habit, moods = ["content", 
     _state: (_s, k) => states[k],
     _sceneFrames: (s0, act) => (s0.species.acts?.[act]?.includes(s0.drawn) ? [`${s0.drawn}_${act}_1`, `${s0.drawn}_${act}_2`] : null),
     _careVariant: ctx0.api._careVariant,
+    _careFrames: careFramesApi._careFrames,
+    _snackRollOut: careFramesApi._snackRollOut,
   };
   const setup = (entry, sc = {}) => {
     entry.setup.call(self, s, sc, { add: () => { const e = el(); els.push(e); return e; },
@@ -452,6 +454,11 @@ function feedSlide({ hunger = "60", missing = false, habit, moods = ["content", 
   };
   return { s, self, setup, els };
 }
+const careFramesApi = (() => {
+  const ctx = {};
+  vm.runInNewContext(`this.api = {${method("_careFrames")},\n${method("_snackRollOut")}};`, ctx);
+  return ctx.api;
+})();
 const ctx0 = (() => {
   const ctx = { pick: (l) => l[Math.floor(Math.random() * l.length)] };
   vm.runInNewContext(`this.api = {${method("_careVariant")}};`, ctx);
@@ -657,4 +664,256 @@ test("the screen-tap stop is installed for a skippable scene only; the status sh
   assert.ok(!/sc\.stop = [^]*if \(entry\.skippable\) this\._sceneEnd/.test(start));
   assert.match(start, /if \(s\.status\?\.contains\(e\.target\)\) return;/);
   assert.match(method("_sceneEnd"), /if \(sc\.stop\) s\.screen\.removeEventListener/);
+});
+
+// --- B2: snack ---------------------------------------------------------------------------------
+// The real SCENES.snack on a fake slide, as feedEntry does for feed.
+function snackEntry(over = {}) {
+  const block = src.slice(src.indexOf("const SCENES = {"), src.indexOf("\n};\n", src.indexOf("const SCENES = {")) + 4);
+  const line = (name) => src.match(new RegExp(`\\nconst ${name} = [^\\n]*`))[0];
+  const fn = (name) => src.match(new RegExp(`\\nfunction ${name}\\([\\s\\S]*?\\n\\}\\n`))[0];
+  const ctx = { Math, Number, Array, Set, spriteSrc: (id, sp) => `${id}/${sp}`, Date, bowlColour: () => "#000", pick: (l) => l[0],
+    seasonNow: () => over.season || null, MINE: 4, MINE_MS: 3000, REFUSALS: { spoiled: "hehe, whining works" }, ...over.ctx };
+  vm.runInNewContext([line("FEED_FULL_AT"), line("FEED_GOBBLE"), line("FEED_MAX_MS"), line("FEED_EXTRA_ODDS"), line("SNACK_LINE_ODDS"),
+    line("SNACK_NIBBLES"), line("PACE_SCALE"), line("mealPart"), line("isHeavy"), konst("NATURE_VALUES"), konst("HEAVY_SNACK"), konst("SNACK_LINES"),
+    fn("nature"), fn("paceOf"), fn("catchPoint"), block, "this.SCENES = SCENES; this.catchPoint = catchPoint;"].join("\n"), ctx);
+  return ctx;
+}
+function snackSlide(opts = {}) {
+  const f = feedSlide(opts);
+  f.s.species.head = { adult: [160, 70], child: [128, 96] };
+  f.s.species.props.snack = "snack";
+  f.s.species.reactions = {};
+  f.self._config = {};
+  f.self._sceneArt = () => {};
+  return f;
+}
+const snackBox = { width: 330, height: 247, left: 0, top: 0 };
+function snackRun(f, sc, t, extra = {}) {
+  const node = () => ({ style: {}, classList: { toggle() {}, add() {}, remove() {} } });
+  sc.snack = node();
+  f.s.pet = Object.assign(node(), { classList: { toggle() {}, add() {}, remove() {}, contains: () => false } });
+  f.s.perch = node();
+  const log = { animated: [], lines: [], hearts: 0, sparkles: 0 };
+  f.self._animate = (_s, _el, c) => log.animated.push(c);
+  f.self._line = (_s, _cls, text) => log.lines.push(text);
+  f.self._bondHearts = () => log.hearts++;
+  f.self._sparkle = () => log.sparkles++;
+  f.self._lines = (_s, _k, text) => ({ text });
+  const ramp = (a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));
+  const ease = (a, b) => { const k = ramp(a, b); return k * k * (3 - 2 * k); };
+  const frames = extra.entry.render.call(f.self, f.s, sc, t, { sw: 330, sh: 247, ramp, ease });
+  return { log, frames };
+}
+
+test("isYes: an ok, and a spoiled snack; a spoiled praise, play or medicine is not", () => {
+  const ctx = {};
+  vm.runInNewContext(`${konst("SPOILED_BY")}\n${src.match(/\nconst isYes = [^\n]*/)[0]}\nthis.isYes = isYes;`, ctx);
+  const yes = (action, result) => ctx.isYes({ action, result });
+  assert.ok(yes("snack", "ok") && yes("feed", "ok") && yes("snack", "spoiled"));
+  for (const a of ["praise", "play", "medicine", "feed"]) assert.ok(!yes(a, "spoiled"), a);
+  for (const r of ["full", "won", "lost", "unfair"]) assert.ok(!yes("snack", r), r);
+  // And it is the one test the answer path uses.
+  assert.match(method("_sceneAnswer"), /isYes\(\{ action: sc\.kind, result \}\)/);
+  assert.match(method("_sceneOffer"), /const ok = isYes\(entry\)/);
+});
+
+test("a spoiled snack answers its scene as an ok: one scene, no floor reaction, sc.spoiled set", () => {
+  const { self, s, log } = sceneCard({ registry: { snack: { ms: 1950, gate: 650, playOwed: true, refuse() {}, exit() {}, done() { log.done++; } } } });
+  self._press(s, "snack");
+  s.ids["button.snack"] = "button.snack";
+  s.buttons.snack = {};
+  self._press(s, "snack");
+  assert.strictEqual(s.scene?.kind, "snack");
+  const sc = s.scene;
+  assert.strictEqual(self._sceneOffer(s, fed("snack", "spoiled"), true), true); // taken: _react never sees it
+  assert.strictEqual(sc.answered, true);
+  assert.strictEqual(sc.result, "ok");
+  assert.strictEqual(sc.spoiled, true);
+  assert.strictEqual(s.scene, sc, "the scene plays on");
+  // Only a snack: a spoiled praise on the floor is the floor's.
+  assert.strictEqual(self._sceneOffer(s, fed("praise", "spoiled"), true), false);
+});
+
+test("a late or owed spoiled snack goes to the floor path (it eats and is smug there)", () => {
+  const { self, s } = sceneCard({ registry: { snack: { ms: 1950, gate: 650, playOwed: true, refuse() {}, exit() {} } } });
+  s.sceneOwes = [{ kind: "snack", until: Date.now() + 5000, playOwed: true, late: false }];
+  assert.strictEqual(self._sceneOffer(s, fed("snack", "spoiled"), true), false);
+  assert.match(method("_react"), /const spoiled = entry\.result === "spoiled" && SPOILED_BY\.has\(entry\.action\)/);
+});
+
+test("snack's prediction is feed's: hunger under 95", () => {
+  const { SCENES } = snackEntry();
+  const due = (h) => SCENES.snack.due.call(snackSlide({ hunger: h }).self, {});
+  assert.strictEqual(due("94"), true);
+  assert.strictEqual(due("95"), false);
+  assert.strictEqual(due("unavailable"), false);
+});
+
+test("snack's variants: one pick for a pinned one; D is a hoarder's; never the same twice; the nature hooks", () => {
+  const { SCENES } = snackEntry();
+  const snack = SCENES.snack;
+  const f = snackSlide();
+  f.s.pinVariant = { snack: "B" };
+  for (let i = 0; i < 5; i++) assert.strictEqual(f.setup(snack).variant, "B");
+  f.s.pinVariant = { snack: "D" }; // a bench may pin D on anyone
+  assert.strictEqual(f.setup(snack).variant, "D");
+  const seen = new Set();
+  const g = snackSlide();
+  let last = null;
+  for (let i = 0; i < 60; i++) {
+    const v = g.setup(snack, {}).variant;
+    seen.add(v);
+    assert.notStrictEqual(v, last);
+    last = v;
+  }
+  assert.ok(!seen.has("D") && seen.has("A") && seen.has("B") && seen.has("C"), [...seen].join());
+  const count = (habit, v) => {
+    const h = snackSlide({ habit });
+    delete h.s.lastVariant;
+    return Array.from({ length: 600 }, () => h.setup(snack, {}).variant).filter((x) => x === v).length;
+  };
+  assert.ok(count("hoarder", "D") > 150, "a hoarder stashes");
+  assert.ok(count("performer", "B") > count(undefined, "B"));
+  assert.ok(count("watcher", "C") > count(undefined, "C"));
+});
+
+test("snack's beats: the gate, the catch at 700, nothing over 3.2 s, at most 12 elements, one nibble set for C", () => {
+  const { SCENES } = snackEntry();
+  for (const [v, n] of [["A", 2], ["B", 2], ["C", 3], ["D", 1]]) {
+    const f = snackSlide();
+    f.s.pinVariant = { snack: v };
+    const sc = f.setup(SCENES.snack);
+    assert.strictEqual(sc.chews.length, n, v);
+    assert.ok(sc.chews[0].at >= (v === "B" ? 850 : 700), v);
+    assert.ok(sc.ms <= 3200 && sc.ms > sc.delightAt, `${v} ${sc.ms}`);
+    assert.ok(f.els.length <= 12, v);
+  }
+  const f = snackSlide();
+  f.s.pinVariant = { snack: "A" };
+  assert.strictEqual(f.setup(SCENES.snack).ms, 1950); // the plan's total for the catch
+  const heavy = snackSlide();
+  heavy.s.pinVariant = { snack: "A" };
+  heavy.self._state = (_s, k) => (k === "sensor.weight" ? { state: "90" } : { state: "60" });
+  const hsc = heavy.setup(SCENES.snack);
+  assert.strictEqual(hsc.lookAt, 700);
+  assert.strictEqual(hsc.chews[0].at, 1100); // a look at it for 400 ms first
+});
+
+test("snack's delight: exactly one greethop across the scene; a favourite day is a bighop and a sparkle; spoiled is two rocks", () => {
+  const { SCENES } = snackEntry();
+  const run = (mutate) => {
+    const f = snackSlide();
+    f.s.pinVariant = { snack: "A" };
+    const sc = f.setup(SCENES.snack);
+    sc.result = "ok";
+    mutate?.(sc);
+    const hops = [];
+    let hearts = 0;
+    let sparkles = 0;
+    const lines = [];
+    for (let t = 0; t <= sc.ms; t += 10) {
+      const r = snackRun(f, sc, t, { entry: SCENES.snack });
+      hops.push(...r.log.animated.filter((c) => ["greethop", "bighop", "rock2", "hop"].includes(c)));
+      hearts += r.log.hearts;
+      sparkles += r.log.sparkles;
+      lines.push(...r.log.lines);
+    }
+    return { hops, hearts, sparkles, lines, sc };
+  };
+  const plainRun = run();
+  assert.deepStrictEqual(plain(plainRun.hops), ["greethop"]);
+  assert.deepStrictEqual(plain(plainRun.lines), ["*gotcha!*"]);
+  assert.strictEqual(plainRun.hearts, 1);
+  const fav = run((sc) => { sc.fav = true; });
+  assert.deepStrictEqual(plain(fav.hops), ["bighop"]);
+  assert.strictEqual(fav.sparkles, 1);
+  assert.deepStrictEqual(plain(fav.lines), [], "the moment says its own line");
+  const smug = run((sc) => { sc.spoiled = true; });
+  assert.deepStrictEqual(plain(smug.hops), ["rock2"]);
+  assert.deepStrictEqual(plain(smug.lines), ["hehe, whining works"]);
+  assert.strictEqual(smug.hearts, 0);
+  // The layout's own greethop for the mood it brings is told it was spent.
+  const f = snackSlide();
+  f.s.pinVariant = { snack: "A" };
+  const sc = f.setup(SCENES.snack);
+  sc.fired.add("delight");
+  SCENES.snack.clear.call(f.self, f.s, sc);
+  assert.ok(f.s.excitedSince > 0);
+});
+
+test("snack's line: the season's candy line beats heavy beats SNACK_LINES; a miss says the other row", () => {
+  const { SCENES } = snackEntry({ season: { key: "halloween", snack: "candy", snackLines: ["candy!! ♪"] } });
+  const f = snackSlide();
+  f.s.pinVariant = { snack: "A" };
+  const sc = f.setup(SCENES.snack);
+  assert.strictEqual(sc.line, "candy!! ♪");
+  assert.strictEqual(sc.candy, "../ui/season_halloween_candy");
+  const b = snackEntry();
+  const g = snackSlide();
+  g.s.pinVariant = { snack: "B" };
+  const bsc = g.setup(b.SCENES.snack);
+  bsc.result = "ok";
+  const lines = [];
+  for (let t = 0; t <= bsc.ms; t += 10) lines.push(...snackRun(g, bsc, t, { entry: b.SCENES.snack }).log.lines);
+  assert.deepStrictEqual(plain(lines), ["*pounce!*"]);
+  const heavy = snackEntry({ ctx: { Math: Object.assign(Object.create(Math), { random: () => 0.1 }) } });
+  const h = snackSlide();
+  h.s.pinVariant = { snack: "A" };
+  h.self._state = (_s, k) => (k === "sensor.weight" ? { state: "90" } : { state: "60" });
+  const hsc = h.setup(heavy.SCENES.snack);
+  assert.ok(/round/.test(hsc.line), hsc.line);
+});
+
+test("snack's push-away: before the gate the snack leaves; after it the catch (to 700) or the chew is finished", () => {
+  const { SCENES } = snackEntry();
+  const snack = SCENES.snack;
+  const f = snackSlide();
+  f.s.pinVariant = { snack: "A" };
+  const sc = f.setup(snack, { gate: snack.gate }); // _sceneStart sets the gate from the entry
+  assert.strictEqual(snack.refuseAt(f.s, sc, 200), 550);
+  assert.strictEqual(snack.refuseAt(f.s, sc, 600), 600);
+  sc.answerAt = 1500; // a reply after a hold
+  assert.strictEqual(snack.refuseAt(f.s, sc, 650), 650);
+  sc.answerAt = 300;
+  assert.strictEqual(snack.refuseAt(f.s, sc, 660), 700, "the catch is finished");
+  const b = sc.chews[0];
+  assert.strictEqual(snack.refuseAt(f.s, sc, b.at + 10), b.at + b.len);
+  // Pre-gate: the snack is shown at refuseAt and rolls out; post-gate it is gone already.
+  snackRun(f, sc, 600, { entry: snack });
+  const k = { sw: 330, sh: 247, ramp: (a, c) => Math.min(1, Math.max(0, (400 - a) / (c - a))), ease: (a, c) => Math.min(1, Math.max(0, (400 - a) / (c - a))) };
+  sc.refuseAt = 600;
+  snack.refuse.call(f.self, f.s, sc, 400, k);
+  assert.ok(Number(sc.snack.style.opacity) < 1 || /calc\(-?\d/.test(sc.snack.style.translate));
+  assert.ok(Number.parseFloat(sc.snack.style.translate.match(/calc\((-?[\d.]+)px/)[1]) < sc.pos.x, "it rolled toward the pad");
+  snackRun(f, sc, 700, { entry: snack });
+  assert.strictEqual(sc.snack.style.opacity, "0");
+});
+
+test("catchPoint: a fixed 8% of the height below the head point, on the drawn rect; face where given; mirrored when flipped", () => {
+  const { catchPoint } = snackEntry();
+  const rect = { left: 100, top: 40, width: 150, height: 150 };
+  const s = { drawn: "adult", species: { head: { adult: [160, 64] } }, pet: { classList: { contains: () => false } } };
+  const p = catchPoint(s, rect, { left: 0, top: 0 });
+  assert.ok(Math.abs(p.x - (100 + (160 * 150) / 256)) < 1e-6);
+  assert.ok(Math.abs(p.y - (40 + (64 * 150) / 256 + 0.08 * 150)) < 1e-6);
+  const flipped = catchPoint({ ...s, pet: { classList: { contains: () => true } } }, rect, { left: 0, top: 0 });
+  assert.ok(Math.abs(flipped.x - (100 + (96 * 150) / 256)) < 1e-6);
+  const face = catchPoint({ ...s, species: { head: s.species.head, face: { adult: [200, 190, 64] } } }, rect, { left: 10, top: 0 });
+  assert.ok(Math.abs(face.x - (90 + (200 * 150) / 256)) < 1e-6);
+  assert.ok(Math.abs(face.y - (40 + (190 * 150) / 256 + 0.03 * 150)) < 1e-6);
+});
+
+test("a favourite snack's moment, while a snack scene plays, marks it and does not perk the pet a second time", () => {
+  const m = method("_moment");
+  assert.match(m, /const scene = s\.scene\?\.kind === "snack" \? s\.scene : null;\n\s+if \(scene\) scene\.fav = true;/);
+  assert.match(m, /\{ catch: !said\.baby, perk: !scene \}/);
+});
+
+test("snack is not skippable and plays an owed ok, as feed", () => {
+  const { SCENES } = snackEntry();
+  assert.strictEqual(SCENES.snack.skippable, false);
+  assert.strictEqual(SCENES.snack.playOwed, true);
+  assert.strictEqual(SCENES.snack.gate, 650);
+  assert.ok(SCENES.snack.refuseMs <= 900);
 });
