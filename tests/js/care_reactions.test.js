@@ -162,6 +162,13 @@ test("the prop leaves in two steps by a timer at propUntil minus 300 ms; the pos
   s.poseUntil = Date.now() + 1; // a newer pose elsewhere is not cut by this timer
 });
 
+test("the praise twirl has its own class (not the adult trick's .spin) and never draws an edge-on angle", () => {
+  const css = src.match(/@keyframes twirl \{[^}]*(\}[^}]*)*?\}\n/)[0];
+  assert.match(rule(".pet.twirl"), /animation: twirl \.6s step-end/);
+  assert.deepStrictEqual([...css.matchAll(/rotate: y (\d+)deg/g)].map((m) => Number(m[1]) % 180), [0, 0, 0, 0]);
+  assert.match(method("_reactMove"), /"twirl", 600/);
+});
+
 test("the prop drops and leaves in steps; the star rises, the finger wags, the fan slides; sway is gone", () => {
   assert.match(rule(".prop"), /animation: drop \.4s steps\(4, jump-none\)/);
   assert.match(rule(".prop.prop-out"), /prop-out \.3s steps\(2, jump-none\) forwards/);

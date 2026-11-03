@@ -699,7 +699,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
       return;
     }
     if (variant === "spin") { // a praised adult turns right round
-      this._animate(s, s.pet, "spin", 600);
+      this._animate(s, s.pet, "twirl", 600);
       return;
     }
     if (variant === "flop") {

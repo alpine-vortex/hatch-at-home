@@ -648,9 +648,11 @@ const STYLE = `
   /* The pet leans into the breeze once (bounded; it replaces the old endless sway). */
   .pet.lean { animation: lean 2.6s ease-in-out; transform-origin: 50% 100%; }
   @keyframes lean { 15%, 85% { transform: skewX(-4deg) translateX(-1%); } }
-  /* A praised adult's spin: a quarter-step turn all the way round. */
-  .pet.spin { animation: spin .6s steps(4, jump-none); }
-  @keyframes spin { to { rotate: y 360deg; } }
+  /* A praised adult's twirl: four held poses, front and back (the .look flip), 150 ms each. No
+     in-between angle is drawn, so no frame is ever edge-on. (Not ".spin": that is an adult's
+     trick, 360 degrees in .9 s, below.) */
+  .pet.twirl { animation: twirl .6s step-end; }
+  @keyframes twirl { 0% { rotate: y 180deg; } 25% { rotate: y 0deg; } 50% { rotate: y 180deg; } 75% { rotate: y 0deg; } }
   /* Thunder: now and then the scene flashes. */
   .flash { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 2;
     background: #fff; opacity: 0; }
