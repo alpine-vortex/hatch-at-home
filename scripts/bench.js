@@ -660,6 +660,66 @@ const PRESETS = {
     }
     return out;
   },
+  // Care B1, the feed scene (plan care-reactions 5.1, 13): an adult fox's four variants every
+  // 200 ms (the reply in at 200 ms), the push-away before and after the gate, the hold and
+  // the exit with no reply, a 300 px card with its poops (one under the bowl), the child ladder (rung 1: hamster,
+  // deer; rung 3: fox, bird), a water world (otter) and the night sky (owl), the end's extras,
+  // breakfast and supper, a resting pet, big text and mono for the line, and reduced motion.
+  feed() {
+    const out = [];
+    const ok = { at: 200, result: "ok" };
+    const shot = (group, name, label, extra) => out.push({ name: `feed/${group}/${name}`, group: `feed-${group}`, label,
+      species: "fox", stage: "adult", world: "woodland", width: 330, care: "feed", answer: ok, clip: "screen", say: "",
+      ...extra, pet: { hunger: 60, ...extra.pet }, variant: { "feed.extra": "none", ...extra.variant } });
+    for (const v of ["A", "B", "C", "D"]) {
+      for (let at = 0; at <= 3200; at += 200) {
+        shot(`variant-${v}`, `${v}-${at}`, `${v} ${at}`, { careAt: at, variant: { feed: v }, pet: v === "C" ? { hunger: 20 } : {} });
+      }
+    }
+    for (let at = 300; at <= 1500; at += 200) {
+      shot("refuse", `pre-${at}`, `full at 300: ${at}`, { careAt: at, answer: { at: 300, result: "full" }, variant: { feed: "A" } });
+    }
+    for (let at = 900; at <= 2100; at += 200) {
+      shot("refuse", `post-${at}`, `ok, full at 900: ${at}`, { careAt: at, answer: [ok, { at: 900, result: "full" }], variant: { feed: "A" } });
+    }
+    for (const at of [650, 950, 1250, 2650, 2850, 3100]) {
+      shot("refuse", `hold-${at}`, `no reply: ${at}`, { careAt: at, answer: undefined, variant: { feed: "A" } });
+    }
+    for (const at of [450, 1000, 1500, 2300]) {
+      shot("300", `poops-${at}`, `300, three poops ${at}`, { width: 300, careAt: at, variant: { feed: "A" }, pet: { poop: 3 } }); // the third sits at right: 7%, under the bowl
+    }
+    for (const [species, stage, rung] of [["hamster", "child", 1], ["deer", "child", 1], ["fox", "child", 3], ["bird", "child", 3]]) {
+      for (const at of [500, 1000, 1500, 2200]) {
+        shot("child", `${species}-${at}`, `${species} child (rung ${rung}) ${at}`,
+          { species, stage, world: worldOf(species), careAt: at, variant: { feed: "A" } });
+      }
+    }
+    for (const at of [300, 450, 600, 1000, 1150, 2300, 2600]) {
+      shot("worlds", `otter-${at}`, `water ${at}`, { species: "otter", world: "tidepool", careAt: at, variant: { feed: "A" } });
+    }
+    for (const at of [400, 500, 600, 1000]) {
+      shot("worlds", `owl-${at}`, `night sky ${at}`, { species: "owl", world: "nightsky", careAt: at, variant: { feed: "A" } });
+    }
+    // The fox is quick (bites of 320 ms): full at 1610, the bowl leaves at 2110.
+    shot("extras", "lick", "lick 1860", { careAt: 1860, variant: { feed: "A", "feed.extra": "lick" } });
+    shot("extras", "heart", "heart 1900", { careAt: 1900, variant: { feed: "A", "feed.extra": "heart" } });
+    shot("extras", "heart-line", "heart, its line 2300", { careAt: 2300, variant: { feed: "A", "feed.extra": "heart" } });
+    shot("extras", "burp", "heavy: burp 2300", { careAt: 2300, variant: { feed: "A", "feed.extra": "burp" }, pet: { weight: 90 } });
+    shot("extras", "breakfast", "breakfast 150", { careAt: 150, time: "2026-11-02T08:00:00Z", variant: { feed: "A" } });
+    shot("extras", "supper", "supper 2000", { careAt: 2000, time: "2026-11-02T19:00:00Z", variant: { feed: "A" } });
+    shot("extras", "performer", "performer hop (bird) 1260", { species: "bird", careAt: 1260, variant: { feed: "A" } });
+    for (const at of [100, 1000, 2300]) {
+      shot("resting", `resting-${at}`, `resting ${at}`, { careAt: at, variant: { feed: "A" }, pet: { resting: true } });
+    }
+    shot("text", "big", "big text 2300", { careAt: 2300, bigText: true, variant: { feed: "A" } });
+    shot("text", "mono", "mono 2300", { careAt: 2300, mono: true, variant: { feed: "A" } });
+    shot("text", "mono-1000", "mono 1000", { careAt: 1000, mono: true, variant: { feed: "A" } });
+    // Reduced motion: no scene (the tap), then the reply on the floor path, the prop still.
+    shot("calm", "tap", "calm: the tap, no scene", { careAt: 1000, motion: "reduce" });
+    shot("calm", "reply", "calm: the reply", { care: undefined, reactEntry: { action: "feed", result: "ok" }, motion: "reduce" });
+    shot("calm", "child-reply", "calm: a child's reply", { care: undefined, stage: "child", reactEntry: { action: "feed", result: "ok" }, motion: "reduce" });
+    return out;
+  },
   // The same sheet on a shared screen: nothing personal, only this screen's rows.
   "settings-shared"() {
     const out = [];
@@ -862,7 +922,7 @@ async function runShots(browser, base, shots, outDir, workers) {
         const png = await page.screenshot({ path: file, clip });
         shot.file = file;
         if (shot.mono) shot.measure = { screen: await page.evaluate(() => window.bench.screenClass), ...await measureMono(page, clip, png) };
-        if (shot.costume || shot.gift || shot.look) {
+        if (shot.costume || shot.gift || shot.look || shot.care) {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
         }

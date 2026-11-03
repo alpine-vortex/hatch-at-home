@@ -145,6 +145,7 @@ class HatchPetCardActions extends HatchPetCardJournal {
     sc.cheer = this._sceneFrames(s, "cheer");
     entry.setup.call(this, s, sc, { add, box, pet });
     s.scene = sc;
+    s.screen.classList.add("in-scene");
     this._patSync(s);
     for (const el of [s.pet, s.perch]) el.style.transition = "none";
     // A tap on the screen ends a skippable one; a meal's takes the tap and does nothing.
@@ -244,6 +245,7 @@ class HatchPetCardActions extends HatchPetCardJournal {
     const entry = SCENES[sc.kind];
     cancelAnimationFrame(sc.raf);
     s.scene = null;
+    s.screen.classList.remove("in-scene");
     this._patSync(s);
     if (sc.stop) s.screen.removeEventListener("click", sc.stop, true);
     sc.els.forEach((el) => el.remove());

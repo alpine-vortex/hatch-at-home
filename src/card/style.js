@@ -1322,6 +1322,17 @@ const STYLE = `
 const SCENE_STYLE = `
   .screen img.scene { left: 0; bottom: 3%; height: 0; }
   .screen img.scene-pill { left: 74%; bottom: 6%; height: 22%; }
+  /* Feed (plan 5.1): the bowl in the prop's place, above the poops; its crumbs (the food's
+     colour, set by the scene), the landing dust, and on water worlds bubbles. */
+  .screen img.scene-bowl { left: 67%; bottom: 7%; height: 22%; transform-origin: 50% 100%; z-index: 1; }
+  .scene-crumb { position: absolute; width: 2.4%; aspect-ratio: 1; opacity: 0; pointer-events: none; z-index: 1; }
+  .scene-crumb.dust { background: #d8c8a8; }
+  .scene-crumb.bubble { width: 3%; border-radius: 50%; background: #cfeefa; box-shadow: inset -1px -1px 0 #7ab8d0; }
+  .pet.chomp { animation: munch .28s ease-in-out; }
+  .pet.breath { animation: settle 1s ease-in-out; }
+  .pet.breath-long { animation: settle 1.6s ease-in-out; }
+  /* The resting label hides while a scene plays (plan 4.9): it would lie under the bowl. */
+  .screen.in-scene .awaylabel { visibility: hidden; }
   .screen .scene-gone { visibility: hidden; }
   .scene-spark { position: absolute; width: 6%; aspect-ratio: 1; opacity: 0; pointer-events: none;
     background: #fff6c8; filter: drop-shadow(0 0 2px #ffd76a);

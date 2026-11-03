@@ -126,6 +126,7 @@
       put("sensor", "last_care", iso(-45), { log: pet.log || [], ...(pet.moments ? { moments } : {}) });
       put("sensor", "energy", String(pet.energy ?? 80));
       if (pet.weight !== undefined) put("sensor", "weight", String(pet.weight));
+      if (pet.hunger !== undefined) put("sensor", "hunger", String(pet.hunger)); // a feed scene's prediction (care B1)
       put("sensor", "poop", String(pet.poop ?? (mood === "dirty" ? 2 : 0)));
       put("sensor", "care_misses", "0");
       put("binary_sensor", "calling", pet.calling || mood === "calling" ? "on" : "off");
@@ -278,7 +279,7 @@
   // still loading has no width (a first tap in a browser can differ; the bench must not).
   async function careSeek(card, cur, shot) {
     const at = shot.careAt ?? 1500;
-    const own = { medicine: cur.species?.props?.medicine || "bird/medicine" }[shot.care];
+    const own = { medicine: cur.species?.props?.medicine || "bird/medicine", feed: cur.species?.props?.feed || "bird/bowl_food" }[shot.care];
     if (own) {
       const img = new Image();
       img.src = spriteSrc(cur.speciesId, own);
@@ -324,20 +325,34 @@
         tag();
         // `answer`: {at, result} answers it at that scene ms, through the card's own _sceneAnswer
         // (with none, a scene with a gate holds there, then gives up 2 s on: plan 4.3).
-        const answer = shot.answer;
+        // A list of them is each in turn (an ok, then a full: the push-away after the gate).
+        const answers = [].concat(shot.answer || []);
+        let spent = 0;
+        let renderMs = 0;
+        let renders = 0;
         for (let t = 0; cur.scene === sc; t = Math.min(at, t + 10)) {
           runDue(t);
           now = t;
-          if (answer && !sc.benchAnswered && t >= answer.at) {
-            sc.benchAnswered = true;
-            card._sceneAnswer(cur, answer.result || "ok", answer.at);
+          while (spent < answers.length && t >= answers[spent].at) {
+            card._sceneAnswer(cur, answers[spent].result || "ok", answers[spent].at);
+            spent++;
             tag();
           }
           if (cur.scene !== sc) break;
+          const r0 = performance.now();
           card._sceneRender(cur, t);
+          renderMs += performance.now() - r0;
+          renders++;
           tag();
           if (t >= at) break;
+          if (card._sceneOver(cur, t)) { // over before careAt: the shot is what the card shows after it
+            card._sceneEnd(cur);
+            tag();
+            break;
+          }
         }
+        // What one frame of the scene costs here (plan 8: the first mate reads it once).
+        window.bench.info = { renderMs: renders ? renderMs / renders : 0, els: sc.els.length };
       }
     } finally {
       window.setTimeout = realSet;

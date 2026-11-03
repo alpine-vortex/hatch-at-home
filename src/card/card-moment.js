@@ -613,7 +613,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         : ok && entry.action === "fan" ? "aired" : null;
       // Praise: a spin for an adult now and then, else the type's move; both with hearts.
       const praise = kind === "praised" && !inGame;
-      const variant = praise && s.drawn === "adult" ? this._floorVariant(s, "praise", ["hearts", "spin"]) : undefined;
+      const variant = praise && s.drawn === "adult" ? this._careVariant(s, "praise", ["hearts", "spin"]) : undefined;
       const long = kind === "scolded" || kind === "aired" ? REACTIONS[kind].ms : undefined; // a flinch is short, a lean is long
       // The child's ladder (plan section 7): rung 1, the species' own reaction pose, with the
       // stage's move; else rung 3, the mood frame (_reactFrames), with the same move.
@@ -674,7 +674,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
     if (REACT_REFUSALS.has(entry.result) && !busy) {
       // A refusal is a turn-away, a head shake, a yawn or a flop (not the same one twice).
       const pool = REFUSAL_VARIANTS[entry.result] || REFUSAL_POOL;
-      const pick1 = this._floorVariant(s, `refused.${entry.result}`, pool);
+      const pick1 = this._careVariant(s, `refused.${entry.result}`, pool);
       this._reactFrames(s, "refused", { variant: pick1 === "look" ? undefined : pick1 });
       if (entry.result === "unfair") { // the finger wags at a pet that did nothing
         const finger = s.species?.props?.scold || FALLBACK_PROPS.scold;

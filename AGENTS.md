@@ -42,7 +42,7 @@ Where things live:
 | card-sheets | shell picker, lay sheet, name sheet, `_set*` |
 | card-journal | journal, photos, every world, finds page |
 | card-actions | actions, the care scenes' shared frame (`_sceneStart`, `_sceneRender`, `_sceneEnd`, the answer) |
-| card-care | `SCENES` (one entry per care scene: medicine, clean), `_sceneFrames`, `_sceneArt` |
+| card-care | `SCENES` (one entry per care scene: medicine, clean, feed), the bowl clip (`bowlCuts`), `_sceneFrames`, `_sceneArt` |
 | card-games | games, dig |
 | card-season | seasons, party, costume |
 | card-visitors | world visitors, basket, reveal |

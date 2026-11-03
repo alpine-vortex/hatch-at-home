@@ -37,6 +37,7 @@ node scripts/bench.js --preset collection # 21 shots: the finds page, each world
 node scripts/bench.js --preset bigtext    # 18 shots: "big text" on, every status-box page at 420, 330 and 260
 node scripts/bench.js --preset everyworld # 10 shots: the journal's "every world" page, none / some / all raised, 420 and 330, big text
 node scripts/bench.js --preset dig        # 22 shots: the Berry dig at 420/330/300, calm bee, the picker at 300-420
+node scripts/bench.js --preset feed       # care B1: 135 shots of the feed scene: variants A-D every 200 ms, the push-away before and after the gate, the hold and exit, 300 px with poops, the child ladder, water and night-sky worlds, extras, breakfast and supper, resting, big text, mono, reduced motion
 node scripts/bench.js --preset bowls      # care B1: 480 close-ups, every feed bowl at full, 2/3, 1/3, gone (330/420, day/night), a sheet per world and scene, and the clip's pass rule (bowl-pass.json)
 node scripts/bench.js --preset mono       # the mono screen: 2498 shots, ~2.5 min, plus the pass rule
 ```
@@ -62,7 +63,7 @@ A shot (all optional):
 | --- | --- |
 | `name` | output path under `out/`, without `.png` |
 | `species`, `stage`, `mood`, `world` | the first pet (default: the world's first species, adult, content, woodland). Stages: egg baby child teen adult. |
-| `pet` | more of the first pet: `name`, `age_days`, `flags`, `energy`, `weight` (none by default: the row shows –), `hatch_minutes`, `raised` (ids, or `"world"`: three of its world's), `next_egg` (a name), `next_world` (a name), `lay` (`true` or `{egg_world}`: the lay request, the next-egg select and `egg_roster`; settings S2)... |
+| `pet` | more of the first pet: `name`, `age_days`, `flags`, `energy`, `weight` (none by default: the row shows –), `hunger` (none by default; a feed scene needs one), `hatch_minutes`, `raised` (ids, or `"world"`: three of its world's), `next_egg` (a name), `next_world` (a name), `lay` (`true` or `{egg_world}`: the lay request, the next-egg select and `egg_roster`; settings S2)... |
 | `pets` | a number (extra pets are children from the world's roster) or an array of pet overrides; the first is on show, the card gets its dots |
 | `empty`, `admin` | `empty: true`: no pets at all (the first-run card, its "add a pet ›" for an admin); `admin: false`: the viewer is not an admin (default admin). The fake devices carry a `config_entries` id |
 | `shell` | `{shape, color, bezel, finish}` over the world's own; `finish: "none"` drops it. Shapes: egg tank house porthole pad moon |
@@ -104,9 +105,9 @@ A shot (all optional):
 | `patBox` | `true`: the pat's clear hit box (PR 3b) outlined in dashed magenta; it moves with `petClasses` such as `go-left` or `wander-r`, and a state that hides it shows no outline |
 | `beam` | `true`: the infrared beam held mid-flight (400 ms in, the head over the host's shell) by the card's own `_linkBeam`, no visit around it. Use `pets: 2` and `clip: "card"` |
 | `link` | the infrared visit greeting caught as the visit screen opens: `{waves, wait, rolls, say}` (`waves` is put on both species, `wait` is ms to hold, default 150; `rolls`: what `Math.random` gives `_linkStart` first, all 0 for type lines and a kindred extra; `say: "host"` or `"extra"` puts the host's queued line in its bubble and holds the visit there; with `wait: 1900` the guest's reply shows too, until the extra hides it). Give the guest `pets: [{}, {stage: "adult", personality: "sweet"}]` for a kindred pair |
-| `care`, `careAt` | a `medicine` or `clean` scene paused at `careAt` ms (default 1500). It is played from 0 on the bench's own clock (10 ms steps; a beat's timers and CSS animations seeked with it), so a shot is byte-identical every run |
+| `care`, `careAt` | a `medicine`, `clean` or `feed` scene paused at `careAt` ms (default 1500); a scene over before `careAt` is ended, so the shot is the card after it. A feed needs `pet.hunger` (under 95). It is played from 0 on the bench's own clock (10 ms steps; a beat's timers and CSS animations seeked with it), so a shot is byte-identical every run |
 | `bowlStep`, `bowlRim` | the feed bowl on the floor at step 0 (full) to 3 (the food above the rim gone) of its clip, through the card's own `_bowlClip`; `bowlRim` stands in for species.json `bowl_rim` |
-| `answer` | `{at, result}`: the server's answer to a `care` scene at that scene ms, through the card's own `_sceneAnswer` (`"ok"`, `"full"`...). With none, a scene with a gate (feed 650 ms) holds there: `careAt` past the gate is the waiting sway, 2000 ms past it the exit beat |
+| `answer` | `{at, result}`, or a list of them (an ok, then a full: the push-away after the gate): the server's answer to a `care` scene at that scene ms, through the card's own `_sceneAnswer` (`"ok"`, `"full"`...). With none, a scene with a gate (feed 650 ms) holds there: `careAt` past the gate is the waiting sway, 2000 ms past it the exit beat |
 | `acts`, `missing`, `reactWait` | a fake species.json `acts` (`{eat: [stages], cheer: [...]}`) on every pet; sprite names (`adult_eat_1`) the server 404s; ms to wait for sprite probes before the shot. `link.cheer: true` runs the full visit (not calm) so the "hi hi" cheer plays: use `wait: 2000` |
 | `bubblePop` | a clean's extra bubble (fresh-expand M-b) through the card's own `_bubblePop`, paused at a share of its 1.2 s (`true`: .7, up and about to pop) |
 | `patTap` | `true`: one pat through the card's own `_pat` (R2: `acts.pat` shows ~900 ms). With `acts`, the new poses (`pat refuse aww ready splash`) are served the species' `eat` frames, bench only. `react` also takes `lost` (acts.aww) and `ready` (acts.ready); `care: "clean"` with `careAt: 2000` shows `acts.splash` |
