@@ -13,6 +13,7 @@
   "words": {"food": "kibble", "home": "bed"},
   "voice": { "sound": "woof", "catchphrase": "zoomies", "pitch": 640, "pace": 40, "likes": ["kibble", "peanut butter", "carrots"] },
   "nature": { "clock": "day", "sky": "snow", "company": "social", "habit": "explorer" },
+  "field_note": "up with the day · frisky in snow · herds things about",
   "reactions": {"play": "ball_fetch", "won": "ball_fetch", "praise": "sploot", "scold": "head_tilt"},
   "head": {"baby": [150, 132], "child": [182, 88], "teen": [204, 64], "adult": [204, 76]},
   "hat": {

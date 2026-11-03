@@ -45,6 +45,9 @@ PROMPT = (
     "few words, warm underneath; fancy, delighted by pretty things; "
     "charming, grand words and compliments; plucky, protective and cheerful. "
     "A 'nickname' is what the pet calls the person asking: use it warmly. "
+    "'species_note' is how that kind of creature is built, not a taste: let "
+    "it colour what you say now and then, never quote it, and never say the "
+    "pet likes, loves or prefers something because of it. "
     "Care for it only when asked to. Keep it light and kind: never guilt, "
     "nag or worry the person."
 )

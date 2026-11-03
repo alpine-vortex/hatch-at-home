@@ -611,6 +611,22 @@ const PRESETS = {
     for (const stage of ["baby", "child"]) {
       out.push({ ...idle("kitten"), stage, width: 330, name: `nature/species-idle-${stage}-none`, group: "nature-species-none", label: `${stage}: no species line` });
     }
+    // N3 (section 10): the status page's "nature" row. The longest note of each world (hamster is 60), scrolled to
+    // the row at 420, 330, 300, in big text and in the porthole; a teen, a child and a baby show it; an egg does not.
+    const longest = [["deer", "woodland"], ["gecko", "terrarium"], ["hamster", "hearth"], ["octopus", "tidepool"],
+      ["axolotl", "pond"], ["opossum", "nightsky"]];
+    const note = (species, world, extra) => ({ species, world, view: "status", scroll: ".naturerow", ...extra });
+    for (const [species, world] of longest) {
+      for (const width of [420, 330, 300]) {
+        out.push(note(species, world, { width, name: `nature/note-${species}-${width}`, group: `nature-note-${width}`, label: `${species} ${width}` }));
+      }
+      out.push(note(species, world, { width: 300, bigText: true, name: `nature/note-${species}-big`, group: "nature-note-big", label: `${species} big text` }));
+      out.push(note(species, world, { width: 330, shell: { shape: "porthole" }, name: `nature/note-${species}-porthole`, group: "nature-note-porthole", label: `${species} porthole` }));
+    }
+    for (const stage of ["teen", "child", "baby"]) {
+      out.push(note("hamster", "hearth", { stage, width: 330, name: `nature/note-${stage}`, group: "nature-note-stage", label: `${stage}: nature row` }));
+    }
+    out.push(note("hamster", "hearth", { stage: "egg", width: 330, scroll: undefined, name: "nature/note-egg", group: "nature-note-stage", label: "egg: no nature row" }));
     return out;
   },
   // Resting (R1, plan favourite-resting §9): the label and breathing pose, its idle line and a
@@ -1148,6 +1164,15 @@ async function runShots(browser, base, shots, outDir, workers) {
         const png = await page.screenshot({ path: file, clip });
         shot.file = file;
         if (shot.mono) shot.measure = { screen: await page.evaluate(() => window.bench.screenClass), ...await measureMono(page, clip, png) };
+        if (shot.lines) { // `lines` (a selector in the card): how many lines its text wraps to, into the shot's .json (N3's cap)
+          const n = await page.evaluate((sel) => {
+            const el = document.querySelector("hatch-pet-card").shadowRoot.querySelector(sel);
+            const r = document.createRange();
+            r.selectNodeContents(el);
+            return new Set([...r.getClientRects()].map((q) => Math.round(q.top))).size;
+          }, shot.lines);
+          fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify({ lines: n }));
+        }
         if (shot.costume || shot.gift || shot.look || shot.care || shot.lightsAlign) {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));

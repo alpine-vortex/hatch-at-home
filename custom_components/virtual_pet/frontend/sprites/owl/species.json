@@ -71,6 +71,7 @@
   },
   "voice": { "sound": "hoo", "catchphrase": "who knows", "pitch": 380, "pace": 27, "likes": ["moths", "beetles", "crickets"] },
   "nature": { "clock": "night", "sky": "fog", "company": "solo", "habit": "watcher" },
+  "field_note": "livelier after dark · goes quiet in fog · keeps watch",
   "reactions": {
     "play": "head_turn",
     "won": "toot",

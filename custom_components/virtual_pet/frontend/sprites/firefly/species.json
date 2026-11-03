@@ -71,6 +71,7 @@
   },
   "voice": { "sound": "blink", "catchphrase": "glow glow", "pitch": 1180, "pace": 43, "likes": ["nectar", "pollen"] },
   "nature": { "clock": "night", "sky": "rain", "company": "social", "habit": "performer" },
+  "field_note": "livelier after dark · perks up in rain · glows brighter",
   "reactions": {
     "play": "flutter",
     "won": "blink",

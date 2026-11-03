@@ -116,4 +116,4 @@ function scanFreshCopy(src) {
   return { bad, count, tables };
 }
 
-module.exports = { scanFreshCopy, COPY_TABLES, FILL };
+module.exports = { scanFreshCopy, COPY_TABLES, FILL, NAG };

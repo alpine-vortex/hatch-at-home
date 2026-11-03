@@ -494,3 +494,65 @@ def test_every_drape_entry_sits_on_its_sprite(species: str) -> None:
         art = {s: drape_box(s, 3) for s in "sml"}
         near = min(art, key=lambda s: abs(art[s][2] - art[s][0] - (right - left)))
         assert size == near, f"{species} {stage}: {size}, nearest is {near}"
+
+
+# Species nature, N3 (plan-2026-11-02-species-nature.md section 8): the field note.
+# One hand-written line per species: <clock> · <sky> · <species clause>. The cap is
+# the plan's hard ceiling (60); the bench-measured two-line cap, if lower, is set
+# in FIELD_NOTE_CAP below once measured (section 8 N3, Q4).
+FIELD_NOTE_CAP = 60
+FIELD_NOTE_CLOCK = {
+    "day": "up with the day",
+    "dusk": "livelier at dusk",
+    "night": "livelier after dark",
+}
+FIELD_NOTE_SKY = {
+    "sun": "warms up in sun",
+    "rain": "perks up in rain",
+    "snow": "frisky in snow",
+    "fog": "goes quiet in fog",
+    "wind": "stirs in the wind",
+    "fire": "snug in a warm spot",
+    "moon": "stirs at full moon",
+}
+# The card's NAG list (scripts/copy-scan.js), and the words the notes never use.
+NAG = re.compile(r"\b(still|again|why|never|pleas\w*|sad|cry|alone|forgot\w*)\b", re.I)
+BANNED = re.compile(r"\b(favou?rite|fond|loves?|best)\b", re.I)
+
+
+def field_notes() -> dict[str, str]:
+    return {
+        s: json.loads((SPRITES / s / "species.json").read_text()).get("field_note")
+        for s in READY
+    }
+
+
+@pytest.mark.parametrize("species", READY)
+def test_field_note_is_valid(species: str) -> None:
+    note = field_notes()[species]
+    assert isinstance(note, str) and note, species
+    assert len(note) <= FIELD_NOTE_CAP, f"{species}: {len(note)} characters"
+    assert not re.search(r"[0-9?!]", note), species
+    assert not NAG.search(note), species
+    assert not BANNED.search(note), species
+    assert note == note.strip() and "  " not in note, species
+    # Three clauses; the clock and the sky match the species' nature block.
+    clock, sky, clause = note.split(" · ")
+    nature = json.loads((SPRITES / species / "species.json").read_text())["nature"]
+    assert clock == FIELD_NOTE_CLOCK[nature["clock"]], species
+    assert sky == FIELD_NOTE_SKY[nature["sky"]], species
+    assert clause, species
+
+
+def test_field_notes_are_distinct_and_cover_every_ready_species() -> None:
+    notes = field_notes()
+    assert len(notes) == 30 and sorted(notes) == READY
+    assert len(set(notes.values())) == len(notes), "two species share a note"
+    # Words that would promise a sound the light performers do not make.
+    for species in ("firefly", "lunamoth"):
+        assert not re.search(r"\b(hum|hums|sing|sings)\b", notes[species]), species
+
+
+def test_banned_words_match_on_word_boundaries() -> None:
+    assert not BANNED.search("a clover glove")
+    assert BANNED.search("loves rain") and BANNED.search("fond of sun")

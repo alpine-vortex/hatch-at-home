@@ -34,6 +34,7 @@
   "words": { "food": "clams", "home": "kelp bed" },
   "voice": { "sound": "squeak", "catchphrase": "splish", "pitch": 880, "pace": 40, "likes": ["clams", "crab", "sea urchins"] },
   "nature": { "clock": "day", "sky": "rain", "company": "social", "habit": "groomer" },
+  "field_note": "up with the day · perks up in rain · grooms often",
   "reactions": { "feed": "rock", "snack": "rock", "praise": "hold_paws", "blanket": "kelp_wrap" },
   "head": { "baby": [150, 116], "child": [164, 104], "teen": [180, 68], "adult": [184, 72] },
   "hat": {

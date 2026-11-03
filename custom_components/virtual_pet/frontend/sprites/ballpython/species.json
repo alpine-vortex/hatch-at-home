@@ -12,6 +12,7 @@
   "words": {"food": "dinner", "home": "hide"},
   "voice": { "sound": "hiss", "catchphrase": "curl up", "pitch": 360, "pace": 25, "likes": ["quail eggs", "egg yolk"] },
   "nature": { "clock": "night", "sky": "fire", "company": "solo", "habit": "watcher" },
+  "field_note": "livelier after dark · snug in a warm spot · keeps watch",
   "reactions": {"play": "tongue_flick", "won": "tongue_flick", "praise": "tongue_flick", "scold": "ball"},
   "head": {"baby": [154, 136], "child": [170, 104], "teen": [176, 76], "adult": [180, 108]},
   "hat": {

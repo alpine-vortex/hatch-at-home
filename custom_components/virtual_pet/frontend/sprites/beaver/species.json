@@ -71,6 +71,7 @@
   },
   "voice": { "sound": "chomp", "catchphrase": "busy busy", "pitch": 500, "pace": 32, "likes": ["willow bark", "water lilies", "aspen twigs"] },
   "nature": { "clock": "night", "sky": "snow", "company": "social", "habit": "builder" },
+  "field_note": "livelier after dark · frisky in snow · builds with sticks",
   "reactions": {
     "play": "gnaw",
     "won": "stick",
