@@ -764,12 +764,14 @@ false; B's data is untouched.
 - **Already in M1a for the ask**: `"memory"` in `QUESTION_KINDS`; `memory_asked` and
   `memory_chosen_days` (at most 7 ISO days) in `_PERSON_KEYS`; `People.forget` keeps both
   with `birthday_skipped`.
-- **Card**: no settings row yet; its label, aria text and on/off status lines are copy
-  questions to the first mate (not in this plan). The card reads `memory_on` and
-  `memory_allowed` from the visit reply (`_memoryOn`, `_memoryAllowed`), and the
-  forget-me reset clears `memory_on`. When the row ships, drop the guide's sentence "The
-  switch isn't on the card yet" and add the row to the settings list (guide "Using the
-  card"). The docs test's strings are `GUIDE_STRINGS` in `tests/test_memory.py`.
+- **Card**: the settings row "remember me" (first-mate copy, 2026-11-02) beside "my day",
+  personal screens only and hidden unless `memory_allowed`; off is a two-tap confirm
+  (`memory_off`). `memoryRow` (ui-copy) draws it, `_setMemory` (card-sheets) sends
+  `virtual_pet/memory` with `shared: false`. Its two status lines sit in `SETTINGS_AGAIN`
+  beside `forgotMe` (over the fresh block's 40 characters, and "forgotten"). The card
+  reads `memory_on` and `memory_allowed` from the visit reply too, and the forget-me
+  reset clears `memory_on`. The docs test's strings are `GUIDE_STRINGS` in
+  `tests/test_memory.py`.
 - **Remainder (erase race)**: the options-save erase runs just before
   `async_create_entry`. A "memory on" tapped during the erase's save `await`, before HA
   stores the new options, could leave one record on with no pet allowing it. Nothing

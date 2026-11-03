@@ -836,6 +836,7 @@ GUIDE_STRINGS = (
     "the pets still won't ask whether to remember",
     "and memory",
     "removing a pet",
+    '"remember me" in settings',
 )
 
 
@@ -849,3 +850,4 @@ def test_the_guide_says_what_memory_keeps_and_where() -> None:
     section = " ".join(section.split())
     for text in GUIDE_STRINGS:
         assert text in section, text
+    assert "isn't on the card yet" not in section  # the row shipped

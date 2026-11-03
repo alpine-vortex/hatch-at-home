@@ -308,7 +308,8 @@ up to four parts, in this order:
     voice). Babble waits for "sounds here": with that off its row reads "needs sounds"
     and can't be switched. *look*: screen effects here, holiday names, mono screen and
     big text. These are saved in this browser only.
-  - **for you**: notify me, my day, my birthday, birthday on my phone, baby talk, your
+  - **for you**: notify me, my day, remember me (memory, off until you turn it on; see
+    Privacy), my birthday, birthday on my phone, baby talk, your
     remembered favourites (each with "ask me again"), "♥ open on <pet>" and my data.
     These follow your login. A shared screen doesn't show this part.
     "♥ open on <pet>" (with two or more pets) is the favourite pet: the pet your card
@@ -610,8 +611,9 @@ picks you made (tonight's dream, a game, a rain-or-sun guess, a great day) and, 
 which kind of big day or weekend you had, each with its date. Only choices from fixed
 lists and dates: never typed words, never anyone's name, no times or places, and no
 tough days. It is per person and one switch for every pet, kept in the people store,
-until you forget it: turning memory off, or "forget my data", erases it at once. The
-switch isn't on the card yet: until it is, nothing is kept. Things to know:
+until you forget it. Turn it on with "remember me" in settings (the gear on the status
+screen; your own screen only, and only where the pet's option allows it). Turning it off
+(two taps), or "forget my data", erases it at once. Things to know:
 
 - It is in Home Assistant's backups, like the rest of the people store. Turning it off
   can't reach a backup made before, and restoring one brings it back.
