@@ -93,9 +93,12 @@ const HATCH_DIRECTOR = Object.freeze(
       return "";
     };
 
-    const create = ({ now, trusted, canRender, schedule, recipes } = {}) => {
+    const create = ({ now, deviceNow, trusted, canRender, schedule, recipes } = {}) => {
       if (typeof now !== "function") throw new TypeError("director: now() is required");
       if (typeof schedule !== "function") throw new TypeError("director: schedule(ms, fn) is required");
+      // The slide's own timers (poseUntil) are on the device clock, `now` is the server's: the
+      // busy read takes the device one. With no second clock they are the same.
+      const dnow = typeof deviceNow === "function" ? deviceNow : now;
       const render = typeof canRender === "function" ? canRender : () => true;
       const book = {};
       for (const [kind, r] of Object.entries(recipes || {})) {
@@ -169,7 +172,7 @@ const HATCH_DIRECTOR = Object.freeze(
       const admit = (slide, st, cue, recipe, t, echo) => {
         const track = recipe.track;
         see(st, cue.id);
-        if (NEEDS_FREE.includes(track) && isBusy(slide, t)) return no("busy");
+        if (NEEDS_FREE.includes(track) && isBusy(slide, dnow())) return no("busy");
 
         // Opposite transitions collapse: a "start" whose "end" arrives while its pulse still
         // runs (or the reverse) leaves nothing on the glass.
@@ -313,7 +316,7 @@ const HATCH_DIRECTOR = Object.freeze(
           if (!fits.length) return no("nothing-to-echo");
           // A user action at the same instant, or a busy body, leaves ambience only.
           if (st.tracks.has("control")) return no("user-action");
-          if (isBusy(slide, t)) return no("busy");
+          if (isBusy(slide, dnow())) return no("busy");
           const best = fits.reduce((a, b) => (better(b, a) ? b : a));
           return admit(slide, st, best, recipeOf(best.kind), t, true);
         },
@@ -367,8 +370,8 @@ const HATCH_DIRECTOR = Object.freeze(
           states = new WeakMap();
         },
 
-        isBusy: (slide) => isBusy(slide, now()),
-        busyOwners: (slide) => busyOwners(slide, now()),
+        isBusy: (slide) => isBusy(slide, dnow()),
+        busyOwners: (slide) => busyOwners(slide, dnow()),
 
         // A plain look at one slide, for tests and the bench.
         inspect: (slide) => {

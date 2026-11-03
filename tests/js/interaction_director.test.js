@@ -170,6 +170,19 @@ test("isBusy: each owner alone makes the slide busy, none makes it free", () => 
 
 // ---- acceptance a: the director's methods ----
 
+test("the pose owner reads the device clock, not the server's (poseUntil is set from the device's)", () => {
+  const device = 5000;
+  const make = (extra) => D.create({ now: () => device + 3600000, deviceNow: () => device, schedule: () => () => {}, ...extra, recipes: { look: { track: "petBody", priority: 1, durationMs: 10 } } });
+  const dir = make();
+  assert.strictEqual(dir.isBusy({ poseUntil: device + 1 }), true);
+  assert.strictEqual(dir.isBusy({ poseUntil: device }), false);
+  assert.strictEqual(dir.offer({ poseUntil: device + 1 }, cue("look")).reason, "busy");
+  assert.ok(dir.offer({ poseUntil: device - 1 }, cue("look")).accepted);
+  // no second clock: the one clock does both
+  const one = D.create({ now: () => device, schedule: () => () => {}, recipes: {} });
+  assert.strictEqual(one.isBusy({ poseUntil: device + 1 }), true);
+});
+
 test("create refuses what it cannot run without, and a malformed recipe", () => {
   assert.throws(() => D.create({}), typeError);
   assert.throws(() => D.create({ now: () => 0 }), typeError);
