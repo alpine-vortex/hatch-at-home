@@ -8380,6 +8380,10 @@ async function main() {
     const err = () => s.status.querySelector(".nameerr");
     const out = {};
     const timers = [];
+    // Home Assistant's frontend pushes its own hass to the card on any state change. A push inside the
+    // retry's 2 s wait would swap the stubbed callWS and states for the real ones (the retry then goes to
+    // the real server, the sheet closes): hold pushes off while this block runs; the finally puts HA's latest.
+    Object.defineProperty(el, "hass", { configurable: true, get: () => el._hass, set: () => {} });
     try {
       // The trigger: the sheet opens when the sensor shows an egg of the next generation, and not before.
       put("adult", gen);
@@ -8554,6 +8558,7 @@ async function main() {
       el._toggleStatus(s);
     } finally {
       window.setTimeout = realTimeout;
+      delete el.hass; // the card's own setter again
       // Home Assistant's own hass as it is now, not the copy taken at the start (this block ran for seconds).
       el.hass = document.querySelector("home-assistant").hass;
       s.sayUntil = 0;
