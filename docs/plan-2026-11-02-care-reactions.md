@@ -1442,7 +1442,7 @@ B1 validation fixes below.
 - `_animate(s, el, cls, ms)` keeps **one timer per element and class** (`ANIMATE_TIMERS`, a WeakMap): a
   re-add clears the old timer. It fixes variant C's cut chomps (250 ms apart, 280 ms long) and card-check
   "motion 1: settles as it falls asleep live" (a flop's `settle` timer stripped a later `settle`); the
-  check's `wait(2600)` workaround (1de79316) can go once that commit is merged with this one.
+  check's `wait(2600)` workaround (1de79316) is removed in B2 and `--only pat,react` passes without it.
 - `feed.refuseAt`: a `full` that came after a hold (`te === gate`, `answerAt >= gate`) is **before** bite 1;
   `refuse`'s `pre` is `refuseAt <= gate`. Snack's `refuseAt` has the same rule.
 - `_careFrames(s, sc, care)` (card-care) is the frames ladder for a meal's scenes (eat, refuse, hungry,
@@ -1472,7 +1472,8 @@ B1 validation fixes below.
 - The hoarder's carried-off piece; the season's candy as more than the same throw; a child's `cheeks` pose for D
   (the ladder's rung 1/3 frames are used); `snack_bite` art (the mask reads on the bench).
 - A heavy pet's look is a held pose (`excited[0]` and a lean), not a turn.
-- Reduced motion: the scene never starts (`sceneFade`); a pat inside the cooldown already sets the pat pose
-  before the cooldown branch (`_pat`), the wiggle is for motion only: pinned by a JS test, nothing built.
+- Reduced motion: the scene never starts (`sceneFade`). The "calm pat" follow-up needed no code: `_pat`
+  sets the pat pose before it looks at the cooldown, and ship C's rewrite keeps the wiggle for motion only
+  (`tests/js/touch.test.js`, "reduced motion: the pose and the line, no lean, no wiggle").
 - Two pre-existing pytest failures on the B1 base (`test_ask_again.py::test_the_answer_is_on_no_bus_log_sensor_or_house_view`,
   `test_forget.py::test_a_dream_without_its_asker_loads_and_is_nobodys_idea`): not from this ship.

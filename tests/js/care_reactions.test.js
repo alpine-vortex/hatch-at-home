@@ -917,13 +917,3 @@ test("snack is not skippable and plays an owed ok, as feed", () => {
   assert.strictEqual(SCENES.snack.gate, 650);
   assert.ok(SCENES.snack.refuseMs <= 900);
 });
-
-test("reduced motion: a pat inside the cooldown still shows the pat pose, and moves nothing", () => {
-  const pat = method("_pat");
-  // The pose is set before the cooldown branch (the line is the one thing the cooldown holds back) ...
-  assert.ok(pat.indexOf("this._patPose(s, reacting)") > 0 && pat.indexOf("this._patPose(s, reacting)") < pat.indexOf("PAT_COOLDOWN_MS || !this._patMayTalk(s)"));
-  // ... and the wiggle in the cooldown is only for motion.
-  assert.match(pat, /PAT_COOLDOWN_MS \|\| !this\._patMayTalk\(s\)\) \{\n\s+this\._tapped\(s\.pat\);\n\s+if \(!still && !reacting\) \{/);
-  // The calm card draws the pose's first frame (a still picture).
-  assert.match(method("_frames"), /return all\.length > 1 && calm\(\) \? all\.slice\(0, 1\) : all;/);
-});

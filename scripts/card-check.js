@@ -10118,10 +10118,7 @@ async function main() {
     force["binary_sensor.calling"] = "off";
     await redraw();
     out.poppedOff = s.attention.classList.contains("arrive");
-    // Falling asleep seen live. The ten-pat flop before this check (care reactions C) set a 2.5 s timer
-    // that takes `settle` off the pet; fired inside the window below it strips the settle seen here.
-    // Let it run out first (here, not at the top: an idle wander would then start under the first check).
-    await wait(2600);
+    // Falling asleep seen live.
     force["binary_sensor.asleep"] = "off";
     await redraw();
     s.pet.classList.remove("settle");
