@@ -564,10 +564,11 @@ test("a rim cue never lands on the glass and a glass look never on the rim (the 
   const glass = new Set([...F.CLASSES_BY_LAYER.glass, ...F.CLASSES_BY_LAYER.ambient]);
   const rim = new Set([...F.CLASSES_BY_LAYER.rim, ...F.CLASSES_BY_LAYER.rimAmbient]);
   for (const c of rim) assert.ok(!glass.has(c), c);
+  for (const c of F.CLASSES_BY_LAYER.mark) assert.ok(!glass.has(c) && !rim.has(c), `${c}: a mark class is on the mark element only`);
   assert.strictEqual(rim.size, F.CLASSES_BY_LAYER.rim.length + F.CLASSES_BY_LAYER.rimAmbient.length, "no class twice");
 });
 
 test("the card's _forget clears the glow with the cues; the rim's ambient set is painted by paint, not by a cue", () => {
   assert.match(src, /s\.rim\?\.classList\.remove\(\.\.\.HATCH_DEVICE_FX\.RIM_CLASSES, \.\.\.HATCH_DEVICE_FX\.CLASSES_BY_LAYER\.rimAmbient\);/);
-  assert.match(src, /<i class="hw glass" aria-hidden="true">(?:<b><\/b>){7}<\/i>/);
+  assert.match(src, /<i class="hw glass" aria-hidden="true">(?:<b><\/b>){7}<u class="mark"><\/u><\/i>/);
 });

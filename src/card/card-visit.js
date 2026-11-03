@@ -671,8 +671,85 @@ class HatchPetCardVisit extends HatchPetCardLooks {
   // `lcd-on`); on paints the ambience again.
   _dirSwitch() {
     for (const s of this._slides || []) {
-      if (!lcdOn()) this._director?.cancel(s, "switch", ["shellImpulse"]);
+      if (!lcdOn()) {
+        this._director?.cancel(s, "switch", ["shellImpulse"]);
+        this._markEnd(s); // the rare glass mark goes with the switch
+      }
       HATCH_DEVICE_FX.paint(this._director, s, this._dirEnv());
+    }
+  }
+
+  // The rare glass mark (slice 6; plan section 9). A generic paw, smudge or edge shadow on the glass of the pet on
+  // show, about one per 20 minutes of viewed time, in memory only (s.glassViewed, s.glassAt, s.glassSeen, s.markUntil,
+  // s.markLast, s.markTimer: nothing saved, nothing on the wire). Called by _tick for the selected slide with the clock
+  // (`now`) and the random (`choose`) as parameters, so a test needs no wait. Not a lease: it never writes s.dirEffect
+  // and offers the director nothing; it only reads it (inspect: a running onset or echo; isBusy: the busy owners).
+  _rareGlass(s, now = Date.now(), choose = pick) {
+    const M = HATCH_DEVICE_FX.MARK;
+    if (!s?.mark) return;
+    if (s.markUntil && now >= s.markUntil) { // the tick is the clock; the animation and a timer are the backstops
+      this._markEnd(s);
+      s.glassAt = now; // the wait starts again from here, at zero
+      return;
+    }
+    // Viewed time: only a tick on the selected slide, in view, lights on, no busy owner (asleep and the status sheet
+    // are owners). Off-slide, hidden or busy time is not credited, and the next tick after it credits nothing.
+    const viewed = this._dirShown(s) && lcdOn() && !s.empty && !s.reloading && !this._director?.isBusy(s);
+    if (!viewed) {
+      s.glassAt = 0;
+      return;
+    }
+    const credit = s.glassAt ? Math.max(0, Math.min(now - s.glassAt, M.creditMs)) : 0;
+    s.glassAt = now;
+    if (s.markUntil) return; // one at a time; the wait starts again when it is gone
+    s.glassViewed = (s.glassViewed || 0) + credit;
+    const first = !s.glassSeen;
+    s.glassSeen = true; // a mark is never drawn on the first view
+    if (first || s.glassViewed < M.everyMs) return;
+    // Due. Waits (still due) while reduced motion is on, an onset or echo is on the glass or the rim, or no spot is clear.
+    if (calm() || this._director?.inspect(s)?.tracks?.shellImpulse) return;
+    const kind = choose(M.kinds.filter((k) => k !== s.markLast));
+    const spot = M.spots.find((c) => this._markClear(s, kind, c));
+    if (!spot || !HATCH_DEVICE_FX.markDraw(s, kind, spot)) {
+      HATCH_DEVICE_FX.markClear(s);
+      return;
+    }
+    HATCH_DEVICE_FX.markStart(s);
+    s.markLast = kind;
+    s.glassViewed = 0;
+    s.markUntil = now + M.showMs + M.fadeMs;
+    clearTimeout(s.markTimer);
+    s.markTimer = setTimeout(() => this._markEnd(s), M.showMs + M.fadeMs + 500);
+  }
+
+  // Is this spot free of the pet and of everything read or pressed on the screen, at its shown size right now? The
+  // mark is laid out (not yet drawn: opacity 0 until dir-mark-on) and measured; a spot that touches one is skipped.
+  _markClear(s, kind, spot) {
+    if (!HATCH_DEVICE_FX.markDraw(s, kind, spot)) return false;
+    const box = s.mark.getBoundingClientRect();
+    if (!box.width || !box.height) return false;
+    const hit = (el) => {
+      if (!el || el.hidden) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && r.left < box.right && r.right > box.left && r.top < box.bottom && r.bottom > box.top;
+    };
+    const watch = [s.pet, s.attention, s.bubble, s.pat, s.request, s.basket, s.gameBox, s.perch];
+    return !watch.some(hit);
+  }
+
+  // The mark is gone: its classes, its timer and the time it was showing. `full` (a forgotten pet) also zeroes the
+  // counter and the first-view flag, so another pet on the slide inherits nothing; a swipe or the switch off does not.
+  _markEnd(s, full = false) {
+    if (!s) return;
+    HATCH_DEVICE_FX.markClear(s);
+    clearTimeout(s.markTimer);
+    s.markTimer = 0;
+    s.markUntil = 0;
+    if (full) {
+      s.glassViewed = 0;
+      s.glassAt = 0;
+      s.glassSeen = false;
+      s.markLast = "";
     }
   }
 

@@ -254,6 +254,27 @@
     window.bench.info = { glass: s.glass.className, rim: s.rim.className, effect: s.dirEffect || 0, canRender: card._director.inspect(s)?.tracks || null };
   }
 
+  // `glassMark` (device-alive slice 6): {kind: "paw"|"smudge"|"edge", spot: "bl"|"br"|"ml"|"mr", at}. The rare glass mark through
+  // the card's own gate (_rareGlass, due, the pick fixed to the kind): the first spot clear of the pet, or with a `spot` that spot. Its `dir-mark-life` is paused `at` ms in (default 2000), so a frame is the same
+  // every run.
+  function glassMarkShot(card, s, shot) {
+    const g = shot.glassMark;
+    const want = `dir-mark-${g.kind}`;
+    // The card's module keeps HATCH_DEVICE_FX out of reach: a spot is forced by answering the gate's own question for it.
+    const realClear = card._markClear;
+    if (g.spot) card._markClear = function (sl, k, c) { realClear.call(this, sl, k, c); return c === `dir-mark-${g.spot}`; };
+    s.glassSeen = true;
+    s.glassViewed = 3600000;
+    card._rareGlass(s, Date.now(), (l) => l.find((k) => k === want) || l[0]);
+    card._markClear = realClear;
+    for (const a of s.mark.getAnimations()) {
+      a.pause();
+      a.currentTime = g.at ?? 2000;
+    }
+    const r = (el) => { const b = el.getBoundingClientRect(); return [b.left, b.top, b.right, b.bottom].map(Math.round); };
+    window.bench.info = { mark: s.mark.className, drawn: !!s.markUntil, box: r(s.mark), pet: r(s.pet), screen: r(s.screen), canRender: card._director.inspect(s)?.tracks || null };
+  }
+
   // `rimCue` (device-alive 3C): {action, at}. The card's own `_rimCue` for the toy's data-action (feed, play,
   // clean, lights; medicine and the rest have none), the rim's animations paused `at` ms in (default 500), so a
   // frame is the same every run. After a `care` scene is seeked, a running scene wins (no cue).
@@ -933,6 +954,7 @@
     // `echo` a ring entry from 20 s before, played at the slide's first view. `at` pauses the
     // glass's animation that many ms in (default 600), so a frame is the same every run.
     if (shot.deviceFx) deviceFxShot(card, cur, shot);
+    if (shot.glassMark) glassMarkShot(card, cur, shot);
     if (shot.costume) await dress(card, cur, shot.costume);
     if (["status", "settings", "picker"].includes(shot.view)) root.querySelector(".statusbtn").click();
     if (shot.view === "settings" || shot.view === "picker") root.querySelector(".gear").click();
