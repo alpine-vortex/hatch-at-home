@@ -114,6 +114,13 @@ const PERSONA_FRESH = {
 };
 // P-b: now and then a spoken pat finds the sweet spot (any stage but a baby).
 const PAT_SPOT = "that's the spot!! ♥";
+// Touch (care reactions ship C, plan 5.4 and 14): the escalating pat's own lines. The tickle is the
+// body's third pat, the flop is the tenth, the asleep one is a stir (1 in 4). Said through _patMayTalk.
+const PAT_RUN_LINES = {
+  ticklish: ["hehe, that tickles ♥"],
+  flop: ["ok ok ♥ ...so cozy", "*melts into a puddle*"],
+  asleep: ["mm..."],
+};
 // V-a (E3): a visitor seen here on VISIT_FRIEND_AFTER days is a friend; its greet is one
 // of these half the time, in turns (turnPick). They name the visitor, never a person.
 const VISIT_FRIENDS = {

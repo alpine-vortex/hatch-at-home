@@ -364,6 +364,14 @@ const STYLE = `
   .pet.pat-slow { animation: perk 1.1s ease-in-out; }
   .pet.rock { animation: rock .6s steps(4, jump-none) 1; transform-origin: 50% 90%; }
   .pet.rock2 { animation: rock .6s steps(4, jump-none) 2; transform-origin: 50% 90%; } /* a cracking egg: a double rock */
+  /* Touch (care reactions ship C, plan 5.4): a pat on the head leans the pet 5deg toward the tapped side,
+     held while pats keep coming. \`rotate\` is one property: the card adds none of these while .look or a
+     wander is on the pet. Its own transition (.15s in, .3s out, +50% when sick), not the pet's .2s. */
+  .pet.lean-l { rotate: -5deg; transition: translate .25s ease-out, rotate .15s ease-out, scale .25s steps(2); }
+  .pet.lean-r { rotate: 5deg; transition: translate .25s ease-out, rotate .15s ease-out, scale .25s steps(2); }
+  .pet.lean-rel { transition: translate .25s ease-out, rotate .3s ease-out, scale .25s steps(2); }
+  .pet.lean-sick.lean-l, .pet.lean-sick.lean-r { transition: translate .25s ease-out, rotate .225s ease-out, scale .25s steps(2); }
+  .pet.lean-sick.lean-rel { transition: translate .25s ease-out, rotate .45s ease-out, scale .25s steps(2); }
   @keyframes rock { 0% { transform: rotate(-4deg); } 33% { transform: rotate(4deg); } 66% { transform: rotate(-3deg); } 100% { transform: rotate(0); } }
   .pet.hop { animation: hop .7s ease-in-out infinite; }
   .pet.munch { animation: munch .5s ease-in-out 3; }

@@ -688,8 +688,37 @@
     }
     // `reactWait`: ms to let sprite probes (and a failed one's swap back) finish before the shot.
     if (shot.reactWait) await new Promise((r) => setTimeout(r, shot.reactWait));
-    // `patTap`: a pat on the pet through the card's own `_pat` (acts.pat shows for ~900 ms).
-    if (shot.patTap) card._pat(cur, { stopPropagation() {}, detail: 0 });
+    // `patTap`: a pat on the pet through the card's own `_pat` (acts.pat shows for ~900 ms). `true` is one
+    // keyboard pat (the head, no side). An object `{n, zone: "head"|"body", side: "left"|"right", gap, at}`
+    // runs n pats `gap` ms apart on a pinned clock (default 600), landing in that zone of the pat box (the
+    // card reads its rect at the tap), then lets every transition finish (the lean) and, with `at`, seeks
+    // the animations to `at` ms. The lean's release timer is held so the shot sees the lean.
+    if (shot.patTap) {
+      const t = shot.patTap === true ? null : shot.patTap;
+      if (!t) card._pat(cur, { stopPropagation() {}, detail: 0 });
+      else {
+        const rect = cur.pat.getBoundingClientRect();
+        const ev = { stopPropagation() {}, detail: 1,
+          clientX: rect.left + rect.width * (t.side === "left" ? 0.25 : 0.75),
+          clientY: rect.top + rect.height * (t.zone === "body" ? 0.7 : 0.2) };
+        const realNow = Date.now;
+        const t0 = realNow();
+        try {
+          for (let i = 0; i < (t.n ?? 1); i++) {
+            Date.now = () => t0 + i * (t.gap ?? 600);
+            card._pat(cur, ev);
+          }
+        } finally {
+          Date.now = realNow;
+        }
+        clearTimeout(cur.leanTimer);
+        await new Promise((r) => setTimeout(r, 30));
+        for (const a of cur.screen.getAnimations({ subtree: true })) {
+          if (a instanceof CSSTransition) a.finish();
+          else if (t.at !== undefined) { a.pause(); a.currentTime = t.at; }
+        }
+      }
+    }
     // `patBox`: the pat's clear hit box outlined, so a shot shows where a tap pats (or, in a
     // state that hides it, that there is none).
     if (shot.patBox) cur.pat.style.outline = "2px dashed #ff00d0";

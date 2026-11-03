@@ -17,6 +17,7 @@ const FILL = {
 const COPY_TABLES = {
   PERSONA_FRESH: {},
   PAT_SPOT: {},
+  PAT_RUN_LINES: {}, // care reactions C: the touch ladder's lines
   VISIT_FRIENDS: {},
   WAKE_LINES: {},
   NIGHT_VISITOR: { fill: "visitor" },
