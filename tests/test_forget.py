@@ -318,7 +318,7 @@ async def test_forget_me_drops_my_dream_pick_and_my_name_on_the_dream(
         {"user": ada.id, "pick": "sea", "at": now},
         {"user": "user-b", "pick": "stars", "at": now},
     ]
-    today = dt_util.now().date().isoformat()
+    today = dt_util.utcnow().date().isoformat()  # setup() puts the house in UTC
     told = {"kind": "picked", "pick": "sea", "user": ada.id, "day": today}
     hass_storage[STORE_KEY] = hatched_pet(
         now, dream_picks=copy.deepcopy(picks), dream=dict(told)
@@ -351,7 +351,7 @@ async def test_forget_me_leaves_other_peoples_dream_alone(
 ) -> None:
     ada, token = await a_user(hass)
     now = dt_util.utcnow().timestamp()
-    today = dt_util.now().date().isoformat()
+    today = dt_util.utcnow().date().isoformat()  # setup() puts the house in UTC
     told = {"kind": "picked", "pick": "sea", "user": "user-b", "day": today}
     picks = [{"user": "user-b", "pick": "stars", "at": now}]
     hass_storage[STORE_KEY] = hatched_pet(
@@ -373,7 +373,7 @@ async def test_a_dream_without_its_asker_loads_and_is_nobodys_idea(
     `yours` is false to everyone."""
     me, _ = await a_user(hass)
     now = dt_util.utcnow().timestamp()
-    today = dt_util.now().date().isoformat()
+    today = dt_util.utcnow().date().isoformat()  # setup() puts the house in UTC
     hass_storage[STORE_KEY] = hatched_pet(
         now,
         dream={"kind": "picked", "pick": "sea", "day": today},
@@ -401,7 +401,7 @@ async def test_diagnostics_hold_no_user_id_from_a_dream_pick_after_forget_me(
 
     ada, token = await a_user(hass)
     now = dt_util.utcnow().timestamp()
-    today = dt_util.now().date().isoformat()
+    today = dt_util.utcnow().date().isoformat()  # setup() puts the house in UTC
     hass_storage[STORE_KEY] = hatched_pet(
         now,
         dream_picks=[{"user": ada.id, "pick": "sea", "at": now}],

@@ -8,6 +8,7 @@ import json
 import logging
 from typing import Any
 
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.const import MATCH_ALL
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
@@ -172,11 +173,17 @@ async def test_the_answer_is_on_no_bus_log_sensor_or_house_view(
     hass_storage: dict[str, Any],
     hass_ws_client: Any,
     caplog: pytest.LogCaptureFixture,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
     from custom_components.virtual_pet.diagnostics import (
         async_get_config_entry_diagnostics,
     )
 
+    # The house view names the day's world visitor, and the favourite here is a
+    # visitor's id: on a day that visitor calls, the id is rightly in the view.
+    # A fixed day keeps the check about the favourite alone (the visitor is
+    # another one that day).
+    freezer.move_to("2026-10-26 14:00:00+00:00")
     caplog.set_level(logging.INFO)
     caplog.set_level(logging.DEBUG, logger="custom_components.virtual_pet")
     bus = async_capture_events(hass, MATCH_ALL)
