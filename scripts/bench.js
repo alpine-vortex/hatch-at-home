@@ -13,6 +13,12 @@ require("./build-card.js").ensureBuilt();
 
 const ROOT = path.join(__dirname, "..");
 const FRONTEND = path.join(ROOT, "custom_components", "virtual_pet", "frontend");
+// The card's DRAPE table (shell-data.js), for the tuck sheet's pass rule.
+const DRAPE_TABLE = (() => {
+  const src = fs.readFileSync(path.join(ROOT, "src", "card", "shell-data.js"), "utf8");
+  const body = src.match(/const DRAPE = (\{[\s\S]*?\n\});/)[1];
+  return new Function(`return ${body}`)();
+})();
 const WORLDS = JSON.parse(fs.readFileSync(path.join(FRONTEND, "worlds.json"), "utf8"));
 const SHAPES = ["egg", "tank", "house", "porthole", "pad", "moon"];
 const FINISHES = ["woodland", "aqua", "grove", "celestial", "dune", "clear", "glitter", "glow", "speckle", "stripes",
@@ -810,6 +816,64 @@ const PRESETS = {
     }
     return out;
   },
+  // Care D, the tuck and the wake (plan care-reactions 5.3, 13). An adult fox in woodland: the tuck and the
+  // wake every beat, day and night, the refusal, the quiet exit, the hold, resting, a baby and a child, the
+  // reduced-motion tap, the drape's alignment through a settle and a pat; and a drape sheet: every
+  // species at every stage with the drape on frame 3, in the day and in the dim (the face stays clear).
+  // Pass rules (lightsPass): the calm frames, the 2% compares, the alignment within 1 px.
+  tuck() {
+    const out = [];
+    const live = { at: 150, asleep: true };
+    const shot = (group, name, label, extra) => out.push({ name: `tuck/${group}/${name}`, group: `tuck-${group}`, label,
+      species: "fox", stage: "adult", world: "woodland", width: 330, care: "lights", clip: "screen", say: "",
+      ...extra, pet: { energy: 60, ...extra.pet }, variant: { lights: "A", "lights.night": "on", ...extra.variant } });
+    const wake = { scene: "dim", pet: { mood: "asleep" }, live: { at: 150, asleep: false } };
+    for (const at of [0, 400, 700, 1000, 1200, 1400, 1600, 1800, 2400]) {
+      shot("day", `day-${at}`, `tuck ${at}`, { careAt: at, live });
+      shot("night", `night-${at}`, `night ${at}`, { careAt: at, live, scene: "night" });
+    }
+    for (const v of ["B", "C"]) for (const at of [1100, 2000, 2600]) shot(`variant-${v}`, `${v}-${at}`, `${v} ${at}`, { careAt: at, live, variant: { lights: v } });
+    for (const at of [0, 300, 500, 700, 850, 1000, 1150, 1300, 1600]) shot("wake", `wake-${at}`, `wake ${at}`, { careAt: at, ...wake });
+    for (const at of [300, 500, 800, 1100, 1400]) shot("refuse", `refuse-${at}`, `not_sleepy at 300: ${at}`, { careAt: at, answer: { at: 300, result: "not_sleepy" } });
+    for (const at of [500, 800, 1300]) shot("quiet", `quiet-${at}`, `no change: ${at}`, { careAt: at });
+    for (const at of [500, 800, 1300]) shot("quiet", `wake-quiet-${at}`, `a wake of an awake pet: ${at}`, { careAt: at, scene: "dim", pet: { mood: "asleep" }, live: { at: 40, asleep: false } });
+    for (const at of [400, 1400, 2400, 2800]) shot("hold", `hold-${at}`, `no reply: ${at}`, { careAt: at, calledAt: false });
+    for (const at of [0, 700, 1000, 1600, 2400]) shot("resting", `resting-${at}`, `resting ${at}`, { careAt: at, live, pet: { resting: true } });
+    for (const [species, stage] of [["fox", "baby"], ["fox", "child"], ["beardeddragon", "baby"], ["corgi", "baby"], ["ferret", "adult"], ["bunny", "teen"], ["bat", "adult"], ["otter", "adult"]]) {
+      for (const at of [1000, 2400]) shot("stages", `${species}-${stage}-${at}`, `${species} ${stage} ${at}`, { species, stage, world: worldOf(species), careAt: at, live });
+    }
+    // Reduced motion: the tap (sleepy, then asleep with the drape on frame 3 and the dim at once), the wake
+    // (the content frame, no drape), the blanket chip's floor reply.
+    shot("calm", "tuck", "calm: tuck", { careAt: 2400, live, motion: "reduce", lightsCalm: "tuck" });
+    shot("calm", "tap", "calm: the tap", { careAt: 0, motion: "reduce", lightsCalm: "tap" });
+    shot("calm", "wake", "calm: wake", { careAt: 2400, ...wake, motion: "reduce", lightsCalm: "wake" });
+    shot("calm", "wake-tap", "calm: the wake's tap", { careAt: 0, scene: "dim", pet: { mood: "asleep" }, motion: "reduce", lightsCalm: "wake-tap" });
+    // The drape through a settle and a pat on a tucked pet (asleep, the lights out): its box is the pet's.
+    for (const at of [300, 400, 625, 1500]) {
+      out.push({ name: `tuck/align/settle-${at}`, group: "tuck-align", label: `settle ${at}`, species: "fox", stage: "adult", world: "woodland",
+        width: 330, clip: "screen", say: "", scene: "dim", pet: { mood: "asleep" }, petClasses: ["settle"], petAt: at, lightsAlign: true });
+    }
+    out.push({ name: "tuck/align/pat", group: "tuck-align", label: "a pat on a tucked pet", species: "fox", stage: "adult", world: "woodland",
+      width: 330, clip: "screen", say: "", scene: "dim", pet: { mood: "asleep" }, patTap: { n: 1, at: 150 }, lightsAlign: true });
+    // The hand-over: the scene paused at its end, and just after its dim swap, against the plain state
+    // (asleep, the lights out, the drape on frame 3): no more than 2% of the pixels differ.
+    // (Cropped below the bubble: the scene says its thanks at 1800, the plain state says nothing.)
+    const plain = { species: "fox", stage: "adult", world: "woodland", width: 330, clip: "screen", say: "", scene: "dim", pet: { mood: "asleep" }, crop: [0, 0.3, 1, 1] };
+    out.push({ name: "tuck/compare/state", group: "tuck-compare", label: "the plain state", ...plain });
+    shot("compare", "scene-1800", "the scene at 1800", { careAt: 1800, live, crop: plain.crop, animsEnd: true });
+    shot("compare", "scene-2400", "the scene at 2400", { careAt: 2400, live, crop: plain.crop, animsEnd: true });
+    out.push({ name: "tuck/compare/wake-state", group: "tuck-compare", label: "a wake's end, plain", ...plain, scene: "day", pet: { mood: "content" } });
+    shot("compare", "wake-1450", "the wake at 1450", { careAt: 1450, ...wake, crop: plain.crop, animsEnd: true });
+    // The drape sheet: every species and stage on frame 3, in the day (the scene at 1500) and in the dim.
+    for (const species of allSpecies().sort()) {
+      for (const stage of speciesData(species).stages.filter((x) => x !== "egg")) {
+        shot("sheet-day", `${species}-${stage}`, `${species} ${stage} day`, { species, stage, world: worldOf(species), careAt: 1500, live, tile: 150, lightsAlign: true });
+        out.push({ name: `tuck/sheet-dim/${species}-${stage}`, group: "tuck-sheet-dim", label: `${species} ${stage} dim`, ...plain, species, stage,
+          world: worldOf(species), tile: 150, lightsAlign: true });
+      }
+    }
+    return out;
+  },
   // The same sheet on a shared screen: nothing personal, only this screen's rows.
   "settings-shared"() {
     const out = [];
@@ -1012,7 +1076,7 @@ async function runShots(browser, base, shots, outDir, workers) {
         const png = await page.screenshot({ path: file, clip });
         shot.file = file;
         if (shot.mono) shot.measure = { screen: await page.evaluate(() => window.bench.screenClass), ...await measureMono(page, clip, png) };
-        if (shot.costume || shot.gift || shot.look || shot.care) {
+        if (shot.costume || shot.gift || shot.look || shot.care || shot.lightsAlign) {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
         }
@@ -1186,6 +1250,87 @@ async function monoLitCheck(browser, shots) {
   return out;
 }
 
+// The share of pixels that differ between two PNGs (any channel pair summing over 30), as monoLitCheck.
+async function pixelShares(browser, pairs) {
+  const page = await browser.newPage();
+  const out = [];
+  for (const p of pairs) {
+    const share = await page.evaluate(async ({ a, b }) => {
+      const px = async (src) => {
+        const img = new Image();
+        img.src = `data:image/png;base64,${src}`;
+        await img.decode();
+        const c = document.createElement("canvas");
+        c.width = img.width;
+        c.height = img.height;
+        const g = c.getContext("2d");
+        g.drawImage(img, 0, 0);
+        return g.getImageData(0, 0, c.width, c.height).data;
+      };
+      const [x, y] = [await px(a), await px(b)];
+      if (x.length !== y.length) return 1;
+      let diff = 0;
+      for (let i = 0; i < x.length; i += 4) if (Math.abs(x[i] - y[i]) + Math.abs(x[i + 1] - y[i + 1]) + Math.abs(x[i + 2] - y[i + 2]) > 30) diff++;
+      return diff / (x.length / 4);
+    }, { a: fs.readFileSync(p.a).toString("base64"), b: fs.readFileSync(p.b).toString("base64") });
+    out.push({ ...p, share: +share.toFixed(4) });
+  }
+  await page.close();
+  return out;
+}
+
+// Care D's pass rules (plan 5.3, 13), over the `tuck` preset: the reduced-motion frames by name, the
+// scene's end and its dim step each within 2% of the plain state, the drape's box within 1 px of the
+// pet's through a settle and a pat, and every species' drape on frame 3 as the card's table says.
+const LIGHTS_SHARE_MAX = 0.02;
+async function lightsPass(browser, shots) {
+  const rows = [];
+  const info = (name) => {
+    const s = shots.find((x) => x.name === name && x.file);
+    return s ? JSON.parse(fs.readFileSync(s.file.replace(/\.png$/, ".json"), "utf8")).lights : null;
+  };
+  const check = (label, ok, detail = "") => rows.push({ label, ok: !!ok, detail });
+  const calm = (name, pet, drape, dim) => {
+    const l = info(`tuck/calm/${name}`);
+    check(`calm ${name}`, l && pet.test(l.pet) && (drape ? /ui\/drape_[sml]_3\.png$/.test(l.drape || "") : l.drape === null) && l.dim === dim &&
+      !l.scene && l.drapeAnim === 0 && !/animation|transition/.test(l.drapeInline), l ? `${l.pet} ${l.drape} dim ${l.dim} anim ${l.drapeAnim} [${l.drapeInline}]` : "no shot");
+  };
+  calm("tap", /adult_sleepy_/, false, false);
+  calm("tuck", /adult_asleep_/, true, true);
+  calm("wake-tap", /adult_content_/, true, true);
+  calm("wake", /adult_content_/, false, false);
+  for (const s of shots.filter((x) => x.name.startsWith("tuck/align/") && x.file)) {
+    const l = info(s.name);
+    const off = l?.drapeBox ? l.petBox.map((v, i) => Math.abs(v - l.drapeBox[i])) : null;
+    check(`align ${s.name.slice(11)}`, off && Math.max(...off) <= 1, off ? `max ${Math.max(...off).toFixed(2)} px` : "no drape");
+  }
+  const pairs = [["scene-1800", "state"], ["scene-2400", "state"], ["wake-1450", "wake-state"]]
+    .map(([a, b]) => ({ label: `${a} vs ${b}`, a: shots.find((x) => x.name === `tuck/compare/${a}`)?.file, b: shots.find((x) => x.name === `tuck/compare/${b}`)?.file }))
+    .filter((p) => p.a && p.b);
+  for (const p of await pixelShares(browser, pairs)) check(`compare ${p.label}`, p.share <= LIGHTS_SHARE_MAX, `${(p.share * 100).toFixed(2)}% differ (need <= ${LIGHTS_SHARE_MAX * 100}%)`);
+  for (const s of shots.filter((x) => x.name.startsWith("tuck/sheet-day/") && x.file)) {
+    const l = info(s.name);
+    const want = DRAPE_TABLE[s.species]?.[s.stage];
+    check(`sheet ${s.species} ${s.stage}`, want ? l?.drape === `ui/drape_${want[0]}_3.png` : l?.drape === null, `${l?.drape}`);
+  }
+  // The drape sits on the pet (FM, 2026-11-02): its drawn pixels lie inside the pet's drawn pixels widened
+  // by 12% a side, and never below the pet's feet line (a pixel of rounding allowed).
+  for (const s of shots.filter((x) => /^tuck\/sheet-(day|dim)\//.test(x.name) && x.file)) {
+    const l = info(s.name);
+    if (!DRAPE_TABLE[s.species]?.[s.stage]) continue;
+    const p = l?.petDrawn, d = l?.drapeDrawn;
+    const slack = p ? 0.12 * (p[2] - p[0]) : 0;
+    const ok = !!(p && d && d[0] >= p[0] - slack && d[2] <= p[2] + slack && d[3] <= p[3] + 1);
+    check(`on the pet ${s.name.slice(5)}`, ok, p && d ? `drape ${d.map((v) => v.toFixed(1))} pet ${p.map((v) => v.toFixed(1))}` : "no box");
+  }
+  for (const r of rows) {
+    if (!r.ok || /^(calm|align|compare|on the pet)/.test(r.label)) console.log(`  ${r.ok ? "pass" : "FAIL"} ${r.label}: ${r.detail}`);
+  }
+  console.log(`lights pass rules: ${rows.filter((r) => r.ok).length} of ${rows.length} pass`);
+  if (rows.some((r) => !r.ok)) process.exitCode = 1;
+  return rows;
+}
+
 // A contact sheet per group: the shots as captioned tiles, drawn by the browser.
 async function buildSheets(browser, shots, outDir) {
   const groups = new Map();
@@ -1233,6 +1378,10 @@ async function main() {
       const bad = l.share <= MONO_LIT_MIN;
       console.log(`mono backlight ${bad ? "FAIL" : "ok"}: ${l.label} differ on ${(l.share * 100).toFixed(1)}% of pixels (need > ${MONO_LIT_MIN * 100}%)`);
       if (bad) process.exitCode = 1;
+    }
+    if (opts.preset === "tuck") {
+      const rows = await lightsPass(browser, shots);
+      fs.writeFileSync(path.join(opts.out, "tuck-pass.json"), JSON.stringify(rows, null, 1));
     }
     if (opts.preset === "snack") {
       const caught = shots.filter((s) => s.snackCatch && s.file);

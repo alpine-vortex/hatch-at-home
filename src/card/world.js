@@ -574,3 +574,20 @@ function seasonNow(config, date = new Date()) {
   return SEASONS.find((x) => after(md, seasonDate(x.from, year)) && after(seasonDate(x.to, year), md)) || null;
 }
 
+
+// Is it the pet's night (the household's bedtime and wake time, as sensor.life_stage's sleep_times
+// carries them), or the hour before bedtime? A tuck is then expected (care reactions D, plan 4.2), a
+// wake grogginess. `early` is minutes before bedtime that count. No sleep_times (an older server): false.
+function inSleepWindow(sleep, now = new Date(), early = 60) {
+  if (!sleep || typeof sleep.bedtime !== "string" || typeof sleep.wake !== "string") return false;
+  const minutes = (hhmm) => {
+    const [h, m] = hhmm.split(":").map(Number);
+    return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
+  };
+  const bed = minutes(sleep.bedtime);
+  const wake = minutes(sleep.wake);
+  if (bed == null || wake == null) return false;
+  const at = now.getHours() * 60 + now.getMinutes();
+  const from = (bed - early + 1440) % 1440;
+  return from <= wake ? at >= from && at < wake : at >= from || at < wake;
+}

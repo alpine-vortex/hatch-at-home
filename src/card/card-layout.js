@@ -369,6 +369,26 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     probe.src = src;
   }
 
+  // Which background the pet's day is in: the day's, the rain's, the night's, or the dim (asleep or
+  // the lights out). `states` is the hass states (the scene reads the live ones, not the held).
+  _sceneKey(states, flags, sleeping) {
+    if (sleeping) return "dim";
+    if (states["sun.sun"]?.state === "below_horizon") return "night";
+    return flags.includes("rainy") ? "rain" : "day";
+  }
+
+  // The background for a scene key, and the classes that go with it (the dim's art, a darkened day
+  // art for a species with no scene of its own).
+  _bgApply(s, scene) {
+    const sp = s.species;
+    const own = sp.backgrounds?.[scene];
+    this._show(s, s.bg, own || sp.backgrounds?.day || Object.values(sp.backgrounds || {})[0]);
+    // A species with only a day scene gets it darkened for night and sleep.
+    s.screen.classList.toggle("faded", !own && scene !== "day" && scene !== "rain");
+    s.screen.classList.toggle("night", scene === "night");
+    s.screen.classList.toggle("dim", scene === "dim");
+  }
+
   _show(s, img, sprite) {
     if (!sprite) {
       img.style.display = "none";
@@ -526,20 +546,19 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     const newCall = calling && s.wasCalling === false && !away;
     if (newCall) this._chirp(s, "call");
     s.wasCalling = calling;
+    // A lights scene (care reactions D, plan 4.9) owns the sleep transition and the background for its
+    // life: the held state says awake, so neither the settle nor the bg swap may run on it, and its
+    // lie-down and blink write s.wasAsleep themselves. It reads the live (unheld) state each pass too.
+    const lightsScene = s.scene?.kind === "lights";
+    if (lightsScene) this._lightsWatch(s);
     // Falling asleep seen live: the pet settles in step with the dim (.6 s). Not on load.
-    if (asleep && s.wasAsleep === false && !s.egg && !calm()) this._animate(s, s.pet, "settle", 2500);
-    s.wasAsleep = asleep;
+    if (!lightsScene) {
+      if (asleep && s.wasAsleep === false && !s.egg && !calm()) this._animate(s, s.pet, "settle", 2500);
+      s.wasAsleep = asleep;
+    }
 
-    let scene = "day";
-    if (flags.includes("rainy")) scene = "rain";
-    if (this._hass.states["sun.sun"]?.state === "below_horizon") scene = "night";
-    if (asleep || lightsOut) scene = "dim";
-    const own = sp.backgrounds?.[scene];
-    this._show(s, s.bg, own || sp.backgrounds?.day || Object.values(sp.backgrounds || {})[0]);
-    // A species with only a day scene gets it darkened for night and sleep.
-    s.screen.classList.toggle("faded", !own && scene !== "day" && scene !== "rain");
-    s.screen.classList.toggle("night", scene === "night");
-    s.screen.classList.toggle("dim", scene === "dim");
+    const scene = this._sceneKey(this._hass.states, flags, asleep || lightsOut);
+    if (!lightsScene) this._bgApply(s, scene);
     this._renderSeason(s);
 
     this._show(s, s.perch, away ? null : sp.perch);
@@ -579,6 +598,7 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     const drawn = sp.stages?.includes(stage) ? stage : sp.stage_fallback?.[stage];
     s.drawn = drawn;
     s.pet.style.scale = String(sp.scale?.[drawn] || 1);
+    if (!lightsScene) this._drapeSync(s, asleep && lightsOut && !away && !s.egg);
     // A heavy pet is drawn a little wider (gaps-seams 2c, owner: x1.06, only while heavy).
     const weight = Number.parseFloat(this._state(s, "sensor.weight")?.state);
     const heavy = stage !== "egg" && isHeavy(Number.isFinite(weight) ? weight : null);

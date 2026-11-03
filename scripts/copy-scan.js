@@ -72,6 +72,7 @@ const COPY_TABLES = {
   CLOCK_LINES: {},
   FEED_LINES: {}, // care reactions B1 (plan-2026-11-02-care-reactions.md 14)
   SNACK_LINES: {}, // care reactions B2
+  LIGHTS_LINES: {}, // care reactions D: the tuck and the wake
 };
 
 function lines(value, path, out) {

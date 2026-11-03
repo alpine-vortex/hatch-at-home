@@ -1475,3 +1475,73 @@ B1 validation fixes below.
 - Reduced motion: the scene never starts (`sceneFade`). The "calm pat" follow-up needed no code: `_pat`
   sets the pat pose before it looks at the cooldown, and ship C's rewrite keeps the wiggle for motion only
   (`tests/js/touch.test.js`, "reduced motion: the pose and the line, no lean, no wiggle").
+
+## 22. D shipped: the tuck, the wake and the drape (s2764)
+
+Ship D (branch `crew/hatch-at-home-s2764-care-d-tuck-in-and-wake-lights`, on B2 and the drape art, `origin/main` e9ff2cf3).
+Names win over lines.
+
+**FM decisions (first mate, 2026-11-02), as built**
+
+- **Q1** The drape is sized by the measured width of the pet's `asleep_1` body, not by its stage: S up to 160 px, M 161-210, L the rest.
+  Three sizes of three frames (`ui/drape_{s,m,l}_{1,2,3}.png`, whole 256 px frames, ground line y=224, final heights 100 / 112 / 120).
+- **Q2** Opt-outs are the bat and the otter only; the axolotl and the octopus wear it. An opt-out plays every beat of the tuck (the turn,
+  the lie-down, the dim, the sigh, the line), just no blanket.
+- **Q3** The blanket chip's shawl is cut; the chip keeps ship A's floor path and the `bird/blanket.png` prop.
+- **Q4** (a) the thanks after the tuck is the existing `fell_asleep` pools (`_tuckLine`: the pet's first night, a visitor's or a sunset's
+  night line, else the pool); (b) a wake says "*stretches*", and "*blinks, squinting*" only when it falls in the sleep window
+  (`inSleepWindow`, the household's bedtime less an hour to the wake time); (c) "*sighs, all snug*", "*peeks out, then dozes*" and
+  "*one more look around*" as drafted (`LIGHTS_LINES`, in `COPY_TABLES`); (d) no species `tuck` keys in D.
+- **Q5** B2 merged first, D after. **Q6** The lights answer's latency is logged and warned on, never failed (card-check `care`).
+- **Q7** The drape art was a separate job; the code treats a missing file as the no-drape path (`DRAPE_ART.ok`), so it shipped first.
+
+**What it is**
+
+- `SCENES.lights` (`card-care.js`): `skippable: false`, no `playOwed`, gate 400 (tuck) and 300 (wake), `refuse` the head shake, two flips,
+  then a hop; `exit` the quiet and the failure exit; `watch` reads the answer; `calm` the reduced-motion pose. Tuck (2400 ms): the yawn
+  (0-100), the turn round (two flips, 100-400), the lie-down (a 300 ms `lie` squash, the asleep frame at its bottom, `wasAsleep = true` at
+  550), the drape falls in `DRAPE_FALL_MS` (500-950), two press-ins (1000-1200), the dusk layer in two steps (1200, 1400) then the dim art
+  (1600, instant: the bg's `transition` is off for the swap), the sigh and the thanks (1800), variants B (a peek, 2400-2800) and C (two
+  rocks for the press-ins, the sigh line). Wake (1600 ms): the light up in three steps from 300 (the lit art under .3, .15, none), the
+  blink from 700 (`wasAsleep = false`, the groggy line), the drape slides off in two steps (frame 2 dropped, then gone, 1000 / 1150),
+  the stretch at 1150 (`s.stretched`, so the `woke_up` moment's twin is held off for `WAKE_STRETCH_MS`), the content frame.
+- The answer is the live state: `_lightsWatch` reads the unheld `binary_sensor.asleep` and `switch.lights_out` on every frame and every
+  `_renderSlide` pass. A tuck is answered by asleep going on (a change from the tap's picture), a wake by the pet and the switch both
+  off. `_call` coming back true sets `sc.called`; 600 ms with no change after it is the quiet exit; `false` is the failure exit; a
+  `not_sleepy` claimed as mine (`SCENE_KIND_OF`) is the refusal. A second tap while the scene lives, or while the call is pending,
+  is ignored (`_toggleLights`); `_sceneStart` lets a lights scene start for an asleep pet (the wake), every other kind still not.
+- `_renderSlide` skips the background block, the settle and the `wasAsleep` write while a lights scene lives (`lightsScene`); the
+  background is `_sceneKey` and `_bgApply` now (the same maths as before). `_moment` plays no sleep line for `fell_asleep {how: lights}` while
+  a lights scene lives or just after it (`s.tuckedAt`), and no second stretch after a wake scene.
+- **The drape** is `<div class="drape"><img></div>` after `.pet` (above it, below the prop and the bubble), with the pet's own box
+  geometry: `_drapeMirror` copies the pet's classes (but the lie-down squash) and inline `translate`, `rotate`, `scale` and `transition` onto
+  it on every pet class or style change, and `style.js` has the same rules for `.drape.<class>`, so a settle, a pat, the scene's tilt and flip
+  and the species scale move both together. The image sits `y` lower inside the box (`top`, as a share of the frame). It is state:
+  `_drapeSync(s, asleep && lightsOut)` in `_renderSlide`: a tuck seen live falls in 450 ms, a wake seen live (any wake that clears the
+  lights: the lights, or a natural morning) slides off in two steps, calm is on or off at once, a pet tucked when the card opens shows
+  frame 3. The scene draws the same element, so the hand-over shows nothing.
+- **`DRAPE`** (`shell-data.js`, one table, no `species.json` edits): `{species: {stage: [size, left, top, right, bottom]} | null}`, the
+  box in the pet's own 256 px frame that the art's last frame is scaled onto (`_drapeShow`; frames 1 and 2 take the same scale; the
+  card's `DRAPE_ART_BOX` holds each size's art box). `scripts/drape-table.py` makes it from the `asleep_1` alpha box: the body's width
+  plus 8 px a side, the feet line (the body's bottom) at the bottom, 40% of the body's height up, so the face stays clear; the size is the
+  art nearest that width. First cut (a plain `y` on the art's own scale, dropped below the ground line) put a dome far wider than the pet
+  at the card's foot; the FM held it (2026-11-02) and asked for the pet's width, the feet line and the pixel check. The check is the
+  tuck preset's `on the pet` rule: the drape's drawn pixels lie inside the pet's drawn pixels widened by 12% a side, and never below
+  its feet line, on every species and stage, day and dim. `tests/test_species.py` holds each entry to the same rule from the sprites.
+
+**Verification** (no gate: the first mate's)
+
+- Bench `--preset tuck` (323 shots, 9 s): the pass rules `lightsPass` in `scripts/bench.js` (132 of 132): the reduced-motion frames by name
+  (tap: sleepy, no drape; tuck: asleep, drape on frame 3, dim, no animation or inline transition on the drape; wake: content, no drape,
+  no dim), the dim step and the scene's end within 2% of the plain state (1.36% and 0.00%), a wake's end 0.00%, the drape's box within
+  1 px of the pet's through a settle (300, 400, 625, 1500 ms) and a pat, and every species' drape the table's.
+- `tests/js/care_reactions.test.js`: the live answer, the quiet exit, the failure exit, the refusal, a wake of an awake pet, the ignore
+  rule, no screen-tap stop, `_layout`'s skips, one `wasAsleep` write per transition, the moment's no-double stretch, the drape's fall,
+  slide-off and calm. card-check `care`: two lights taps send one call; the tap-to-asleep delta is logged (warn, never fail).
+
+**Not built, on purpose or open**
+
+- The shawl (Q3). A species `tuck` key (Q4 d). The night creature's reluctant look is the line only; no extra gesture.
+- The bench's `live` draws the slide through `_renderSlide` directly, not `set hass` and `_update` (which awaits worlds.json): the read path
+  `_lightsWatch` is the card's own, the async update around it is not run.
+- `LIGHTS_TIRED_AT` 95 is plan 4.2's "energy < 95" for the tuck's prediction; the server's nap rule is wider (a stale card gets the quiet exit).

@@ -18,6 +18,9 @@
 //                                the push-away u ms in, how long it is, where on the clock it
 //                                starts for a refusal at te (default te)
 //   exit(s, sc, u, k)            the exit beat u ms in (SCENE_EXIT_MS), when it gives up
+//   watch(s, sc, t)              read on every frame (and by _layout on every hass update): lights reads the live
+//                                asleep state here, its answer (plan 4.3b)
+//   calm(s)                      reduced motion: no scene, but the pet shows the tap took (a pose); lights
 const SCENES = {
   medicine: {
     ms: 2200,
@@ -570,11 +573,102 @@ const SCENES = {
       if (sc.fired?.has("delight")) s.excitedSince = Date.now();
     },
   },
+  // Lights (plan 5.3, 4.3b): the tuck and the wake, one entry. Not skippable (no screen-tap stop, and a
+  // second tap is ignored); answered by the live binary_sensor.asleep (an ok writes no log entry), or by
+  // a not_sleepy refusal. A tuck, ms from the tap: 0-100 the yawn, 100-400 the turn round (two flips),
+  // the gate at 400; 400-700 the lie-down (a 300 ms squash, the asleep frame swapped in at its bottom),
+  // 500-950 the drape falls (3 steps), 1000-1200 two press-ins, 1200-1800 the dim in three steps, 1800-2400
+  // the sigh and the thanks line. A wake: the gate at 300, 300-700 the light comes up in three steps,
+  // 700-1300 the blink, 1000-1150 the drape slides off in two steps, 1150 the stretch, the content frame.
+  // A species with no drape (null in DRAPE) plays every beat but the blanket's. Variants (4.7): A curl,
+  // B peek (a look out after the sigh), C wiggle-in (two rocks under the blanket).
+  lights: {
+    ms: 2400,
+    gate: 400,
+    skippable: false,
+    refuseMs: 900,
+    due(s) {
+      if (s.asleep || s.lightsOut) return true; // a wake; the card may be a beat behind (4.3b: a quiet exit)
+      const energy = Number.parseFloat(this._state(s, "sensor.energy")?.state);
+      if (!Number.isFinite(energy)) return false; // unavailable, unknown, NaN: no scene (4.2)
+      return energy < LIGHTS_TIRED_AT || inSleepWindow(this._state(s, "sensor.life_stage")?.attributes.sleep_times);
+    },
+    // Reduced motion: no scene, but the pet shows the tap took: sleepy for a tuck, content for a wake.
+    calm(s) {
+      const lit = !!(s.asleep || s.lightsOut);
+      const frames = this._moodFrames(s, lit ? "content" : "sleepy");
+      if (!frames) return;
+      s.poseFrames = frames;
+      s.poseUntil = Date.now() + 700;
+      this._show(s, s.pet, frames[0]);
+    },
+    setup(s, sc) {
+      sc.wake = !!(s.asleep || s.lightsOut);
+      sc.ms = sc.wake ? 1600 : 2400;
+      sc.gate = sc.wake ? 300 : 400;
+      this._careFrames(s, sc, "lights");
+      sc.asleep = this._moodFrames(s, "asleep");
+      sc.fired = new Set();
+      sc.start0 = this._lightsLive(s); // what the live state was at the tap: the answer is a change from it
+      sc.drape = this._drapeInfo(s); // null: a species with none, or no art on disk: no blanket beats
+      this._drapePreload(s);
+      // The dusk layer sits just over the background, under the pet and everything else.
+      sc.dusk = document.createElement("div");
+      sc.dusk.className = "scene scene-dusk";
+      s.bg.after(sc.dusk);
+      sc.els.push(sc.dusk);
+      if (sc.wake) {
+        sc.groggy = inSleepWindow(this._state(s, "sensor.life_stage")?.attributes.sleep_times);
+        sc.lit = this._sceneKey(this._hass.states, this._state(s, "sensor.mood")?.attributes.flags || [], false);
+        return;
+      }
+      sc.variant = this._careVariant(s, "lights", ["A", "B", "C"]);
+      if (sc.variant === "B") sc.ms = 2800; // the peek
+      // A night creature (nature.clock) looks round once more first, in 1 in 4 tucks (LIGHTS_NIGHT_ODDS; a bench
+      // pins it with "lights.night": "on" | "off"); the others, and the rest, go straight to the thanks.
+      sc.night = nature(s.species)?.clock === "night" && (s.pinVariant?.["lights.night"] ?? (Math.random() < LIGHTS_NIGHT_ODDS ? "on" : "off")) === "on";
+    },
+    render(s, sc, t, k) {
+      return sc.wake ? this._lightsWake(s, sc, t, k) : this._lightsTuck(s, sc, t, k);
+    },
+    watch(s, sc) {
+      this._lightsWatch(s);
+    },
+    // The tap turned out not to be about this pet (not_sleepy): the turn round becomes a head shake, two
+    // flips, then a hop with the excited frame. "not sleepy yet" is said as it starts (_sceneRender).
+    refuse(s, sc, u) {
+      sc.looked = true;
+      s.pet.style.transition = u < 500 ? "rotate .2s ease-out" : "none";
+      s.pet.classList.toggle("look", u < 250);
+      s.pet.style.rotate = "";
+      if (u >= 500 && !sc.fired.has("hop")) {
+        sc.fired.add("hop");
+        this._perk(s);
+      }
+      return u >= 500 ? sc.excited : sc.sleepy;
+    },
+    // No change came (the card's picture was stale), or the call failed: the pet's own frame back, the
+    // turn undone. Nothing that was drawn needs undoing: the light and the drape come after the gate.
+    exit(s, sc) {
+      s.pet.classList.remove("look");
+      s.pet.style.rotate = "";
+      s.pet.style.transition = "none";
+      return null;
+    },
+    clear(s) {
+      s.bg.style.transition = ""; // the dim swap and the lit swap are instant; the .6 s fade is back
+      s.drapeImg.style.scale = "";
+    },
+  },
 };
 
+const LIGHTS_TIRED_AT = 95; // under this energy the card expects a tuck to work (the server's nap rule is wider)
+const LIGHTS_QUIET_MS = 600; // the call is back and nothing changed this long after: the tap did nothing (4.3b)
+const DRAPE_ART = { ok: undefined, asked: new Set() }; // false once a drape file fails to load: no blanket then
 const FEED_GOBBLE = 30; // under this hunger the feed may be a gobble (variant C)
 const FEED_MAX_MS = 3200; // a feed scene never runs longer, whatever the pace (plan 8)
 const FEED_EXTRA_ODDS = 0.25; // a heart, a lick or a burp at the end of a meal
+const LIGHTS_NIGHT_ODDS = 0.25; // how often a night creature's tuck says "*one more look around*" (1 in 4, as FEED_EXTRA_ODDS: FM)
 const SNACK_LINE_ODDS = 0.25; // how often a snack scene says its SNACK_LINES line (1 in 4, as FEED_EXTRA_ODDS: FM)
 const SNACK_NIBBLES = [[90, 25, 38], [8, 45, 40], [50, 55, 75]]; // C's three bites: centre (% of the snack) and radius
 
@@ -661,6 +755,252 @@ function bowlCuts(rows, rim) {
 }
 
 class HatchPetCardCare extends HatchPetCardActions {
+  // A mood's frames for this stage (<stage>_<mood>_<n>), or null when the species has none.
+  _moodFrames(s, mood) {
+    return s.species.moods?.includes(mood) && s.drawn
+      ? Array.from({ length: s.species.frames || 1 }, (_, i) => `${s.drawn}_${mood}_${i + 1}`) : null;
+  }
+
+  // The unheld sleep state: what the server says now, not what a running scene holds (4.3b).
+  _lightsLive(s) {
+    return {
+      asleep: this._hass.states[s.ids?.["binary_sensor.asleep"]]?.state === "on",
+      lights: this._hass.states[s.ids?.["switch.lights_out"]]?.state === "on",
+    };
+  }
+
+  // The answer to a lights scene, read on every hass update (_layout) and every frame of the scene
+  // (_sceneRender), from the live state: a tuck is answered by asleep going on, a wake by the pet and the
+  // switch both off. An ok writes no log entry, so there is nothing else to wait for. No change
+  // LIGHTS_QUIET_MS after the call came back (an egg, an away pet, one tucked already, a wake of
+  // an awake one: the server did nothing and logs nothing) is the quiet exit, not the 2 s hold.
+  _lightsWatch(s) {
+    const sc = s.scene;
+    if (sc?.kind !== "lights" || sc.failAt != null || sc.answerAt != null || sc.refuseAt != null) return;
+    const live = this._lightsLive(s);
+    const was = sc.start0;
+    const changed = sc.wake ? !live.asleep && !live.lights && (was.asleep || was.lights) : live.asleep && !was.asleep;
+    const at = this._sceneNow(sc);
+    if (changed) {
+      this._sceneAnswer(s, "ok", at);
+    } else if (sc.called != null && at - sc.called >= LIGHTS_QUIET_MS) {
+      sc.quiet = true;
+      this._sceneFail(s);
+    }
+  }
+
+  // What a lights scene says for the tuck, as the moment says it (the pet's first bedtime once; the
+  // evening or a visitor's day; else the fell_asleep pool): { text, ms, then }.
+  _tuckLine(s, capture = false) {
+    const first = !capture && this._firstNightKey(s);
+    if (first) return { text: FIRST_NIGHT, ms: 4500, then: () => onceEver(first) };
+    return { text: this._nightLine(s) || this._lines(s, "fell_asleep", pick(["good night...", "night night...", "sleep tight..."])).text, ms: 4000 };
+  }
+
+  // One line of the scene's, said bare, in its own words (a table in lines-fresh.js).
+  _lightsSay(s, line) {
+    this._line(s, MINE, line.text ?? pick(LIGHTS_LINES[line]), Math.max(line.ms ?? 0, 3500), { write: true, type: "care", then: line.then });
+  }
+
+  // The tuck (5.3a) on the scene's clock t.
+  _lightsTuck(s, sc, t, { ramp, ease }) {
+    const once = (key) => !sc.fired.has(key) && sc.fired.add(key);
+    const v = sc.variant;
+    // The yawn: a 4deg tilt that ends where the first flip begins (a flip wins over a lean, 4.9), then
+    // the turn round: two paper flips (on at 100, off at 250, .2 s each), a head shake's twin.
+    sc.looked = true;
+    const flip = t >= 100 && t < 250;
+    s.pet.style.transition = t >= 100 && t < 450 ? "rotate .2s ease-out" : "none";
+    s.pet.classList.toggle("look", flip);
+    s.pet.style.rotate = t < 100 ? `${4 * (ease(0, 50) - ease(60, 100))}deg` : "";
+    if (sc.night && t >= 150 && once("night")) this._lightsSay(s, "night");
+    // The lie-down: a 300 ms squash, the asleep frame swapped in at its bottom. The scene owns the
+    // sleep transition (4.9), so the layout's own settle does not run a second time at its end.
+    if (t >= 400 && once("lie")) this._animate(s, s.pet, "lie", 300);
+    if (t >= 550 && once("down")) s.wasAsleep = true;
+    // The blanket falls over the lower body (3 steps), two press-ins on its edge (or, for C, two
+    // wiggles under it). No art, or none for this species: these beats are skipped, the rest plays.
+    if (t >= 500 && sc.drape) {
+      this._drapeShow(s, 1 + Math.min(2, Math.floor(ramp(500, 500 + DRAPE_FALL_MS) * 3)));
+      const press = v !== "C" && ((t >= 1000 && t < 1060) || (t >= 1100 && t < 1160));
+      s.drapeImg.style.scale = press ? "1 .97" : "";
+    }
+    if (v === "C") {
+      for (const at of [1000, 1300]) if (t >= at && once(`rock${at}`)) this._animate(s, s.pet, "rock", 600);
+    }
+    // The lights: two steps of dusk over the background, then the dim art itself (instantly: its filter
+    // has no .6 s fade here), within 2% of the plain dim picture (plan 4.9).
+    sc.dusk.style.opacity = t >= 1600 ? "0" : t >= 1400 ? ".3" : t >= 1200 ? ".15" : "0";
+    if (t >= 1600 && once("dim")) {
+      s.bg.style.transition = "none";
+      this._bgApply(s, "dim");
+    }
+    // The sigh, and the thanks (variant C says its own).
+    if (t >= 1800 && once("sigh")) {
+      this._animate(s, s.pet, "sigh", 600);
+      s.tuckedAt = Date.now();
+      if (sc.result === "ok") this._lightsSay(s, v === "C" ? "sigh" : this._tuckLine(s));
+    }
+    if (v === "B" && t >= 2400 && once("peek")) this._lightsSay(s, "peek");
+    if (t < 100) return sc.sleepy;
+    if (v === "B" && t >= 2400 && t < 2800) return sc.sleepy;
+    return t >= 550 ? sc.asleep : null;
+  }
+
+  // The wake (5.3a) on the scene's clock t.
+  _lightsWake(s, sc, t) {
+    const once = (key) => !sc.fired.has(key) && sc.fired.add(key);
+    // The light comes up in three steps, the dusk reversed: the lit art under .3, then .15, then none.
+    if (t >= 300 && once("lit")) {
+      s.bg.style.transition = "none";
+      this._bgApply(s, sc.lit);
+    }
+    sc.dusk.style.opacity = t >= 700 ? "0" : t >= 500 ? ".15" : t >= 300 ? ".3" : "0";
+    // The blink (asleep, sleepy, asleep, sleepy; 150 ms each); the scene owns the sleep transition (4.9).
+    if (t >= 700 && once("awake")) {
+      s.wasAsleep = false;
+      if (sc.groggy) this._lightsSay(s, "groggy"); // a wake in the sleep window
+    }
+    // The blanket slides off in two steps: frame 2 dropped a little, then gone.
+    if (s.drapeFrame) {
+      if (t >= 1150) this._drapeHide(s);
+      else if (t >= 1000) this._drapeShow(s, 2, DRAPE_SLIDE_PX);
+    }
+    if (t >= 1150 && once("stretch")) {
+      this._animate(s, s.pet, "stretch", 1100);
+      s.stretched = Date.now(); // the woke_up moment's own stretch is skipped (card-moment)
+      if (!sc.groggy) this._lightsSay(s, "wake");
+    }
+    if (t < 700) return null;
+    return t < 1300 ? (Math.floor((t - 700) / 150) % 2 ? sc.sleepy : sc.asleep) : sc.content;
+  }
+
+  // --- The drape (plan 5.3, 12) ------------------------------------------------------------
+  // The blanket is state: shown whenever the pet is asleep and the lights are out (_layout, through
+  // _drapeSync), a whole 256 px frame drawn over the lower body, three frames. It lives in a box with
+  // the pet's own geometry that wears the pet's classes and inline motion (_drapeMirror), so it moves
+  // with the body (the settle, a pat, the scene's tilt). A lights scene draws it itself.
+
+  _drapeInfo(s) {
+    return DRAPE_ART.ok === false ? null : drapeOf(s.speciesId, s.drawn);
+  }
+
+  _drapeSrc(size, n) {
+    return `${BASE}/ui/drape_${size}_${n}.png?v=${VERSION}`;
+  }
+
+  // The three frames of this pet's size, asked for before the first beat needs them.
+  _drapePreload(s) {
+    const info = this._drapeInfo(s);
+    if (!info) return;
+    for (let n = 1; n <= 3; n++) {
+      const key = `${info.size}_${n}`;
+      if (DRAPE_ART.asked.has(key)) continue;
+      DRAPE_ART.asked.add(key);
+      new Image().src = this._drapeSrc(info.size, n);
+    }
+  }
+
+  // Show frame 1-3 (slide: sprite px dropped, for the slide-off's second step). False when there is
+  // none to show: a species with none, or no art on disk.
+  _drapeShow(s, frame, slide = 0) {
+    const info = this._drapeInfo(s);
+    if (!info || !s.drape) {
+      this._drapeHide(s);
+      return false;
+    }
+    const img = s.drapeImg;
+    if (!img.onerror) {
+      img.onload = () => { DRAPE_ART.ok = true; };
+      img.onerror = () => { // no art on disk: the no-blanket path from now on
+        DRAPE_ART.ok = false;
+        this._drapeStop(s);
+        this._drapeHide(s);
+      };
+    }
+    const src = this._drapeSrc(info.size, frame);
+    if (img.getAttribute("src") !== src) img.setAttribute("src", src);
+    // The art's last frame scaled onto the target box (in sprite px of the 256 frame), the other two
+    // frames the same; the origin is the blanket's foot, for the press beat's squash.
+    const [bl, bt, br, bb] = info.box;
+    const [al, at, ar, ab] = DRAPE_ART_BOX[info.size];
+    const sx = (br - bl) / (ar - al);
+    const sy = (bb - bt) / (ab - at);
+    const left = bl - al * sx;
+    const top = bt - at * sy;
+    const pct = (v) => `${(v / 256) * 100}%`;
+    Object.assign(img.style, {
+      left: pct(left), top: pct(top), width: pct(256 * sx), height: pct(256 * sy),
+      transformOrigin: `50% ${((bb - top) / (256 * sy)) * 100}%`,
+      translate: slide ? `0 ${(slide / (256 * sy)) * 100}%` : "",
+    });
+    s.drape.hidden = false;
+    s.drapeFrame = frame;
+    this._drapeMirror(s);
+    return true;
+  }
+
+  _drapeHide(s) {
+    if (!s.drape) return;
+    s.drape.hidden = true;
+    s.drapeFrame = 0;
+    s.drapeImg.style.scale = "";
+  }
+
+  _drapeStop(s) {
+    (s.drapeTimers || []).forEach(clearTimeout);
+    s.drapeTimers = [];
+    s.drapeAnim = false;
+  }
+
+  // The pet's classes (all but its own name, and the lie-down squash the scene plays before the blanket
+  // is there) and inline motion, copied onto the drape's box, whenever the pet's change.
+  _drapeMirror(s) {
+    const d = s.drape;
+    if (!d || d.hidden) return;
+    const cls = ["drape", ...[...s.pet.classList].filter((c) => c !== "pet" && c !== "lie")].join(" ");
+    if (d.className !== cls) d.className = cls;
+    for (const key of ["translate", "rotate", "scale", "transition"]) {
+      if (d.style[key] !== s.pet.style[key]) d.style[key] = s.pet.style[key];
+    }
+  }
+
+  // Others' tuck, seen live (no scene): the three frames in DRAPE_FALL_MS, on the pass where asleep and
+  // the lights both turn on; a wake seen live: two steps off, whatever woke it (a natural morning clears
+  // the lights too). Under calm() the drape is simply on or off. One pass per change: `was` is the last
+  // pass's want (undefined on the first: a pet tucked when the card opens shows its final frame).
+  _drapeSync(s, want) {
+    if (!s.drape) return;
+    const was = s.wasDrape;
+    s.wasDrape = want;
+    if (want && this._drapeInfo(s)) {
+      if (s.drapeAnim) return; // landing
+      if (was === false && !s.drapeFrame && !calm()) {
+        this._drapePreload(s);
+        this._drapeStop(s);
+        s.drapeAnim = true;
+        this._drapeShow(s, 1);
+        const third = DRAPE_FALL_MS / 3;
+        s.drapeTimers = [
+          setTimeout(() => this._drapeShow(s, 2), third),
+          setTimeout(() => this._drapeShow(s, 3), third * 2),
+          setTimeout(() => { s.drapeAnim = false; }, DRAPE_FALL_MS),
+        ];
+      } else {
+        this._drapeShow(s, 3);
+      }
+      return;
+    }
+    if (!s.drapeFrame) return;
+    this._drapeStop(s);
+    if (was === true && !calm() && !s.scene) {
+      this._drapeShow(s, 2, DRAPE_SLIDE_PX);
+      s.drapeTimers = [setTimeout(() => this._drapeHide(s), DRAPE_FALL_MS / 3)];
+    } else {
+      this._drapeHide(s);
+    }
+  }
+
   // The frames a meal's scenes use: the species' own where it has them, else the ladder (plan 7):
   // a child's own pose for this care (rung 1), else its mood frames (rung 3). `care` is the care's
   // key in species.json "reactions" (feed, snack).

@@ -303,3 +303,53 @@ function timeAgo(iso) {
   return `${Math.round(hours / 24)} d ago`;
 }
 
+
+// The blanket drape (care reactions D, plan 5.3): the pet's asleep and the lights are out. Three sizes
+// of one shared art, ui/drape_<s|m|l>_<1|2|3>.png, each a whole 256 px sprite frame with the blanket
+// drawn on it (ground line y=224). The card scales the art's last frame onto a target box in the pet's
+// own frame, [size, left, top, right, bottom] in sprite px, made by scripts/drape-table.py from the
+// asleep_1 alpha box: the body's width and 8 px a side, its feet line at the bottom, 40% of the body's
+// height up (the face stays clear on frame 3). The size is the art nearest that width. Frames 1 and 2
+// take the same scale. null: no drape (the bat hangs upside down, the otter floats on its back on a
+// ripple), and the scene still plays every other beat. tests/test_species.py holds every entry to its sprite.
+const DRAPE = {
+  axolotl: { baby: ["s", 42, 185, 212, 224], child: ["m", 26, 177, 228, 224], teen: ["l", 6, 172, 246, 224], adult: ["l", 8, 173, 248, 224] },
+  ballpython: { baby: ["s", 48, 180, 206, 224], child: ["m", 26, 170, 228, 224], teen: ["l", 10, 158, 244, 224], adult: ["l", 10, 162, 246, 224] },
+  bananaslug: { baby: ["s", 46, 189, 208, 224], child: ["m", 22, 187, 232, 224], teen: ["l", 6, 181, 248, 224], adult: ["l", 8, 187, 248, 224] },
+  bat: null,
+  beardeddragon: { baby: ["s", 60, 188, 194, 224], child: ["s", 42, 181, 212, 224], teen: ["m", 26, 177, 230, 224], adult: ["l", 2, 185, 252, 224] },
+  beaver: { baby: ["s", 42, 190, 214, 224], child: ["m", 24, 186, 228, 224], teen: ["l", 4, 175, 250, 224], adult: ["l", 6, 171, 248, 224] },
+  bird: { baby: ["s", 46, 164, 208, 224], child: ["m", 28, 152, 230, 224], teen: ["m", 18, 146, 238, 224], adult: ["l", 8, 146, 248, 224] },
+  bunny: { baby: ["m", 22, 175, 232, 224], child: ["l", 0, 167, 254, 224], teen: ["l", 0, 164, 256, 224], adult: ["l", 0, 165, 256, 224] },
+  corgi: { baby: ["s", 48, 182, 208, 224], child: ["m", 34, 166, 220, 224], teen: ["m", 14, 166, 242, 224], adult: ["m", 14, 173, 242, 224] },
+  deer: { baby: ["s", 36, 176, 220, 224], child: ["m", 14, 166, 238, 224], teen: ["l", 0, 164, 256, 224], adult: ["l", 0, 146, 256, 224] },
+  duckling: { baby: ["m", 28, 167, 226, 224], child: ["l", 0, 152, 256, 224], teen: ["l", 0, 147, 254, 224], adult: ["l", 0, 162, 256, 224] },
+  ferret: { baby: ["s", 36, 190, 220, 224], child: ["m", 18, 182, 236, 224], teen: ["l", 4, 173, 250, 224], adult: ["l", 4, 181, 252, 224] },
+  firefly: { baby: ["s", 50, 198, 204, 224], child: ["m", 34, 194, 222, 224], teen: ["m", 16, 188, 242, 224], adult: ["m", 14, 193, 240, 224] },
+  fox: { baby: ["s", 42, 173, 212, 224], child: ["m", 26, 170, 228, 224], teen: ["l", 12, 164, 244, 224], adult: ["l", 12, 160, 244, 224] },
+  gecko: { baby: ["s", 36, 186, 218, 224], child: ["m", 34, 174, 222, 224], teen: ["l", 10, 173, 244, 224], adult: ["l", 6, 182, 250, 224] },
+  hamster: { baby: ["s", 44, 178, 210, 224], child: ["m", 20, 170, 236, 224], teen: ["m", 16, 163, 240, 224], adult: ["l", 8, 161, 246, 224] },
+  hermitcrab: { baby: ["s", 60, 186, 194, 224], child: ["s", 44, 181, 210, 224], teen: ["m", 22, 162, 232, 224], adult: ["m", 22, 163, 234, 224] },
+  kitten: { baby: ["l", 6, 168, 250, 224], child: ["l", 8, 160, 248, 224], teen: ["l", 0, 165, 256, 224], adult: ["l", 0, 158, 256, 224] },
+  lunamoth: { baby: ["s", 44, 189, 208, 224], child: ["m", 26, 176, 228, 224], teen: ["l", 4, 150, 252, 224], adult: ["l", 6, 160, 250, 224] },
+  octopus: { baby: ["s", 46, 172, 210, 224], child: ["m", 28, 164, 228, 224], teen: ["l", 12, 156, 244, 224], adult: ["m", 12, 162, 242, 224] },
+  opossum: { baby: ["s", 52, 189, 204, 224], child: ["m", 28, 173, 224, 224], teen: ["m", 14, 167, 242, 224], adult: ["l", 6, 174, 248, 224] },
+  otter: null,
+  owl: { baby: ["s", 44, 165, 212, 224], child: ["s", 38, 159, 218, 224], teen: ["m", 16, 147, 240, 224], adult: ["m", 18, 143, 236, 224] },
+  pondturtle: { baby: ["s", 46, 187, 208, 224], child: ["m", 28, 182, 230, 224], teen: ["m", 12, 178, 240, 224], adult: ["m", 16, 180, 240, 224] },
+  puffin: { baby: ["m", 30, 165, 224, 224], child: ["m", 18, 162, 236, 224], teen: ["l", 6, 160, 248, 224], adult: ["m", 16, 151, 240, 224] },
+  seal: { baby: ["s", 38, 174, 216, 224], child: ["m", 20, 166, 232, 224], teen: ["l", 2, 161, 250, 224], adult: ["l", 6, 173, 248, 224] },
+  squirrel: { baby: ["s", 36, 169, 218, 224], child: ["m", 16, 159, 240, 224], teen: ["l", 4, 152, 250, 224], adult: ["l", 4, 146, 250, 224] },
+  tarantula: { baby: ["s", 44, 180, 210, 224], child: ["m", 26, 167, 230, 224], teen: ["l", 10, 158, 246, 224], adult: ["l", 10, 156, 246, 224] },
+  tortoise: { baby: ["s", 52, 186, 200, 224], child: ["s", 36, 177, 220, 224], teen: ["m", 16, 168, 240, 224], adult: ["m", 16, 166, 240, 224] },
+  treefrog: { baby: ["s", 46, 191, 210, 224], child: ["s", 40, 175, 216, 224], teen: ["m", 26, 160, 232, 224], adult: ["m", 20, 155, 234, 224] },
+};
+// The art's last frame, [left, top, right, bottom] in its 256 px frame (the alpha box), per size.
+const DRAPE_ART_BOX = { s: [48, 124, 208, 224], m: [24, 112, 232, 224], l: [0, 104, 252, 224] };
+const DRAPE_FALL_MS = 450; // the drape's three frames when it falls, seen live (steps(3)); the scene's blanket beat too
+const DRAPE_SLIDE_PX = 12; // frame 2's drop when it slides off (a wake): sprite px, three art pixels
+// The drape for a species and the stage it is drawn at, else null ({ size, box: [left, top, right, bottom] }).
+function drapeOf(speciesId, stage) {
+  const entry = DRAPE[speciesId]?.[stage];
+  return entry ? { size: entry[0], box: entry.slice(1) } : null;
+}

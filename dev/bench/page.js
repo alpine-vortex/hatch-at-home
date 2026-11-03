@@ -300,6 +300,37 @@
     return { cx: s.left + s.width / 2, cy: s.top + s.height / 2, box: [left, r.top + y0 * sy, right, r.top + (y1 + 1) * sy], head: cur.species?.head?.[cur.drawn] || null };
   }
 
+  // D: what a lights shot shows, for its pass rules (bench.js lightsPass): the pet's frame and the drape
+  // by name, the dim, and the pet's and the drape's boxes (a settle or a pat moves both).
+  // The alpha box of an image as drawn, in page px: its drawn pixels, found on a canvas at the sprite's
+  // own size, mapped through the element's box (care reactions D: a pixel check on the drape's place).
+  function drawnBox(img) {
+    const w = img.naturalWidth, h = img.naturalHeight;
+    if (!w || !h) return null;
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(img, 0, 0);
+    const a = g.getImageData(0, 0, w, h).data;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (a[(y * w + x) * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    }
+    if (x1 < 0) return null;
+    const r = img.getBoundingClientRect();
+    return [r.left + (x0 / w) * r.width, r.top + (y0 / h) * r.height, r.left + ((x1 + 1) / w) * r.width, r.top + ((y1 + 1) / h) * r.height];
+  }
+  function lightsInfo(cur) {
+    const name = (img) => (img.getAttribute("src") || "").replace(/^.*\/(sprites\/[^?]*|ui\/[^?]*)\?.*$/, "$1");
+    const box = (el) => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; };
+    return {
+      scene: !!cur.scene, pet: name(cur.pet), drape: cur.drape.hidden ? null : name(cur.drapeImg), dim: cur.screen.classList.contains("dim"),
+      said: cur.bubble.textContent, petBox: box(cur.pet), drapeBox: cur.drape.hidden ? null : box(cur.drape),
+      petDrawn: drawnBox(cur.pet), drapeDrawn: cur.drape.hidden ? null : drawnBox(cur.drapeImg),
+      drapeAnim: [...cur.drape.getAnimations()].length, drapeInline: cur.drape.style.cssText,
+    };
+  }
+
   // A care scene seeked on the bench's own clock, so a shot is the same every run (plan
   // care-reactions 4.1). The card's rAF loop is stopped (it would end the scene on real time),
   // and the scene is played from 0 to `careAt` in 10 ms steps with the page's timers on a
@@ -322,6 +353,34 @@
       await img.decode().catch(() => {});
       window.bench.warm = img; // kept, so it stays in the page's image cache
     }
+    // D: a lights scene draws the drape's three frames; they are decoded first, as the prop is.
+    const drape = shot.care === "lights" ? drapeOf(cur.speciesId, cur.drawn) : null;
+    if (drape) {
+      window.bench.warmDrape = await Promise.all([1, 2, 3].map(async (n) => {
+        const img = new Image();
+        img.src = card._drapeSrc(drape.size, n);
+        await img.decode().catch(() => {});
+        return img;
+      }));
+    }
+    // D: `live`, [{at, asleep, lights?}]: the fake hass's binary_sensor.asleep (and switch.lights_out,
+    // which follows it unless `lights` says) flips at that scene ms and the slide is drawn from it,
+    // the card's own read of the live state (a hass update). `calledAt` (default 60, false: never) is when
+    // _call came back true; the quiet exit counts from it.
+    const live = [].concat(shot.live || []);
+    const applyLive = (ev) => {
+      const states = { ...card._hass.states };
+      const stamp = new Date(Date.parse(shot.time || "2026-06-15T12:00:00Z") + 1000 + (applyLive.n = (applyLive.n || 0) + 1)).toISOString();
+      for (const [key, on] of [["binary_sensor.asleep", ev.asleep], ["switch.lights_out", ev.lights ?? ev.asleep]]) {
+        const id = cur.ids[key];
+        states[id] = { ...states[id], state: on ? "on" : "off", last_updated: stamp };
+      }
+      const moodId = cur.ids["sensor.mood"]; // the server's mood is "asleep" while it sleeps
+      states[moodId] = { ...states[moodId], state: ev.asleep ? "asleep" : "content", last_updated: stamp };
+      card._hass = { ...card._hass, states };
+      cur.drawnSig = null;
+      card._renderSlide(cur);
+    };
     const before = new Set(cur.screen.getAnimations({ subtree: true }));
     const born = new Map();
     const realSet = window.setTimeout;
@@ -355,6 +414,10 @@
     try {
       card._sceneStart(cur, shot.care);
       const sc = cur.scene;
+      if (!sc) { // calm: no scene, the state arrives; a pose the tap made lasts 700 ms, so it is over by then
+        for (const ev of live.filter((e) => e.at <= at)) applyLive(ev);
+        if (at >= 700) { cur.poseUntil = 0; cur.drawnSig = null; card._renderSlide(cur); }
+      }
       if (sc) {
         cancelAnimationFrame(sc.raf);
         sc.paused = true;
@@ -364,11 +427,22 @@
         // A list of them is each in turn (an ok, then a full: the push-away after the gate).
         const answers = [].concat(shot.answer || []);
         let spent = 0;
+        let liveSpent = 0;
+        let called = shot.calledAt === false;
         let renderMs = 0;
         let renders = 0;
         for (let t = 0; cur.scene === sc; t = Math.min(at, t + 10)) {
+          sc.at = t; // the scene's own clock for what it reads (the live answer, the call's return)
           runDue(t);
           now = t;
+          while (liveSpent < live.length && t >= live[liveSpent].at) {
+            applyLive(live[liveSpent++]);
+            tag();
+          }
+          if (!called && t >= (shot.calledAt ?? 60)) {
+            called = true;
+            sc.called = shot.calledAt ?? 60;
+          }
           while (spent < answers.length && t >= answers[spent].at) {
             card._sceneAnswer(cur, answers[spent].result || "ok", answers[spent].at);
             spent++;
@@ -402,6 +476,10 @@
       a.pause();
       a.currentTime = Math.max(0, at - t);
     }
+    // `animsEnd`: every animation the scene started runs to its end, so a compare against a plain state is
+    // not about a move half way (D: the hand-over and the dim step).
+    if (shot.animsEnd) for (const a of cur.screen.getAnimations({ subtree: true })) if (!(a instanceof CSSTransition)) a.finish();
+    if (shot.care === "lights") (window.bench.info ||= {}).lights = lightsInfo(cur);
   }
 
   async function settled(card) {
@@ -778,6 +856,7 @@
     // A flush first, so a class that is a CSS transition (`look`, `wander-l`) starts one `petAt` can seek.
     void cur.pet.offsetWidth;
     for (const c of shot.petClasses || []) cur.pet.classList.add(c);
+    card._drapeMirror(cur); // the drape wears the pet's classes (the card's observer would, a microtask on)
     // `petStretch`: a mockup only (gaps-seams Q2): the pet drawn that much wider, its
     // height kept, over the species' own scale.
     if (shot.petStretch) {
@@ -785,7 +864,8 @@
       cur.pet.style.scale = `${k * shot.petStretch} ${k}`;
     }
     if (shot.petAt !== undefined) {
-      for (const a of cur.pet.getAnimations()) {
+      if (!cur.drape.hidden) await new Promise((r) => requestAnimationFrame(r)); // both boxes' animations are running
+      for (const a of [...cur.pet.getAnimations(), ...cur.drape.getAnimations()]) {
         a.pause();
         a.currentTime = shot.petAt;
       }
@@ -889,6 +969,7 @@
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     await settled(card);
     window.bench.screenClass = cur.screen.className;
+    if (shot.lightsAlign) (window.bench.info ||= {}).lights = lightsInfo(cur);
     return true;
   }
 

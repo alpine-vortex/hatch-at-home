@@ -187,7 +187,7 @@ test("the excited bounce is one greethop at the start, not a 10 s hop loop", () 
 });
 
 test("lights on stretches the pet (no line); the play beat, meds sniff and clean hop are wired", () => {
-  assert.match(src, /m\.how === "lights"\) \{\n\s+now\(\(\) => \{ if \(!s\.asleep && !s\.scene && !calm\(\)\) this\._animate\(s, s\.pet, "stretch", 1100\)/);
+  assert.match(src, /m\.how === "lights"\) \{\n[^\n]*\n\s+now\(\(\) => \{ if \(!s\.asleep && !s\.scene && !calm\(\) && !\(Date\.now\(\) - \(s\.stretched \|\| 0\) < WAKE_STRETCH_MS\)\) this\._animate\(s, s\.pet, "stretch", 1100\)/);
   assert.match(src, /this\._reactFrames\(s, "played"\)/);
   assert.match(src, /sc\.sniff = this\._careVariant\(s, "medicine"/);
   assert.match(src, /const hopK = near < 1 && sweep < 1/);
@@ -223,7 +223,7 @@ function sceneCard({ registry, now = 0 } = {}) {
   };
   const line = (name) => src.match(new RegExp(`\\nconst ${name} = [^\\n]*`))[0];
   const consts = ["SCENE_KIND_OF", "sceneKind", "SCENE_HOLD_MS", "SCENE_EXIT_MS", "SCENE_OWE_MS", "SPOILED_BY", "isYes"].map(line).join("");
-  const methods = ["_sceneClock", "_sceneOver", "_sceneAnswer", "_sceneFail", "_sceneOffer", "_sceneEnd", "_sceneRefusalLine",
+  const methods = ["_sceneClock", "_sceneOver", "_sceneAnswer", "_sceneFail", "_sceneNow", "_sceneOffer", "_sceneEnd", "_sceneRefusalLine",
     "_care", "_press"].map(method).join(",\n");
   vm.runInNewContext(`${consts}\nthis.api = {${methods}};`, ctx);
   ctx.SCENES = registry || {
@@ -473,7 +473,7 @@ test("feed's prediction: hunger under 95 (the server's >=), parsed; unavailable,
   assert.strictEqual(due("95"), false);
   for (const h of ["unavailable", "unknown", undefined, "NaN"]) assert.strictEqual(due(h), false, String(h));
   // The shared guard (asleep, egg, away, lights out) runs before any due: today's _sceneStart line.
-  assert.match(method("_sceneStart"), /if \(!mood \|\| mood\.state === "away" \|\| stage === "egg" \|\| s\.asleep \|\| s\.lightsOut\) return;\n.*entry\.due/);
+  assert.match(method("_sceneStart"), /if \(!mood \|\| mood\.state === "away" \|\| stage === "egg" \|\| \(\(s\.asleep \|\| s\.lightsOut\) && kind !== "lights"\)\) return;\n.*entry\.due/);
 });
 
 test("feed's variants: C (gobble) only under hunger 30, a pin wins, never the same twice in a row", () => {
@@ -935,4 +935,362 @@ test("snack's line is 1 in 4 (SNACK_LINE_ODDS), like feed's extra; the dice over
   };
   assert.deepStrictEqual(said(0.2), ["*gotcha!*"]);
   assert.deepStrictEqual(said(0.3), []);
+});
+
+// --- Ship D: tuck and wake, the drape (plan 4.3b, 5.3, 12) ------------------------------------
+// The real lights entry, its answer path and the drape on a fake slide, in a vm.
+function lightsCard({ calm = false, energy = "60", asleep = false, lights = false, sleepTimes } = {}) {
+  const log = { lines: [], animated: [], timers: [], tapped: [], calls: [], shown: [], bg: [], sceneEnds: 0 };
+  const states = {
+    "binary_sensor.asleep": { state: asleep ? "on" : "off" },
+    "switch.lights_out": { state: lights ? "on" : "off" },
+    "sensor.energy": { state: energy },
+    "sensor.mood": { state: "content", attributes: { flags: [] } },
+    "sensor.life_stage": { state: "adult", attributes: { sleep_times: sleepTimes } },
+  };
+  const clock = { now: 0 };
+  const el = () => {
+    const cls = new Set();
+    return { style: {}, hidden: false, className: "", remove() {}, classList: { toggle: (c, on) => (on ? cls.add(c) : cls.delete(c)), add: (c) => cls.add(c), remove: (c) => cls.delete(c),
+      contains: (c) => cls.has(c), [Symbol.iterator]: () => cls[Symbol.iterator]() }, setAttribute(k, v) { this[k] = v; }, getAttribute(k) { return this[k] ?? null; } };
+  };
+  const FakeDate = class extends Date { static now() { return 1e12 + clock.now; } };
+  const ctx = { calm: () => calm, performance: { now: () => clock.now }, Date: FakeDate, Math, Number, Array, Set, Promise, document: { createElement: () => el() },
+    setTimeout: (fn, ms) => log.timers.push([fn, ms]), clearTimeout() {}, requestAnimationFrame: () => 1, cancelAnimationFrame() {},
+    BASE: "/f", VERSION: "t", MINE: 4, MINE_MS: 3000, MINE_MATCH_MS: 10000, pick: (l) => l[0], REFUSALS: { not_sleepy: "not sleepy yet" }, Image: class { set src(v) { this.s = v; } } };
+  const consts = ["SCENE_KIND_OF", "sceneKind", "SCENE_HOLD_MS", "SCENE_EXIT_MS", "SCENE_OWE_MS", "SPOILED_BY", "isYes", "LIGHTS_TIRED_AT", "LIGHTS_QUIET_MS",
+    "DRAPE_FALL_MS", "DRAPE_SLIDE_PX", "WAKE_STRETCH_MS", "DRAPE_ART", "DRAPE_ART_BOX", "LIGHTS_NIGHT_ODDS"].map((n) => src.match(new RegExp(`\\nconst ${n} = [^\\n]*`))[0]);
+  const fn = (name) => src.match(new RegExp(`\\nfunction ${name}\\([\\s\\S]*?\\n\\}\\n`))[0];
+  const block = src.slice(src.indexOf("const SCENES = {"), src.indexOf("\n};\n", src.indexOf("const SCENES = {")) + 4);
+  const methods = ["_sceneClock", "_sceneOver", "_sceneAnswer", "_sceneFail", "_sceneNow", "_sceneOffer", "_sceneEnd", "_sceneRefusalLine", "_toggleLights", "_lightsLive",
+    "_lightsWatch", "_lightsTuck", "_lightsWake", "_lightsSay", "_moodFrames", "_drapeInfo", "_drapeSrc", "_drapePreload", "_drapeShow", "_drapeHide", "_drapeStop", "_drapeMirror",
+    "_drapeSync", "_sceneKey", "_bgApply"].map(method).join(",\n");
+  vm.runInNewContext([...consts, konst("DRAPE"), konst("LIGHTS_LINES"), konst("NATURE_VALUES"), fn("drapeOf"), fn("inSleepWindow"), fn("nature"), block,
+    `this.api = {${methods}}; this.SCENES = SCENES; this.drapeOf = drapeOf; this.inSleepWindow = inSleepWindow; this.DRAPE_ART = DRAPE_ART;`].join("\n"), ctx);
+  const s = {
+    species: { moods: ["content", "sleepy", "asleep", "excited", "bored"], frames: 2, backgrounds: { day: "bg_day", dim: "bg_dim", night: "bg_night" } },
+    drawn: "adult", speciesId: "fox", ids: Object.fromEntries(Object.keys(states).map((k) => [k, k])), pressed: [], buttons: { lights: { id: "lights" } },
+    pet: el(), perch: el(), drape: el(), drapeImg: el(), bg: Object.assign(el(), { after() {} }), screen: Object.assign(el(), { getBoundingClientRect: () => ({}) }),
+    game: null, frames: ["adult_content_1"], poseFrames: [], poseUntil: 0,
+  };
+  s.screen.classList = Object.assign(s.screen.classList, { contains: () => false });
+  const self = Object.assign(Object.create(ctx.api), {
+    _hass: { states }, _state: (_s, k) => states[k],
+    _tapped: (_b, _s, o) => log.tapped.push(o?.perk !== false), _careMarks() {},
+    _call: () => { log.calls.push(1); return Promise.resolve(self.callResult ?? true); },
+    _line: (_s, _c, text) => log.lines.push(text), _lines: (_s, _k, text) => ({ text }),
+    _animate: (_s, _e, c) => log.animated.push(c), _perk() {}, _patSync() {}, _redraw() {}, _careVariant: (_s, _k, pool) => s.pinVariant?.lights || pool[0],
+    _careFrames(s0, sc) { sc.excited = ["adult_excited_1"]; sc.sleepy = ["adult_sleepy_1"]; sc.content = ["adult_content_1"]; sc.refuse = ["adult_bored_1"]; },
+    _show: (_s, _e, f) => log.shown.push(f), _tuckLine: () => ({ text: "night night...", ms: 4000 }), _firstNightKey: () => null, _nightLine: () => null,
+    _sceneStart(s0, kind) { // as _sceneStart makes one (the elements and the rAF are the browser's)
+      const entry = ctx.SCENES[kind];
+      if (!entry.due.call(self, s0, states["sensor.mood"], "adult")) return;
+      const sc = { kind, start: clock.now, ms: entry.ms, gate: entry.gate ?? null, els: [], answerAt: null, result: null, held: {} };
+      entry.setup.call(self, s0, sc, {});
+      s0.scene = sc;
+    },
+    _bgApply: (_s, key) => log.bg.push(key),
+  });
+  return { self, s, log, ctx, states, clock };
+}
+const flipLive = (f, asleep, lights = asleep) => {
+  f.states["binary_sensor.asleep"] = { state: asleep ? "on" : "off" };
+  f.states["switch.lights_out"] = { state: lights ? "on" : "off" };
+};
+const lightsTap = (f) => { f.s.asleep = f.states["binary_sensor.asleep"].state === "on"; f.s.lightsOut = f.states["switch.lights_out"].state === "on"; f.self._toggleLights(f.s); };
+
+test("lights: a night creature's one-more-look is 1 in 4 (LIGHTS_NIGHT_ODDS); the others never, a pin wins", () => {
+  assert.strictEqual(src.match(/\nconst LIGHTS_NIGHT_ODDS = ([\d.]+);/)[1], "0.25");
+  const setup = (clock, roll, pin) => {
+    const f = lightsCard();
+    f.s.species.nature = { clock, sky: "sun", company: "solo", habit: "explorer" };
+    f.ctx.Math = Object.assign(Object.create(Math), { random: () => roll }); // the odds override: a pinned roll
+    if (pin) f.s.pinVariant = { "lights.night": pin };
+    lightsTap(f);
+    return f.s.scene.night;
+  };
+  assert.strictEqual(setup("night", 0.24), true, "under the odds: it looks round");
+  assert.strictEqual(setup("night", 0.25), false, "at the odds or over: the thanks as usual");
+  assert.strictEqual(setup("day", 0), false, "a day creature never");
+  assert.strictEqual(setup("dusk", 0), false, "a dusk creature never");
+  assert.strictEqual(setup("night", 0.9, "on"), true, "a bench pin on");
+  assert.strictEqual(setup("night", 0, "off"), false, "a bench pin off");
+});
+
+test("lights: due for a tuck when tired or at the pet's night, never on a bad reading; always for a wake", () => {
+  const due = (o) => { const f = lightsCard(o); f.s.asleep = !!o.asleep; f.s.lightsOut = !!o.lights; return f.ctx.SCENES.lights.due.call(f.self, f.s); };
+  assert.strictEqual(due({ energy: "94.9" }), true);
+  assert.strictEqual(due({ energy: "95" }), false);
+  for (const e of ["unavailable", "unknown", "NaN", null]) assert.strictEqual(due({ energy: e }), false, String(e));
+  assert.strictEqual(due({ asleep: true, energy: "unknown" }), true, "a wake");
+  assert.strictEqual(due({ lights: true, energy: "unknown" }), true, "lights out, the pet awake: still a wake");
+  const at = (h, m) => new Date(2026, 5, 15, h, m);
+  const win = { bedtime: "23:00", wake: "07:00" };
+  const { ctx } = lightsCard();
+  assert.deepStrictEqual([at(21, 59), at(22, 0), at(23, 30), at(3, 0), at(6, 59), at(7, 0), at(12, 0)].map((d) => ctx.inSleepWindow(win, d)),
+    [false, true, true, true, true, false, false]);
+  assert.strictEqual(ctx.inSleepWindow(undefined, at(23, 30)), false, "an older server: no sleep_times");
+});
+
+test("lights: a tap sends one call and starts the scene; the entry mirrors _press", async () => {
+  const f = lightsCard();
+  lightsTap(f);
+  assert.strictEqual(f.log.calls.length, 1);
+  assert.strictEqual(f.s.scene.kind, "lights");
+  assert.deepStrictEqual(plain(f.s.pressed.map((p) => p.action)), ["lights_out"]);
+  assert.strictEqual(f.s.scene.wake, false);
+  assert.strictEqual(f.s.scene.gate, 400);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.strictEqual(f.s.scene.called, 0, "the call came back: the quiet exit counts from it");
+});
+
+test("lights: a second tap while the scene lives is ignored: the ring only, nothing sent, no scene ended", () => {
+  const f = lightsCard();
+  lightsTap(f);
+  const sc = f.s.scene;
+  lightsTap(f);
+  assert.strictEqual(f.log.calls.length, 1);
+  assert.strictEqual(f.s.scene, sc);
+  assert.deepStrictEqual(plain(f.log.tapped), [false], "the ring and the haptic, no perk");
+  assert.strictEqual(f.s.pressed.length, 1);
+});
+
+test("lights is not skippable: no screen-tap stop, and a tap behind the status sheet starts nothing", () => {
+  const { ctx } = lightsCard();
+  assert.strictEqual(ctx.SCENES.lights.skippable, false);
+  assert.strictEqual(ctx.SCENES.lights.playOwed, undefined);
+  assert.match(method("_sceneStart"), /if \(entry\.skippable\) \{\n\s+sc\.stop = /); // the stop is installed only for a skippable scene
+  assert.match(method("_sceneStart"), /s\.screen\.classList\.contains\("show-status"\)\) return;/); // with the sheet open no scene starts
+});
+
+test("lights: the live asleep answers a tuck; the call coming back alone does not", () => {
+  const f = lightsCard();
+  lightsTap(f);
+  const sc = f.s.scene;
+  f.clock.now = 120;
+  sc.at = 120;
+  sc.called = 60;
+  f.self._lightsWatch(f.s);
+  assert.strictEqual(sc.answerAt, null, "no change yet");
+  flipLive(f, true);
+  sc.at = 180;
+  f.self._lightsWatch(f.s);
+  assert.deepStrictEqual([sc.answerAt, sc.result, sc.answered], [180, "ok", true]);
+  assert.strictEqual(sc.failAt, undefined);
+  assert.strictEqual(f.self._sceneClock(sc, 900).te, 900 - 0, "answered before the gate: one continuous beat");
+});
+
+test("lights: 600 ms with no change after the call is the quiet exit, not the 2 s hold", () => {
+  const f = lightsCard();
+  lightsTap(f);
+  const sc = f.s.scene;
+  sc.called = 60;
+  sc.at = 659;
+  f.self._lightsWatch(f.s);
+  assert.strictEqual(sc.failAt, undefined);
+  sc.at = 660;
+  f.self._lightsWatch(f.s);
+  assert.deepStrictEqual([sc.failAt, sc.quiet], [660, true]);
+  assert.strictEqual(f.self._sceneOver(f.s, 660 + 399), false);
+  assert.strictEqual(f.self._sceneOver(f.s, 660 + 400), true, "the exit beat is 400 ms");
+  f.self._sceneEnd(f.s);
+  assert.deepStrictEqual(plain(f.s.sceneOwes || []), [], "a failed or quiet exit leaves no owe");
+  assert.deepStrictEqual(plain(f.log.lines), [], "no line");
+});
+
+test("lights: a wake of a pet that is already awake takes the same quiet exit", () => {
+  const f = lightsCard({ asleep: true, lights: true });
+  lightsTap(f);
+  const sc = f.s.scene;
+  assert.strictEqual(sc.wake, true);
+  assert.strictEqual(sc.gate, 300);
+  flipLive(f, false); // it was awake already: the switch goes off, the pet was up before the tap's picture
+  // The change from the start is the answer when the live state differs from what the card thought:
+  sc.start0 = { asleep: false, lights: false }; // woken a beat before the tap: no change from here
+  sc.called = 50;
+  sc.at = 650;
+  f.self._lightsWatch(f.s);
+  assert.deepStrictEqual([sc.answerAt, sc.quiet], [null, true]);
+});
+
+test("lights: a wake is answered when the pet and the switch are both off", () => {
+  const f = lightsCard({ asleep: true, lights: true });
+  lightsTap(f);
+  const sc = f.s.scene;
+  flipLive(f, false, true); // awake, the switch still on: not yet
+  sc.at = 100;
+  f.self._lightsWatch(f.s);
+  assert.strictEqual(sc.answerAt, null);
+  flipLive(f, false, false);
+  f.self._lightsWatch(f.s);
+  assert.deepStrictEqual([sc.answerAt, sc.result], [100, "ok"]);
+});
+
+test("lights: a false from _call takes the failure exit", async () => {
+  const f = lightsCard();
+  f.self.callResult = false;
+  lightsTap(f);
+  const sc = f.s.scene;
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.notStrictEqual(sc.failAt, undefined);
+  assert.strictEqual(f.self._sceneOver(f.s, sc.failAt + 400), true);
+});
+
+test("lights: not_sleepy, claimed as mine, is the head shake and the hop; nothing to undo", () => {
+  const f = lightsCard();
+  lightsTap(f);
+  const sc = f.s.scene;
+  f.self._care = undefined;
+  assert.strictEqual(f.self._sceneOffer(f.s, { action: "lights_out", result: "not_sleepy" }, true), true);
+  assert.deepStrictEqual([sc.result, sc.refuseAt, sc.answered], ["not_sleepy", 0, true]);
+  const entry = f.ctx.SCENES.lights;
+  const frames = (u) => plain(entry.refuse.call(f.self, f.s, sc, u));
+  assert.deepStrictEqual(frames(100), ["adult_sleepy_1"]);
+  assert.strictEqual(f.s.pet.classList.contains("look"), true, "the first flip");
+  frames(300);
+  assert.strictEqual(f.s.pet.classList.contains("look"), false, "the second");
+  assert.deepStrictEqual(frames(600), ["adult_excited_1"], "then a hop");
+  assert.strictEqual(f.self._sceneOver(f.s, 400 + 900), true, "900 ms from the refusal");
+  assert.strictEqual(f.self._sceneOffer(f.s, { action: "lights_out", result: "not_sleepy" }, false), false, "a partner's refusal is not mine");
+});
+
+test("lights: the scene writes wasAsleep once at the lie-down and once at the blink, and says nothing at the sigh until answered", () => {
+  const f = lightsCard();
+  lightsTap(f);
+  const sc = f.s.scene;
+  const k = (t) => ({ ramp: (a, b) => Math.min(1, Math.max(0, (t - a) / (b - a))), ease: (a, b) => Math.min(1, Math.max(0, (t - a) / (b - a))) });
+  f.s.wasAsleep = false;
+  sc.dusk = { style: {} };
+  sc.drape = null;
+  for (const t of [100, 400, 549]) f.self._lightsTuck(f.s, sc, t, k(t));
+  assert.strictEqual(f.s.wasAsleep, false);
+  f.self._lightsTuck(f.s, sc, 550, k(550));
+  assert.strictEqual(f.s.wasAsleep, true);
+  f.s.wasAsleep = "later";
+  f.self._lightsTuck(f.s, sc, 560, k(560));
+  assert.strictEqual(f.s.wasAsleep, "later", "once");
+  assert.strictEqual(f.log.animated.filter((c) => c === "lie").length, 1);
+  f.self._lightsTuck(f.s, sc, 1800, k(1800));
+  assert.deepStrictEqual(plain(f.log.lines), [], "no answer, no thanks");
+  sc.result = "ok";
+  sc.fired.delete("sigh");
+  f.self._lightsTuck(f.s, sc, 1810, k(1810));
+  assert.deepStrictEqual(plain(f.log.lines), ["night night..."]);
+  const w = lightsCard({ asleep: true, lights: true });
+  lightsTap(w);
+  const wc = w.s.scene;
+  wc.dusk = { style: {} };
+  w.s.wasAsleep = true;
+  w.self._lightsWake(w.s, wc, 699);
+  assert.strictEqual(w.s.wasAsleep, true);
+  w.self._lightsWake(w.s, wc, 700);
+  assert.strictEqual(w.s.wasAsleep, false);
+  assert.deepStrictEqual(plain(w.log.lines), [], "awake in the day: the stretch's line is later");
+  w.self._lightsWake(w.s, wc, 1150);
+  assert.deepStrictEqual(plain(w.log.lines), ["*stretches*"]);
+  assert.ok(w.s.stretched > 0, "the moment's own stretch is held off");
+  const hm = (d) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const nowD = new Date();
+  const g = lightsCard({ asleep: true, lights: true, sleepTimes: { bedtime: hm(new Date(nowD - 5 * 60000)), wake: hm(new Date(+nowD + 120 * 60000)) } }); // it is the pet's night right now
+  lightsTap(g);
+  g.s.scene.dusk = { style: {} };
+  g.self._lightsWake(g.s, g.s.scene, 700);
+  assert.deepStrictEqual(plain(g.log.lines), ["*blinks, squinting*"], "in the sleep window the blink is groggy, the stretch is plain");
+});
+
+test("lights: _layout leaves the background, the settle and wasAsleep to the scene while it lives", () => {
+  const m = method("_renderSlide");
+  assert.match(m, /const lightsScene = s\.scene\?\.kind === "lights";\n\s+if \(lightsScene\) this\._lightsWatch\(s\);/);
+  assert.match(m, /if \(!lightsScene\) \{\n\s+if \(asleep && s\.wasAsleep === false && !s\.egg && !calm\(\)\) this\._animate\(s, s\.pet, "settle", 2500\);\n\s+s\.wasAsleep = asleep;/);
+  assert.match(m, /if \(!lightsScene\) this\._bgApply\(s, scene\);/);
+  assert.match(m, /if \(!lightsScene\) this\._drapeSync\(s, asleep && lightsOut && !away && !s\.egg\);/);
+  // The scene keys as the layout did: dim wins, then night, then rain.
+  const { self } = lightsCard();
+  const sun = (state) => ({ "sun.sun": { state } });
+  assert.deepStrictEqual([self._sceneKey(sun("above_horizon"), [], false), self._sceneKey(sun("above_horizon"), ["rainy"], false), self._sceneKey(sun("below_horizon"), ["rainy"], false),
+    self._sceneKey(sun("below_horizon"), [], true)], ["day", "rain", "night", "dim"]);
+});
+
+test("the woke_up lights moment does not stretch twice, nor say a tuck line the scene said", () => {
+  const m = method("_moment");
+  assert.match(m, /!\(Date\.now\(\) - \(s\.stretched \|\| 0\) < WAKE_STRETCH_MS\)\) this\._animate\(s, s\.pet, "stretch", 1100\)/);
+  assert.match(m, /if \(m\.how === "lights" && !capture && \(s\.scene\?\.kind === "lights" \|\| Date\.now\(\) - \(s\.tuckedAt \|\| 0\) < WAKE_STRETCH_MS\)\) break;/);
+  // Run it: a stretch moment after a wake scene's own stretch, and a fell_asleep during a scene.
+  const ctx = { Date, calm: () => false, WAKE_STRETCH_MS: 2500, MOMENT_CLASS: {}, FLAVOUR: 1, KEPT: 3, pick: (l) => l[0] };
+  vm.runInNewContext(`const o = {${m}}; this.moment = o._moment;`, ctx);
+  const run = (s, moment) => {
+    const log = { animated: [], lines: [] };
+    const self = { _animate: (_s, _e, c) => log.animated.push(c), _line: (_s, _c, text) => log.lines.push(text), _tuckLine: () => ({ text: "night night...", ms: 4000 }) };
+    ctx.moment.call(self, s, moment);
+    return log;
+  };
+  assert.deepStrictEqual(plain(run({ asleep: false, scene: null }, { type: "woke_up", how: "lights" }).animated), ["stretch"], "a wake from elsewhere stretches as before");
+  assert.deepStrictEqual(plain(run({ asleep: false, scene: null, stretched: Date.now() - 1000 }, { type: "woke_up", how: "lights" }).animated), [], "just after a wake scene's stretch");
+  assert.deepStrictEqual(plain(run({ asleep: false, scene: { kind: "lights" } }, { type: "woke_up", how: "lights" }).animated), []);
+  assert.deepStrictEqual(plain(run({ scene: { kind: "lights" } }, { type: "fell_asleep", how: "lights" }).lines), [], "the scene says its own");
+  assert.deepStrictEqual(plain(run({ scene: null, tuckedAt: Date.now() - 500 }, { type: "fell_asleep", how: "lights" }).lines), []);
+  assert.deepStrictEqual(plain(run({ scene: null }, { type: "fell_asleep", how: "lights" }).lines), ["night night..."], "a tuck seen from elsewhere is today's");
+  assert.deepStrictEqual(plain(run({ scene: { kind: "lights" } }, { type: "fell_asleep", how: "house" }).lines), ["night night..."], "only a lights tuck is the scene's");
+});
+
+test("the drape: others' tuck falls in DRAPE_FALL_MS, a wake slides off in two steps whatever woke it, calm is instant", () => {
+  const f = lightsCard();
+  f.self._drapeSync(f.s, false); // the first pass: nothing
+  assert.strictEqual(f.s.drapeFrame, undefined);
+  f.self._drapeSync(f.s, true);
+  assert.strictEqual(f.s.drapeFrame, 1, "asleep and the lights out turned on: it falls");
+  assert.deepStrictEqual(plain(f.log.timers.map(([, ms]) => ms)), [150, 300, 450]);
+  f.log.timers.forEach(([fn]) => fn());
+  assert.deepStrictEqual([f.s.drapeFrame, f.s.drapeAnim], [3, false]);
+  assert.match(f.s.drapeImg.src, /drape_l_3\.png/);
+  f.log.timers.length = 0;
+  f.self._drapeSync(f.s, false); // a wake: lights on, or a natural morning that cleared them: the same
+  assert.strictEqual(f.s.drapeFrame, 2);
+  assert.ok(f.s.drapeImg.style.translate, "frame 2, dropped");
+  assert.deepStrictEqual(plain(f.log.timers.map(([, ms]) => ms)), [150]);
+  f.log.timers[0][0]();
+  assert.strictEqual(f.s.drape.hidden, true);
+  // A pet tucked when the card opens shows the final frame; calm is on or off at once.
+  const open = lightsCard();
+  open.self._drapeSync(open.s, true);
+  assert.strictEqual(open.s.drapeFrame, 3);
+  const still = lightsCard({ calm: true });
+  still.self._drapeSync(still.s, false);
+  still.self._drapeSync(still.s, true);
+  assert.strictEqual(still.s.drapeFrame, 3);
+  assert.strictEqual(still.log.timers.length, 0);
+  still.self._drapeSync(still.s, false);
+  assert.strictEqual(still.s.drape.hidden, true);
+  // An opt-out species and a missing file: no blanket, no error.
+  const bat = lightsCard();
+  bat.s.speciesId = "bat";
+  bat.self._drapeSync(bat.s, false);
+  bat.self._drapeSync(bat.s, true);
+  assert.strictEqual(bat.s.drapeFrame ?? 0, 0);
+  const none = lightsCard();
+  none.ctx.DRAPE_ART.ok = false;
+  none.self._drapeSync(none.s, true);
+  assert.strictEqual(none.s.drapeFrame ?? 0, 0);
+});
+
+test("the drape mirrors the pet's classes and motion, but not the lie-down squash", () => {
+  const f = lightsCard();
+  f.self._drapeShow(f.s, 3);
+  for (const c of ["pet", "settle", "heavy", "lie"]) f.s.pet.classList.add(c);
+  Object.assign(f.s.pet.style, { translate: "1px 2px", rotate: "3deg", scale: "1.05", transition: "none" });
+  f.self._drapeMirror(f.s);
+  assert.strictEqual(f.s.drape.className, "drape settle heavy");
+  assert.deepStrictEqual([f.s.drape.style.translate, f.s.drape.style.rotate, f.s.drape.style.scale, f.s.drape.style.transition], ["1px 2px", "3deg", "1.05", "none"]);
+});
+
+test("lights, reduced motion: no scene, the pose only (sleepy for a tuck, content for a wake)", () => {
+  const f = lightsCard({ calm: true });
+  f.ctx.SCENES.lights.calm.call(f.self, f.s);
+  assert.deepStrictEqual(plain(f.s.poseFrames), ["adult_sleepy_1", "adult_sleepy_2"]);
+  f.s.asleep = true;
+  f.ctx.SCENES.lights.calm.call(f.self, f.s);
+  assert.deepStrictEqual(plain(f.s.poseFrames), ["adult_content_1", "adult_content_2"]);
+  assert.match(method("_sceneStart"), /s\.sceneFade = \{ kind, until: Date\.now\(\) \+ 10000 \};[^\n]*\n\s+entry\.calm\?\.call\(this, s\);/);
 });
