@@ -149,7 +149,9 @@
       // The card asks once for a server clock reading; none arrives here.
       connection: { subscribeEvents: noop, subscribeMessage: noop },
       // `digReplies`: play_game answers, in order, for a `game: "dig"` shot (the server's dig is random).
+      // `hopReply`: the `hop` service's `board` answer (a canned reply from hop.py, see hopBoard).
       callService: async (domain, service) => ({ response: service === "visit" ? (shot.visit || { counted: true })
+        : service === "hop" ? (shot.hopReply || {})
         : service === "play_game" && shot.digReplies?.length ? shot.digReplies.shift() : {} }),
       callWS: async (msg) => {
         if (msg.type === "virtual_pet/photos") return { photos: [] };
@@ -658,6 +660,63 @@
     };
   }
 
+  // Hop of the Day (ship 2b). `board: {fixture, moves, take, lit, special, reply}`: the fixture
+  // (dev/bench/hop-boards.json, built by scripts/hop_bench_boards.py from hop.py) names a canned
+  // `board` reply; `moves` is "win", "tidy" or move letters, played through the card's own
+  // _hopMove (`take`: only the first n); `lit` a cell lit (the first tap of a two-tap commit);
+  // `special` the special key armed; `reply` replaces the fixture's (a malformed one).
+  let HOP_FIXTURES;
+  async function hopBoard(shot) {
+    HOP_FIXTURES ||= await (await realFetch("/dev/bench/hop-boards.json")).json();
+    for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-hop|")) localStorage.removeItem(k); // no parked list from a shot before
+    const b = shot.board || {};
+    const fx = HOP_FIXTURES.boards[b.fixture || "hop-adult"];
+    if (!fx) throw new Error(`no hop fixture ${b.fixture}`);
+    shot.hopReply = b.reply || fx.reply;
+    return fx;
+  }
+  // What the shot measured, into the shot's .json: the cell and key sizes the board drew, and the
+  // picker's buttons and the Hop row's rects (overlap with the close button, the prompt, each other).
+  function hopInfo(card, s) {
+    const r = (el) => el && !el.hidden && el.getClientRects().length ? el.getBoundingClientRect() : null;
+    const box = s.gameBox.getBoundingClientRect();
+    const rel = (q) => q && [q.left - box.left, q.top - box.top, q.right - box.left, q.bottom - box.top].map((n) => Math.round(n * 10) / 10);
+    const hit = (a, b) => a && b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const info = { box: [Math.round(box.width * 10) / 10, Math.round(box.height * 10) / 10] };
+    if (s.game?.kind === "hop") {
+      info.cell = s.game.cell;
+      info.key = Math.round(s.gameBox.querySelector(".hk").getBoundingClientRect().width * 10) / 10;
+      info.oneTap = s.game.cell >= 44;
+      info.grid = rel(r(s.gameBox.querySelector(".hgrid")));
+      info.keys = rel(r(s.gameBox.querySelector(".hkeys")));
+      info.close = rel(r(s.gameBox.querySelector(".gx")));
+      info.moves = s.game.moves.length;
+      info.uses = s.game.st.uses;
+      info.done = s.game.done;
+      info.tidy = s.game.tidy;
+      info.keyState = Object.fromEntries([...s.gameBox.querySelectorAll(".hk")].map((k) => [k.dataset.k,
+        `${k.getAttribute("aria-disabled") === "true" ? "off" : "on"}: ${k.getAttribute("aria-label")}`]));
+    } else {
+      const gx = r(s.gameBox.querySelector(".gx"));
+      const bubble = r(s.bubble);
+      const row = r(s.gameBox.querySelector(".ghop"));
+      const games = [...s.gameBox.querySelectorAll(".gpick button")].map(r);
+      info.games = games.map(rel);
+      info.row = rel(row);
+      info.rowClass = row ? s.gameBox.querySelector(".ghop").className : null;
+      info.pick = s.gameBox.querySelector(".gpick").className;
+      info.overlaps = [];
+      const all = [["close", gx], ["prompt", bubble], ["row", row], ...games.map((g, i) => [`game${i}`, g])];
+      for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+        if (all[i][0] === "row" || all[j][0] === "row" || all[i][0] === "close" || all[i][0] === "prompt") {
+          if (hit(all[i][1], all[j][1])) info.overlaps.push(`${all[i][0]}+${all[j][0]}`);
+        }
+      }
+      info.offFoot = games.concat(row).filter(Boolean).some((q) => q.bottom > box.bottom + 0.5);
+    }
+    return info;
+  }
+
   let FINDS_DEFAULT;
   async function mount(shot) {
     await customElements.whenDefined("hatch-pet-card");
@@ -691,8 +750,11 @@
     if (FINDS_DEFAULT === undefined) FINDS_DEFAULT = Card.findsShown;
     Card.findsShown = shot.findsShown === undefined ? FINDS_DEFAULT : !!shot.findsShown;
 
+    if (shot.view === "board") await hopBoard(shot);
     const card = document.createElement("hatch-pet-card");
-    card.setConfig({ seasonal: shot.season === "auto" ? undefined : shot.season, ...(shot.config || {}) });
+    // `hop: true` (and any board shot) turns the YAML-only experimental_hop flag on.
+    card.setConfig({ seasonal: shot.season === "auto" ? undefined : shot.season,
+      ...(shot.hop || shot.view === "board" ? { experimental_hop: true } : {}), ...(shot.config || {}) });
     card.hass = buildHass(shot, WORLDS);
     stage.append(card);
     await settled(card);
@@ -862,6 +924,27 @@
       if (shot.scrollEnd) cur.status.scrollTop = cur.status.scrollHeight; // the foot's links
     }
     if (shot.view === "games") card._startGame(cur, cur.buttons.play); // the button itself can be disabled
+    if (shot.view === "board") {
+      const fx = await hopBoard(shot);
+      card._startGame(cur, cur.buttons.play);
+      await card._hopOpen(cur);
+      const b = shot.board || {};
+      const list = b.moves === "win" ? fx.win : b.moves === "tidy" ? fx.tidy : b.moves || "";
+      const cells = [...list].map((ch) => HATCH_HOP_LETTERS.indexOf(ch)).slice(0, b.take ?? 1e9);
+      // `spent`: stop at the first move the winning list pays a use for (none: all of it).
+      for (const c of cells) {
+        const uses = cur.game.st.uses;
+        card._hopMove(cur, c);
+        if (b.spent && cur.game.st.uses < uses) break;
+      }
+      if (b.special) { cur.game.special = true; }
+      if (b.lit === "first") { // the first legal cell: the board's first tap of a two-tap commit
+        const t = card._hopTargets(cur.game);
+        cur.game.lit = [...t.plain, ...t.special][0];
+      } else if (b.lit !== undefined) cur.game.lit = b.lit;
+      if (b.special || b.lit !== undefined) card._hopDraw(cur, false);
+      card._hopPlace(cur, false); // the piece is on its cell, not on its way
+    }
     // `game: "dig"`: a Berry dig started through the card's own picker, then `digTaps`
     // ("dig" or "keep") played, each answered by the next of `digReplies` (scripted).
     // Held on the last reply, before its pause (a bee still shows).
@@ -1029,9 +1112,11 @@
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     await settled(card);
     window.bench.screenClass = cur.screen.className;
+    if (shot.view === "board" || (shot.hop && shot.view === "games")) (window.bench.info ||= {}).hop = hopInfo(card, cur);
     if (shot.lightsAlign) (window.bench.info ||= {}).lights = lightsInfo(cur);
     return true;
   }
 
+  const HATCH_HOP_LETTERS = "abcdefghijklmnopqrstuvwx";
   window.bench = { mount, step, lookEnd };
 })();

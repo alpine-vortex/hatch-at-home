@@ -145,6 +145,36 @@ const PRESETS = {
       motion: "reduce", game: "dig", digReplies: [r(1, 2, 2), r(2, 2, 0, { found: "bee", round_over: true })], digTaps: ["dig"] });
     return out;
   },
+  // Hop of the Day (ship 2b, behind experimental_hop): the picker with the Hop row, then per width and
+  // family (a canned `board` reply built by hop.py, dev/bench/hop-boards.json) a board at the start, a lit
+  // cell (the first tap of a two-tap commit), a spent special, the solved view (a plain win) and the tidy view
+  // (both pinned by the bench's `board.moves`, not by a reply's done/tidy), and a blocked key (a corner:
+  // the keys' on/off and aria are in each shot's .json, with the measured cell and key size).
+  hop() {
+    const out = [];
+    const families = ["hop", "glide", "swim", "dig", "climb", "squeeze"];
+    for (const width of [300, 330, 420]) {
+      const base = { width, world: "woodland", group: `hop-${width}` };
+      out.push({ ...base, name: `hop/${width}-picker`, label: "picker with the Hop row", view: "games", hop: true });
+      for (const f of families) {
+        const board = { fixture: `${f}-adult` };
+        const shot = (state, label, extra) => out.push({ ...base, group: `hop-${width}-${f}`, name: `hop/${width}-${f}-${state}`,
+          label: `${f}: ${label}`, view: "board", board: { ...board, ...extra } });
+        shot("board", "the board", {});
+        shot("lit", "a lit cell", { lit: "first" });
+        shot("spent", "a spent special", { moves: "win", spent: true });
+        shot("solved", "solved (a plain win)", { moves: "win" });
+        shot("tidy", "tidy", { moves: "tidy" });
+      }
+      out.push({ ...base, group: `hop-${width}-blocked`, name: `hop/${width}-blocked`, label: "a blocked key (a move in)",
+        view: "board", board: { fixture: "hop-adult", moves: "win", take: 1 } });
+      out.push({ ...base, group: `hop-${width}-baby`, name: `hop/${width}-baby`, label: "a baby's 4 x 3",
+        view: "board", board: { fixture: "hop-baby" } });
+      out.push({ ...base, group: `hop-${width}-calm`, name: `hop/${width}-calm`, label: "reduced motion",
+        view: "board", motion: "reduce", board: { fixture: "swim-adult", moves: "win", take: 3 } });
+    }
+    return out;
+  },
   // World visitors at 330: every one at its greet (its own hours: night ones on a night
   // screen), then the beats of one walker and one flyer, a calm visit, a baby and a child.
   visitors() {
@@ -1173,7 +1203,7 @@ async function runShots(browser, base, shots, outDir, workers) {
           }, shot.lines);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(n));
         }
-        if (shot.costume || shot.gift || shot.look || shot.care || shot.lightsAlign) {
+        if (shot.costume || shot.gift || shot.look || shot.care || shot.lightsAlign || shot.view === "board" || (shot.hop && shot.view === "games")) {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
         }

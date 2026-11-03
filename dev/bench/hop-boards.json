@@ -1,0 +1,212 @@
+{
+ "gen_version": 2,
+ "day": "2026-06-15",
+ "boards": {
+  "hop-adult": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-06-15",
+    "id": "dbc32a5fe1",
+    "w": 6,
+    "h": 4,
+    "grid": [
+     "fo.fN.",
+     ".~~#..",
+     "f.....",
+     "P~.~.."
+    ],
+    "family": "hop",
+    "specials": 3,
+    "world": "woodland",
+    "twist": null,
+    "done": false,
+    "tidy": false
+   },
+   "win": "mabde",
+   "tidy": "mgabcdpnouwxrqklfe"
+  },
+  "glide-adult": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-06-15",
+    "id": "6b30c44888",
+    "w": 6,
+    "h": 4,
+    "grid": [
+     ".N....",
+     ".f#o..",
+     "..#.f~",
+     "f.o#.P"
+    ],
+    "family": "glide",
+    "specials": 3,
+    "world": "woodland",
+    "twist": null,
+    "done": false,
+    "tidy": false
+   },
+   "win": "qputsmhb",
+   "tidy": "wqpklfedchntsmgab"
+  },
+  "swim-adult": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-06-15",
+    "id": "bf46fed905",
+    "w": 6,
+    "h": 4,
+    "grid": [
+     "..N~.f",
+     "o~~...",
+     ".#....",
+     "..ff.P"
+    ],
+    "family": "swim",
+    "specials": 3,
+    "world": "woodland",
+    "twist": null,
+    "done": false,
+    "tidy": false
+   },
+   "win": "wvuoijklfedc",
+   "tidy": "wvpqrlfekjioutsmgabc"
+  },
+  "dig-adult": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-06-15",
+    "id": "8155b17a4f",
+    "w": 6,
+    "h": 4,
+    "grid": [
+     "..N...",
+     ".o.#..",
+     ".f#f.#",
+     "#.f..P"
+    ],
+    "family": "dig",
+    "specials": 3,
+    "world": "woodland",
+    "twist": null,
+    "done": false,
+    "tidy": false
+   },
+   "win": "wvutnpdc",
+   "tidy": "wqpvutnmgabhiklfedc"
+  },
+  "climb-adult": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-06-15",
+    "id": "c5d5de854a",
+    "w": 6,
+    "h": 4,
+    "grid": [
+     "..N.o#",
+     ".~..#o",
+     "..f.#.",
+     "#f#.fP"
+    ],
+    "family": "climb",
+    "specials": 3,
+    "world": "woodland",
+    "twist": null,
+    "done": false,
+    "tidy": false
+   },
+   "win": "wvutnoic",
+   "tidy": "wvpqrlkedjiontsmgabc"
+  },
+  "squeeze-adult": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-06-15",
+    "id": "da4683aa9e",
+    "w": 6,
+    "h": 4,
+    "grid": [
+     "~#~N~o",
+     "......",
+     "#f...f",
+     "P..~f."
+    ],
+    "family": "squeeze",
+    "specials": 3,
+    "world": "woodland",
+    "twist": null,
+    "done": false,
+    "tidy": false
+   },
+   "win": "tnopqwqrqpjd",
+   "tidy": "tnhghiouopqwxrlkjd"
+  },
+  "hop-baby": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-06-15",
+    "id": "59254ba214",
+    "w": 4,
+    "h": 3,
+    "grid": [
+     ".N..",
+     ".~..",
+     "of.P"
+    ],
+    "family": "hop",
+    "specials": 0,
+    "world": "woodland",
+    "twist": null,
+    "done": false,
+    "tidy": false
+   },
+   "win": "kjieab",
+   "tidy": "hdcgkjieab"
+  },
+  "hop-child": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-06-15",
+    "id": "9f7930a876",
+    "w": 5,
+    "h": 4,
+    "grid": [
+     "..N.o",
+     "o.#f.",
+     "f..~.",
+     "P~.#."
+    ],
+    "family": "hop",
+    "specials": 1,
+    "world": "woodland",
+    "twist": null,
+    "done": false,
+    "tidy": false
+   },
+   "win": "kfgidc",
+   "tidy": "kfabglmrtojidc"
+  },
+  "hop-teen": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-06-15",
+    "id": "0c3af48de6",
+    "w": 6,
+    "h": 4,
+    "grid": [
+     ".f..oN",
+     "..~.f.",
+     "##~.o.",
+     "P#...."
+    ],
+    "family": "hop",
+    "specials": 2,
+    "world": "woodland",
+    "twist": null,
+    "done": false,
+    "tidy": false
+   },
+   "win": "gabhjkef",
+   "tidy": "uvpjhgabcdekqwxrlf"
+  }
+ }
+}
