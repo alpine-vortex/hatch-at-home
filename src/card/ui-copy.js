@@ -268,9 +268,11 @@ const NOTES = {
   pet_birthday: (n) => (n.years ? `it's my birthday!! i'm ${n.years} today! ♥` : `i'm ${months(n.months)} old today! ♥`),
   birthday_friends: (n) => `i'm ${months(n.months)} old! friends from day one ♥`,
   your_birthday: (n) => (n.quiet ? "happy birthday ♥" : "happy birthday!! ♥"), // _note adds the name
-  friends_for: (n) => n.months % 12 === 0
+  // Door 11 (memory plan M2, 6a): the 12-month day may carry one tag; a tag this card
+  // has no line for says the usual line.
+  friends_for: (n) => (n.months === 12 && Object.hasOwn(MEMORY_TAG_DOORS.door11, n.tag || "") && MEMORY_TAG_DOORS.door11[n.tag]) || (n.months % 12 === 0
     ? `we've been friends for ${n.months === 12 ? "a whole year" : `${n.months / 12} years`}!! ♥`
-    : `we've been friends for ${n.months === 1 ? "a month" : `${n.months} months`}! ♥`,
+    : `we've been friends for ${n.months === 1 ? "a month" : `${n.months} months`}! ♥`),
   tucked_in: () => pick(["thanks for tucking me in last night ♥", "i slept so well after you tucked me in ♥"]),
   steps: (n) => `wow, ${n.steps.toLocaleString()} steps! you've been busy!`,
   more_than_usual: () => pick(["you've walked way more than usual today!", "so many steps! you've been on the go!"]),
@@ -303,10 +305,14 @@ const NOTES = {
   door4: (n) => MEMORY_DREAM_LABEL[n.pick] && MEMORY_DOORS.door4(MEMORY_DREAM_LABEL[n.pick]),
   door5: (n) => ["rain", "sun"].includes(n.pick) && MEMORY_DOORS.door5(n.pick),
   door12: (n) => { const game = GAMES.find((g) => g.key === n.pick); return game && MEMORY_DOORS.door12(game.label); },
+  // Doors 1, 3 (memory plan M2) and 10, by their tag; a tag with no line says nothing.
+  door1: (n) => tagDoor("door1", n.tag),
+  door3: (n) => tagDoor("door3", n.tag),
   early_alarm: () => "early start tomorrow! sleep well ♥",
   up_early: () => "mmh... you're up before the sun... zzz ♥",
   photo: () => "i made you something! it's in your journal ♥",
 };
+const tagDoor = (door, tag) => (Object.hasOwn(MEMORY_TAG_DOORS[door], tag || "") ? MEMORY_TAG_DOORS[door][tag] : null);
 const MEMORY_DREAM_LABEL = { stars: "the stars", sea: "the sea", snacks: "snacks", you: "you" }; // door 4's {pick}
 const DREAM_FRIENDS = "I dreamed about my friends ♥"; // a "you" dream, to everyone but its asker
 const DREAM_CALLBACK_DAYS = [2, 3, 4]; // a told story's callback, days later (F2), by the pet and day

@@ -941,6 +941,11 @@ GUIDE_STRINGS = (
     "exam, match, show, trip, party, lesson, work thing or something else",
     "the Saturday for a weekend; never what you typed",
     '"work thing" and "something else" are never said back',
+    "a week after that day",
+    "not for an exam",
+    "between 11:00 and 20:00",
+    "friends for a whole year",
+    'They say "you told me", never that the day happened, and never count.',
 )
 
 
@@ -1355,7 +1360,7 @@ async def test_one_door_a_look_in_order_and_a_door_with_no_room_waits(
     reply = await door_visit(pet, ada.id)
     assert door_notes(reply) == [{"kind": "door5", "pick": "sun"}]
     for note in door_notes(reply):
-        assert set(note) <= {"kind", "pick"}
+        assert set(note) <= {"kind", "pick", "tag"}
     noted = pet.people.data["people"][ada.id].get("noted") or {}
     assert not any(k.startswith("door") for k in noted)
 
@@ -1671,3 +1676,266 @@ async def test_the_bus_never_sees_a_kept_tag(
     assert pet.people.memory(ada.id)["tags"][0]["tag"] == "lesson"
     text = json.dumps([(e.event_type, e.data) for e in bus], default=str)
     assert "lesson" not in text and THURSDAY not in text
+
+
+# --- M2: doors 3, 1 and 11 (plan sections 6 "Door timing", 6a, 8 "Acceptance, doors") ---
+
+
+def tag(day: str, name: str, kind: str = "big_day") -> dict[str, str]:
+    return {"day": day, "kind": kind, "tag": name}
+
+
+def tag_memory(*tags: dict[str, str], **said: str) -> dict[str, Any]:
+    mem: dict[str, Any] = {"on": True, "since": "2025-01-01", "tags": list(tags)}
+    if said:
+        mem["said"] = dict(said)
+    return mem
+
+
+def test_door_three_a_year_after_once_and_not_for_exam() -> None:
+    mem = tag_memory(tag("2025-11-03", "trip"))
+    assert P.memory_door(mem, "2026-11-03", 12) == (
+        "door3",
+        {"kind": "door3", "tag": "trip"},
+    )
+    for day in ("2026-11-02", "2026-11-04", "2027-11-03", "2025-11-03"):
+        assert P.memory_door(mem, day, 12) is None, day
+    for hour in (10, 20, 23):  # outside the window: lost, not marked
+        assert P.memory_door(mem, "2026-11-03", hour) is None
+    assert (
+        P.memory_door({**mem, "said": {"door3": "2026-11-03"}}, "2026-11-03", 12)
+        is None
+    )
+    for name in ("exam", "work_thing", "something_else"):
+        assert (
+            P.memory_door(tag_memory(tag("2025-11-03", name)), "2026-11-03", 12) is None
+        )
+    weekend = tag_memory(tag("2025-11-03", "trip", "weekend"))
+    assert P.memory_door(weekend, "2026-11-03", 12) is None
+
+
+def test_door_three_takes_feb_29_as_feb_28() -> None:
+    mem = tag_memory(tag("2028-02-29", "show"))
+    assert P.memory_door(mem, "2029-02-28", 12) == (
+        "door3",
+        {"kind": "door3", "tag": "show"},
+    )
+    assert P.memory_door(mem, "2029-03-01", 12) is None
+    # A Feb 28 tag never fires on a Feb 29, and Feb 29 itself fires nothing.
+    mem = tag_memory(tag("2027-02-28", "show"))
+    assert P.memory_door(mem, "2028-02-29", 12) is None
+    assert P.memory_door(mem, "2028-02-28", 12) == (
+        "door3",
+        {"kind": "door3", "tag": "show"},
+    )
+    # A Feb 28 and a Feb 29 tag of one year: the later day's goes.
+    mem = tag_memory(tag("2028-02-28", "match"), tag("2028-02-29", "party"))
+    assert P.memory_door(mem, "2029-02-28", 12) == (
+        "door3",
+        {"kind": "door3", "tag": "party"},
+    )
+
+
+def test_door_one_a_week_after_once() -> None:
+    mem = tag_memory(tag("2026-10-27", "exam"))
+    assert P.memory_door(mem, "2026-11-03", 11) == (
+        "door1",
+        {"kind": "door1", "tag": "exam"},
+    )
+    assert P.memory_door(mem, "2026-11-03", 19) == (
+        "door1",
+        {"kind": "door1", "tag": "exam"},
+    )
+    for day in ("2026-11-02", "2026-11-04"):  # plus 6, plus 8
+        assert P.memory_door(mem, day, 12) is None, day
+    for hour in (10, 20):
+        assert P.memory_door(mem, "2026-11-03", hour) is None
+    said = {**mem, "said": {"door1": "2026-11-03"}}
+    assert P.memory_door(said, "2026-11-03", 12) is None
+    for name in ("work_thing", "something_else"):
+        assert (
+            P.memory_door(tag_memory(tag("2026-10-27", name)), "2026-11-03", 12) is None
+        )
+    weekend = tag_memory(tag("2026-10-27", "trip", "weekend"))
+    assert P.memory_door(weekend, "2026-11-03", 12) is None
+
+
+def test_the_doors_go_in_the_order_two_three_one_then_the_picks() -> None:
+    """FM s2782 Q5: 2, 3, 1, 10, 4, 5, 12; a due door 1 does not take door 2's look."""
+    mem = door_memory()  # doors 2, 4, 5, 12 due on 2026-11-03
+    mem["tags"] = [tag("2025-11-03", "show"), tag("2026-10-27", "match")]
+    day = "2026-11-03"
+    assert P.memory_door(mem, day, 11)[0] == "door2"
+    mem["said"] = {"door2": day}
+    assert P.memory_door(mem, day, 11) == ("door3", {"kind": "door3", "tag": "show"})
+    mem["said"]["door3"] = day
+    assert P.memory_door(mem, day, 11) == ("door1", {"kind": "door1", "tag": "match"})
+    mem["said"]["door1"] = day
+    assert P.memory_door(mem, day, 11)[0] == "door4"
+
+
+def test_door_eleven_reads_one_recent_named_tag() -> None:
+    day = "2026-11-03"
+    assert P.memory_recap(tag_memory(), day) is None
+    mem = tag_memory(
+        tag("2025-11-01", "party"),  # over a year ago
+        tag("2026-03-01", "trip"),
+        tag("2026-06-01", "exam"),
+        tag("2026-09-01", "work_thing"),
+        tag("2026-10-31", "something_else", "weekend"),
+        tag("2026-11-05", "show"),  # ahead: not yet
+    )
+    assert P.memory_recap(mem, day) == "exam"
+    only = tag_memory(
+        tag("2026-09-01", "work_thing"), tag("2026-10-01", "show", "weekend")
+    )
+    assert P.memory_recap(only, day) is None
+    assert P.memory_recap(tag_memory(tag("2025-11-01", "party")), day) is None
+
+
+async def friends_pet(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: Any,
+    record: dict[str, Any],
+    months: int = 12,
+    **options: Any,
+) -> tuple[Any, str]:
+    """Pip on 2026-11-03 at noon, Ada its friend for `months` whole months."""
+    freezer.move_to("2026-11-03 12:00:00+00:00")
+    ada, _ = await a_user(hass)
+    pet = await start(hass, hass_storage, {ada.id: record}, **options)
+    since = f"{2026 - months // 12}-11-03"  # whole years only, as the tests use
+    pet.state.bonds.setdefault(ada.id, {})["since"] = since
+    pet.state.bonds[ada.id]["points"] = 25
+    return pet, ada.id
+
+
+def friends_note(reply: dict[str, Any]) -> dict[str, Any] | None:
+    return next(
+        (n for n in reply["notes"] if n["kind"] in ("friends_for", "birthday_friends")),
+        None,
+    )
+
+
+async def test_door_eleven_rides_the_twelve_month_friends_note(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer
+) -> None:
+    mem = tag_memory(tag("2026-06-01", "lesson"), tag("2026-09-01", "work_thing"))
+    pet, ada = await friends_pet(hass, hass_storage, freezer, {"memory": mem})
+    with patch.object(pet.people, "mark_memory_said", side_effect=AssertionError):
+        reply = await door_visit(pet, ada)
+    note = friends_note(reply)
+    assert note == {"kind": "friends_for", "months": 12, "tag": "lesson"}
+    assert "said" not in pet.people.memory(ada)  # no memory mark for door 11
+    assert set(note) - {"kind", "months"} == {"tag"}
+
+
+@pytest.mark.parametrize(
+    ("record", "options"),
+    [
+        ({"memory": tag_memory(tag("2026-09-01", "work_thing"))}, {}),
+        ({"memory": tag_memory(tag("2026-09-01", "show", "weekend"))}, {}),
+        ({"memory": tag_memory()}, {}),
+        ({}, {}),  # memory off
+        ({"memory": tag_memory(tag("2026-06-01", "show"))}, {CONF_MEMORY: False}),
+    ],
+)
+async def test_door_eleven_carries_nothing_without_a_named_tag_here(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer,
+    record: dict[str, Any],
+    options: dict[str, Any],
+) -> None:
+    pet, ada = await friends_pet(hass, hass_storage, freezer, record, **options)
+    reply = await door_visit(pet, ada)
+    assert friends_note(reply) == {"kind": "friends_for", "months": 12}
+
+
+async def test_door_eleven_not_at_twenty_four_months(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer
+) -> None:
+    mem = tag_memory(tag("2026-06-01", "show"))
+    pet, ada = await friends_pet(hass, hass_storage, freezer, {"memory": mem}, 24)
+    reply = await door_visit(pet, ada)
+    assert friends_note(reply) == {"kind": "friends_for", "months": 24}
+
+
+async def test_door_eleven_waits_a_look_when_the_pets_first_birthday_is_today(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer
+) -> None:
+    """At 12 months the pet's own first birthday is {"years": 1}, never
+    birthday_friends (that is a first-year month only, model.pet_birthday), so the
+    birthday takes the first look and the recap comes on the next, as the plain
+    friends line does today (plan 6a's "lost when birthday_friends wins" cannot
+    happen at 12 months: a question in the M2 report)."""
+    mem = tag_memory(tag("2026-06-01", "show"))
+    pet, ada = await friends_pet(hass, hass_storage, freezer, {"memory": mem})
+    pet.state.hatched_on = "2025-11-03"  # a year old today
+    reply = await door_visit(pet, ada)
+    assert [n for n in reply["notes"] if n["kind"] == "pet_birthday"] == [
+        {"kind": "pet_birthday", "years": 1}
+    ]
+    assert friends_note(reply) is None
+    reply = await door_visit(pet, ada)
+    assert friends_note(reply) == {"kind": "friends_for", "months": 12, "tag": "show"}
+
+
+async def test_door_eleven_is_lost_when_birthday_friends_wins(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer
+) -> None:
+    """The one note birthday_friends carries no tag (it is never 12 months, above;
+    checked here with a patched pet birthday that says it is)."""
+    mem = tag_memory(tag("2026-06-01", "show"))
+    pet, ada = await friends_pet(hass, hass_storage, freezer, {"memory": mem})
+    pet.state.hatched_on = "2025-11-03"
+    with patch(
+        "custom_components.virtual_pet.model.pet_birthday",
+        return_value={"months": 12},
+    ):
+        reply = await door_visit(pet, ada)
+    assert friends_note(reply) == {"kind": "birthday_friends", "months": 12}
+
+
+async def test_doors_one_and_three_go_out_one_a_look_marked_in_memory(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer
+) -> None:
+    """Off leaves no trace: the marks are in memory's said only; turning it off takes
+    them, and `noted` never holds a door key."""
+    freezer.move_to("2026-11-03 12:00:00+00:00")
+    ada, token = await a_user(hass)
+    mem = tag_memory(tag("2025-11-03", "trip"), tag("2026-10-27", "show"))
+    pet = await ready_pet(hass, hass_storage, freezer, ada.id, record={"memory": mem})
+    reply = await door_visit(pet, ada.id)
+    assert door_notes(reply) == [{"kind": "door3", "tag": "trip"}]
+    assert pet.people.memory_said(ada.id, "door3") == "2026-11-03"
+    assert pet.people.memory_said(ada.id, "door1") is None
+    reply = await door_visit(pet, ada.id)
+    assert door_notes(reply) == [{"kind": "door1", "tag": "show"}]
+    reply = await door_visit(pet, ada.id)
+    assert door_notes(reply) == []
+    for note in door_notes(reply):
+        assert set(note) <= {"kind", "pick", "tag"}
+    person = pet.people.data["people"][ada.id]
+    assert not any(k.startswith("door") for k in person.get("noted") or {})
+    await pet.people.forget_memory(ada.id)
+    assert "door" not in json.dumps(saved_people(hass_storage)[ada.id])
+
+
+async def test_a_door_reads_the_capped_tags(
+    hass: HomeAssistant, hass_storage: dict[str, Any]
+) -> None:
+    """The cap holds on write: a year-old tag pushed out by 120 newer ones is no door."""
+    hass_storage[PEOPLE_KEY] = people_store(
+        {"u": {"memory": {"on": True, "tags": [tag("2025-11-03", "trip")]}}}
+    )
+    people = P.People(hass)
+    await people.async_load()
+    first = date(2026, 1, 1)
+    for i in range(P.MEMORY_TAGS_CAP):
+        day = (first + timedelta(days=i)).isoformat()
+        assert people.remember("u", "tags", tag(day, "work_thing"))
+    mem = people.memory("u")
+    assert len(mem["tags"]) == P.MEMORY_TAGS_CAP
+    assert P.memory_door(mem, "2026-11-03", 12) is None

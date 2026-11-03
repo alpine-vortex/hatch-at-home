@@ -240,3 +240,57 @@ test("the chip labels are text, never markup", () => {
   assert.match(method("_tagChips"), /prompt\.textContent = MEMORY_TAG_CHIPS\.q/);
   assert.doesNotMatch(method("_tagChips"), /innerHTML/);
 });
+
+// Doors 1, 3 and 11 (plan 6a): the approved line by the note's tag; a tag with no line
+// says nothing (door 1, 3) or the usual line (door 11); not at 24 months.
+function notes() {
+  const entry = (text, key) => {
+    const m = text.match(new RegExp(`\\n  ${key}: [\\s\\S]*?,\\n(?=  (?://|\\w+:)|\\};)`));
+    assert.ok(m, `no ${key}`);
+    return m[0].trim();
+  };
+  const ctx = {};
+  vm.runInNewContext([
+    table("MEMORY_TAG_DOORS"),
+    grab(/\nconst tagDoor = [^\n]*\n/),
+    `const months = (n) => n + " months";`,
+    `const NOTES = { ${["friends_for", "door1", "door3"].map((k) => entry(table("NOTES"), k)).join("\n")} };`,
+    "this.out = { NOTES, MEMORY_TAG_DOORS };",
+  ].join("\n"), ctx);
+  return ctx.out;
+}
+
+test("doors 1 and 3 say their approved line by tag, and nothing for a tag with none", () => {
+  const { NOTES } = notes();
+  assert.equal(NOTES.door1({ kind: "door1", tag: "show" }), "thinking of the show you told me about");
+  assert.equal(NOTES.door1({ kind: "door1", tag: "exam" }), "thinking of the exam you told me about");
+  assert.equal(NOTES.door3({ kind: "door3", tag: "trip" }), "a year ago you told me about a trip ♥");
+  for (const t of ["exam", "work_thing", "something_else", "toString", undefined, "<b>x</b>"]) {
+    assert.ok(!NOTES.door3({ kind: "door3", tag: t }), String(t));
+  }
+  for (const t of ["work_thing", "something_else", "constructor", undefined]) assert.ok(!NOTES.door1({ kind: "door1", tag: t }), String(t));
+});
+
+test("door 11: the 12-month friends note with a tag says the recap, else the usual line", () => {
+  const { NOTES } = notes();
+  assert.equal(NOTES.friends_for({ kind: "friends_for", months: 12, tag: "lesson" }), "a whole year! you told me about a lesson");
+  assert.equal(NOTES.friends_for({ kind: "friends_for", months: 12, tag: "exam" }), "a whole year! you told me about an exam");
+  const usual = "we've been friends for a whole year!! ♥";
+  assert.equal(NOTES.friends_for({ kind: "friends_for", months: 12 }), usual);
+  assert.equal(NOTES.friends_for({ kind: "friends_for", months: 12, tag: "work_thing" }), usual);
+  assert.equal(NOTES.friends_for({ kind: "friends_for", months: 12, tag: "valueOf" }), usual);
+  assert.equal(NOTES.friends_for({ kind: "friends_for", months: 24, tag: "show" }), "we've been friends for 2 years!! ♥");
+  assert.equal(NOTES.friends_for({ kind: "friends_for", months: 3, tag: "show" }), "we've been friends for 3 months! ♥");
+});
+
+test("every door line is at most 40 characters and says 'told me', never that it happened", () => {
+  const { MEMORY_TAG_DOORS } = notes();
+  for (const [door, lines] of Object.entries(MEMORY_TAG_DOORS)) {
+    for (const [tag, line] of Object.entries(lines)) {
+      assert.ok([...line].length <= 40, `${door}.${tag}`);
+      if (door !== "door10") assert.match(line, /you told me about/, `${door}.${tag}`);
+    }
+  }
+  assert.deepEqual(Object.keys(MEMORY_TAG_DOORS.door3), ["match", "show", "trip", "party", "lesson"]);
+  assert.deepEqual(Object.keys(MEMORY_TAG_DOORS.door10), ["match", "show", "lesson"]);
+});

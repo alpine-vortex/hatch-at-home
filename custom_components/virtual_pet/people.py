@@ -1137,6 +1137,11 @@ def memory_ask_due(person: dict[str, Any], today: str, level: int) -> bool:
     return len(recent) < R.MEMORY_ASK_CHOSEN
 
 
+# The tag doors (plan M2, section 4's table): which big_day tags each reads. Never
+# work_thing or something_else, never a weekend tag; door 3 not exam (FM s2782 Q4, Q8).
+MEMORY_DOOR1_TAGS = ("exam", "match", "show", "trip", "party", "lesson")
+MEMORY_DOOR3_TAGS = ("match", "show", "trip", "party", "lesson")
+MEMORY_DOOR11_TAGS = MEMORY_DOOR1_TAGS
 # The pick doors (plan section 6): door, picks list, how many of its newest
 # MEMORY_PICKS_CAP must be the same pick. In door-number order.
 MEMORY_PICK_DOORS = (
@@ -1146,15 +1151,33 @@ MEMORY_PICK_DOORS = (
 )
 
 
+def _month_day(day: date) -> tuple[int, int]:
+    """A tag's (month, day) for its anniversary: Feb 29 counts as Feb 28 (FM s2782
+    Q5), so it comes once a year, every year."""
+    return (2, 28) if (day.month, day.day) == (2, 29) else (day.month, day.day)
+
+
+def _big_day_tags(mem: dict[str, Any], tags: tuple[str, ...]) -> list[dict[str, Any]]:
+    """The big_day tags a door may read, oldest first (the record's own order)."""
+    return [
+        e
+        for e in mem.get("tags") or []
+        if e.get("kind") == "big_day" and e.get("tag") in tags
+    ]
+
+
 def memory_door(
     mem: dict[str, Any], today: str, hour: int
 ) -> tuple[str, dict[str, Any]] | None:
-    """The memory door due on this look, the lowest-numbered first (plan section 6,
-    "Door timing"; door 6 rides the favourite's own note): (its said key, its note).
-    A note holds its kind and at most one fixed-list pick, never a day (FM Q1). Door
-    2: a great day yesterday, before noon, once for it. Doors 4, 5, 12: a repeated
-    pick, in the day's window, at most once a week and only with a pick made since
-    it was last said (so a habit long over isn't said week after week)."""
+    """The memory door due on this look (plan section 6, "Door timing"; door 6 rides
+    the favourite's own note): (its said key, its note). In the order 2, 3, 1, 10, 4,
+    5, 12 (FM s2782 Q5): the doors only one day can reach go before the ones that stay
+    true for days. A note holds its kind and at most one fixed-list pick or tag, never
+    a day (FM Q1, s2782 Q1). Door 2: a great day yesterday, before noon, once for it.
+    Door 3: a big day told of exactly a year ago; door 1: one exactly a week ago; each
+    once that day, in the day's window, and lost with no look in it. Doors 4, 5, 12: a
+    repeated pick, in the day's window, at most once a week and only with a pick made
+    since it was last said (so a habit long over isn't said week after week)."""
     said = mem.get("said") or {}
     picks = mem.get("picks") or {}
     now = date.fromisoformat(today)
@@ -1167,6 +1190,22 @@ def memory_door(
         return "door2", {"kind": "door2"}
     if not R.MEMORY_DOORS_FROM <= hour < R.MEMORY_DOORS_UNTIL:
         return None
+    if said.get("door3") != today and (now.month, now.day) != (2, 29):
+        # Exactly a year back (Feb 29 as Feb 28); of two that map to one day, the later.
+        year_ago = [
+            e
+            for e in _big_day_tags(mem, MEMORY_DOOR3_TAGS)
+            if (tag_day := date.fromisoformat(e["day"])).year == now.year - 1
+            and _month_day(tag_day) == (now.month, now.day)
+        ]
+        if year_ago:
+            last = max(year_ago, key=lambda e: e["day"])
+            return "door3", {"kind": "door3", "tag": last["tag"]}
+    week_ago = (now - timedelta(days=7)).isoformat()
+    if said.get("door1") != today:
+        for e in _big_day_tags(mem, MEMORY_DOOR1_TAGS):
+            if e["day"] == week_ago:
+                return "door1", {"kind": "door1", "tag": e["tag"]}
     for door, kind, need in MEMORY_PICK_DOORS:
         entries = sorted(picks.get(kind) or [], key=lambda e: e["day"])
         entries = entries[-MEMORY_PICKS_CAP:]
@@ -1185,6 +1224,25 @@ def memory_door(
             if n >= need:
                 return door, {"kind": door, "pick": pick}
     return None
+
+
+def memory_recap(mem: dict[str, Any], today: str) -> str | None:
+    """Door 11 (plan section 6a, FM s2782 Q6): for the 12-month friendship day, the
+    most recent big_day tag of the last 12 months among the six named ones, or None
+    (no tag, or only work_thing, something_else or a weekend's)."""
+    now = date.fromisoformat(today)
+    year_ago = date(now.year - 1, *_month_day(now)).isoformat()
+    recent = [
+        e["day"]
+        for e in _big_day_tags(mem, MEMORY_DOOR11_TAGS)
+        if year_ago < e["day"] <= today
+    ]
+    if not recent:
+        return None
+    last = max(recent)
+    return next(
+        e["tag"] for e in _big_day_tags(mem, MEMORY_DOOR11_TAGS) if e["day"] == last
+    )
 
 
 def memory_chosen(person: dict[str, Any], today: str) -> None:

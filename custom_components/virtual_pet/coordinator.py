@@ -1885,10 +1885,16 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             else:
                 note = {"kind": "pet_birthday", **born}
             celebrations.append(("pet", "birthday", today, note))
+        # Memory (plan M1b): doors only while it is on and this pet allows it. Read
+        # with .get (memory()), never person(), so nothing here re-creates a record.
+        mem = self.people.memory(user) if self.memory_allowed else None
         if friends:
-            celebrations.append(
-                ("pet", "friends", today, {"kind": "friends_for", "months": months})
-            )
+            note = {"kind": "friends_for", "months": months}
+            # Door 11 (plan M2, 6a): the 12-month day only, one fixed-list tag and
+            # nothing else; no memory mark (the bond's `noted` is the line's own).
+            if months == 12 and mem is not None and (tag := P.memory_recap(mem, today)):
+                note["tag"] = tag
+            celebrations.append(("pet", "friends", today, note))
         out += celebrations[:1]
         gen = str(state.generation)
         if gen in bond.get("photos", {}) and noted.get("photo") != gen:
@@ -1949,9 +1955,6 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             )
             if note := wellbeing.notice(seen, level, hour):
                 out.append(("person", "day", today, note))
-        # Memory (plan M1b): doors only while it is on and this pet allows it. Read
-        # with .get (memory()), never person(), so nothing here re-creates a record.
-        mem = self.people.memory(user) if self.memory_allowed else None
 
         def told(kind: str) -> bool:
             """Door 6: a favourite told on an earlier day while memory was on, and

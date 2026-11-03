@@ -637,8 +637,14 @@ again, and the settings row still works. It isn't asked while baby talk is on.
 **What the pets say from memory.** Only on your own screen, only while memory is on and
 that pet allows it, one a look and after the pet's other news: the morning after you
 told it your day was great ("yesterday was a great one! ♥"); a dream, guess or game you
-keep picking (at most once a week each, and only after a new pick); and, once, the first
-time a favourite weather or season you told it with memory on comes back. A shared
+keep picking (at most once a week each, and only after a new pick); once, the first
+time a favourite weather or season you told it with memory on comes back; and, from a
+big day's tag, a week after that day ("thinking of the show you told me about") and a
+year after it ("a year ago you told me about a show ♥", not for an exam). Each of those
+two is tied to its one day: with no look at the pet between 11:00 and 20:00 that day,
+it is skipped. On the day you have been friends for a whole year, the pet's line may
+name the most recent big day you tagged in that year ("a whole year! you told me about
+a show"). They say "you told me", never that the day happened, and never count. A shared
 screen never gets these: they come with the pet's private news, which the card asks
 for only on a screen that isn't shared. That is the card's own check, since the server
 can't see the shared-screen switch. "great" is kept only while memory is on (and never
