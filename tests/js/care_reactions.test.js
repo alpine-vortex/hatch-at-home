@@ -1421,3 +1421,27 @@ test("audit N2, N7, N9: _forget clears the drape, a lights scene drops .resting,
   f.self._drapeHide(f.s);
   assert.deepStrictEqual([f.s.drapeAnim, f.s.drape.hidden, f.s.drapeFrame, plain(f.s.drapeTimers)], [false, true, 0, []]);
 });
+
+test("audit N3: _animate restarts the blanket with the pet (not the lie squash); startle, jig, droop, sulk share the drape's rules", () => {
+  const ops = [];
+  const ctx = { WeakMap, Map, setTimeout: () => 1, clearTimeout() {} };
+  vm.runInNewContext(`${konst("ANIMATE_TIMERS")}\nthis.api = {${method("_animate")}};`, ctx);
+  const el = (name) => ({ get offsetWidth() { ops.push(`${name}:reflow`); return 0; }, hidden: false, classList: { add: (c) => ops.push(`${name}+${c}`), remove: (c) => ops.push(`${name}-${c}`) } });
+  const pet = el("pet");
+  const drape = el("drape");
+  ctx.api._animate({ pet, drape }, pet, "perk", 320);
+  assert.deepStrictEqual(ops, ["pet-perk", "drape-perk", "pet:reflow", "pet+perk", "drape+perk"], "removed from both, one reflow, added to both");
+  ops.length = 0;
+  ctx.api._animate({ pet, drape }, pet, "lie", 300);
+  assert.deepStrictEqual(ops, ["pet-lie", "pet:reflow", "pet+lie"], "the squash is the pet's alone");
+  ops.length = 0;
+  ctx.api._animate({ pet, drape: Object.assign(el("drape"), { hidden: true }) }, pet, "perk", 320);
+  assert.ok(!ops.some((o) => o.startsWith("drape")), "a hidden blanket is left alone");
+  ops.length = 0;
+  ctx.api._animate({ pet, drape }, el("prop"), "perk", 320);
+  assert.ok(!ops.some((o) => o.startsWith("drape")), "only the pet's own element");
+  for (const c of ["startle", "jig", "droop", "sulk"]) {
+    assert.match(src, new RegExp(`\\.pet\\.${c}, \\.drape\\.${c} \\{`), c);
+  }
+  assert.match(src, /\.pet\.droop, \.drape\.droop \{ transform: translateY\(4px\)/, "reduced motion holds the sag on both");
+});

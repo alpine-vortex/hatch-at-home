@@ -6,7 +6,7 @@ const STYLE = `
     outline-offset: 2px; box-shadow: 0 0 0 6px #1d2a22; }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
-    .pet.droop { transform: translateY(4px) rotate(-4deg) scaleY(.94); transform-origin: 50% 100%; }
+    .pet.droop, .drape.droop { transform: translateY(4px) rotate(-4deg) scaleY(.94); transform-origin: 50% 100%; }
   }
   ha-card { overflow: hidden; border-radius: var(--ha-card-border-radius, 24px);
     background: var(--hp-backdrop, #2f4a3a); transition: background .5s; }
@@ -629,9 +629,9 @@ const STYLE = `
   .screen.show-status .basket, .screen.show-status .reveal { display: none !important; }
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
-  .pet.sulk { animation: shake .35s 2; }
+  .pet.sulk, .drape.sulk { animation: shake .35s 2; } /* a sleeping pet's blanket moves with it (_drapeMirror) */
   /* Feeling poorly (2b): sags and settles back, once. Reduced motion holds the sag. */
-  .pet.droop { animation: droop 2.8s ease-in-out 1; transform-origin: 50% 100%; }
+  .pet.droop, .drape.droop { animation: droop 2.8s ease-in-out 1; transform-origin: 50% 100%; }
   @keyframes droop { 0%, 100% { transform: none; }
     35%, 70% { transform: translateY(4px) rotate(-4deg) scaleY(.94); } }
   .pet.born { animation: pop .45s ease-out; }
@@ -640,8 +640,8 @@ const STYLE = `
   .screen .burst.big { top: 38%; width: 96px; height: 96px; margin-left: -48px; z-index: 2; }
   /* Stand-ins for house poses that are only drawn for the child. */
   .pet.dance { animation: hop .45s ease-in-out infinite; }
-  .pet.jig { animation: hop .45s ease-in-out 4; } /* a house moment's dance (H8): bounded, unlike .dance */
-  .pet.startle { animation: perk .3s ease-out 2; } /* a house moment's startle (H8): a quick double jolt */
+  .pet.jig, .drape.jig { animation: hop .45s ease-in-out 4; } /* a house moment's dance (H8): bounded, unlike .dance */
+  .pet.startle, .drape.startle { animation: perk .3s ease-out 2; } /* a house moment's startle (H8): a quick double jolt */
   .pet.shiver { animation: shake .25s linear infinite; }
   /* The fan: wind lines cross the scene and the pet leans into them. */
   .breeze { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 1; }
