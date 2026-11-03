@@ -838,6 +838,43 @@ const STYLE = `
     top: round(down, 50% - var(--px) * 2.5, var(--px)); width: calc(var(--px) * 5); height: calc(var(--px) * 5); }
   .device:has(.screen.dim) .hw.light { --art: var(--hw-light-off); }
   @supports not (width: round(1px, 1px)) { .hw { display: none !important; } } /* placed on the grid with round() */
+  /* The inner glass (device-alive 3B, plan 6.6): a layer in the screen, over the scene and under
+     everything that is read or pressed. It sits after .glow in the DOM and has no z-index of its own
+     above 0, so the bubble, the pat box, the basket, the game, the status sheet and the boot screen
+     (later in the DOM, or z-index 1+) are all over it; it is deaf to the pointer. Drawn only where
+     round() is known (every .hw is) and only with "screen effects here" on. dir-wet is the rain
+     ambience (still); dir-drop / dir-clear are the onset, dir-echo its shorter form. */
+  @supports (width: round(1px, 1px)) {
+    .hw.glass { display: none; inset: 0; z-index: 0; background: none; -webkit-mask: none; mask: none;
+      --b: var(--px, 2px); }
+    ha-card.lcd-on .hw.glass { display: block; }
+    .screen.show-status .hw.glass { display: none; }
+    .hw.glass::before, .hw.glass::after { content: ""; position: absolute; pointer-events: none; }
+    .hw.glass::before { inset: 0; opacity: 0; transition: opacity .8s ease-out; }
+    .hw.glass.dir-wet::before, .hw.glass.dir-clear::before {
+      background:
+        radial-gradient(circle at 14% 22%, rgba(236,246,255,.85) 0 calc(var(--b) * 1.5), transparent calc(var(--b) * 1.5 + 1px)),
+        radial-gradient(circle at 37% 11%, rgba(236,246,255,.8) 0 var(--b), transparent calc(var(--b) + 1px)),
+        radial-gradient(circle at 81% 19%, rgba(236,246,255,.85) 0 calc(var(--b) * 1.5), transparent calc(var(--b) * 1.5 + 1px)),
+        radial-gradient(circle at 63% 47%, rgba(236,246,255,.8) 0 var(--b), transparent calc(var(--b) + 1px)),
+        radial-gradient(circle at 8% 63%, rgba(236,246,255,.8) 0 var(--b), transparent calc(var(--b) + 1px)),
+        radial-gradient(circle at 90% 71%, rgba(236,246,255,.85) 0 calc(var(--b) * 1.5), transparent calc(var(--b) * 1.5 + 1px)),
+        radial-gradient(circle at 44% 86%, rgba(236,246,255,.8) 0 var(--b), transparent calc(var(--b) + 1px)),
+        linear-gradient(112deg, rgba(214,232,255,.2), rgba(214,232,255,0) 42%, rgba(214,232,255,.12)); }
+    .hw.glass.dir-wet::before { opacity: .8; }
+    /* The onset: a drop runs down the glass in steps (a pixel toy), or the sheen dries off. */
+    .hw.glass.dir-drop::after { left: 63%; top: -8%; width: calc(var(--b) * 3); height: calc(var(--b) * 7);
+      border-radius: 40% 40% 50% 50%; background: linear-gradient(180deg, rgba(240,248,255,0), rgba(240,248,255,.95) 45%, rgba(200,224,255,.85));
+      animation: dir-run 1.8s steps(18) both; }
+    .hw.glass.dir-clear::before { animation: dir-dry 1.2s ease-in both; }
+    .hw.glass.dir-echo.dir-drop::after { animation-duration: .9s; }
+    .hw.glass.dir-echo.dir-clear::before { animation-duration: .6s; }
+    @keyframes dir-run { 0% { top: -8%; opacity: 0; } 10%, 80% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+    @keyframes dir-dry { from { opacity: .8; } to { opacity: 0; } }
+    /* Reduced motion: the still sheen only; the onset is a move, so there is none (the card never starts
+       one, and the global rule above also stops the animation). */
+    @media (prefers-reduced-motion: reduce) { .hw.glass.dir-drop::after, .hw.glass.dir-clear::before { display: none; } }
+  }
   .compact .egg .hw.light { display: none; } /* no margin left beside a narrow egg's screen */
   /* Clear: the board behind the screen, seen through the plastic round the bezel,
      and a glare on the plastic. */

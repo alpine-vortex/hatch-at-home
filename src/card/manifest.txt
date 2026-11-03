@@ -2,6 +2,7 @@ prefs.js
 world.js
 hop-engine.js
 interaction-director.js
+device-fx.js
 lines.js
 lines-fresh.js
 ui-copy.js

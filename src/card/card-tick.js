@@ -2,6 +2,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
   _tick() {
     if (!this._slides || !this._visible || document.hidden) return;
     this._ticks = (this._ticks || 0) + 1;
+    this._director?.tick(); // expires a glass effect past its time (a missed animationend)
     // A screen left on overnight (a wall tablet never hides): a new day is a new look.
     const day = new Date().toDateString();
     if (this._lookDay !== day) {

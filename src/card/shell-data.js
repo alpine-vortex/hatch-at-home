@@ -284,13 +284,20 @@ const gamesPlayed = (games) => Object.values(games || {}).reduce((n, c) => n + (
 // reading arrives the device clock is used as it is.
 const SKEW_CAP_MS = 24 * 3600 * 1000; // a reading further off than this is not believed
 let serverOffset = 0; // server time minus device time, ms
+let serverClockSeen = false; // one reading accepted (device-alive 3B, M5: serverNow has no "unknown" state)
 function noteServerTime(iso) {
   const at = new Date(iso).getTime();
   if (!Number.isFinite(at)) return;
   const offset = at - Date.now();
-  if (Math.abs(offset) <= SKEW_CAP_MS) serverOffset = offset;
+  if (Math.abs(offset) <= SKEW_CAP_MS) {
+    serverOffset = offset;
+    serverClockSeen = true;
+  }
 }
 const serverNow = () => Date.now() + serverOffset;
+// True after one accepted reading. Until then serverNow() is the device clock as it is, which is
+// not good enough to say a house event is recent: the device-alive director takes it as `trusted`.
+const serverClockKnown = () => serverClockSeen;
 const SERVER_CLOCK_EVERY_MS = 3600000; // one reading an hour, per connection
 const SERVER_CLOCK = new WeakMap(); // connection -> { at: last reading (device ms), busy }
 

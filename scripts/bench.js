@@ -116,6 +116,31 @@ const PRESETS = {
         }
       }
     }
+    // Device-alive slice 3B: rain on the inner glass. Rest (the wet sheen), the onset mid-run, the
+    // echo, the last bead clearing, and the protected states: a dialogue open, the status sheet, the
+    // game picker (the glass is under all three), reduced motion (a still sheen, and an onset that
+    // never starts), the switch off (nothing), a dry house and a house that does not say (nothing).
+    // `at` is ms into the animation; the shot is the screen, whole, so the layering shows.
+    const rain = (name, label, extra) => {
+      for (const width of [420, 300]) {
+        out.push({ name: `alive/rain-${width}-${name}`, group: `alive-rain-${width}`, label, world: "woodland", width,
+          clip: "screen", ...extra });
+      }
+    };
+    rain("dry", "dry (current false)", { deviceFx: { rain: false } });
+    rain("unknown", "no device_fx (nothing to paint)", {});
+    rain("rest", "rain, the wet sheen", { deviceFx: { rain: true } });
+    rain("onset", "rain onset, 600 ms in", { deviceFx: { rain: true, onset: "start", at: 600 } });
+    rain("onset-late", "rain onset, 1300 ms in", { deviceFx: { rain: true, onset: "start", at: 1300 } });
+    rain("echo", "rain echo (first view 20 s on), 300 ms in", { deviceFx: { rain: true, echo: "start", at: 300 } });
+    rain("clear", "rain stopped, the sheen drying, 500 ms in", { deviceFx: { rain: false, onset: "end", at: 500 } });
+    rain("dialogue", "rain with a line open", { deviceFx: { rain: true, onset: "start", at: 600 }, say: "oh! it's raining ~" });
+    rain("status", "rain, the status sheet open", { deviceFx: { rain: true }, view: "status" });
+    rain("games", "rain, the game picker open", { deviceFx: { rain: true }, view: "games" });
+    rain("night", "rain at night", { deviceFx: { rain: true }, scene: "night" });
+    rain("lit", "rain, the backlight on", { deviceFx: { rain: true }, scene: "night", classes: ["lit"] });
+    rain("reduce", "rain, reduced motion (still sheen; no onset)", { deviceFx: { rain: true, onset: "start", at: 600 }, motion: "reduce" });
+    rain("off", "rain, screen effects off (nothing)", { deviceFx: { rain: true, onset: "start", at: 600 }, lcd: "off" });
     return out;
   },
   // The card around the toy: status screen, game picker, a speech bubble.
@@ -1225,7 +1250,7 @@ async function runShots(browser, base, shots, outDir, workers) {
           }, shot.lines);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(n));
         }
-        if (shot.costume || shot.gift || shot.look || shot.care || shot.lightsAlign || shot.view === "board" || shot.view === "games") {
+        if (shot.costume || shot.deviceFx || shot.gift || shot.look || shot.care || shot.lightsAlign || shot.view === "board" || shot.view === "games") {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
         }

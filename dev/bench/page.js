@@ -221,6 +221,32 @@
     }
   }
 
+  // `deviceFx`: see the call in mount. Everything goes through the card's methods (_dirSync, _channel,
+  // _dirView), the clock is read (noteServerTime) as a snapshot's `now` would.
+  function deviceFxShot(card, s, shot) {
+    const fx = shot.deviceFx;
+    noteServerTime(new Date(shot.time).toISOString());
+    const entry = (kind, agoMs, n) => ({ id: `bench-${n}`, kind: kind === "start" ? "rain_started" : "rain_stopped", scope: "house",
+      occurred_at: new Date(Date.parse(shot.time) - agoMs).toISOString(), expires_at: new Date(Date.parse(shot.time) - agoMs + 90000).toISOString() });
+    s.subscribed = true;
+    s.house = { ...(s.house || {}) };
+    if (fx.rain !== undefined) s.house.device_fx = { version: 1, current: { rain: fx.rain } };
+    card._dirSync(s);
+    if (fx.echo) {
+      s.dirViewed = false;
+      s.dirRecent = [entry(fx.echo, 20000, 1)];
+      card._dirView(s);
+    } else {
+      s.dirViewed = true;
+      if (fx.onset) card._channel(s, { fx: entry(fx.onset, 0, 2) });
+    }
+    for (const a of s.glass.getAnimations({ subtree: true })) {
+      if (typeof CSSTransition !== "undefined" && a instanceof CSSTransition) a.finish();
+      else { a.pause(); a.currentTime = fx.at ?? 600; }
+    }
+    window.bench.info = { glass: s.glass.className, effect: s.dirEffect || 0, canRender: card._director.inspect(s)?.tracks || null };
+  }
+
   // `look`: a look played over time by the card's own tick (the driver moves the pinned
   // clock and calls bench.step): {at: seconds in, resumed: a tab back after 3 h hidden
   // (fresh-moment 1), seenAgo: hours since this device last looked (the away note)}.
@@ -857,6 +883,12 @@
     // A seasonal costume put on through the card's own _costume: {season, art, frame}.
     // The seat it used is kept in bench.info (bench.js writes it beside the shot).
     window.bench.info = null;
+    // `deviceFx` (device-alive 3B): the rain on the glass, through the card's own adapter and channel.
+    // {rain: bool, onset: "start"|"end", echo: "start"|"end", at: ms}. `rain` is the house's
+    // device_fx.current (missing: none); `onset` a live {"fx"} entry with the slide already viewed;
+    // `echo` a ring entry from 20 s before, played at the slide's first view. `at` pauses the
+    // glass's animation that many ms in (default 600), so a frame is the same every run.
+    if (shot.deviceFx) deviceFxShot(card, cur, shot);
     if (shot.costume) await dress(card, cur, shot.costume);
     if (["status", "settings", "picker"].includes(shot.view)) root.querySelector(".statusbtn").click();
     if (shot.view === "settings" || shot.view === "picker") root.querySelector(".gear").click();

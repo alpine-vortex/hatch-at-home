@@ -112,8 +112,10 @@ class HatchPetCardBase extends HTMLElement {
     if (document.hidden) {
       (this._slides || []).forEach((x) => this._stopTyping(x));
       this._hiddenAt ??= Date.now();
+      this._dirPause();
       return;
     }
+    this._dirView(this._slides?.[this._index]); // back in view: the ambience, and a first view's echo
     // Back after a long while (owner Q1): a new look, as a fresh page would have, a gift
     // waiting too (fresh-moment 1). The look waits for fresh states (RESUME_HOLD_MS at
     // most): a phone back from sleep holds yesterday's, and a set hass with the same
@@ -172,6 +174,7 @@ class HatchPetCardBase extends HTMLElement {
     this._resize?.disconnect();
     this._io?.disconnect();
     document.removeEventListener("visibilitychange", this._onHidden);
+    this._director?.reset();
     window.removeEventListener(SHARED_EVENT, this._onSharedEvent);
     window.removeEventListener("storage", this._onSharedStorage);
     window.removeEventListener(MONO_EVENT, this._onMono);
@@ -315,17 +318,22 @@ class HatchPetCardBase extends HTMLElement {
       }
       if (s.house?.media?.at) s.mediaSeen.add(s.house.media.at);
       this._powerNews(s);
+      // Device-alive: the ambient state first, then the ring for the first view (3B, M6/M7).
+      this._dirSync(s);
+      if (!s.dirViewed) s.dirRecent = Array.isArray(msg.device_fx_recent) ? msg.device_fx_recent : null;
       s.subscribed = true;
       s.subscribeFailed = false;
       s.retries = 0;
       clearTimeout(s.waitTimer);
       s.waitTimer = null;
+      this._dirView(s); // the first snapshot of a slide on show is its first view
     } else {
       if ("mine" in msg) s.mine = shared ? null : msg.mine || null;
       if ("house" in msg) {
         s.house = msg.house || null;
         this._powerNews(s);
         this._basketSync(s); // a basket emptied on another screen just goes, no line
+        this._dirSync(s); // the glass follows the house's device_fx.current
       }
       const m = msg.moment;
       if (m?.type) {
@@ -341,6 +349,9 @@ class HatchPetCardBase extends HTMLElement {
           this._channelMoment(s, m);
         }
       }
+      // A house onset ({"fx": entry}, after the house part of the same push): a pulse on the glass
+      // and nothing else, so before the early return and the redraw below (6.3).
+      if (msg.fx && typeof msg.fx === "object") this._dirLive(s, msg.fx);
       if (!("mine" in msg) && !("house" in msg)) return; // a moment draws nothing
     }
     // The viewer's own baby talk, kept for the next page load (by whose it is).

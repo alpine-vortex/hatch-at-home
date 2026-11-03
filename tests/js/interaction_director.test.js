@@ -135,13 +135,8 @@ test("every BUSY_OWNERS field is assigned somewhere in src/card (a rename leaves
     .filter((f) => f.endsWith(".js") && f !== "interaction-director.js")
     .map((f) => fs.readFileSync(path.join(dir, f), "utf8"))
     .join("\n");
-  // statusOpen has no setter until slice 3's adapter (_toggleStatus); the table test sets it by hand.
-  const NO_SETTER_YET = new Set(["statusOpen"]);
+  // statusOpen is set by slice 3B's adapter in _toggleStatus (card-layout.js).
   for (const f of busyFields) {
-    if (NO_SETTER_YET.has(f)) {
-      assert.ok(!new RegExp(`\\.${f}\\s*=[^=]`).test(all), `${f} has a setter now: drop it from NO_SETTER_YET`);
-      continue;
-    }
     assert.ok(new RegExp(`\\.${f}\\s*=[^=]`).test(all), `no src/card part assigns .${f}`);
   }
 });
