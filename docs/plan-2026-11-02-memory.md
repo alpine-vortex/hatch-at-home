@@ -28,7 +28,7 @@ Q1 is now decided).
 blockers, seven should-fixes, four nits, in the numbering "(M2 B1)", "(M2 S3)", "(M2 N12)"
 and so on, problems 1-15) and the first mate's eight answers on it (section 1, "on the M2
 review"). Each problem was checked against the code at `9f4c8125` first; section 2b is the
-table. **After the first mate approves the draft copy table (section 6a), M2 is ready to
+table. **The first mate approved the copy table (section 6a) on 2026-11-03, so M2 is ready to
 build.** M2 now has a copy table written by the plan's author; the M2 ship worker writes no
 copy.
 
@@ -618,11 +618,11 @@ skip, since the `visit` service cannot see `shared` (R3).
 | 5 | **Your habit:** the last 5 guesses all the same way | "you always say sun! my sunny friend" | M1b |
 | 6 | **Since you told me:** the first time a favourite **weather or season** comes back after it was told (**one-shot per favourite**, FM Q-B). **Not** part of M0-b's rotation: its own short list, replacing that day's plain line | "it's snowing! you told me snow's the best" | M1b |
 | 12 | **The game you picked:** 3 of the last 5 game picks the same. **No "lapsed" clause** (FM Q-B): no "played" signal exists | "your dig again? i'm ready" | M1b |
-| 1 | **Week-later echo:** exactly 7 days after a tagged `big_day`'s own day, once; the six named tags and `exam` (section 4 table). The line does not say the day happened ("you told me", FM s2782 Q4) | "thinking of that show you told me of" | M2 |
-| 3 | **Anniversary:** exactly a year after a tagged `big_day` (not `exam`, FM s2782 Q4/Q8). "you told me", not "you went" | "a year ago you told me of a trip ♥" | M2 (dormant until a year passes) |
+| 1 | **Week-later echo:** exactly 7 days after a tagged `big_day`'s own day, once; the six named tags and `exam` (section 4 table). The line does not say the day happened ("you told me", FM s2782 Q4) | "thinking of the show you told me about" | M2 |
+| 3 | **Anniversary:** exactly a year after a tagged `big_day` (not `exam`, FM s2782 Q4/Q8). "you told me", not "you went" | "a year ago you told me about a trip ♥" | M2 (dormant until a year passes) |
 | 9 | *(Dropped, FM Q4, 2026-11-02: not built. The number stays unused so the other doors keep theirs.)* | | |
 | 10 | **Weekday pattern:** the same tag on the same weekday 3 times | "maybe a match tomorrow! go you ♥" | **M2, its own last commit** |
-| 11 | **Friendship-year recap** on the 12-month friendship day only, by extending the `friends_for` note (FM s2782 Q6); **no numbers and no count words** (section 4 forbids counts shown as a score, and the sticker rule says the same) | "a whole year! you told me of a show" | M2 |
+| 11 | **Friendship-year recap** on the 12-month friendship day only, by extending the `friends_for` note (FM s2782 Q6); **no numbers and no count words** (section 4 forbids counts shown as a score, and the sticker rule says the same) | "a whole year! you told me about a show" | M2 |
 | 7 | **"Things you told me" page** | see section 9 | M3a |
 | 8 | **Stickers** | see section 9 | M3b |
 
@@ -763,8 +763,7 @@ month**; the card already says "we've been friends for a whole year!!" at 12 mon
   server) it says the existing line. An **old cached card** ignores the field and says the
   existing line: no harm.
 
-**The draft copy table.** DRAFT; written by the plan's author, **not yet approved**. The
-first mate approves it before M2 starts; **the M2 ship worker writes no copy** and copies
+**The copy table.** APPROVED by the first mate 2026-11-03 ("told me of" changed to "told me about", every line still at most 40 characters); written by the plan's author. **The M2 ship worker writes no copy** and copies
 this table as approved (or as the first mate edits it). Two tables go in the fresh block
 of `src/card/lines-fresh.js` and in `COPY_TABLES` (`scripts/copy-scan.js`):
 `MEMORY_TAG_CHIPS` (`asks: ["q"]`) and `MEMORY_TAG_DOORS` (no fill). Doors 1, 3, 10 and
@@ -784,29 +783,29 @@ of `src/card/lines-fresh.js` and in `COPY_TABLES` (`scripts/copy-scan.js`):
 | `.labels.work_thing` | work thing | 10 |
 | `.labels.something_else` | something else | 14 |
 | `.none` (the "no tag" chip; the default) | no tag | 6 |
-| `MEMORY_TAG_DOORS.door1.exam` | thinking of that exam you told me of | 36 |
-| `.door1.match` | thinking of that match you told me of | 37 |
-| `.door1.show` | thinking of that show you told me of | 36 |
-| `.door1.trip` | thinking of that trip you told me of | 36 |
-| `.door1.party` | thinking of that party you told me of | 37 |
-| `.door1.lesson` | thinking of that lesson you told me of | 38 |
-| `.door3.match` | a year ago you told me of a match ♥ | 35 |
-| `.door3.show` | a year ago you told me of a show ♥ | 34 |
-| `.door3.trip` | a year ago you told me of a trip ♥ | 34 |
-| `.door3.party` | a year ago you told me of a party ♥ | 35 |
-| `.door3.lesson` | a year ago you told me of a lesson ♥ | 36 |
+| `MEMORY_TAG_DOORS.door1.exam` | thinking of the exam you told me about | 38 |
+| `.door1.match` | thinking of the match you told me about | 39 |
+| `.door1.show` | thinking of the show you told me about | 38 |
+| `.door1.trip` | thinking of the trip you told me about | 38 |
+| `.door1.party` | thinking of the party you told me about | 39 |
+| `.door1.lesson` | thinking of the lesson you told me about | 40 |
+| `.door3.match` | a year ago you told me about a match ♥ | 38 |
+| `.door3.show` | a year ago you told me about a show ♥ | 37 |
+| `.door3.trip` | a year ago you told me about a trip ♥ | 37 |
+| `.door3.party` | a year ago you told me about a party ♥ | 38 |
+| `.door3.lesson` | a year ago you told me about a lesson ♥ | 39 |
 | `.door10.match` | maybe a match tomorrow! go you ♥ | 32 |
 | `.door10.show` | maybe a show tomorrow! break a leg ♥ | 36 |
 | `.door10.lesson` | maybe a lesson tomorrow! have fun ♥ | 35 |
-| `.door11.exam` | a whole year! you told me of an exam | 36 |
-| `.door11.match` | a whole year! you told me of a match | 36 |
-| `.door11.show` | a whole year! you told me of a show | 35 |
-| `.door11.trip` | a whole year! you told me of a trip | 35 |
-| `.door11.party` | a whole year! you told me of a party | 36 |
-| `.door11.lesson` | a whole year! you told me of a lesson | 37 |
+| `.door11.exam` | a whole year! you told me about an exam | 39 |
+| `.door11.match` | a whole year! you told me about a match | 39 |
+| `.door11.show` | a whole year! you told me about a show | 38 |
+| `.door11.trip` | a whole year! you told me about a trip | 38 |
+| `.door11.party` | a whole year! you told me about a party | 39 |
+| `.door11.lesson` | a whole year! you told me about a lesson | 40 |
 
 Notes on the wording, for the first mate:
-- **Doors 1, 3 and 11 never say the day happened** ("you told me of", FM s2782 Q4): a big
+- **Doors 1, 3 and 11 never say the day happened** ("you told me about", FM s2782 Q4): a big
   day picked ahead may not have taken place. Door 1 does not say "a week", since the line
   is said exactly 7 days after the tag's day and the person knows that. Door 3 has no
   `exam` line (it is not read by door 3) and none for `work thing` or `something else`;
