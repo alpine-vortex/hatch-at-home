@@ -502,6 +502,39 @@ still carries every key's truth, so the ambience is right and the echo shows one
   fresh ring entries, and they are sent at the end of `_push_watchers`, **after** the house
   diff, in one flush that both callers share. Test: the house `current` goes out first,
   the `fx` message second.
+- **As built in 4A (what 4B reads).** The wire shape of 3A, with more keys; nothing else moved.
+  1. `house.device_fx = {"version": 1, "current": {...}}` (still `version` 1: a key is
+     additive). `current` holds any of `rain`, `snow`, `fog`, `storm`, `wind`, each a bool,
+     **in that order** and each **missing (not `false`) until the server has known it once**.
+     A weather entity that is mapped and reads normally gives all five at once; a house
+     with only a rain gauge gives `rain` and never the others (a gauge says nothing of
+     snow); `device_fx` is missing from a house with neither. A card reads a missing key as
+     "nothing to paint" for that key.
+  2. Ring entries and the live `{"fx": entry}` are the 3A shape, unchanged (`id`, `kind`,
+     `occurred_at`, `expires_at`, `scope`; no `key` field and no `version`). `kind` is
+     `<key>_started` or `<key>_stopped` for the five keys: **the key is the kind with its
+     suffix removed**. `snapshot.device_fx_recent` is the same list, oldest first.
+  3. `tests/js/device_signal_map.json` is the map's export: `{"version", "scope", "keys":
+     {key: {type, kinds, block_s, echo, echo_ttl_s, echo_rank}}}`, in map order (rain,
+     snow, fog, storm, wind). Every row is `bool`, `block_s` 45, `echo` true, `echo_ttl_s`
+     90, `echo_rank` 2. `tests/test_device_fx.py::test_the_map_is_exported_to_the_json_the_card_tests_read`
+     fails on a diff and says how to update it (`UPDATE_DEVICE_SIGNAL_MAP=1 pytest ...`).
+  4. **One onset per pass, so a kind can be missing even though `current` changed.** Two
+     keys that change in one pass send one entry: the same direction goes to the storm
+     over the rain, otherwise a start beats a stop (`rainy` to `snowy` sends only
+     `snow_started`; `rain` has gone false in `current` with no `rain_stopped`), then the
+     lower `echo_rank`, then the map's order. 4B must take `current` as the truth and an
+     entry as at most one cue; an echo for `rain` can be dropped by its own `stillTrue`
+     (current disagrees) as usual. (The start-over-stop tie-break is 4A's; the plan text
+     gave only "storm over rain, otherwise the higher rank".)
+  5. A condition can be several keys at once: `lightning-rainy` is `rain` **and** `storm`
+     (both true in `current`, one `storm_started` entry); `snowy-rainy` is `snow` only
+     (it is not in `RAINY`); `wind` is also true from the weather entity's wind or gust
+     speed alone (30 and 50 km/h), with any condition.
+  6. Timing is as for rain, per key: leading edge 0-10 s after the sensor, a reverse held
+     45 s (`block_s`) and then 0-10 s for the pass its own timer asks for (45-55 s), one
+     timer per key. Unknown (no weather reading after the 10 min hold) holds every key's
+     last value, sends nothing, and the first known reading after it is silent.
 
 ### 6.4 Time (F7, B1, B2)
 

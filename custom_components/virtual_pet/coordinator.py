@@ -95,7 +95,7 @@ from .const import (
     STORE_MINOR_VERSION,
     STORE_VERSION,
 )
-from .device_fx import DeviceFx, rain_reading
+from .device_fx import DeviceFx, mapped_keys
 from .home import (
     FOGGY,
     RAINY,
@@ -748,7 +748,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             async_track_state_change_event(self.hass, ids, changed)
         )
         self.config_entry.async_on_unload(self._home_debouncer.async_shutdown)
-        self.config_entry.async_on_unload(self.device_fx.cancel)  # the rain block
+        self.config_entry.async_on_unload(self.device_fx.cancel)  # every key's block
 
         @callback
         def person_moved(event: Event[EventStateChangedData]) -> None:
@@ -919,8 +919,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         )
         readings = self.watcher.read(now, night, late)
         options = self.config_entry.options
-        if self._fx_mapped():  # only collected here: _push_watchers sends it
-            self.device_fx.observe_rain(rain_reading(readings), now)
+        if keys := self._fx_keys():  # only collected here: _push_watchers sends it
+            self.device_fx.observe(readings, now, keys)
         local = dt_util.as_local(dt_util.utc_from_timestamp(now))
         self._find_flags = find_flags(
             readings,
@@ -2887,11 +2887,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         only shared screens get it."""
         return {**house, "house_open_on": self.people.house_open_on() == self.pet_id}
 
+    def _fx_keys(self) -> tuple[str, ...]:
+        """The device_fx keys this house can tell: those whose source is mapped
+        (rain: a weather entity or a rain sensor; the rest: the weather entity)."""
+        return mapped_keys(self.config_entry.options)
+
     def _fx_mapped(self) -> bool:
-        """The house can tell rain (a weather entity or a rain sensor is mapped);
-        with neither, there is no device_fx at all."""
-        options = self.config_entry.options
-        return bool(options.get(CONF_WEATHER) or options.get(CONF_RAIN))
+        """Some key could be present; with none, there is no device_fx at all."""
+        return bool(self._fx_keys())
 
     def _house_view(self) -> dict[str, Any]:
         """What every screen sees, shared ones too: the latest show or song,

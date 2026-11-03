@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "scope": "house",
+  "keys": {
+    "rain": {
+      "type": "bool",
+      "kinds": [
+        "rain_started",
+        "rain_stopped"
+      ],
+      "block_s": 45.0,
+      "echo": true,
+      "echo_ttl_s": 90.0,
+      "echo_rank": 2
+    },
+    "snow": {
+      "type": "bool",
+      "kinds": [
+        "snow_started",
+        "snow_stopped"
+      ],
+      "block_s": 45.0,
+      "echo": true,
+      "echo_ttl_s": 90.0,
+      "echo_rank": 2
+    },
+    "fog": {
+      "type": "bool",
+      "kinds": [
+        "fog_started",
+        "fog_stopped"
+      ],
+      "block_s": 45.0,
+      "echo": true,
+      "echo_ttl_s": 90.0,
+      "echo_rank": 2
+    },
+    "storm": {
+      "type": "bool",
+      "kinds": [
+        "storm_started",
+        "storm_stopped"
+      ],
+      "block_s": 45.0,
+      "echo": true,
+      "echo_ttl_s": 90.0,
+      "echo_rank": 2
+    },
+    "wind": {
+      "type": "bool",
+      "kinds": [
+        "wind_started",
+        "wind_stopped"
+      ],
+      "block_s": 45.0,
+      "echo": true,
+      "echo_ttl_s": 90.0,
+      "echo_rank": 2
+    }
+  }
+}

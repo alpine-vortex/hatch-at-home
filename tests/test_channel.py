@@ -19,6 +19,7 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.virtual_pet import model
 from custom_components.virtual_pet.const import DOMAIN
+from custom_components.virtual_pet.device_fx import DEVICE_SIGNAL_MAP
 
 from .test_forget import a_user
 from .test_init import STORE_KEY, hatched_pet, settle, setup, setup_with_house
@@ -485,6 +486,18 @@ async def test_the_evening_reaches_an_open_card_with_nothing_else_changing(
     assert heard == [True]  # once, when the hour came
 
 
+# A weather condition that turns each key of DEVICE_SIGNAL_MAP on (and nothing
+# else). A key cannot join the map without a row here (test_device_fx checks).
+FX_ON = {
+    "rain": "rainy",
+    "snow": "snowy",
+    "fog": "fog",
+    "storm": "lightning",
+    "wind": "windy",
+}
+fx_key = pytest.mark.parametrize("key", list(DEVICE_SIGNAL_MAP))
+
+
 async def rainy_house(
     hass: HomeAssistant, hass_storage: dict[str, Any], now: float, state: str = "sunny"
 ) -> Any:
@@ -495,6 +508,7 @@ async def rainy_house(
     return hass.config_entries.async_entries(DOMAIN)[0].runtime_data
 
 
+@fx_key
 async def test_the_house_goes_out_before_the_device_onset_that_belongs_to_it(
     hass: HomeAssistant,
     now: float,
@@ -502,6 +516,7 @@ async def test_the_house_goes_out_before_the_device_onset_that_belongs_to_it(
     hass_ws_client: Any,
     hass_admin_user: Any,
     freezer: FrozenDateTimeFactory,
+    key: str,
 ) -> None:
     """Plan 6.3 (M1): _sense_home only collects; the new `current` reaches the
     card first and the `fx` message second, one per transition, top level (never
@@ -509,16 +524,19 @@ async def test_the_house_goes_out_before_the_device_onset_that_belongs_to_it(
     await rainy_house(hass, hass_storage, now)
     client = await hass_ws_client(hass)
     snapshot = await subscribe(client)
-    assert snapshot["house"]["device_fx"]["current"] == {"rain": False}
-    hass.states.async_set("weather.private_name", "rainy")
+    assert snapshot["house"]["device_fx"]["current"] == {
+        k: False for k in DEVICE_SIGNAL_MAP
+    }
+    hass.states.async_set("weather.private_name", FX_ON[key])
     await settle(hass, freezer)
     got = await pushed(client)
     assert [next(iter(e)) for e in got] == ["house", "fx"]
-    assert got[0]["house"]["device_fx"]["current"] == {"rain": True}
-    assert set(got[1]) == {"fx"} and got[1]["fx"]["kind"] == "rain_started"
+    assert got[0]["house"]["device_fx"]["current"][key] is True
+    assert set(got[1]) == {"fx"} and got[1]["fx"]["kind"] == f"{key}_started"
     assert not [e for e in got if "moment" in e and "fx" in json.dumps(e["moment"])]
 
 
+@fx_key
 async def test_a_push_with_nothing_new_sends_nothing_with_the_bridge_on(
     hass: HomeAssistant,
     now: float,
@@ -526,12 +544,13 @@ async def test_a_push_with_nothing_new_sends_nothing_with_the_bridge_on(
     hass_ws_client: Any,
     hass_admin_user: Any,
     freezer: FrozenDateTimeFactory,
+    key: str,
 ) -> None:
     """B4: `recent` is never in the diffed house, so it expiring is no change."""
     coordinator = await rainy_house(hass, hass_storage, now)
     client = await hass_ws_client(hass)
     await subscribe(client)
-    hass.states.async_set("weather.private_name", "rainy")
+    hass.states.async_set("weather.private_name", FX_ON[key])
     await settle(hass, freezer)
     await pushed(client)
     assert coordinator.device_fx.recent(coordinator._now())
@@ -542,6 +561,7 @@ async def test_a_push_with_nothing_new_sends_nothing_with_the_bridge_on(
     assert "device_fx_recent" not in json.dumps(coordinator._house_view())
 
 
+@fx_key
 async def test_the_onset_reaches_every_watcher_once_the_shared_screen_too(
     hass: HomeAssistant,
     now: float,
@@ -549,19 +569,21 @@ async def test_the_onset_reaches_every_watcher_once_the_shared_screen_too(
     hass_ws_client: Any,
     hass_admin_user: Any,
     freezer: FrozenDateTimeFactory,
+    key: str,
 ) -> None:
     await rainy_house(hass, hass_storage, now)
     mine = await hass_ws_client(hass)
     shared = await hass_ws_client(hass)
     await subscribe(mine)
     await subscribe(shared, shared=True)
-    hass.states.async_set("weather.private_name", "rainy")
+    hass.states.async_set("weather.private_name", FX_ON[key])
     await settle(hass, freezer)
     for client in (mine, shared):
         got = await pushed(client)
-        assert [e["fx"]["kind"] for e in got if "fx" in e] == ["rain_started"]
+        assert [e["fx"]["kind"] for e in got if "fx" in e] == [f"{key}_started"]
         assert [next(iter(e)) for e in got] == ["house", "fx"]
     # A shared screen's snapshot: the same whitelist as a personal one.
     again = await subscribe(await hass_ws_client(hass), shared=True)
-    assert again["house"]["device_fx"] == {"version": 1, "current": {"rain": True}}
-    assert [e["kind"] for e in again["device_fx_recent"]] == ["rain_started"]
+    assert again["house"]["device_fx"]["version"] == 1
+    assert again["house"]["device_fx"]["current"][key] is True
+    assert [e["kind"] for e in again["device_fx_recent"]] == [f"{key}_started"]
