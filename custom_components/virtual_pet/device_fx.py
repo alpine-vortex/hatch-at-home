@@ -1,4 +1,4 @@
-"""The device-alive signal bridge, server half (slices 3A and 4A): the sky.
+"""The device-alive signal bridge, server half (slices 3A, 4A and 4C): the sky and the room.
 
 It tells the card two things, and keeps neither on disk:
 
@@ -13,14 +13,18 @@ sensor, diagnostics or the event bus, and nothing here draws from the pet's
 random generator (ids come from ``secrets``).
 
 ``DEVICE_SIGNAL_MAP`` is the one source (plan section 6.2, F9): one row per key
-(``rain``, ``snow``, ``fog``, ``storm``, ``wind``) with its type (a bool, or a
-closed enum), its two kinds, its block, and its echo numbers. ``KINDS`` and the
+(the weather: ``rain``, ``snow``, ``fog``, ``storm``, ``wind``; the room:
+``lights``, ``heating``, ``cooling``, ``fireplace``, ``tv``, ``music``) with its
+type (a bool, or a closed enum), its two kinds (none for an ambient-only row:
+``heating`` and ``cooling`` are a tint, their wash is a moment's), its block, and
+its echo numbers. ``KINDS`` and the
 ``view()`` whitelist are derived from it, ``tests/js/device_signal_map.json`` is
 its committed export, and ``current`` is rebuilt from it each time, never copied
 from a reading. A value that is not of the row's type, or a kind outside the map,
 is dropped, never sent.
 
-A key is *known* or it is *unknown* (each row's ``read``). Unknown is its own
+A key is *known* or it is *unknown* (each row's ``read``; a plain-bool reading
+cannot say it, so the row names the ``Watcher.known`` key that asks, section 6.5). Unknown is its own
 state, not off: it adds no ring entry, sends no message, and the first known
 reading after it is silent (``current`` takes the new value, ambience is truth,
 and no onset is invented out of an outage or a restart). A key is present in
@@ -37,7 +41,8 @@ restart has no pending block.
 One onset per pass: a condition that starts two keys at once (``lightning-rainy``)
 sends the storm and not the rain (and likewise when both end); any other tie goes
 to a start over a stop (rain ending as snow begins shows the snow), then the lower
-echo rank, then the row first in the map. ``current`` still carries every key's
+echo rank (a fireplace beats a TV), then the row first in the map. An ambient-only
+row never sends an onset. ``current`` still carries every key's
 truth.
 """
 
@@ -53,7 +58,16 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_RAIN, CONF_WEATHER
+from .const import (
+    CONF_COOLING,
+    CONF_FIREPLACE,
+    CONF_HEATING,
+    CONF_MUSIC,
+    CONF_RAIN,
+    CONF_ROOM_LIGHTS,
+    CONF_TV,
+    CONF_WEATHER,
+)
 from .home import FOGGY, SNOWY, STORMY, Readings, is_raining, is_windy
 
 VERSION = 1  # a new key is additive: no bump (an unknown version is ignored)
@@ -61,6 +75,9 @@ BLOCK_SECONDS = 45.0  # a reverse waits this long (FM8; tune on the device)
 RAIN_BLOCK_SECONDS = BLOCK_SECONDS  # 3A's name, kept
 RING_SIZE = 16
 RING_SECONDS = 90.0  # how long a transition can still be echoed
+LIGHTS_ON_LEVEL = 0.0  # a light is "on" above this (any brightness; no dim, Q1)
+HEATING_BLOCK_SECONDS = 120.0  # a tint "while running", not a stale one (6.5)
+MUSIC_BLOCK_SECONDS = 60.0  # a track gap or a pause is not "stopped" (owner: >= 45)
 SCOPE = "house"
 
 
@@ -99,6 +116,27 @@ def wind_reading(readings: Readings) -> bool | None:
     return is_windy(readings)
 
 
+def lights_reading(readings: Readings) -> str | None:
+    """``on`` iff any mapped light is on at any brightness, else ``off``; None
+    (unknown) when there is no light to ask (``room_light_level`` is Optional)."""
+    if readings.room_light_level is None:
+        return None
+    return "on" if readings.room_light_level > LIGHTS_ON_LEVEL else "off"
+
+
+_READINGS = {"heating": "heating_on", "cooling": "cooling_on"}  # else the key's name
+
+
+def _plain(name: str) -> Callable[[Readings], bool]:
+    """A plain-bool reading (``fireplace``, ``tv`` ...): it cannot say unknown,
+    so the row's ``known`` key does (``Watcher.known``)."""
+
+    def read(readings: Readings) -> bool:
+        return bool(getattr(readings, name))
+
+    return read
+
+
 @dataclass(frozen=True)
 class Signal:
     """One row of ``DEVICE_SIGNAL_MAP``. The first six fields are the row the
@@ -106,14 +144,15 @@ class Signal:
     the server's alone."""
 
     type: str | tuple[str, ...]  # "bool", or the closed enum's members
-    kinds: tuple[str, str]  # (started, stopped) for a bool
+    kinds: tuple[str, ...]  # (started, stopped); an enum's (on, off); () = ambient only
     block_s: float
     echo: bool
-    echo_ttl_s: float
-    echo_rank: int
+    echo_ttl_s: float | None  # None for an ambient-only row (no echo)
+    echo_rank: int | None
     read: Callable[[Readings], bool | str | None]  # None = unknown
     sources: tuple[str, ...]  # the options that can tell it (any one is enough)
     supersedes: tuple[str, ...] = ()  # keys whose onset this one replaces
+    known: str | None = None  # a plain-bool reading's ``Watcher.known`` key
 
     def export(self) -> dict[str, Any]:
         return {
@@ -148,16 +187,65 @@ def _weather(key: str, read: Callable[[Readings], bool | None], **more: Any) -> 
     )
 
 
+def _activity(key: str, rank: int, block_s: float, source: str) -> Signal:
+    """A plain-bool room reading with an onset and an echo (``x_started`` and
+    ``x_stopped``), known when ``Watcher.known(key)`` says so."""
+    return Signal(
+        type="bool",
+        kinds=(f"{key}_started", f"{key}_stopped"),
+        block_s=block_s,
+        echo=True,
+        echo_ttl_s=RING_SECONDS,
+        echo_rank=rank,
+        read=_plain(_READINGS.get(key, key)),
+        sources=(source,),
+        known=key,
+    )
+
+
+def _ambient(key: str, block_s: float, source: str) -> Signal:
+    """A tint and nothing else: no kinds, no echo, no rank (F9)."""
+    return Signal(
+        type="bool",
+        kinds=(),
+        block_s=block_s,
+        echo=False,
+        echo_ttl_s=None,
+        echo_rank=None,
+        read=_plain(_READINGS.get(key, key)),
+        sources=(source,),
+        known=key,
+    )
+
+
 # The one source of what the server may send (plan section 6.2, F9, and the
-# per-key table of 6.5). Weather keys only: their state is already in `flags` and
-# the edge is the sky's (6.2a rule 3). The activity keys wait for the owner (4C).
-# A bool or a closed enum, nothing else may ever cross (6.2a rule 1).
+# per-key table of 6.5). The weather's state is already in `flags`; the room's
+# keys are the owner's own rule of 2026-11-03 (6.6a). A bool or a closed enum,
+# nothing else may ever cross (6.2a rule 1). The doorbell, the appliance tick,
+# the vacuum, the moon and arrival are not keys (FM10, FM11, FM15).
 DEVICE_SIGNAL_MAP: dict[str, Signal] = {
     "rain": _weather("rain", rain_reading, sources=(CONF_WEATHER, CONF_RAIN)),
     "snow": _weather("snow", _by_condition(SNOWY)),
     "fog": _weather("fog", _by_condition(FOGGY)),
     "storm": _weather("storm", _by_condition(STORMY), supersedes=("rain",)),
     "wind": _weather("wind", wind_reading),
+    # The room. Rank 3: fireplace and lights; 4: TV and music (section 6.7).
+    "lights": Signal(
+        type=("off", "on"),
+        kinds=("lights_on", "lights_off"),  # kinds[0] is the "on" edge
+        block_s=BLOCK_SECONDS,
+        echo=True,
+        echo_ttl_s=RING_SECONDS,
+        echo_rank=3,
+        read=lights_reading,
+        sources=(CONF_ROOM_LIGHTS,),
+    ),
+    # Ambient only: no kinds, no echo. Their wash is the `house_answered` moment.
+    "heating": _ambient("heating", HEATING_BLOCK_SECONDS, CONF_HEATING),
+    "cooling": _ambient("cooling", HEATING_BLOCK_SECONDS, CONF_COOLING),
+    "fireplace": _activity("fireplace", 3, BLOCK_SECONDS, CONF_FIREPLACE),
+    "tv": _activity("tv", 4, BLOCK_SECONDS, CONF_TV),
+    "music": _activity("music", 4, MUSIC_BLOCK_SECONDS, CONF_MUSIC),
 }
 
 # Every kind the server can send, derived from the map.
@@ -238,14 +326,20 @@ class DeviceFx:
     # -- the home pass --------------------------------------------------------
 
     def observe(
-        self, readings: Readings, now: float, keys: tuple[str, ...] | None = None
+        self,
+        readings: Readings,
+        now: float,
+        keys: tuple[str, ...] | None = None,
+        known: Callable[[str], bool] | None = None,
     ) -> None:
-        """One home pass at time ``now``: every mapped key looks at its reading,
-        and at most one onset (the strongest) is sent."""
+        """One home pass at time ``now``: every mapped key looks at its reading
+        (``known`` answers for a plain-bool one: ``Watcher.known``), and at most
+        one onset (the strongest) is sent."""
         onsets = [
             key
             for key in (DEVICE_SIGNAL_MAP if keys is None else keys)
-            if self._observe_key(key, DEVICE_SIGNAL_MAP[key].read(readings), now)
+            if self._observe_key(key, self._reading(key, readings, known), now)
+            and DEVICE_SIGNAL_MAP[key].kinds  # an ambient-only row sends no onset
         ]
 
         # One onset per pass. A key beaten by another of the same direction is
@@ -253,7 +347,7 @@ class DeviceFx:
         # stop (rain ending as snow begins shows the snow), then the lower echo
         # rank, then the map's order.
         def starts(key: str) -> bool:
-            return bool(self._keys[key].value)
+            return self._keys[key].value in (True, "on")  # an enum's `on`, not "off"
 
         onsets = [
             key
@@ -275,6 +369,17 @@ class DeviceFx:
                 ),
             )
             self._add(key, now)
+
+    @staticmethod
+    def _reading(
+        key: str, readings: Readings, known: Callable[[str], bool] | None
+    ) -> bool | str | None:
+        """The row's reading, or None (unknown) when its guard says nothing
+        answers: a plain bool reads "off" in an outage, which is not off."""
+        spec = DEVICE_SIGNAL_MAP[key]
+        if spec.known is not None and known is not None and not known(spec.known):
+            return None
+        return spec.read(readings)
 
     def _observe_key(self, key: str, value: Any, now: float) -> bool:
         """One key's reading (None = unknown). True when it is an accepted change
@@ -302,9 +407,9 @@ class DeviceFx:
 
     def _add(self, key: str, now: float) -> None:
         spec, state = DEVICE_SIGNAL_MAP[key], self._keys[key]
-        if spec.type != "bool":  # an enum's kinds are not built yet
+        if len(spec.kinds) != 2 or spec.echo_ttl_s is None:  # ambient only
             return
-        kind = spec.kinds[0] if state.value else spec.kinds[1]
+        kind = spec.kinds[0] if state.value in (True, "on") else spec.kinds[1]
         if kind not in KINDS:  # a kind outside the map never reaches the ring
             return
         self._seq += 1

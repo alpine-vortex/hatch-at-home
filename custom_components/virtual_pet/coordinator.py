@@ -920,7 +920,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         readings = self.watcher.read(now, night, late)
         options = self.config_entry.options
         if keys := self._fx_keys():  # only collected here: _push_watchers sends it
-            self.device_fx.observe(readings, now, keys)
+            self.device_fx.observe(
+                readings, now, keys, lambda key: self.watcher.known(key, now)
+            )
         local = dt_util.as_local(dt_util.utc_from_timestamp(now))
         self._find_flags = find_flags(
             readings,
@@ -2889,7 +2891,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     def _fx_keys(self) -> tuple[str, ...]:
         """The device_fx keys this house can tell: those whose source is mapped
-        (rain: a weather entity or a rain sensor; the rest: the weather entity)."""
+        (rain: a weather entity or a rain sensor; the other weather keys: the
+        weather entity; each room key: its own mapping)."""
         return mapped_keys(self.config_entry.options)
 
     def _fx_mapped(self) -> bool:

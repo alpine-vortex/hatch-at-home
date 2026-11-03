@@ -77,6 +77,28 @@ input_boolean:
     name: Fake music playing
   fake_tv:
     name: Fake TV on
+  # Stand-ins for the activity keys (device-alive 4C): map each in the pet's
+  # options (fireplace, heating, cooling) and flip it; the TV and music ones are
+  # read through the media players below.
+  fake_fireplace:
+    name: Fake fireplace lit
+  fake_heating:
+    name: Fake heating on
+  fake_cooling:
+    name: Fake cooling on
+
+# A media_player is what the pet's TV and music options take, and the booleans above
+# are not one: these read them (on = playing). Music "playing" is not a video, so
+# it is music, not the TV.
+media_player:
+  - platform: universal
+    name: Fake TV
+    unique_id: fake_tv_player
+    state_template: "{{ 'playing' if is_state('input_boolean.fake_tv', 'on') else 'off' }}"
+  - platform: universal
+    name: Fake speaker
+    unique_id: fake_music_player
+    state_template: "{{ 'playing' if is_state('input_boolean.fake_music', 'on') else 'paused' }}"
 
 template:
   - sensor:
