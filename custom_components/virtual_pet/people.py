@@ -1266,7 +1266,7 @@ def memory_recap(mem: dict[str, Any], today: str) -> str | None:
     recent = [
         e["day"]
         for e in _big_day_tags(mem, MEMORY_DOOR11_TAGS)
-        if year_ago < e["day"] <= today
+        if year_ago <= e["day"] <= today
     ]
     if not recent:
         return None

@@ -156,6 +156,7 @@ in sections 4, 5, 6, 8 and 10.
   admin erase pushes to every loaded pet (5), the row's fallback is the viewed pet's own
   option and the row hides until it is known (4), memory's days are canonical ISO (2);
   findings 3 and 6 are the notes in section 12 and the guide.
+- **M2 audit s2785 (2026-11-03): player-impact 1 (mono chip, fixed in this follow-up), nits 6 (N2, N4, N6 fixed; N1, N3, N5 accepted).**
 
 ## 2. What was checked against the code
 
@@ -762,9 +763,11 @@ month**; the card already says "we've been friends for a whole year!!" at 12 mon
 - **It writes no `memory["said"]` key.** The celebration marks `noted["friends"]` on the
   bond, as today; that is not a memory trace (it exists with memory off, for the existing
   line). "Off leaves no trace" is therefore unchanged for door 11, and the test says so.
-- **When `birthday_friends` wins** (the pet's birthday has the same months, `coordinator.py`
-  makes one `birthday_friends` note and `celebrations[:1]` takes it), the recap is **lost
-  that year, accepted** (FM s2782 Q6). The card line is at most 40 characters.
+- **At 12 months `birthday_friends` cannot win** (M2 audit s2785 N6): the pet's first
+  birthday is `{"years": 1}`, not a month count, so the `friends_for` note is not displaced.
+  On the pet's first birthday the recap **waits a look** (the birthday note goes first); it
+  is lost only if no second counted look comes that day (FM s2782 Q6). The card line is at
+  most 40 characters.
 - The card, given `n.tag` on a `friends_for` note at 12 months, says
   `MEMORY_TAG_DOORS.door11[tag]`; if the key is not there (an unknown tag from a newer
   server) it says the existing line. An **old cached card** ignores the field and says the
@@ -1197,8 +1200,8 @@ The visit marks `door1`, `door3` and `door10` through `mark_memory_said`, never
   order 2, 3, 1, 10, 4, 5, 12, and the others are **not** marked said; with memory off, the
   pet's option off, or no record, no door note and no `said`; door 11: a 12-month
   `friends_for` carries `tag` when a `big_day` tag of the six exists in the window, carries
-  nothing for `work_thing`, a `weekend` tag or none, is lost when `birthday_friends` wins
-  that day, is not sent at 24 months, and writes no `memory["said"]` key. The `tags` cap
+  nothing for `work_thing`, a `weekend` tag or none, waits a look when the pet's first
+  birthday is that day (lost only with no second counted look), is not sent at 24 months, and writes no `memory["said"]` key. The `tags` cap
   interplay: a door reads the capped list.
 - **Pytest, shape** (section 10, "`_mine`..." row): the door-notes test asserts
   `set(note) <= {"kind", "pick", "tag"}` (the existing assertion in `tests/test_memory.py`
@@ -1352,8 +1355,9 @@ tools), none of these slices needs one: no new art (section 9).
   first, ask for an exception only if a line loses its charm.
 - **M2's doors are tied to a day and are lost with no look** (doors 1, 3, 10, and door 2
   before them; FM s2782 Q5): a day with no look from 11:00 to 20:00 (door 2: before noon)
-  spends the door for good, accepted. **Door 11 is lost when `birthday_friends` wins** that
-  day, and there is no recap at 24 months (FM s2782 Q6). Neither is a bug.
+  spends the door for good, accepted. **Door 11 waits a look on the pet's first birthday**
+  (it cannot lose to `birthday_friends` at 12 months; it is lost only with no second counted
+  look that day), and there is no recap at 24 months (FM s2782 Q6). Neither is a bug.
 - **Good news has no callback besides door 2.** "great" to slept, or a weekend "yes"
   without words, still end at the reply. Out of scope here.
 - **`slept: not really`** has no follow-up. Out of scope.
