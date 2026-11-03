@@ -405,3 +405,37 @@ test("the card hands the part the server's now, and the markup has the five laye
   // _forget clears every glass class, the ambient set too
   assert.match(src, /s\.glass\?\.classList\.remove\(\.\.\.HATCH_DEVICE_FX\.CLASSES_BY_LAYER\.ambient, \.\.\.HATCH_DEVICE_FX\.CLASSES\);/);
 });
+
+// ---- what 4D needs from the adapter (plan 6.6c, F16): a moment-driven entry point beside rim ----
+
+test("offerMoment: the entry point exists with the rim's gates; the 4B table is empty, so every moment has no cue yet", () => {
+  assert.strictEqual(typeof F.offerMoment, "function");
+  assert.deepStrictEqual(Object.keys(F.HOUSE_RIM), []);
+  const w = world(), s = w.slide();
+  assert.strictEqual(F.offerMoment(w.dir, s, "doorbell_live", "m-1", w.env).reason, "no-cue");
+  assert.strictEqual(F.offerMoment(w.dir, s, "__proto__", "m-2", w.env).reason, "no-cue");
+  assert.deepStrictEqual(s.rim.names(), []);
+});
+
+test("offerMoment with a house row (a stand-in table in a fresh realm): house origin, house priority, calm and a scene refuse it, no clock gate", () => {
+  const c2 = { Date, Object, Array, Number, Math, JSON };
+  const patched = part.replace("const HOUSE_RIM = Object.freeze({});",
+    'const HOUSE_RIM = Object.freeze({ doorbell_live: Object.freeze({ kind: "rimBell", cls: "dir-bell", ms: 900, cooldownMs: 5000 }) });');
+  assert.notStrictEqual(patched, part);
+  vm.runInNewContext(`${director}\n${patched}\nthis.D = HATCH_DIRECTOR; this.F = HATCH_DEVICE_FX;`, c2);
+  const { D: D2, F: F2 } = c2;
+  assert.ok(F2.CLASSES_BY_LAYER.rim.includes("dir-bell"), "the house class is in the rim layer's set");
+  assert.strictEqual(F2.RECIPES.rimBell.priority, D2.PRIORITY.house);
+  assert.strictEqual(F2.RECIPES.rimBell.cooldownMs, 5000);
+  assert.strictEqual(F2.RECIPES.rimFeed.priority, D2.PRIORITY.care, "a press stays over a house cue");
+  const t = { v: T0 };
+  const dir = D2.create({ now: () => t.v, deviceNow: () => t.v, trusted: () => false, canRender: () => true, schedule: () => () => {}, recipes: F2.RECIPES });
+  const mk = () => ({ glass: glassOf(), rim: glassOf() });
+  const env = { lcdOn: true, calm: false, clockKnown: false }; // an unknown clock does not matter for a moment
+  const s = mk();
+  const r = F2.offerMoment(dir, s, "doorbell_live", "m-1", env);
+  assert.ok(r.accepted, r.reason);
+  assert.deepStrictEqual(s.rim.names(), ["dir-bell"]);
+  assert.strictEqual(F2.offerMoment(dir, mk(), "doorbell_live", "m-2", { ...env, calm: true }).reason, "calm");
+  assert.deepStrictEqual(Object.keys(F2.RIM), Object.keys(F.RIM), "offerMoment adds no user rows");
+});

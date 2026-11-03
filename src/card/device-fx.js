@@ -56,6 +56,11 @@ const HATCH_DEVICE_FX = Object.freeze(
     // The moon, off the wire (FM11): a static halo on the full and the new day, computed from the server's
     // clock. Not a key: it has no edge, no onset, no ring entry, no echo.
     const MOON = Object.freeze({ full: "dir-moon", new: "dir-newmoon" });
+    // The rim cues a moment drives (slice 4D fills this: doorbell, appliance, heating and cooling, the vacuum),
+    // by the moment's type: {kind, cls, ms, cooldownMs}, the same lamp vocabulary as RIM below. Empty in 4B: the
+    // entry point (`offerMoment`) and the recipe factory are here so 4D adds rows, not a second refactor.
+    const HOUSE_RIM = Object.freeze({});
+    const USER_RIM_CLASSES = ["dir-feed", "dir-play", "dir-clean", "dir-tuck"];
     // Every class a recipe or the paint may set, by layer (F11): each recipe's start clears its layer's
     // onset set, the paint owns the ambient set. A test checks it against every `.hw.glass.dir-*` and
     // `.hw.rim.dir-*` rule in style.js.
@@ -63,7 +68,7 @@ const HATCH_DEVICE_FX = Object.freeze(
     const CLASSES_BY_LAYER = Object.freeze({
       glass: ONSETS,
       ambient: Object.freeze(KEY_LIST.map((key) => WEATHER[key].ambient).concat(Object.values(MOON))),
-      rim: Object.freeze(["dir-feed", "dir-play", "dir-clean", "dir-tuck"]),
+      rim: Object.freeze(USER_RIM_CLASSES.concat(Object.values(HOUSE_RIM).map((cue) => cue.cls))),
     });
     const CLASSES = CLASSES_BY_LAYER.glass;
     const RIM_CLASSES = CLASSES_BY_LAYER.rim;
@@ -141,10 +146,10 @@ const HATCH_DEVICE_FX = Object.freeze(
       lights: Object.freeze({ kind: "rimTuck", cls: "dir-tuck", ms: 1800 }), // the lamps dimming in sequence
     });
     const clearRim = (rim) => rim.classList.remove(...RIM_CLASSES);
-    const rimRecipe = (cue) =>
+    const rimRecipe = (cue, priority = HATCH_DIRECTOR.PRIORITY.care) => // a press is over a house onset
       Object.freeze({
-        track: "shellImpulse", priority: HATCH_DIRECTOR.PRIORITY.care, // a press is over a house onset
-        durationMs: cue.ms, cancel: "finish",
+        track: "shellImpulse", priority, durationMs: cue.ms, cancel: "finish",
+        ...(cue.cooldownMs > 0 ? { cooldownMs: cue.cooldownMs } : {}),
         start: (slide, effect) => {
           const rim = slide && slide.rim;
           if (!rim) return;
@@ -162,6 +167,7 @@ const HATCH_DEVICE_FX = Object.freeze(
     const RECIPES = Object.freeze({
       ...Object.fromEntries(KEY_LIST.map((key) => [key, weatherRecipe(key)])),
       ...Object.fromEntries(Object.values(RIM).map((cue) => [cue.kind, rimRecipe(cue)])),
+      ...Object.fromEntries(Object.values(HOUSE_RIM).map((cue) => [cue.kind, rimRecipe(cue, HATCH_DIRECTOR.PRIORITY.house)])),
     });
 
     // A rim cue for the toy `action` (its data-action), from the card's press (or a confirmed tuck).
@@ -174,6 +180,19 @@ const HATCH_DEVICE_FX = Object.freeze(
       if (env.calm) return { accepted: false, reason: "calm", effectId: 0 };
       if (dir.busyOwners(slide).includes("scene")) return { accepted: false, reason: "busy", effectId: 0 };
       return dir.offer(slide, { id, kind: cue.kind, origin: "user", presentation: "onset" });
+    };
+
+    // A rim cue for a moment the card has just handled (slice 4D; plan 6.6c): `moment` is the moment's type, `id`
+    // its own (`m.at` plus the type, or a card sequence), called from the same callback as the moment's screen-effect
+    // sibling, never from a wire edge. A house cue: `origin: "house"`, the house priority, no `occurredAt` (a
+    // moment has no clock dependence, so it is not gated on `clockKnown`). The same gates as `rim`: reduced
+    // motion refuses it, a care scene running wins; the director decides the rest (the switch, on show, visible).
+    const offerMoment = (dir, slide, moment, id, env) => {
+      const cue = Object.prototype.hasOwnProperty.call(HOUSE_RIM, moment) ? HOUSE_RIM[moment] : null;
+      if (!cue) return { accepted: false, reason: "no-cue", effectId: 0 };
+      if (env.calm) return { accepted: false, reason: "calm", effectId: 0 };
+      if (dir.busyOwners(slide).includes("scene")) return { accepted: false, reason: "busy", effectId: 0 };
+      return dir.offer(slide, { id, kind: cue.kind, origin: "house", presentation: "onset" });
     };
 
     // The full or the new moon for a time (ms), or "". The synodic month from a known new moon
@@ -231,6 +250,6 @@ const HATCH_DEVICE_FX = Object.freeze(
       return dir.enterView(slide, ringOf(recent), env.clockKnown === true);
     };
 
-    return { RECIPES, KINDS, WEATHER, CLASSES, CLASSES_BY_LAYER, RIM, RIM_CLASSES, moonOf, ambientOf, cueOf, ringOf, paint, sync, live, enter, rim };
+    return { RECIPES, KINDS, WEATHER, CLASSES, CLASSES_BY_LAYER, RIM, HOUSE_RIM, RIM_CLASSES, moonOf, ambientOf, cueOf, ringOf, paint, sync, live, enter, rim, offerMoment };
   })()
 );
