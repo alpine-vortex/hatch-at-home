@@ -234,6 +234,7 @@ async def test_nothing_personal_on_the_bus(
         assert e.context.user_id is None, e.event_type
         assert "open_on" not in text, e.event_type  # the favourite (§5.2)
         assert "rest_offer" not in text, e.event_type  # its offer's answer (§6.4)
+        assert "has_open_on" not in text, e.event_type  # their having a favourite
     made = [e for e in ours if e.event_type == f"{DOMAIN}_wish_made"]
     assert made[-1].data == {"kind": "play", "pet_id": pet.pet_id}  # the aimed one
     # Each of the bond's moments reached their own channel, without who...
@@ -329,11 +330,13 @@ async def test_nothing_personal_on_a_state(
     assert day["pet"].people.house_open_on() == day["pet"].pet_id
     assert day["pet"].people.data["people"][day["me"].id]["rest_offer"] is True
     assert "open_on" not in text and "rest_offer" not in text
+    assert "has_open_on" not in text
     diagnostics = await async_get_config_entry_diagnostics(
         hass, day["pet"].config_entry
     )
     assert "open_on" not in json.dumps(diagnostics, default=str)
     assert "rest_offer" not in json.dumps(diagnostics, default=str)
+    assert "has_open_on" not in json.dumps(diagnostics, default=str)
     stage = attrs["sensor.pip_life_stage"]
     assert "bonds" not in stage and "notify_users" not in stage
     assert set(stage["wish"]) == {"kind", "granted", "open"}

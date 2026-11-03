@@ -563,7 +563,7 @@ class HatchPetCardStatus extends HatchPetCardMoment {
           this._birthdayKept = false;
           this._birthdayPhone = false;
           this._memoryOn = false; // memory went with the rest (plan M1a)
-          for (const key of ["my_day", "baby_talk", "birthday_kept", "birthday_phone", "memory_on", "open_on", "rest_offer"]) this._setMine(key, false);
+          for (const key of ["my_day", "baby_talk", "birthday_kept", "birthday_phone", "memory_on", "has_open_on", "open_on", "rest_offer"]) this._setMine(key, false);
           for (const key of ["fav_weather", "fav_season", "fav_visitor"]) this._setMine(key, null); // M0-c's, gone too
           this._openOnSync(); // the heart and the copy of the pet their card opened on
           this._restOffer = null; // and an offer on show: it may come once more (§6.4)

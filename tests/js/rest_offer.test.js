@@ -159,7 +159,54 @@ test("29c: not offered for house, a shared screen, one pet, no pet that can rest
   await none(THREE, {}, (c, a) => pick(c, a, false));
   // _openOnSync's late move never calls it.
   assert.doesNotMatch(method("_openOnSync"), /_offerRest/);
-  assert.match(method("_setOpenOn"), /if \(ok\) this\._offerRest\(s, scope, enabled, before\)/);
+  assert.match(method("_setOpenOn"), /if \(ok\) this\._offerRest\(s, scope, enabled, before, hadFavourite\)/);
+});
+
+test("29c2 (R3 audit): a favourite on a pet this card doesn't show is a move: no offer", async () => {
+  const { card } = load();
+  // The server says the person has a favourite (has_open_on), though no slide here is it.
+  const mine = () => ({ open_on: false, rest_offer: false, has_open_on: true });
+  const c = card([{ device: "pip", mine: mine() }, { device: "bo", mine: mine() }, { device: "moss", mine: mine() }]);
+  await pick(c, c._slides[0]);
+  assert.strictEqual(c._restOffer ?? null, null);
+  assert.strictEqual(row(c, c._slides[0]), "");
+  // And with none, the same pick offers.
+  const d = card([{ device: "pip", mine: { open_on: false, rest_offer: false, has_open_on: false } }, { device: "bo" }]);
+  await pick(d, d._slides[0]);
+  assert.strictEqual(d._restOffer?.device, "pip");
+});
+
+test("29c3 (R3 audit): no offer when the sheet closed or the card moved off the pet during the call", async () => {
+  for (const how of [(c, a) => { a.settings = false; }, (c) => { c._index = 1; }]) {
+    const { card, replies } = load();
+    const slow = later();
+    replies.fn = () => slow.promise;
+    const c = card(THREE);
+    const a = c._slides[0];
+    const p = pick(c, a);
+    how(c, a);
+    slow.resolve({});
+    await p;
+    assert.strictEqual(c._restOffer ?? null, null);
+  }
+});
+
+test("29c4 (R3 audit): toggling off then on while 'rest them' is busy makes no second offer", async () => {
+  const { card, replies } = load();
+  const c = card(THREE);
+  const a = c._slides[0];
+  await pick(c, a);
+  const first = c._restOffer;
+  assert.ok(first);
+  const slow = later();
+  replies.fn = (m) => (m.type === "virtual_pet/rest" ? slow.promise : Promise.resolve({}));
+  const answering = c._answerRestOffer(a, true, fakeButton());
+  assert.strictEqual(first.busy, true);
+  await pick(c, a, false); // the first is busy: its answer is in flight, it stays
+  await pick(c, a, true); // and on again
+  assert.strictEqual(c._restOffer, first, "no second live offer");
+  slow.resolve({});
+  await answering;
 });
 
 test("29d: the favourite may be an egg or resting; only this card's slides count", async () => {
