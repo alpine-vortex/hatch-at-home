@@ -134,7 +134,7 @@ one on its own track. **Nothing queues. A missed cue is never owed.**
   is `tests/js/interaction_director.test.js`, copying `hop_engine.test.js:19-31`: in the
   built card, before `class HatchPetCardBase`; one frozen namespace; the part's only
   top-level declaration is `const HATCH_DIRECTOR`. The TDZ card-check case and any
-  pick-sections change move to the first slice with an adapter (3B or 3C, whichever lands first, section 13).
+  pick-sections change moved to the first slice with an adapter, which is 3B (built: section 13, "As built in 3B").
 - **`_houseFx` / `_robotFx` are not adopted (FM4).** `_houseFx` (`card-visit.js:610-616`)
   already does the `shellImpulse` job for the `fx-*` screen classes (one class, one
   2.5 s timer, no busy test); `_robotFx` keeps a second timer (6 s). They stay as they
@@ -242,8 +242,7 @@ Each entry is `{ name, busy(s) }` over plain slide fields, and `busy` is a pure 
 
 (The `status` row is the one owner with no field today. Slice 1 only reads
 `s.statusOpen`; the one line in `_toggleStatus` that sets it is an adapter, so it lands
-with the first slice that has adapters (3B or 3C, section 13). Until then the table test sets it by
-hand. No other owner needs one.)
+with the first slice that has adapters, which is 3B (it sets it, and the table test no longer sets it by hand).  No other owner needs one.)
 
 **How slice 1 checks the list is complete** (a source test, no device). The card already
 has two "can the body act" gates, `_freeBody` (`card-tick.js:122`) and `_ghosting`
@@ -596,7 +595,7 @@ astronomy; ties by recency.
 
 Added by the review: 15. a server test beside `tests/test_channel.py` and
 `tests/test_public.py` that audits a shared screen's `device_fx`; 16. a recorded week with
-the bridge on equals main (no save field); 17. the card-check TDZ-order case for the director, in the first slice with an adapter (3B or 3C, whichever lands first; slice 1 has none, section 5.2).
+the bridge on equals main (no save field); 17. the card-check TDZ-order case for the director, in the first slice with an adapter (3B, as built; slice 1 has none, section 5.2).
 
 ## 7. Press feel: the gaps only (F2, LD section 7)
 
@@ -730,8 +729,8 @@ art. **Do not run two workers on the card chain or `manifest.txt` at once.**
 | 1 | **Director core**: pure `interaction-director.js`, track leases, generation tokens, `BUSY_OWNERS`, injected `schedule`, `node --test`; a manifest line, one AGENTS.md table row. No adapter, no card-check case, no `pick-sections` entry. **No visual change.** Acceptance below. | 1 | S-M | `scripts/gate --auto` (picks no card-check section; the JS tests are the guard) | none (nothing to see) |
 | 2 | **Press release feel**: section 7 only, CSS on the cap (FM5, FM6). Rebound, restyled `.pending`/`.failed`, cleanup, per-action rebound curves via `data-action` and `--rebound`; `failed` joins `PASSING_CLASSES`; bench `alive` preset. No director, no `canRender`, no adapter, no TDZ card-check case, no `pick-sections` entry; the rim cues wait for slice 3C. | 1 | S | `gate --auto` | Press feed, play, clean and meds caps and the lights toy; hold a cap and drag off it (touch and mouse); Space on a focused cap (does it pop up, then down?); a quick double tap; iOS `:active`; the feel of the 90-140 ms rebound; one refusal (the cap does nothing special). |
 | 3A | **Signal bridge, rain: server.** `custom_components/virtual_pet/device_fx.py` (`current`, ring, leading-edge hysteresis with the `async_call_later` block, unknown state; sections 6.2, 6.4, 6.5), the `_sense_home` call, `current` (only) in `_house_view()`, `recent` beside the house on the snapshot, the `{"fx": ...}` live message flushed at the end of `_push_watchers` after the house diff (section 6.3), `tests/test_device_fx.py`, `test_channel.py`, `test_public.py`. Wire: `{"version":1,"current":{"rain":bool}}` and the rain ring entries, nothing else (FM7/m1). Old cards ignore all of it, so 3A can land alone and bake. **Tier 1** (nothing stored: the ring, nonce and state are in memory and join no `PetState.to_dict`, diagnostics, debug sensor or bus). No new copy. | 1 | M | `scripts/ci-gate` (pick-sections prints `all` for any non-test `.py`, `scripts/pick-sections:84-86`) **plus a privacy review of its PR** (case 15 is the shared-screen audit; a second pair of eyes on it) | Rain on a wall tablet (shared) and a phone: nothing visible changes yet (3A has no client); confirm the card still loads and a rain flip leaves no console error. HA restarted in rain: same. |
-| 3B | **Signal bridge, rain: client adapter.** The first adapter *if it lands first*; else it reuses 3C's. Creates the director (`create` with `now` = `serverNow`, `deviceNow`, `trusted`, `canRender` = `lcdOn()` + on-show + visible, `schedule`); `s.statusOpen` set in `_toggleStatus`; `release` from `animationend`; `serverClockKnown()` in `shell-data.js`; the `{"fx"}` handler in `_channel` before the early return and before the redraw; the wire-to-cue mapping (section 6.7: `direction`, `data.key/value`, the same `collapseKey`, `occurredAt`/`ttlMs` only for ring entries); the `.hw.glass` element and its rules (section 6.6); the rain recipe, ambience and echo; the first-view hooks in `_go`, the IO callback and `_onHidden` (M7); bench `alive` rain shots; card-check section `devicefx`. Needs 3A for a real wire; its tests drive `_channel` directly with a fake `device_fx` shaped as 3A built it (section 6.3, "As built in 3A": `house.device_fx.current.rain`, missing until known; `snapshot.device_fx_recent`; `{"fx": entry}` with a ring-shaped entry; the same `id` may come in both; no `device_fx` key means nothing to paint). | 1 | M-L | `gate --auto`, plus the new card-check section (below) | The wet look and the drop on a phone and a wall tablet against each finish; open at 20 s and at 3 min by eye; the 0-10 s onset delay and, on a flap, the 45-55 s held reverse (m4: the pet says "rain!" and the glass is dry 45 s later is the **expected** result); rain with reduced motion on (still sheen); rain at night (the drop plays, silent); the switch off. |
-| 3C | **Rim cues from section 7** (from slice 2, FM5): feed's delivery glow, play's two-point pulse, clean's one sweep, the tuck's lamps dimming once confirmed, as `shellImpulse` leases through the director, gated by `canRender` (a press with screen effects off still has its cap feel from slice 2; only the rim cue goes). They key off the toy's `data-action` that slice 2 already sets (`feed`, `play`, `clean`, `medicine`, `lights`; snack, scold and praise have none and get no rim cue, as FM6 gave them the default), fire from `_tapped` or the scene's own beat and never from the cap's classes, and add no `transform`, `animation` or `filter` to `.cap` or `.toy` (slice 2 owns the cap's `translate`, `filter` and transition; a rim cue lives on the rim layer, `dir-*`). Needs only the adapter, no wire, no server. Reduced motion: no cue (it is an onset). | 1 | S-M | `gate --auto` plus the `devicefx` section if it is the first adapter | Press feed, play, clean and the lights toy; each cue once against each finish; the cue with the switch off (none); the cue with a care scene running (scene wins). |
+| 3B | **Signal bridge, rain: client adapter.** The first adapter *if it lands first*; else it reuses 3C's. Creates the director (`create` with `now` = `serverNow`, `deviceNow`, `trusted`, `canRender` = `lcdOn()` + on-show + visible, `schedule`); `s.statusOpen` set in `_toggleStatus`; `release` from `animationend`; `serverClockKnown()` in `shell-data.js`; the `{"fx"}` handler in `_channel` before the early return and before the redraw; the wire-to-cue mapping (section 6.7: `direction`, `data.key/value`, the same `collapseKey`, `occurredAt`/`ttlMs` only for ring entries); the `.hw.glass` element and its rules (section 6.6); the rain recipe, ambience and echo; the first-view hooks in `_go`, the IO callback and `_onHidden` (M7); bench `alive` rain shots; card-check section `devicefx`. Needs 3A for a real wire; its tests drive `_channel` directly with a fake `device_fx` shaped as 3A built it (section 6.3, "As built in 3A": `house.device_fx.current.rain`, missing until known; `snapshot.device_fx_recent`; `{"fx": entry}` with a ring-shaped entry; the same `id` may come in both; no `device_fx` key means nothing to paint). | 1 | M-L | `gate --auto`, plus the new card-check section (below) | The wet look and the drop on a phone and a wall tablet against each finish; open at 20 s and at 3 min by eye; the 0-10 s onset delay and, on a flap, the 45-55 s held reverse (m4: the pet says "rain!" and the glass is dry 45 s later is the **expected** result); rain with reduced motion on (still sheen); rain at night (the drop plays, silent); the switch off. **Added by the 3B build:** the sheen on each finish and in each world on a phone (is it a wet window or a dirty one: the bead gradients and `.dir-wet::before` opacity in `style.js` are the dial); the drop's size and speed at arm's length (18 steps over 1.8 s, 3x7 px at the 2 px grid); a first view by swiping to the second pet (the echo plays once, on that slide only; going back and forth does not replay); a hidden tab in rain and back (no replay: M7); the status sheet opened over rain (the glass is hidden under it, nothing plays) and closed (the sheen is back); a browser without CSS `round()` (older Safari: no glass at all, the card as before); HA restarted while it rains (the sheen returns with the first snapshot, no echo); the pet's own lines ("it's raining") unchanged. |
+| 3C | **Rim cues from section 7** (from slice 2, FM5): feed's delivery glow, play's two-point pulse, clean's one sweep, the tuck's lamps dimming once confirmed, as `shellImpulse` leases through the director, gated by `canRender` (a press with screen effects off still has its cap feel from slice 2; only the rim cue goes). They key off the toy's `data-action` that slice 2 already sets (`feed`, `play`, `clean`, `medicine`, `lights`; snack, scold and praise have none and get no rim cue, as FM6 gave them the default), fire from `_tapped` or the scene's own beat and never from the cap's classes, and add no `transform`, `animation` or `filter` to `.cap` or `.toy` (slice 2 owns the cap's `translate`, `filter` and transition; a rim cue lives on the rim layer, `dir-*`). Needs only the adapter, no wire, no server; **3B landed first, so 3C reuses what it built**: the director on the card (`this._director`, created in `_build`), `s.glass` is the rain's layer and not the rim's (the rim cue gets its own `dir-*` element or the toy's rim; it must not reuse `.hw.glass`), `canRender` (`lcdOn()` and the slide's `_dirShown`), `s.statusOpen`, the `animationend` release (the card's one listener on the slide's screen releases `s.dirEffect`; 3C leases need their own effect id field or the same one, one effect per track), `serverClockKnown()`, `device-fx.js` (a rim recipe is a new entry in the card's `recipes`, passed to `create`), the TDZ card-check case and the `devicefx` section (3C adds its own section or extends `devicefx`, and names its methods in the comment, `pick-sections` finds a section by mention), and the `device-fx` AGENTS.md row (3C adds a part, or its rim recipes to `device-fx.js`, and a row). Reduced motion: no cue (it is an onset). | 1 | S-M | `gate --auto` plus the `devicefx` section if it is the first adapter | Press feed, play, clean and the lights toy; each cue once against each finish; the cue with the switch off (none); the cue with a care scene running (scene wins). |
 | 4 | **Expand the matrix**: snow, fog, storm, wind, lights, fireplace, heating/cooling, media, TV, vacuum, appliance, moon, `DEVICE_SIGNAL_MAP` machine-checked. Two PRs. | 1 | M | `ci-gate` for the server half, `gate --auto` for the rest | Each row once on the phone: lights, fireplace, heating, doorbell, a storm with reduced motion on. |
 | 5 | **Idle delta**: section 8's three rows, only if N4 leaves them open. | 1 | S-M | `gate --auto` | A ten-minute idle watch on the phone; a game then idle. |
 | 6 | **Rare glass**: section 9. | 1 | S | `gate --auto` | A long idle watch; confirm it is rare and never over a control. |
@@ -794,13 +793,48 @@ provable without a device; the device queue above is for the look and feel only.
 | clock (M5) | node: a skewed fake clock, a live onset is not silently expired; `offer` gated on `serverClockKnown()` |
 | fx / dir (m5) | source test: no `fx-` in the adapter |
 
+**As built in 3B (what 3C reads).**
+
+- **Part and adapter.** `src/card/device-fx.js` (`HATCH_DEVICE_FX`, after `interaction-director.js` in
+  `manifest.txt`): `RECIPES.rain`, `ambientOf`, `cueOf`, `ringOf`, `paint`, `sync`, `live`, `enter`. No `this`,
+  no timer, no sound or vibrate. The card's methods that call it are in `card-visit.js`:
+  `_dirEnv`, `_dirShown`, `_dirSync`, `_dirLive`, `_dirView`, `_dirPause`, `_dirSwitch`.
+- **Director.** Created in `_build` with `now` = `serverNow`, `deviceNow` = `Date.now`, `trusted` =
+  `serverClockKnown`, `canRender(s)` = `lcdOn() && this._dirShown(s)` (on show and visible; reduced motion
+  is **not** in `canRender`, `live` and `enter` check `calm()` so the ambience is still set),
+  `schedule` a `setTimeout` returning its cancel. `tick` runs from `_tick`; `reset` on disconnect;
+  `detach` in `_forget`. `serverClockKnown()` is in `shell-data.js` (true after the first reading inside the
+  skew cap).
+- **Wire to cue.** `rain_started` is `direction:"start"`, `data:{key:"rain", value:true}`; `rain_stopped` is
+  `"end"`, `false`; both `collapseKey:"rain"`. A live entry is `presentation:"onset"` with no `occurredAt` or
+  `ttlMs` (M5); a ring entry is `"echo"` with the server's times.
+- **Where it hooks.** `_channel`: the snapshot sets the ambient (`_dirSync`) and keeps the ring, then the
+  first view decides (`_dirView`); a house diff re-syncs; `{"fx": entry}` goes to `_dirLive` before the
+  early return. `_go`, the IO callback, `_onHidden` and `_bootEnd` call `_dirView` for the slide in view (the
+  first view marks the slide; a reconnect snapshot on a viewed slide never echoes, M7); leaving a slide, a
+  hidden tab and the IO "not visible" cancel the `shellImpulse` track. `_toggleStatus` sets `s.statusOpen`.
+  `animationend` on the slide's screen releases `s.dirEffect`. `lcd` switch: `_dirSwitch` (off clears the
+  glass, on repaints the sheen).
+- **Glass.** `.hw.glass` (an `<i>` in `.screen`, after `.glow`, before the attention icon, bubble, status
+  sheet, game box and boot layer, `z-index:0`, `pointer-events:none`), only under `ha-card.lcd-on` and
+  `@supports (width: round(1px,1px))`, hidden while `.screen.show-status`. Classes: `dir-wet` (the still
+  sheen: beads and a faint wash), `dir-drop`/`dir-clear` (the onset, 1.8 s, 18 steps), `dir-echo` (the
+  shortened form, .9 s). Reduced motion: the sheen only; `live` and `enter` offer nothing under `calm()`
+  (and the global rule would stop the animation anyway).
+- **Not changed.** `_houseFx`/`_robotFx`, the `.pet` rules (`motion_rule.test.js` `ALLOWED` is untouched),
+  the server. No new copy; the pet says nothing for the rain from this path.
+- **card-check.** Section `devicefx` (before `lcd`), written in the `if (enter("devicefx"))` form, naming
+  the adapter methods, `_channel`, `_toggleStatus`, `_go`, `_onHidden` and the part's constants. It drives
+  the card's own `_channel` (cases 1, 2, 3, 7, M7, 8, 9, 12, 13, 14, 17); the real-rain-flip line (dev's
+  `input_number.fake_rain_rate`) is not in it, see the first mate's list in the 3B report.
+
 3C (rim cues; `node --test`, the bench, card-check only if first adapter):
 
 | Case | Proof |
 |---|---|
 | 12 (the rim half) | reduced motion or the switch off: no cue; no haptic and no audio from the cue |
 | 14 (the rim half) | the cue sits on the rim layer, `pointer-events:none`, never over a control |
-| 17 | as 3B, if 3C lands first |
+| 17 | already in `devicefx` (3B); a new part for 3C goes in `manifest.txt` after `device-fx.js` and extends the TDZ test |
 | rule | source test: no `transform`, `animation` or `filter` on `.cap` or `.toy` from a rim rule; the cue starts from `_tapped` or the scene beat, never from the cap's classes; `dir-*` only |
 | shared frame | node: a care scene running wins over a rim cue (`BUSY_OWNERS` `scene`) |
 
@@ -863,7 +897,7 @@ world-exclusive idle poses. The internals art (parked) is not counted.
 - **Bench:** a new `alive` preset: rest, pressed, rain current, echo pending, a
   protected state (Hop board open, status open), reduced motion, 420 and 330 px. The
   bench cannot test the channel or a restart (its README Limits).
-- **card-check:** from 3B (or 3C, whichever lands first), a section for the echo (a fake `device_fx` over the real
+- **card-check:** from 3B (built), a section for the echo (a fake `device_fx` over the real
   channel), the TDZ-order case, restart. Slice 1 has none. Use a real HA only for behaviour (AGENTS.md).
 
 ## 16. Risks
