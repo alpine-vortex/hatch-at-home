@@ -396,7 +396,7 @@ rule: a line the plan does not quote is not here):
 | tide pool, stone on the next move | `tide pool, a stone on the next move` |
 | tide pool, water on the next move | `tide pool, water on the next move` |
 | ripple pad | `ripple pad, sinks the pads to its right` |
-| dark cell, unlit | `dark cell, lit by the lantern` |
+| dark cell, unlit | `dark cell, not lit yet` (first mate, ship 4b brief) |
 | lantern | `lantern, step here to light the dark cells` |
 
 A lit dark cell has the plain pad's look and no label. The **keys' labels** keep
@@ -1618,7 +1618,7 @@ stage and day loads, `board` serves a new id, a `settle` with the old id answers
 the bench shows a woodland and a hearth board at 300 / 330 / 420; `scripts/gate --auto` plus
 the first mate's `ci-gate` for the batch.
 
-#### Ship 4b: crackle, pool, ripple, lantern (new state; M-L)
+#### Ship 4b: crackle, pool, ripple, lantern (new state; M-L) — BUILT (s2869, awaiting merge)
 
 Terrarium's crackle `c`, tidepool's pool `%`, pond's ripple `r`, nightsky's `?` and `*`. The
 new state (section 2c "The state"): `parity` on pool boards and `half` on crackle boards,
@@ -1702,6 +1702,49 @@ lantern), with the key labels (a crackle `sunk` only when fully sunk, a water-ph
 `blocked`) and the aria labels of section 2c asserted; the bench shows each world's board at
 300 / 330 / 420, a pool in both phases and the lantern unlit and lit
 (`--preset hop`); `scripts/gate --auto` plus the first mate's `ci-gate` for the batch.
+
+**As built (s2869).** Where the build settled something the text above leaves open:
+- **State.** `parity` and `half` are on a board's state only when it has a pool or a crackle
+  (`None` in `State`, absent from `view()` and the JS state elsewhere; a missing one reads
+  0), so a board without them has the same views, ids and save shape as before. The lantern's
+  lit flag is derived (the lantern sunk or under the pet) and is not in the state or the memo
+  key. `_Rules.leave(pos, sunk, half)` (JS `leave(board, cells, pos, sunk, half)`) is the one
+  place a cell is left: a crackle's first visit only sets its `half` bit, a ripple sinks its
+  `r` run to the right and then the first plain pad, stopping at the edge or a sunk cell and
+  never sinking `f` or `P`. Leaving a cell already sunk (a squeeze's lift) sinks nothing.
+- **Memo key.** `sunk | pos << 24 | uses << 29 | parity << 31 | half << 32`, packed the same
+  in `rec` and `walk`; a board with no twist state keeps a fast path with parity and half 0.
+- **Bots.** `_plan`'s nodes are `(cell, spent, phase)`, where the phase is the parity on a pool
+  board, the lantern's lit bit on a lantern board (so a plan can light the lantern before it
+  names a dark cell), and 0 elsewhere. `_greedy` re-plans when a step sinks more than the cell
+  left (a ripple's chain), besides a landing that is not the planned one.
+- **Pools and the square colour.** On a step-only family a move changes the pet's square
+  colour (the grid is bipartite), so each pool's phase on arrival is fixed by its colour; only
+  a special (hop, glide, dig) moves without changing colour while counting a move, and so
+  changes which pools a path can enter. The generator does not use this; the bot ranges hold.
+- **Generator.** One branch per twist with `(specials -> count)` tables: crackles where three
+  or more neighbours are open, pools where `clear()` holds and two or more are open, ripples
+  with a plain pad to the right, the lantern where two or more are open and then the dark
+  cells where one or more are; a lantern with no dark cell that fits is taken back. Cost per
+  world over 40 boards a (world, family, stage) at child, teen and adult: no fallback in any
+  world, the worst board 2.3 s (terrarium hop adult), the most states 99,229 (terrarium squeeze
+  adult: a crackle's half bits widen the key, and that is close to `HOP_STATE_CAP`'s 100,000,
+  past which a candidate is redrawn); the ship report has the table.
+- **Card.** `hopCellLabel(board, state, i)` replaces `HOP_LABELLED`: a whole or half crackle,
+  a pool in the next move's phase, a ripple, an unlit dark cell and the lantern carry their
+  2c label; a sunk twist pad and a lit dark cell carry none (no line is quoted for them). The
+  classes are `wet` (a pool in its water phase), `half` and `dark` (`lit` was taken: the tap
+  highlight), plain class swaps with no animation. A key reads "sunk" onto any sunk cell of
+  `HATCH_HOP.PADS` (`.fPcr*?`).
+- **Tests.** The default suite's per (world, family) bot bracket now runs in its own test per
+  twist world over 10 boards a stage (`BRACKET_CELL`, 120 noisy games a pair; about 19 s): at
+  `PER_CELL`'s 60 games one board the bot loses three times moves a pair 5%, and tidepool swim
+  scored 53/60 there while scoring 0.94 on 120 and 0.93 or more on 60 boards a cell. The
+  threshold (90% / 20%) is unchanged.
+- **Bench.** Each fixture in `dev/bench/hop-boards.json` gains `acted` (the shortest list
+  that shows the twist acting: the landing, a half crackle, a ripple's chain); the `board:`
+  shot takes `parity` and `lantern: "lit"`, and `hopInfo` writes the cells' `labels`,
+  `parity` and `half`.
 
 ### Ship 5: hints and practice boards (server and card, tier 1, S-M)
 
