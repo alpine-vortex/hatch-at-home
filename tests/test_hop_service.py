@@ -152,17 +152,24 @@ async def test_a_world_change_changes_the_board(hass, now, hass_storage):
     second = await board(hass)
     assert second["world"] == pet.world != first["world"]
     assert second["id"] != first["id"]
-    assert (first["twist"], second["twist"]) == ("stumps", None)  # pond: ship 4b's
+    assert (first["twist"], second["twist"]) == ("stumps", "ripple")
 
 
 async def test_the_twist_follows_the_world_and_the_stage(hass, now, hass_storage):
-    """Hearth's rug from child up; a baby's board has no twist in any world
-    (Decided 26)."""
+    """Each world's twist from child up (hearth's rug, ship 4b's four); a
+    baby's board has no twist in any world (Decided 26)."""
     await ready(hass, now, hass_storage)
     pet = coordinator(hass)
-    pet.world = "hearth"
-    reply = await board(hass)
-    assert reply["twist"] == "rug" and "=" in "".join(reply["grid"])
+    for world, twist, glyph in (
+        ("hearth", "rug", "="),
+        ("terrarium", "crackle", "c"),
+        ("tidepool", "pool", "%"),
+        ("pond", "ripple", "r"),
+        ("nightsky", "lantern", "*"),
+    ):
+        pet.world = world
+        reply = await board(hass)
+        assert reply["twist"] == twist and glyph in "".join(reply["grid"]), world
     pet.state.hop_day = {}
     pet.state.age_hours = 10.0  # a baby
     baby = await board(hass)

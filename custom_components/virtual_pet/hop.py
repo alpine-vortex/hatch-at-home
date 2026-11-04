@@ -22,6 +22,15 @@ A world's twist (plan 2c; never on a baby's board, one twist per board):
     =    rug     hearth: a step onto it slides the pet one more cell the way it
                  went, if that cell is walkable and unsunk (else it stops on the
                  rug). Never sinks. A special that lands on it does not slide.
+    c    crackle terrarium: a pad that sinks on the second leaving (half-sunk
+                 after the first). Tidy needs it fully sunk.
+    %    pool    tidepool: a stone when the move entering it makes the count of
+                 moves odd, water when even (state: the count's parity). Never
+                 sinks.
+    r    ripple  pond: a pad; leaving it also sinks the ripples to its right and
+                 the first plain pad `.` after them (never a find, the start).
+    ? *  dark    nightsky: a dark cell can't be entered until the lantern `*`
+         lantern (a pad) is lit (sunk or under the pet); then it is a pad.
 
 A cell is named by its index in reading order, a letter `a` to `x` on the wire.
 A move names the cell the pet steps onto; the server works out the move from
@@ -31,8 +40,10 @@ twin) or a rug (the cell past it): every rule reads the landing.
 A win is the nest with every find; tidy is a win with every pad sunk.
 
 A state is (pos, sunk, uses): the pet's cell, the sunk pads as a bit mask, the
-specials left. A find is picked up when its pad is entered, so the finds in are
-the find pads that are sunk or under the pet: no field of their own.
+specials left; on a pool board also `parity` (moves made mod 2), on a crackle
+board `half` (the half-sunk crackles, a mask), and on no other board. A find is
+picked up when its pad is entered, so the finds in are the find pads that are
+sunk or under the pet: no field of their own (a ripple never sinks a find).
 """
 
 from __future__ import annotations
@@ -48,7 +59,9 @@ from . import rates as R
 
 # Bump on any change that can change a board for the same inputs; the golden
 # boards in tests/fixtures/hop_golden.json are then regenerated.
-GEN_VERSION = 3  # 2: board_id binds the world; 3: stumps and rugs (ship 4a)
+# 2: board_id binds the world; 3: stumps and rugs (ship 4a); 4: crackle, pool,
+# ripple, lantern (ship 4b)
+GEN_VERSION = 4
 
 FAMILIES = ("hop", "glide", "swim", "dig", "climb", "squeeze")
 DEFAULT_FAMILY = "hop"
@@ -107,15 +120,31 @@ MIN_WIDTH = 4
 NARROW_WEEKDAY = 2  # date.weekday(): Wednesday
 
 LETTERS = "abcdefghijklmnopqrstuvwx"  # 6 x 4: a wider board is a format change
-PADS = ".fP"
-CELLS = ".fo~#PN12="
+# Pads: they sink when left (a crackle on its second leaving), count toward
+# tidy, and a squeeze steps back onto one once sunk. A dark cell is one once lit.
+PADS = ".fPcr*?"
+CELLS = ".fo~#PN12=c%r?*"
 # Walkable cells that never sink: no two may touch (a free loop; plan section 2).
-NEVER_SINKING = "o12="
+NEVER_SINKING = "o12=%"
 # A twist's glyphs (plan 2c). The engines read glyphs only; twist_of() names the
 # twist for copy and the bench, and no rule reads it.
-TWIST_GLYPHS = {"stumps": "12", "rug": "="}
+TWIST_GLYPHS = {
+    "stumps": "12",
+    "rug": "=",
+    "crackle": "c",
+    "pool": "%",
+    "ripple": "r",
+    "lantern": "?*",
+}
 # The world whose boards carry a twist from child up (babies get none).
-WORLD_TWIST = {"woodland": "stumps", "hearth": "rug"}
+WORLD_TWIST = {
+    "woodland": "stumps",
+    "hearth": "rug",
+    "terrarium": "crackle",
+    "tidepool": "pool",
+    "pond": "ripple",
+    "nightsky": "lantern",
+}
 MAX_SPECIALS = 3  # an adult's; STAGES has no more
 
 
@@ -181,6 +210,8 @@ class Board:
         ones, twos = cells.count("1"), cells.count("2")
         if ones not in (0, 2) or twos not in (0, 2) or (twos and not ones):
             raise ValueError("stumps come in pairs")
+        if cells.count("*") > 1 or bool(cells.count("*")) != ("?" in cells):
+            raise ValueError("one lantern, with dark cells")
         if self.family not in FAMILIES:
             raise ValueError("unknown family")
         if (
@@ -233,10 +264,14 @@ class Board:
     def find_mask(self) -> int:
         return _mask(i for i, c in enumerate(self.cells) if c == "f")
 
+    def glyph_mask(self, glyph: str) -> int:
+        return _mask(i for i, c in enumerate(self.cells) if c == glyph)
+
 
 def twist_of(board: Board) -> str | None:
-    """The board's twist by its glyphs ("stumps", "rug"), or None: the reply's
-    `twist`, for copy and the bench. No rule reads it."""
+    """The board's twist by its glyphs ("stumps", "rug", "crackle", "pool",
+    "ripple", "lantern"), or None: the reply's `twist`, for copy and the
+    bench. No rule reads it."""
     for kind, glyphs in TWIST_GLYPHS.items():
         if any(g in board.cells for g in glyphs):
             return kind
@@ -263,25 +298,40 @@ class State:
     sunk: int
     uses: int
     done: bool = False  # in the nest: the board is over
+    # A twist's state, only on a board with its glyph (plan 2c "The state"):
+    # None elsewhere, which every rule reads as 0.
+    parity: int | None = None  # moves made, mod 2 (a pool board)
+    half: int | None = None  # the half-sunk crackles, a mask (a crackle board)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "pos": self.pos,
             "sunk": _bits(self.sunk),
             "uses": self.uses,
             "done": self.done,
         }
+        if self.parity is not None:
+            out["parity"] = self.parity
+        if self.half is not None:
+            out["half"] = _bits(self.half)
+        return out
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> State:
-        """A state from to_dict()'s form (replay()'s `final`): `sunk` is a list
-        of cells, not the bit mask the rules and the solver take."""
+        """A state from to_dict()'s form (replay()'s `final`): `sunk` and
+        `half` are lists of cells, not the bit masks the rules and the solver
+        take. A missing `parity` or `half` reads as 0."""
         cells = range(len(LETTERS))
+        parity, half = data.get("parity"), data.get("half")
         if not (
             data["pos"] in cells
             and all(i in cells for i in data["sunk"])
             and isinstance(data["uses"], int)
             and data["uses"] >= 0
+            and (parity is None or parity in (0, 1) and not isinstance(parity, bool))
+            and (
+                half is None or isinstance(half, list) and all(i in cells for i in half)
+            )
         ):
             raise ValueError("not a state")
         return cls(
@@ -289,11 +339,20 @@ class State:
             _mask(data["sunk"]),
             int(data["uses"]),
             bool(data["done"]),
+            None if parity is None else int(parity),
+            None if half is None else _mask(half),
         )
 
 
 def start_state(board: Board) -> State:
-    return State(board.start, 0, board.specials)
+    cells = board.cells
+    return State(
+        board.start,
+        0,
+        board.specials,
+        parity=0 if "%" in cells else None,
+        half=0 if "c" in cells else None,
+    )
 
 
 class _Rules:
@@ -314,6 +373,12 @@ class _Rules:
         "rugs",
         "beyond",
         "plain",
+        "pools",
+        "crackles",
+        "ripples",
+        "dark",
+        "lantern",
+        "simple",
     )
 
     def __init__(self, board: Board) -> None:
@@ -334,6 +399,8 @@ class _Rules:
                         fam == "climb" and cells[t] == "#"
                     )
                     out.append((t, special))
+                    if fam == "swim" and cells[t] == "%":
+                        out.append((t, True))  # into a pool in its water phase
                     if fam == "squeeze" and cells[t] in PADS:
                         out.append((t, True))  # back onto it once it has sunk
                 if fam in ("hop", "dig"):
@@ -366,10 +433,20 @@ class _Rules:
                     on = 0 <= nr < h and 0 <= nc < w
                     self.beyond[(fr * w + fc) << 5 | t] = nr * w + nc if on else -1
         self.plain = not self.rugs and max(self.twin) < 0  # the landing is the target
+        # Ship 4b's cells (plan 2c): pools (a phase by the move count), crackles
+        # (half-sunk first), ripples (a chain to the right), dark cells and the
+        # lantern that lights them.
+        self.pools = board.glyph_mask("%")
+        self.crackles = board.glyph_mask("c")
+        self.ripples = board.glyph_mask("r")
+        self.dark = board.glyph_mask("?")
+        self.lantern = board.glyph_mask("*")
+        self.simple = not (self.crackles or self.ripples)  # leaving sinks the cell left
         # The relaxed map the solver prunes with: cells a move may ever enter,
-        # sinking aside (water and walls only for their family).
+        # sinking aside (water and walls only for their family; dark cells once
+        # the lantern is reached).
         steady = _mask(i for i, ch in enumerate(cells) if ch in NEVER_SINKING)
-        self.walk = self.pads | steady | (1 << self.nest)
+        self.walk = (self.pads | steady | (1 << self.nest)) & ~self.dark
         self.extra = _mask(
             i
             for i, ch in enumerate(cells)
@@ -381,7 +458,8 @@ class _Rules:
     def reach(self, pos: int, sunk: int, uses: int) -> int:
         """The cells the pet could still enter from `pos`, as if pads it
         crosses did not sink and a use were never spent: a mask that holds
-        every cell a real line can reach (the solver's prune)."""
+        every cell a real line can reach (the solver's prune). A dark cell is
+        open once the lantern is lit or reached; a pool in either phase."""
         open_ = self.walk & ~sunk
         nbrs = self.steps
         if uses:
@@ -389,6 +467,10 @@ class _Rules:
             if self.board.family == "squeeze":
                 open_ |= sunk
             nbrs = self.any
+        lantern = self.lantern
+        if lantern and (sunk | 1 << pos) & lantern:
+            open_ |= self.dark & ~sunk
+            lantern = 0
         nest, twin = self.nest, self.twin
         seen = 1 << pos
         todo = [pos]
@@ -407,23 +489,74 @@ class _Rules:
                         if o >= 0 and not seen >> o & 1:
                             seen |= 1 << o
                             todo.append(o)
+            if not todo and lantern and seen & lantern:
+                # The lantern is reached: the dark cells open; look again from
+                # every cell reached so far.
+                open_ |= self.dark & ~sunk
+                lantern = 0
+                todo = [i for i in _bits(seen) if i != nest]
         return seen
 
-    def entry(self, pos: int, t: int, special: bool, sunk: int, uses: int) -> bool:
-        """Whether the pet on `pos` may enter `t` by that kind of move."""
+    def leave(self, pos: int, sunk: int, half: int) -> tuple[int, int]:
+        """(sunk, half) after the pet leaves `pos`: a pad sinks (a crackle
+        only on its second leaving: half-sunk on the first), and leaving an
+        unsunk ripple sinks the ripples to its right along the row and the
+        first plain pad after them (plan 2c, the chain). A cell already sunk
+        sinks nothing new."""
+        bit = 1 << pos
+        if not self.pads & bit or sunk & bit:
+            return sunk, half
+        if self.crackles & bit and not half & bit:
+            return sunk, half | bit
+        sunk |= bit
+        half &= ~bit
+        if self.ripples & bit:
+            w, cells = self.board.w, self.board.cells
+            j = pos + 1
+            while j % w and not sunk >> j & 1:
+                if cells[j] == "r":
+                    sunk |= 1 << j
+                    j += 1
+                    continue
+                if cells[j] == ".":
+                    sunk |= 1 << j
+                break
+        return sunk, half
+
+    def entry(
+        self,
+        pos: int,
+        t: int,
+        special: bool,
+        sunk: int,
+        uses: int,
+        parity: int = 0,
+        lit: bool | None = None,
+    ) -> bool:
+        """Whether the pet on `pos` may enter `t` by that kind of move.
+        `parity` is the moves made mod 2 (a pool's phase: this move makes the
+        count odd, a stone, when it is 0). `lit` overrides the lantern's
+        derived flag (the bots' plan walks past the lantern before it is)."""
         cell = self.board.cells[t]
         fam = self.board.family
+        if cell == "?":
+            if lit is None:
+                lit = bool((sunk | 1 << pos) & self.lantern)
+            if not lit:
+                return False  # dark: nothing enters it, a special neither
         if special:
             if uses < 1:
                 return False
             if fam == "swim":
-                return cell == "~"
+                return cell == "~" or (cell == "%" and parity == 1)
             if fam == "climb":
                 return cell == "#"
             if fam == "squeeze":
                 return cell in PADS and bool(sunk >> t & 1)
         if cell in PADS:
             return not sunk >> t & 1
+        if cell == "%":
+            return parity == 0  # a stone on the move that makes the count odd
         if cell in NEVER_SINKING:
             return True
         if cell == "N":
@@ -452,11 +585,19 @@ class _Rules:
         state is at the landing (land()), which may not be `t`."""
         if s.done:
             return None
+        parity = s.parity or 0
         for target, special in self.moves[s.pos]:
-            if target == t and self.entry(s.pos, t, special, s.sunk, s.uses):
-                sunk = s.sunk | (self.pads & (1 << s.pos))
+            if target == t and self.entry(s.pos, t, special, s.sunk, s.uses, parity):
+                sunk, half = self.leave(s.pos, s.sunk, s.half or 0)
                 to = t if self.plain else self.land(s.pos, t, special, sunk)
-                return State(to, sunk, s.uses - special, to == self.nest)
+                return State(
+                    to,
+                    sunk,
+                    s.uses - special,
+                    to == self.nest,
+                    parity ^ 1 if self.pools else None,
+                    half if self.crackles else None,
+                )
         return None
 
     def targets(self, s: State) -> list[int]:
@@ -466,7 +607,7 @@ class _Rules:
             {
                 t
                 for t, special in self.moves[s.pos]
-                if self.entry(s.pos, t, special, s.sunk, s.uses)
+                if self.entry(s.pos, t, special, s.sunk, s.uses, s.parity or 0)
             }
         )
 
@@ -500,6 +641,7 @@ def is_won(board: Board, state: State) -> bool:
 
 
 def is_tidy(board: Board, state: State) -> bool:
+    """A win with every pad sunk (a crackle fully, every dark cell too)."""
     return state.done and board.pad_mask & ~state.sunk == 0
 
 
@@ -578,7 +720,9 @@ def solve(
     """Count the winning and tidy lists from `state` (default: the start).
 
     A memoised depth-first search over (pos, sunk, uses), at each move's
-    landing (a stump's twin, the cell past a rug). Every move but one between
+    landing (a stump's twin, the cell past a rug), widened by the move
+    count's parity on a pool board and the half-sunk crackles on a crackle
+    board (on no other board, so their state counts do not grow). Every move but one between
     never-sinking cells sinks a pad or spends a use, so the state graph is
     acyclic unless two of them touch; a state met again on the current line
     raises CycleError rather than loop. Raises TooBig past `cap` states
@@ -590,12 +734,16 @@ def solve(
         return Solve(0, 0, None, None, None, None, 0)
     pads, finds, nest = rules.pads, rules.finds, rules.nest
     moves, entry, reach = rules.moves, rules.entry, rules.reach
-    plain, land = rules.plain, rules.land
+    plain, land, leave, simple = rules.plain, rules.land, rules.leave, rules.simple
+    flip = 1 if rules.pools else 0  # parity changes each move on a pool board only
     memo: dict[int, tuple[int, int, int, int]] = {}
     line: set[int] = set()
 
-    def rec(pos: int, sunk: int, uses: int) -> tuple[int, int, int, int]:
-        key = sunk | pos << 24 | uses << 29
+    def rec(
+        pos: int, sunk: int, uses: int, ph: int, half: int
+    ) -> tuple[int, int, int, int]:
+        # pos 5 bits, uses 2, parity 1, then the half-sunk crackles.
+        key = sunk | pos << 24 | uses << 29 | ph << 31 | half << 32
         got = memo.get(key)
         if got is not None:
             return got
@@ -603,7 +751,10 @@ def solve(
             raise CycleError(f"state met twice: pos {pos}")
         if len(memo) >= cap:
             raise TooBig(cap)
-        left = sunk | (pads & (1 << pos))
+        if simple:
+            left, half2 = sunk | (pads & (1 << pos)), half
+        else:
+            left, half2 = leave(pos, sunk, half)
         need = (finds & ~left & ~(1 << pos)) | 1 << nest
         if reach(pos, sunk, uses) & need != need:
             got = memo[key] = (0, 0, _NONE, _NONE)  # a find or the nest is cut off
@@ -611,8 +762,9 @@ def solve(
         line.add(key)
         win = tidy = 0
         min_win = min_tidy = _NONE
+        ph2 = ph ^ flip
         for t, special in moves[pos]:
-            if not entry(pos, t, special, sunk, uses):
+            if not entry(pos, t, special, sunk, uses, ph):
                 continue
             to = t if plain else land(pos, t, special, left)
             if to == nest:
@@ -622,7 +774,7 @@ def solve(
                     tidy += 1
                     min_tidy = 1
                 continue
-            w, td, mw, mt = rec(to, left, uses - special)
+            w, td, mw, mt = rec(to, left, uses - special, ph2, half2)
             win += w
             tidy += td
             if mw + 1 < min_win:
@@ -633,7 +785,7 @@ def solve(
         got = memo[key] = (win, tidy, min_win, min_tidy)
         return got
 
-    win, tidy, mw, mt = rec(s0.pos, s0.sunk, s0.uses)
+    win, tidy, mw, mt = rec(s0.pos, s0.sunk, s0.uses, s0.parity or 0, s0.half or 0)
 
     def walk(slot: int) -> list[int] | None:
         """A shortest list by the memo (slot 2: win, slot 3: tidy), the first
@@ -642,21 +794,25 @@ def solve(
             return None
         out: list[int] = []
         pos, sunk, uses = s0.pos, s0.sunk, s0.uses
+        ph, half = s0.parity or 0, s0.half or 0
         need = mw if slot == 2 else mt
         while True:
-            left = sunk | (pads & (1 << pos))
+            left, half2 = leave(pos, sunk, half)
+            ph2 = ph ^ flip
             for t, special in moves[pos]:
-                if not entry(pos, t, special, sunk, uses):
+                if not entry(pos, t, special, sunk, uses, ph):
                     continue
                 to = t if plain else land(pos, t, special, left)
                 if to == nest:
                     if need == 1 and (slot == 2 or pads & ~left == 0):
                         return [*out, t]
                     continue
-                key = left | to << 24 | (uses - special) << 29
+                # rec's key, packed the same way.
+                key = left | to << 24 | (uses - special) << 29 | ph2 << 31 | half2 << 32
                 if memo[key][slot] == need - 1:
                     out.append(t)  # the named cell; the pet is on `to`
                     pos, sunk, uses, need = to, left, uses - special, need - 1
+                    ph, half = ph2, half2
                     break
             else:  # pragma: no cover - the memo always has the next step
                 raise AssertionError("broken memo")
@@ -701,22 +857,33 @@ def _plan(
     move it may not take (its second choice after an undo). The walk is
     (named cell, landing) pairs: a node is the cell the pet ends on, so a
     stump or a rug leads on from its landing; _greedy replays each step with
-    rules.step and re-plans where the live board lands it elsewhere."""
+    rules.step and re-plans where the live board lands it elsewhere. A node
+    also holds a phase: the move count's parity on a pool board (a pool's
+    phase on the move into it), whether the walk has lit the lantern on a
+    lantern board, 0 elsewhere."""
     finds_in = s.sunk | (1 << s.pos)
     goals = _bits(rules.finds & ~finds_in) or [rules.nest]
-    sunk = s.sunk | (rules.pads & (1 << s.pos))  # the cell it leaves
+    sunk, _ = rules.leave(s.pos, s.sunk, s.half or 0)  # the cell it leaves
+    # The live board stays as `sunk` along the walk; a ripple's chain changes
+    # it, and _greedy plans again after one.
+    sunk |= rules.pads & (1 << s.pos)
+    pools, lantern = bool(rules.pools), rules.lantern
+    if pools:
+        phase0 = s.parity or 0
+    else:
+        phase0 = 1 if lantern and (s.sunk | 1 << s.pos) & lantern else 0
     for allow in range(s.uses + 1):
-        # BFS over (cell, specials spent <= allow), by moves made.
-        start = (s.pos, 0)
-        parent: dict[tuple[int, int], tuple[tuple[int, int], int] | None] = {
+        # BFS over (cell, specials spent <= allow, phase), by moves made.
+        start = (s.pos, 0, phase0)
+        parent: dict[tuple[int, int, int], tuple[tuple[int, int, int], int] | None] = {
             start: None
         }
         frontier = [start]
-        found: list[tuple[int, int]] = []
+        found: list[tuple[int, int, int]] = []
         while frontier and not found:
-            nxt: list[tuple[int, int]] = []
+            nxt: list[tuple[int, int, int]] = []
             for node in frontier:
-                pos, spent = node
+                pos, spent, phase = node
                 moves = rules.moves[pos]
                 if rng is not None:
                     moves = _order(rng, moves)
@@ -726,13 +893,24 @@ def _plan(
                     spent2 = spent + special
                     if spent2 > allow:
                         continue
-                    if not rules.entry(pos, t, special, sunk, s.uses - spent):
+                    if pools:
+                        ok = rules.entry(pos, t, special, sunk, s.uses - spent, phase)
+                    else:
+                        lit = bool(phase) if lantern else None
+                        ok = rules.entry(pos, t, special, sunk, s.uses - spent, 0, lit)
+                    if not ok:
                         continue
                     to = t if rules.plain else rules.land(pos, t, special, sunk)
                     if to == rules.nest and goals != [rules.nest]:
                         continue
-                    child = (to, spent2)
-                    if child in parent or any((to, k) in parent for k in range(spent2)):
+                    if pools:
+                        phase2 = phase ^ 1
+                    else:
+                        phase2 = 1 if phase or lantern >> to & 1 else 0
+                    child = (to, spent2, phase2)
+                    if child in parent or any(
+                        (to, k, phase2) in parent for k in range(spent2)
+                    ):
                         continue
                     parent[child] = (node, t)
                     if to in goals:
@@ -746,14 +924,14 @@ def _plan(
             pref = [g for g in prefer if any(f[0] == g for f in found)]
             if pref:
                 found = [f for f in found if f[0] == pref[0]]
-        found.sort(key=lambda f: (f[1], f[0]))
+        found.sort(key=lambda f: (f[1], f[0], f[2]))
         if rng is not None:
             best = [f for f in found if f[1] == found[0][1]]
             goal = _pick(rng, best)
         else:
             goal = found[0]
         path: list[tuple[int, int]] = []
-        node: tuple[int, int] = goal
+        node: tuple[int, int, int] = goal
         while node != start:
             back = parent[node]
             assert back is not None
@@ -799,10 +977,13 @@ def _greedy(
             # A failed plan: return what was played (re-planning would draw
             # the same illegal walk again, forever).
             return moves, s
+        chain = nxt.sunk & ~(s.sunk | 1 << s.pos)
         s = nxt
         moves.append(t)
-        if s.pos != to:
-            path = []  # the live board landed it elsewhere (a rug): plan again from here
+        if s.pos != to or chain:
+            # The live board landed it elsewhere (a rug), or a ripple's chain
+            # sank cells the walk may cross: plan again from here.
+            path = []
     return moves, s
 
 
@@ -834,7 +1015,7 @@ def careful_bot(board: Board, budget: int = 300) -> tuple[list[int], bool, bool]
         nonlocal tried
         if s.done:
             return line if pads & ~s.sunk == 0 else None
-        left = s.sunk | (pads & (1 << s.pos))
+        left, _ = rules.leave(s.pos, s.sunk, s.half or 0)
         need = (pads & ~left & ~(1 << s.pos)) | 1 << rules.nest
         if rules.reach(s.pos, s.sunk, s.uses) & need != need:
             return None
@@ -878,6 +1059,12 @@ STONES = {0: (1, 1), 1: (1, 2), 2: (1, 2), 3: (1, 2)}
 # (hearth).
 STUMP_PAIRS = {1: (1, 1), 2: (1, 2), 3: (1, 2)}
 RUGS = {1: (1, 2), 2: (1, 2), 3: (1, 2)}
+# Ship 4b (draft, tuned by the measured acceptance): crackles (terrarium), pools
+# (tidepool), ripples (pond), and the dark cells beside one lantern (nightsky).
+CRACKLES = {1: (1, 2), 2: (1, 2), 3: (1, 2)}
+POOLS = {1: (1, 2), 2: (1, 2), 3: (1, 2)}
+RIPPLES = {1: (1, 2), 2: (1, 2), 3: (1, 2)}
+DARK = {1: (1, 2), 2: (2, 3), 3: (2, 3)}
 # Check 2's window: tidy lists, at most this many, by specials.
 TIDY_MAX = {0: 40, 1: 80, 2: 160, 3: 320}
 # Check 3: every tidy list is at least this many moves longer than the shortest win.
@@ -988,11 +1175,54 @@ def _place_twist(
     clear: Any,
 ) -> None:
     """The twist's cells on pads of `order` (the candidate's shuffled free
-    cells), each clear of every never-sinking cell. Stumps go in whole pairs
-    (a pair with no room for its twin is not placed); a rug goes only where a
-    step across it could slide: both its neighbours on a row or a column are
-    on the board and neither is water or a wall."""
-    if twist == "stumps":
+    cells), each never-sinking one clear of every never-sinking cell, and
+    each where it can act. Stumps go in whole pairs (a pair with no room for
+    its twin is not placed); a rug goes only where a step across it could
+    slide: both its neighbours on a row or a column are on the board and
+    neither is water or a wall. A crackle goes where three neighbours are
+    open (in, out, and in again), a pool where two are (in and out), a
+    ripple with a plain pad to its right; the lantern, then its dark cells,
+    each with an open neighbour (check()'s reach drops a board whose dark
+    cells the lantern's side can't reach)."""
+
+    def opens(i: int) -> int:
+        r, c = divmod(i, w)
+        return sum(
+            1
+            for dr, dc in ((0, -1), (-1, 0), (1, 0), (0, 1))
+            if 0 <= r + dr < h
+            and 0 <= c + dc < w
+            and cells[(r + dr) * w + c + dc] not in "~#"
+        )
+
+    def count(table: dict[int, tuple[int, int]]) -> int:
+        lo, hi = table[specials]
+        return lo + int(rng.random() * (hi - lo + 1))
+
+    def place(glyph: str, k: int, fits: Any) -> None:
+        for i in order:
+            if k == 0:
+                break
+            if cells[i] == "." and fits(i):
+                cells[i] = glyph
+                k -= 1
+
+    if twist == "crackle":
+        place("c", count(CRACKLES), lambda i: opens(i) >= 3)
+    elif twist == "pool":
+        place("%", count(POOLS), lambda i: clear(i) and opens(i) >= 2)
+    elif twist == "ripple":
+        place("r", count(RIPPLES), lambda i: (i + 1) % w and cells[i + 1] == ".")
+    elif twist == "lantern":
+        dark = count(DARK)
+        place("*", 1, lambda i: opens(i) >= 2)
+        if "*" in cells:
+            place("?", dark, lambda i: opens(i) >= 1)
+        if "?" not in cells:
+            for i, ch in enumerate(cells):  # no room for a dark cell: no lantern
+                if ch == "*":
+                    cells[i] = "."
+    elif twist == "stumps":
         lo, hi = STUMP_PAIRS[specials]
         glyphs = "12"[: lo + int(rng.random() * (hi - lo + 1))]
         for glyph in glyphs:
@@ -1031,8 +1261,8 @@ def _place_twist(
 
 
 def touching_never_sinking(board: Board) -> bool:
-    """Two orthogonally touching never-sinking cells (stones, stumps, rugs; a
-    stump beside its own twin too): a free loop, so endless lists."""
+    """Two orthogonally touching never-sinking cells (stones, stumps, rugs,
+    pools; a stump beside its own twin too): a free loop, so endless lists."""
     cells, w = board.cells, board.w
     for i, ch in enumerate(cells):
         if ch not in NEVER_SINKING:

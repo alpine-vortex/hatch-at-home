@@ -46,7 +46,14 @@ PAIRS = sorted(
         if s in H.FAMILY_OF
     }
 )
-TWIST_GLYPH = {"stumps": "1", "rug": "="}
+TWIST_GLYPH = {
+    "stumps": "1",
+    "rug": "=",
+    "crackle": "c",
+    "pool": "%",
+    "ripple": "r",
+    "lantern": "*",
+}
 
 
 def board(name: str) -> H.Board:
@@ -93,20 +100,39 @@ def test_fixture_boards_keep_the_touching_rule():
 
 
 def test_fixtures_cover_the_twists():
-    """Ship 4a: each twist's boards have a legal and an illegal case, a win, and
-    a case whose landing is not the named cell."""
-    for twist in ("stumps", "rug"):
+    """Ship 4: each twist's boards have a legal and an illegal case and a win;
+    4a's a case whose landing is not the named cell, 4b's a tidy line (tidy
+    needs the twist's own cells: both crackle visits, the lit dark cells)."""
+    for twist in H.TWIST_GLYPHS:
         names = [n for n in CASES["boards"] if H.twist_of(board(n)) == twist]
         mine = [c for c in CASES["cases"] if c["board"] in names]
         assert any(c["expect"]["won"] for c in mine), twist
         assert any(c["expect"]["bad_index"] is not None for c in mine), twist
-        moved = [
-            c
-            for c in mine
-            if c["expect"]["legal"]
-            and c["expect"]["final"]["pos"] != H.decode(c["moves"])[-1]
-        ]
-        assert moved, twist
+        if twist in ("stumps", "rug"):
+            moved = [
+                c
+                for c in mine
+                if c["expect"]["legal"]
+                and c["expect"]["final"]["pos"] != H.decode(c["moves"])[-1]
+            ]
+            assert moved, twist
+        elif twist != "pool":  # a pool is never a pad: tidy is as before
+            assert any(c["expect"]["tidy"] for c in mine), twist
+
+
+def test_the_twist_state_is_only_on_its_boards():
+    """Plan 2c "The state" (Decided 32): `parity` on a pool board's states and
+    `half` on a crackle board's, from the start on; on no other board."""
+    for case in CASES["cases"]:
+        b = board(case["board"])
+        final = case["expect"]["final"]
+        if final is None:
+            continue
+        assert ("parity" in final) == ("%" in b.cells), case["moves"]
+        assert ("half" in final) == ("c" in b.cells), case["moves"]
+    assert H.start_state(board("pool_hop")).to_dict()["parity"] == 0
+    assert H.start_state(board("crackle_hop")).to_dict()["half"] == []
+    assert set(H.start_state(SAMPLE).to_dict()) == {"pos", "sunk", "uses", "done"}
 
 
 def test_fixtures_cover_the_rules():
@@ -193,11 +219,30 @@ def test_a_view_round_trips_to_a_state():
         {"pos": 0, "sunk": ["a"], "uses": 0, "done": False},
         {"pos": 0, "sunk": [], "uses": -1, "done": False},
         {"pos": 0, "sunk": [], "uses": 1.5, "done": False},
+        {"pos": 0, "sunk": [], "uses": 0, "done": False, "parity": 2},
+        {"pos": 0, "sunk": [], "uses": 0, "done": False, "parity": True},
+        {"pos": 0, "sunk": [], "uses": 0, "done": False, "half": [24]},
+        {"pos": 0, "sunk": [], "uses": 0, "done": False, "half": 3},
     ],
 )
 def test_state_from_dict_refuses_junk(bad):
     with pytest.raises(ValueError):
         H.State.from_dict(bad)
+
+
+def test_a_view_with_no_twist_state_reads_as_zero():
+    """fromView's twin: a missing parity or half is 0 to every rule, so a
+    parked list's view and every older fixture's `final` still play."""
+    for name, moves in (("pool_hop", "jk"), ("crackle_hop", "efj")):
+        b = board(name)
+        out = H.replay(b, moves)["final"]
+        full = H.State.from_dict(out)
+        bare = H.State.from_dict(
+            {k: v for k, v in out.items() if k not in ("parity", "half")}
+        )
+        if not (full.parity or full.half):
+            assert H.legal_targets(b, bare) == H.legal_targets(b, full)
+            assert H.solve(b, bare).win_count == H.solve(b, full).win_count
 
 
 def test_board_rejects_a_bad_grid():
@@ -294,6 +339,20 @@ def test_check_refuses_touching_never_sinking_cells(grid, why):
     assert H.check(b).why == "touching", why
 
 
+@pytest.mark.parametrize(
+    ("grid", "why"),
+    [
+        (("N.f.", ".%o.", "P..."), "a pool beside a stone"),
+        (("N.f.", ".%..", "P%.."), "two pools touching"),
+    ],
+)
+def test_check_refuses_a_pool_touching_a_never_sinking_cell(grid, why):
+    """Ship 4b: a pool is a stone every other move, so it joins the class."""
+    b = H.Board(4, 3, grid, "hop", 1)
+    assert H.touching_never_sinking(b), why
+    assert H.check(b).why == "touching", why
+
+
 def test_check_turns_a_loop_into_a_refusal(monkeypatch):
     """A loop the touching rule missed costs the candidate (Verdict "loop"),
     never the day's board call."""
@@ -306,6 +365,10 @@ def test_check_turns_a_loop_into_a_refusal(monkeypatch):
 def test_twist_of():
     assert H.twist_of(board("stumps_hop")) == "stumps"
     assert H.twist_of(board("rug_hop")) == "rug"
+    assert H.twist_of(board("crackle_hop")) == "crackle"
+    assert H.twist_of(board("pool_hop")) == "pool"
+    assert H.twist_of(board("ripple_hop")) == "ripple"
+    assert H.twist_of(board("lantern_hop")) == "lantern"
     assert H.twist_of(SAMPLE) is None
     assert H.twist_of(board("baby")) is None
 
@@ -358,6 +421,28 @@ def test_solve_counts_every_list_on_twist_boards(world, family):
         assert H.twist_of(b) == H.WORLD_TWIST[world]
         got = H.solve(b)
         assert (got.win_count, got.tidy_count) == walk(b, H.start_state(b)), b.grid
+
+
+def test_walk_finds_the_memo_at_every_step():
+    """The memo key is packed in rec and again in walk (ship 4b widens both by
+    parity and the half-sunk crackles): walk follows the memo from the start
+    to the nest for the shortest win and the shortest tidy list, on every
+    fixture board and on seeded boards of every twist world, and each list it
+    gives is that long and wins (tidy too)."""
+    boards = [board(n) for n in CASES["boards"]]
+    boards += [
+        cell_boards(world, family, stage)[0]  # the cached cells: no new boards
+        for world, family in PAIRS
+        for stage in ("child", "adult")
+    ]
+    for b in boards:
+        got = H.solve(b)  # walk raises (a KeyError or "broken memo") on a miss
+        if got.win is not None:
+            assert len(got.win) == got.min_win
+            assert H.replay(b, H.encode(got.win))["won"], b.grid
+        if got.tidy is not None:
+            assert len(got.tidy) == got.min_tidy
+            assert H.replay(b, H.encode(got.tidy))["tidy"], b.grid
 
 
 def test_state_cap():
@@ -448,8 +533,8 @@ def test_golden_boards():
     pinned = json.loads(GOLDEN.read_text(encoding="utf-8"))
     assert pinned["gen_version"] == H.GEN_VERSION
     assert pinned["boards"] == rows
-    # A twist world's golden from child up holds its glyph; a baby's and the
-    # other worlds' hold none (ship 4a's twists).
+    # A world's golden from child up holds its twist's glyph; a baby's holds
+    # none (every world has a twist from ship 4b).
     for inputs, row in zip(GOLDEN_INPUTS, rows, strict=True):
         twist = H.WORLD_TWIST.get(inputs[2]) if inputs[4] != "baby" else None
         cells = "".join(row["grid"])
@@ -460,7 +545,7 @@ def test_golden_boards():
 
 @pytest.mark.parametrize(
     "inputs",
-    [GOLDEN_INPUTS[2]]  # tidepool: no twist
+    [GOLDEN_INPUTS[6]]  # a baby's: no twist
     + [
         next(i for i in GOLDEN_INPUTS if i[2] == world and i[4] != "baby")
         for world in sorted(H.WORLD_TWIST)
@@ -562,9 +647,24 @@ def test_fallback_boards_pass(key, specials, w, h):
 
 
 @functools.cache
-def cell_boards(world: str, family: str, stage: str) -> tuple[H.Board, ...]:
-    """The seeded boards of a (world, family, stage) cell: PER_CELL pets, days
-    spread over four weeks (so a Wednesday's narrower size is in)."""
+def cell_boards(
+    world: str, family: str, stage: str, count: int = PER_CELL
+) -> tuple[H.Board, ...]:
+    """The seeded boards of a (world, family, stage) cell: `count` pets (PER_CELL
+    by default), days spread over four weeks (so a Wednesday's narrower size is
+    in). A wider count starts with the same boards."""
+    if count > PER_CELL:
+        more = (
+            make(
+                f"pet{k}",
+                (MONDAY + timedelta(days=k % 28)).isoformat(),
+                world,
+                family,
+                stage,
+            )
+            for k in range(PER_CELL, count)
+        )
+        return cell_boards(world, family, stage) + tuple(more)
     return tuple(
         make(
             f"pet{k}",
@@ -573,7 +673,7 @@ def cell_boards(world: str, family: str, stage: str) -> tuple[H.Board, ...]:
             family,
             stage,
         )
-        for k in range(PER_CELL)
+        for k in range(count)
     )
 
 
@@ -656,27 +756,43 @@ def test_babies_get_no_twist(world, family):
         assert H.twist_of(b) is None
 
 
+# A twist world's (world, family) pairs are bracketed on this many boards a stage
+# (120 noisy games a pair): at PER_CELL's 60 one board the bot loses three times
+# moves a pair 5%, and ship 4b measured tidepool/swim at 53/60 there, 0.94 on 120
+# and above 0.92 on 60 boards a cell.
+BRACKET_CELL = 10
+
+
 def test_bot_brackets():
     """Win easy, tidy hard, over every cell's boards: the noisy casual bot (random
     ties, a shuffled find order: a player the filter never saw) wins at least 90%
-    and is tidy on at most 20%, over all cells and over each twist world's. Per
-    (world, family, stage) cell it is HOP_FULL's (15 noisy games a cell here is
-    too few to bracket one cell). The careful bot's tidy rate is reported only
-    (a node budget sets it, not the boards)."""
+    and is tidy on at most 20% over all cells. Per (world, family, stage) cell it
+    is HOP_FULL's (15 noisy games a cell here is too few to bracket one cell). The
+    careful bot's tidy rate is reported only (a node budget sets it, not the
+    boards)."""
     if FULL:
         pytest.skip("HOP_FULL asserts the brackets per cell")
     count = Counter()
     for world, family in PAIRS:
-        mine = Counter()
         for stage in STAGES:
-            mine += bot_rates(cell_boards(world, family, stage))
-        count += mine
-        if world in H.WORLD_TWIST:
-            assert mine["noisy_won"] / mine["noisy"] >= 0.90, (world, family)
-            assert mine["noisy_tidy"] / mine["noisy"] <= 0.20, (world, family)
+            count += bot_rates(cell_boards(world, family, stage))
     assert count["noisy_won"] / count["noisy"] >= 0.90
     assert count["noisy_tidy"] / count["noisy"] <= 0.20
     print(f"\nHOP careful tidy {count['careful_tidy'] / count['careful']:.3f}")
+
+
+@pytest.mark.parametrize("world", sorted(H.WORLD_TWIST))
+def test_bot_brackets_per_twist_pair(world):
+    """The same brackets per (world, family) pair of a twist world, over
+    BRACKET_CELL boards a stage."""
+    if FULL:
+        pytest.skip("HOP_FULL asserts the brackets per cell")
+    for family in sorted({f for w, f in PAIRS if w == world}):
+        mine = Counter()
+        for stage in STAGES:
+            mine += bot_rates(cell_boards(world, family, stage, BRACKET_CELL))
+        assert mine["noisy_won"] / mine["noisy"] >= 0.90, (world, family)
+        assert mine["noisy_tidy"] / mine["noisy"] <= 0.20, (world, family)
 
 
 def test_casual_bot_cannot_hang_on_a_failed_plan(monkeypatch):
@@ -691,12 +807,29 @@ def test_casual_bot_cannot_hang_on_a_failed_plan(monkeypatch):
 
 
 def test_casual_bot_plans_by_the_landing():
-    """The bot's walk follows a stump to its twin and a rug's slide, and wins."""
-    for name in ("stumps_hop", "stumps_glide", "rug_hop", "rug_climb", "rug_swim"):
+    """The bot's walk follows a stump to its twin and a rug's slide, a pool's
+    phase, the lantern before the dark cells, and plans again after a ripple's
+    chain; it wins."""
+    names = ("stumps_hop", "stumps_glide", "rug_hop", "rug_climb", "rug_swim")
+    names += ("crackle_hop", "pool_hop", "pool_swim", "ripple_hop", "lantern_hop")
+    for name in names:
         b = board(name)
         moves, won, _ = H.casual_bot(b)
         assert won, name
         assert H.replay(b, H.encode(moves))["won"], name
+
+
+def test_casual_bot_walks_through_the_lantern_and_the_pool_phase():
+    """The plan's nodes carry the twist's state: a find behind a dark cell is
+    reached by lighting the lantern first, and a pool is crossed only on the
+    move that makes it a stone (no planned step is refused)."""
+    dark = H.Board(4, 3, ("N?f.", "*#..", "P#.."), "hop", 1)
+    moves, won, _ = H.casual_bot(dark)
+    assert won and H.replay(dark, H.encode(moves))["won"]
+    assert moves.index(4) < moves.index(1)  # the lantern e, then the dark b
+    pools = H.Board(4, 3, ("N.f.", "#%#.", "P..."), "hop", 1)
+    moves, won, _ = H.casual_bot(pools)
+    assert won and H.replay(pools, H.encode(moves))["won"]
 
 
 def test_hop_solve_script():

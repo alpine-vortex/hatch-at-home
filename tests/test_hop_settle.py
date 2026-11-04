@@ -468,6 +468,41 @@ async def test_a_save_from_before_ship_4a_loads_and_its_id_is_board_changed(
 
 
 @pytest.mark.parametrize(
+    ("world", "twist"),
+    [
+        ("terrarium", "crackle"),
+        ("tidepool", "pool"),
+        ("pond", "ripple"),
+        ("nightsky", "lantern"),
+    ],
+)
+async def test_a_save_from_before_ship_4b_loads_and_its_id_is_board_changed(
+    hass, now, hass_storage, monkeypatch, world, twist
+):
+    """Ship 4b stays tier 1: hop_day keeps {day, stage, done, tidy}. A pet saved
+    mid-day under GEN_VERSION 3 (ship 4a: no twist in ship 4b's worlds) loads,
+    `board` serves the new board (a new id, the world's twist), and a settle of
+    the old board's id answers board_changed."""
+    old_day = {"day": MONDAY, "stage": "child", "done": False, "tidy": False}
+    await ready(hass, now, hass_storage, hop_day=dict(old_day))
+    pet = coordinator(hass)
+    pet.world = world
+    reply = await board(hass)
+    assert pet.state.hop_day == old_day  # loaded as saved, no field added
+    # The board that pet had: GEN_VERSION 3 with ship 4a's two worlds only.
+    monkeypatch.setattr(H, "GEN_VERSION", 3)
+    monkeypatch.setattr(H, "WORLD_TWIST", {"woodland": "stumps", "hearth": "rug"})
+    old = H.hop_board("test_pet", MONDAY, world, reply["family"], 1, 5, 4)
+    monkeypatch.undo()
+    assert H.twist_of(old) is None and old.id != reply["id"]
+    assert reply["twist"] == twist
+    old_win = H.encode(H.solve(old).win)
+    info = await bad_settle(hass, pet, old.id, old_win)
+    assert info == {"result": "board_changed"}
+    assert set(pet.state.hop_day) == {"day", "stage", "done", "tidy"}
+
+
+@pytest.mark.parametrize(
     ("stats", "code"),
     [
         ({"age_hours": 0.0}, "egg"),
