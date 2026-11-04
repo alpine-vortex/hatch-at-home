@@ -134,6 +134,27 @@ def test_the_last_round_is_never_later_than_an_hour_before_bed(bed, wake, last):
 
 
 @pytest.mark.parametrize(
+    ("wake", "bed", "now"),
+    [
+        (time(23, 30), time(12), at(0, 10)),  # the first slot falls after midnight
+        (time(23, 30), time(12), at(0, 0)),
+        (time(23, 1), time(14), at(0, 0)),
+        (time(23, 59), time(14), at(0, 30)),
+        (time(23), time(12), at(0, 0)),
+    ],
+)
+def test_a_late_wake_time_always_has_a_slot(wake, bed, now) -> None:
+    """A wake time of 23:01-23:59 put the first slot of a day after midnight, and
+    yesterday's and today's slots left none at or before 00:00."""
+    settings = model.Settings(tz=UTC, bedtime=bed, wake_time=wake)
+    slot, _ = model._sitter_slot(now, settings)
+    assert slot <= now
+    pet = away(now, sitter_served=0.0)
+    assert model.sitter_due(pet, now, settings) == slot
+    model.sitter_round(pet, now, settings)  # does not raise
+
+
+@pytest.mark.parametrize(
     ("day", "slot_hour"),
     [((2026, 3, 8), 16), ((2026, 11, 1), 16)],
 )
@@ -484,6 +505,32 @@ def test_an_old_away_save_loads_and_replays_nothing() -> None:
     events = run(pet, at(10, 5))
     assert done(events) == [] and pet.age_hours == pytest.approx(30.0 + 5 / 60)
     assert model.PetState.from_dict(pet.to_dict()).sitter_served == at(8)
+
+
+def test_reloads_during_a_visit_add_no_round() -> None:
+    """A load with away on is the sitter arriving only for an old save or a due
+    slot: three reloads at 10:30, the 08:00 slot served, add no rows."""
+    pet = away(at(10, 30), hunger=40.0, happiness=40.0, sitter_served=at(8))
+    rows = len(pet.care_log)
+    for _ in range(3):
+        events = model.settle_legacy_lights(pet, at(10, 30), SETTINGS, settles=True)
+        assert done(events) == []
+    assert len(pet.care_log) == rows and pet.hunger == 40.0
+    assert pet.sitter_served == at(8)
+
+
+def test_a_reload_with_a_slot_due_runs_that_round_once() -> None:
+    pet = away(at(12, 5), hunger=40.0, sitter_served=at(8))
+    events = model.settle_legacy_lights(pet, at(12, 5), SETTINGS, settles=True)
+    assert "feed" in done(events) and pet.sitter_served == at(12)
+    assert done(model.settle_legacy_lights(pet, at(12, 6), SETTINGS, True)) == []
+
+
+def test_a_reload_still_settles_a_whine_and_a_met_call() -> None:
+    pet = away(at(10, 30), sitter_served=at(8))
+    pet.call = model.Call("fake", at(10, 20), at(10, 50))
+    events = model.settle_legacy_lights(pet, at(10, 30), SETTINGS, settles=True)
+    assert {"type": "call_settled"} in events and done(events) == []
 
 
 @pytest.mark.parametrize("stamp", ["x", None, -5.0, float("nan")])

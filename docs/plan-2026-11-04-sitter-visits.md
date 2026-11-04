@@ -434,9 +434,12 @@ or a random generator. Tests, in a new `tests/test_sitter.py`:
   `lights_before_away` left in an old save is applied once on load
   (`settle_legacy_lights`, a call to the `come_home` body) and cleared; the field itself stays
   (always `None` from now), no save change. The same function treats `away: true` at load as an
-  arrival (A8): it runs `sitter_arrives` once, so a fussy whine the pet left with is settled by
-  the option (3.9) or paused, and an open call is settled like any (3.4), instead of staying open
-  with no arrival ever having flipped it.
+  arrival (A8): a fussy whine the pet left with is settled by the option (3.9) or paused, and an
+  open call is settled like any (3.4), instead of staying open with no arrival ever having
+  flipped it. That settling runs on every load. The arrival **round** runs only for an old save
+  (`sitter_served` 0.0, "once": the first load stamps the slot) or when `sitter_due` says a slot
+  is due (the restart came after a slot); a reload or restart inside a served slot adds no round
+  (S1 audit P2: it used to run a free feed and play on every load).
 - **Downgrade:** an older version keeps `sitter_served` as an unknown key and treats `away: true`
   as frozen and refusing care again. Harmless, and Pip simply loses the sitter for the time.
 - **No** change to the people store, the channel store, options or `config_flow` options (the
@@ -473,6 +476,7 @@ With **Keep presence private ON** (the default) and **OFF**, for a visit in prog
 | debug sensor flags | masked (as built, `sensor.py:391`) | real |
 | events `virtual_pet_went_away` / `came_home` | fired as built (never gated by privacy, `coordinator.py:961`) | same |
 | any new bus event for the sitter's rounds | **none** (the rounds go to cards by the channel only) | none |
+| the pet's own events during a visit (`virtual_pet_fell_asleep`, `woke_up`, `found`, `wish_made`, ...), `last_care.moments`, the mood sensor's `requests` attribute | **real**: a living pet's events and moments fire, beside a mood of `asleep` (S1 audit N1; inside the privacy bar, nothing leaves the household, no free text) | same |
 | notifications | the same as at home; calls don't fire (3.4); `became_sick`, `hatched` and stage changes do | same |
 | Assist, "how is Pip" | "asleep" (as built, `intent.py:261`) | "with the sitter" (draft, 9) |
 | Assist, a care command | refused "asleep" (**new in S1**: the intent checks `away and privacy` itself, 5.2; today the refusal comes from `coordinator.py:3096`, which S1 deletes) | works |
@@ -639,7 +643,7 @@ Changes the away behaviour and saved state.
   one (3.4); `_wake` skips the resumed `call_started` while away; `_log_sitter` (3.6); the
   `_do_action` / `_refuse_play` / `drop_game` away terms removed; the other gates (3.7, with the
   keep list); `give_treats` loses its away term; `set_lights_out` loses the away branch;
-  `real_mood`; `settle_legacy_lights` (also runs `sitter_arrives` once for `away: true`, 3.10);
+  `real_mood`; `settle_legacy_lights` (also runs `sitter_arrives` for `away: true`: the round only for an old save or a due slot, 3.10);
   `fast_forward` rebases `sitter_served`; `MOOD_REASONS["away"]` = "the sitter's here"; the four
   log actions.
 - `coordinator.py`: `_sense_home` stops dropping the game, calls `sitter_arrives` on the flip,
@@ -950,3 +954,20 @@ owner decisions D1-D6 and the answers Q-A to Q-D are unchanged, as is the approv
 Also: the review's open question 1 (a gentle sitter play, or a lower happiness floor) is
 answered in the plan as a gentle play with its own constants, since the brief for this revision
 asked for it; no owner decision is changed by it. Question 2 is Q-E.
+
+## S1 audit 2026-11-04
+
+S1 audit 2026-11-04: player-impact 2 (fixed in this branch), save 0, nits 7.
+
+- **P1 (fixed):** `_sitter_slot` raised for a wake time of 23:01 to 23:59 around midnight; it now
+  looks back to the day before yesterday, so there is always a slot. Test rows: wake 23:30 at
+  00:10, wake 23:01 at 00:00, and others.
+- **P2 (fixed):** a reload or restart during a visit ran a free round; see 3.10.
+- **N1:** the private visit's events are listed in the 5.1 table. **N7:** 3.10 says what the code
+  does, and the guide's restart sentence is true again.
+- **Known, no code (N2 to N6):** N2 the `by` guess still takes the newest non-nobody row, which
+  can be someone else's when the winner has none (as A5, no regression). N3 discipline still
+  falls during a visit (0.25 per awake hour); the sitter keeps Pip well, not schooled. N4 energy
+  ends each evening near zero and Pip may fall asleep where it is; no health cost seen. N5 a wake
+  time inside a spring-forward gap puts breakfast an hour late. N6 until S2 the card still draws
+  the old away look and disables the buttons, so S1 should not ship alone in a release.
