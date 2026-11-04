@@ -157,6 +157,27 @@ async function unpinAwake(card) {
   }, !!process.env.CARD_CHECK_NIGHT).catch(() => {});
 }
 
+// Quiet the card's own random idle for a check's window (the wander/look turns, the poses, the
+// idle chatter, the first-day move). `_idle` sleeps while `nextIdle` is in the future, so
+// Infinity stops it without touching the card's code; `quietIdle(card, false)` hands it back (a
+// fresh draw). A move the idle tick already scheduled (a speck's later look, a wander ending)
+// is waited out, so the window starts still. Use it round a check that reads the pet's classes
+// or bubble over a second or two; never to hide a real change (the check still asserts it).
+async function quietIdle(card, on = true) {
+  await card.evaluate((el, on) => {
+    for (const s of el._slides) {
+      s.nextIdle = on ? Infinity : 0;
+      if (on) s.firstMoveAt = 0;
+    }
+  }, on);
+  if (!on) return;
+  for (let i = 0; i < 40; i++) {
+    const moving = await card.evaluate((el) => el._slides.some((s) => s.movingUntil > Date.now()));
+    if (!moving) break;
+    await card.page().waitForTimeout(100);
+  }
+}
+
 // The frontend may reload itself once after a page opens: wait until the page has
 // gone `quiet` ms without a navigation (at most `max`), not a fixed 16 s. A fresh
 // HA on 127.0.0.1 doesn't reload at all, so this is usually 3 s.
@@ -399,7 +420,16 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     el._realState4c = real;
     el._state = (x, key) => {
       const st = real.call(el, x, key);
-      return key === "sensor.life_stage" && st && x === el._slides[el._index] ? { ...st, attributes: { ...st.attributes, social_level: 5 } } : st;
+      if (key === "sensor.life_stage" && st && x === el._slides[el._index]) {
+        return { ...st, attributes: { ...st.attributes, social_level: 5 } };
+      }
+      // Whatever the dev pet wants right now (a call, a blanket or fan request, sick, resting) adds
+      // a "would like" row or a line to this 158 px box at 330: measure the controls with no want,
+      // as the check means to, whatever the pet happens to be doing on the run.
+      if (key === "sensor.mood" && st && st.state !== "away") {
+        return { ...st, state: "content", attributes: { ...st.attributes, reason: "all good", reason_key: "content", flags: [], requests: [] } };
+      }
+      return st;
     };
     for (const s of el._slides) { s.statusHtml = null; s.drawnSig = null; }
     el._redraw();
@@ -4497,7 +4527,12 @@ async function main() {
       g.cell < 44 && lit.lit === aim && lit.moves === 0 && done.moves === 1 && done.pos === aim && done.lit === null,
       JSON.stringify({ cell: g.cell, aim, lit, done }));
     await shot("board-300-lit-commit");
-    // A tap far from every legal cell does nothing and says nothing.
+    // A tap far from every legal cell does nothing and says nothing. The bubble is read twice, 100 ms
+    // apart round the tap, so settle it first: a held line ending is rewritten by the next tick (700 ms)
+    // with the mood's own, which is not a tap's doing. Idle is quiet for the window too.
+    await quietIdle(card);
+    await card.evaluate((el) => { el._slides[el._index].sayUntil = 0; });
+    await page.waitForTimeout(1600);
     const far = await cur().locator(".hc.wall, .hc.stone, .hc.sunk").first().boundingBox().catch(() => null);
     const before = await game();
     const sayBefore = await cur().locator(".bubble").innerText();
@@ -4518,6 +4553,7 @@ async function main() {
     check("a tap farther than 22 px from every legal cell does nothing and says nothing",
       !!dead && after.moves === before.moves && after.lit === before.lit && (await cur().locator(".bubble").innerText()) === sayBefore,
       JSON.stringify({ dead, before, after, far: !!far }));
+    await quietIdle(card, false);
     const arrows = await card.evaluate((el) => [...el._slides[el._index].gameBox.querySelectorAll('.hk[aria-disabled="false"]')].map((k) => k.dataset.k));
     const arrow = arrows.find((k) => ["left", "up", "down", "right"].includes(k));
     const beforeArrow = await game();
@@ -13395,6 +13431,8 @@ async function main() {
         s.pet.classList.remove("look", "wander-l", "wander-r", "hop");
         s.pinVariant = { feed: "A", "feed.extra": "none", snack: "A" };
       });
+      // The idle wander/look and chatter would turn the pet or change the line during the ~1.5 s scene.
+      await quietIdle(card);
     };
     const feedTap = (twice = false, kind = "feed") => card.evaluate(async (el, [twice, kind]) => {
       const s = el._slides[el._index];
@@ -13594,6 +13632,7 @@ async function main() {
       measured.scene && measured.answerAt !== null && measured.answerAt <= 650, JSON.stringify(measured));
     await feedEnd();
     await card.evaluate((el) => { delete el._slides[el._index].pinVariant; });
+    await quietIdle(card, false); // the meal and snack checks are done: idle runs again
     // Lights on the real server (care D, plan 13): the tap to the live asleep, logged and never failed on: the hour and
     // the pet's energy decide whether a tuck sleeps at all (model.py _apply_lights), and the answer is a sensor push after
     // the service call, slower than a log entry. If it is often over the gate (400 ms) the gate moves later (a code change,
