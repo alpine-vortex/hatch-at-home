@@ -443,7 +443,8 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
   until the owner decides on 256-colour versions). Card speed: loops pause off screen,
   redraws per slide, cache headers. Accessibility: a live region, focus, contrast ink
   per shell (`deviceInk`), names. Storage: `trait_progress` in whole percents, no
-  frozen deadline while away, `SAVE_DELAY` 60. Privacy: diagnostics and the debug
+  frozen deadline while away (since the sitter visits, 2026-11-04, the deadline
+  slides while the sitter is here), `SAVE_DELAY` 60. Privacy: diagnostics and the debug
   sensor redact what the house was doing; the dev bench uses HA's demo location. Left
   as is, on purpose: the journal and memories stay on the life stage sensor (moving
   them breaks anyone reading them there), and the six stat sensors keep long-term

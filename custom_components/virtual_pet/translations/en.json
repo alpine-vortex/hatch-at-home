@@ -88,7 +88,7 @@
         "description": "Who is home decides whether the pet is with you or at the sitter's. The privacy switches decide what dashboards and sensors may show.",
         "data": {
           "zone": "Home zone",
-          "away_after": "Off to the sitter's after",
+          "away_after": "The sitter comes after",
           "sitter_settles": "The sitter calms a fussy pet",
           "privacy": "Keep presence private",
           "house_words_private": "Keep house words off sensors",
@@ -96,9 +96,9 @@
         },
         "data_description": {
           "zone": "The pet counts the people in this zone. Only people tracked in Home Assistant count.",
-          "away_after": "How long the house has to be empty first.",
+          "away_after": "With nobody home this long, a sitter looks after your pet. It still gets older and hungry, and the sitter feeds it and tidies up at set times.",
           "sitter_settles": "On: if the pet was fussing for attention when it left (not a real need), the sitter settles it, so it comes home happy. Off: the fussing waits for you. Real needs, like hunger, always wait.",
-          "privacy": "On: an empty house shows the pet napping, never at the sitter's, and the pet never names anyone on sensors. For a wall tablet, also turn on \"shared screen\" in the card's settings.",
+          "privacy": "On: sensors, Assist and the mood show your pet napping when nobody is home, and the pet never names anyone. The card still shows the sitter. For a wall tablet, also turn on \"shared screen\" in the card's settings.",
           "house_words_private": "On: news headlines and a house moment's own words are said on the card only, never kept on the pet's sensors (automations still get a headline). Off: they sit on the last-care sensor for a while, like the pet's other moments.",
           "memory": "On: each person may turn memory on for themselves, on their own screen, and this pet keeps their picks and tags (dates and fixed choices, never typed words or names) until they forget them. Off: this pet keeps and says nothing from memory. Off on every pet erases what everyone told their pets."
         }
@@ -162,7 +162,7 @@
           "notice_doorbell": "Every doorbell in the house counts. One added later is noticed once these settings are saved again.",
           "appliances": "Machines that finish a cycle. A switch or sensor that reports power, a sensor that says running and finished, or a binary sensor that is on while it runs. When one finishes the pet says so, once.",
           "appliance_watts": "For power readings: at or below this many watts means the machine is not running. A cycle is seen after 10 minutes running, and over after about 3 minutes idle.",
-          "chores": "To-do lists. Each item someone ticks off earns the pet a treat (up to 5 a day); it waits if the pet is asleep or away."
+          "chores": "To-do lists. Each item someone ticks off earns the pet a treat (up to 5 a day); it waits if the pet is asleep."
         }
       },
       "sky": {
@@ -270,7 +270,7 @@
       "mood": {
         "name": "Mood",
         "state": {
-          "away": "At the sitter's",
+          "away": "With the sitter",
           "egg": "Egg",
           "sick": "Sick",
           "asleep": "Asleep",
@@ -425,7 +425,7 @@
     },
     "hop": {
       "name": "Hop of the Day",
-      "description": "Hop of the Day, the pet's daily board game. The board action returns today's board for the pet: the same on every screen all day, built once and kept until midnight, and refused (result egg, asleep, away or too_tired) when the pet could not play a game now. The settle action sends the moves of a board played to the nest; the server replays them and pays the day's first win, and one find for the day's first tidy win. A later settle the same day answers ok with already true. Other results: illegal, not_won, too_long, board_changed (load today's board), egg, asleep or away.",
+      "description": "Hop of the Day, the pet's daily board game. The board action returns today's board for the pet: the same on every screen all day, built once and kept until midnight, and refused (result egg, asleep or too_tired) when the pet could not play a game now. The settle action sends the moves of a board played to the nest; the server replays them and pays the day's first win, and one find for the day's first tidy win. A later settle the same day answers ok with already true. Other results: illegal, not_won, too_long, board_changed (load today's board), egg or asleep.",
       "fields": {
         "entity_id": {
           "name": "Pet",

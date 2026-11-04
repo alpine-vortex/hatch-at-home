@@ -27,7 +27,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.virtual_pet import model
-from custom_components.virtual_pet.const import DOMAIN
+from custom_components.virtual_pet.const import CONF_PRIVACY, DOMAIN
 from custom_components.virtual_pet.coordinator import async_rename
 from custom_components.virtual_pet.llm import PROMPT
 
@@ -206,6 +206,20 @@ async def test_privacy_keeps_the_sitter_quiet(
     assert speech(response) == "Pip is asleep."
     response = await ask(hass, "VirtualPetCare", action="feed")
     assert speech(response) == "Pip is asleep."
+
+
+async def test_without_privacy_the_sitter_is_named_and_care_works(
+    hass: HomeAssistant, pip: MockConfigEntry
+) -> None:
+    hass.config_entries.async_update_entry(
+        pip, options={**pip.options, CONF_PRIVACY: False}
+    )
+    await hass.async_block_till_done()
+    pip.runtime_data.state.away = True
+    response = await ask(hass, "VirtualPetStatus")
+    assert speech(response).startswith("Pip is with the sitter.")
+    response = await ask(hass, "VirtualPetCare", action="feed")
+    assert speech(response) == "Pip is eating."
 
 
 def unexpose_all(hass: HomeAssistant, entry: MockConfigEntry) -> None:

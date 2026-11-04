@@ -125,7 +125,7 @@ HOP_STATE_CAP = 100_000
 CHORE_TREAT_HUNGER = 10.0
 CHORE_TREAT_HAPPINESS = 10.0
 CHORE_TREATS_PER_DAY = 5
-CHORE_TREATS_WAITING = CHORE_TREATS_PER_DAY  # all kept while it sleeps or is away
+CHORE_TREATS_WAITING = CHORE_TREATS_PER_DAY  # all kept while it sleeps or rests
 
 # --- Poop -------------------------------------------------------------------
 
@@ -181,7 +181,7 @@ SLEEPY_BELOW = 30.0
 BORED_BELOW = 35.0
 EXCITED_MINUTES = 15  # play, praise or a snack keeps it excited this long
 
-# --- Life stages (hours of age, aging pauses while away) --------------------
+# --- Life stages (hours of age, aging pauses while resting) -----------------
 
 STAGE_STARTS: list[tuple[str, float]] = [
     ("egg", 0.0),
@@ -238,6 +238,21 @@ SCRAPPY_WHINE_FACTOR = 1.5  # a scrappy adult whines more (it never hurts it)
 # --- Log --------------------------------------------------------------------
 
 CARE_LOG_SIZE = 20
+
+# --- The sitter (plan 2026-11-04-sitter-visits §3.2, §3.6) ------------------
+# Nobody home for HOME_AWAY_AFTER_HOURS: a sitter looks after the pet. Its
+# needs decay as normal; the sitter's round tops them up at set times. Tuned on
+# the real model by dev/sitter_sim.py (plan §3.2a); re-run it when one changes.
+
+SITTER_ROUNDS_HOURS = (1.0, 5.0, 9.0, 13.0)  # after wake time, on the wall clock
+SITTER_SUPPER_BEFORE_BED_HOURS = 1.0  # the last round never later than this
+SITTER_FEED_BELOW = 65.0  # a round feeds a pet hungrier than this
+SITTER_SUPPER_BELOW = 80.0  # the last round's: so it isn't hungry at wake
+SITTER_PLAY_BELOW = 65.0  # a round plays (at PLAY_MIN_ENERGY or more)
+SITTER_PLAY_ENERGY = -5.0  # a gentle play: its own costs, not PLAY_*
+SITTER_PLAY_HUNGER = -2.5
+SITTER_PLAY_WEIGHT = -1.5
+SITTER_LOG_ROWS = 8  # the sitter's rows the care log keeps, at most
 
 # --- Home influences (phase 3). Bonuses only; the house never drains. -------
 
@@ -332,7 +347,7 @@ HOME_FORECAST_SWING_C = 8.0  # a high this far from the day before is worth a wo
 HOME_FORECAST_REFRESH_MINUTES = 60
 HOME_FORECAST_DELAY_MINUTES = 3  # after good morning, so the two don't collide
 HOME_FORECAST_EVENING_HOURS = 3.0  # tomorrow's forecast, this long before bedtime
-HOME_AWAY_AFTER_HOURS = 2.0  # empty this long: off to the sitter's
+HOME_AWAY_AFTER_HOURS = 2.0  # empty this long: the sitter comes
 
 # Answering a request
 BLANKET_HAPPINESS = 10.0

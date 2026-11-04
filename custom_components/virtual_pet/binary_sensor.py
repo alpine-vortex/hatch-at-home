@@ -77,7 +77,7 @@ class PetBinarySensor(PetEntity, BinarySensorEntity):
         if (
             self.entity_description.key != "calling"
             or self.pet.call is None
-            or self.pet.away  # frozen while away: it would move on every tick
+            or self.pet.away  # slides while the sitter is here: it would move on every tick
             or self.pet.asleep  # paused: it would move on every tick
         ):
             return None

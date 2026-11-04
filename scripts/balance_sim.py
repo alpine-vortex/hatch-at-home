@@ -170,6 +170,13 @@ def neglect(s: M.PetState, t: float, rng: random.Random) -> None:
     pass
 
 
+def sitter(s: M.PetState, t: float, rng: random.Random) -> None:
+    """Nobody home for the whole childhood: no care at all, the sitter's rounds
+    only (docs/plan-2026-11-04-sitter-visits.md 3.8; tests/test_sitter.py runs
+    the same invariants over 14 days of an adult)."""
+    s.away = True
+
+
 def responder(s: M.PetState, t: float, rng: random.Random) -> None:
     """Answers every call with the textbook answer, and does nothing else."""
     if not s.asleep:
@@ -260,6 +267,7 @@ STRATEGIES: dict[str, Policy] = {
     "casual_games": casual_games,
     "twice_a_day": twice_a_day,
     "neglect": neglect,
+    "sitter": sitter,
     "responder": responder,
     "responder_praise": responder_praise,
     "responder_miss1": responder_miss1,
@@ -559,6 +567,15 @@ BANDS: dict[str, list[tuple[str, Callable[[dict], bool]]]] = {
         ("weight 30-70", weight_in(30, 70)),
     ],
     "neglect": [("scrappy", at_most("scrappy"))],
+    "sitter": [
+        ("no care misses", lambda r: r["care_misses"] == 0),
+        ("no discipline misses", lambda r: r["disc_misses"] == 0),
+        ("no calls started", lambda r: r["notify_day"] == 0),
+        ("never sick", lambda r: r["min_health"] == 100 and not r["sick"]),
+        ("weight 40-65", weight_in(40, 65)),
+        ("never light", lambda r: r["light_day"] is None),
+        ("never off the healthy band", lambda r: r["off_band_h"] == 0),
+    ],
     "responder": [
         ("steady or better", at_least("steady")),
         ("weight 30-70", weight_in(30, 70)),

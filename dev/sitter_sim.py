@@ -2,12 +2,14 @@
 
 Runs the REAL model.advance (away off, so it steps) and applies the plan's sitter round
 after each 5-minute step, tidying poop at once. Prints the numbers the plan quotes.
+With --model it runs the shipped sitter instead (away on, model.sitter_round with the
+constants in rates.py; the constant flags are ignored): the two must agree (3.8).
 
     .venv/bin/python dev/sitter_sim.py [--days 30] [--tz UTC] [--bed 23:00] [--wake 07:00]
         [--seeds 5] [--play-energy -5] [--play-weight -1.5] [--play-below 65]
-        [--play-hunger -2.5] [--feed-below 65] [--supper-below 80]
+        [--play-hunger -2.5] [--feed-below 65] [--supper-below 80] [--model]
 
-Throwaway tool: the sitter itself lands in model.py (slice S1); this only pins the constants.
+The sitter itself is in model.py (slice S1); this pins the constants.
 """
 
 import argparse
@@ -46,6 +48,11 @@ ap.add_argument(
     "--trace", default="", help="YYYY-MM-DD: print the pet every 30 min that local day"
 )
 ap.add_argument("--start", default="2026-01-05T09:00")
+ap.add_argument(
+    "--model",
+    action="store_true",
+    help="run model.py's sitter (away on), not the stand-in",
+)
 a = ap.parse_args()
 
 TZ = ZoneInfo(a.tz)
@@ -123,6 +130,7 @@ def run(seed):
     s.hunger = s.happiness = 80.0
     s.energy = 90.0
     s.sitter_served = t0
+    s.away = a.model
     t, log = t0, []
     st = dict(
         hunger=100,
@@ -142,7 +150,13 @@ def run(seed):
     was_asleep = s.asleep
     while t < t0 + a.days * 86400:
         t += 300
-        for e in M.advance(s, t, S, rng):
+        served = s.sitter_served
+        events = M.advance(s, t, S, rng)
+        if a.model and s.sitter_served != served:
+            log.append(
+                next((e["did"] for e in events if e["type"] == "sitter_round"), [])
+            )
+        for e in events:
             if e["type"] == "care_miss":
                 st["miss"] += (
                     1  # counted only to show the sim's stand-in works: expect the model to make none
@@ -151,12 +165,11 @@ def run(seed):
                 st["calls"] += 1
             if e["type"] == "became_sick":
                 st["sick"] += 1
-        s.call = (
-            None  # calls are not made while the sitter is here (3.4); misses stay 0
-        )
-        s.poops = []  # tidied the moment it appears (3.3)
-        if not s.asleep and (d := due(s.sitter_served, t)):
-            round_(s, t, d[0], d[1], log)
+        if not a.model:
+            s.call = None  # no calls while the sitter is here (3.4); misses stay 0
+            s.poops = []  # tidied the moment it appears (3.3)
+            if not s.asleep and (d := due(s.sitter_served, t)):
+                round_(s, t, d[0], d[1], log)
         if was_asleep and not s.asleep:
             st["wake_hunger"] = min(st["wake_hunger"], s.hunger)
         was_asleep = s.asleep

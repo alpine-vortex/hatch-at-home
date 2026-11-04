@@ -129,7 +129,8 @@ class MoodSensor(PetEntity, SensorEntity):
             "requests": model.requests(
                 self.pet, dt_util.utcnow().timestamp(), self.coordinator.settings
             ),
-            # Not while away or asleep: paused, it would move on every tick.
+            # Not while away (it slides while the sitter is here) or asleep
+            # (paused): it would move on every tick.
             "call_deadline": (
                 dt_util.utc_from_timestamp(call.deadline).isoformat()
                 if call and not self.pet.away and not self.pet.asleep
@@ -329,7 +330,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
         }
 
     def _hatches_at(self) -> str | None:
-        """When the egg hatches at the current pace (aging pauses while away)."""
+        """When the egg hatches at the current pace (aging pauses while resting)."""
         pet = self.pet
         if model.life_stage(pet) != "egg" or not self.coordinator.roster:
             return None
@@ -355,10 +356,19 @@ class LastCareSensor(PetEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        # Privacy: the sitter's rows read as the plain care (feed, play, clean,
+        # medicine), by nobody, so the log doesn't say the house is empty
+        # (plan sitter §5.1).
+        private = self.coordinator.privacy
         return {
             "log": [
                 {
                     **entry,
+                    **(
+                        {"action": entry["action"].removeprefix("sitter_")}
+                        if private and entry.get("action") in model.SITTER_ACTIONS
+                        else {}
+                    ),
                     "at": dt_util.utc_from_timestamp(entry["at"]).isoformat(),
                 }
                 for entry in self.pet.care_log
