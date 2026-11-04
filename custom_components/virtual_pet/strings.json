@@ -85,7 +85,7 @@
       },
       "people": {
         "title": "People and privacy",
-        "description": "Who is home decides whether the pet is with you or at the sitter's. The privacy switches decide what dashboards and sensors may show.",
+        "description": "Who is home decides whether the pet is with you or has a sitter over. The privacy switches decide what dashboards and sensors may show.",
         "data": {
           "zone": "Home zone",
           "away_after": "The sitter comes after",
@@ -97,7 +97,7 @@
         "data_description": {
           "zone": "The pet counts the people in this zone. Only people tracked in Home Assistant count.",
           "away_after": "With nobody home this long, a sitter looks after your pet. It still gets older and hungry, and the sitter feeds it and tidies up at set times.",
-          "sitter_settles": "On: if the pet was fussing for attention when it left (not a real need), the sitter settles it, so it comes home happy. Off: the fussing waits for you. Real needs, like hunger, always wait.",
+          "sitter_settles": "On: if the pet was fussing for attention when the sitter arrived (not a real need), the sitter settles it. Off: the fussing waits for you.",
           "privacy": "On: sensors, Assist and the mood show your pet napping when nobody is home, and the pet never names anyone. The card still shows the sitter. For a wall tablet, also turn on \"shared screen\" in the card's settings.",
           "house_words_private": "On: news headlines and a house moment's own words are said on the card only, never kept on the pet's sensors (automations still get a headline). Off: they sit on the last-care sensor for a while, like the pet's other moments.",
           "memory": "On: each person may turn memory on for themselves, on their own screen, and this pet keeps their picks and tags (dates and fixed choices, never typed words or names) until they forget them. Off: this pet keeps and says nothing from memory. Off on every pet erases what everyone told their pets."

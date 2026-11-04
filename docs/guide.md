@@ -611,13 +611,13 @@ Lights, a fireplace, the TV and music change the pet's scene and mood.
 
 ### People and privacy
 
-Who is home decides whether the sitter comes. The pet stays home either way; the two switches at the end decide what dashboards and sensors may show.
+Who is home decides whether the pet is with you or has a sitter over. The privacy switches decide what dashboards and sensors may show.
 
 | Field | Default | What it does | Example |
 | --- | --- | --- | --- |
 | Home zone | `zone.home` | Counts the people in it. Someone arriving gets an excited greeting, at most once every 30 minutes. | `zone.home` |
 | The sitter comes after | 2 h | With nobody home this long, a sitter looks after your pet. It still gets older and hungry, and the sitter feeds it and tidies up at set times. | 2 h |
-| The sitter calms a fussy pet | on | If the pet was fussing for attention (not a real need) when it left, the sitter settles it and it comes home happy. Off: the fussing waits for you. Real needs always wait. | on |
+| The sitter calms a fussy pet | on | On: if the pet was fussing for attention when the sitter arrived (not a real need), the sitter settles it. Off: the fussing waits for you. | on |
 | Keep presence private | on | On: sensors, Assist and the mood show your pet napping when nobody is home, and the pet never names anyone. The card still shows the sitter. For a wall tablet, also turn on "shared screen" in the card's settings. Turn it off to see "with the sitter" on the mood sensor and in Assist. | default |
 | Pets may remember what people tell them | on | Each person may turn memory on for themselves (see "Memory" under Privacy below); this pet then keeps their picks and tags, dates and fixed choices only, until they forget them. Off: this pet keeps, says and asks nothing from memory. (If you turn it off on only some pets, the pet with it off may use the day's one question slot first, and the others then don't ask that day.) Off on every pet, or removing a pet when no other pet allows it, erases everyone's memory. Per pet. | default |
 | Keep house words off sensors | off | Off: a news headline (`virtual_pet.share_news`) and a Custom house moment's own words (`virtual_pet.react`) sit on the pet's last-care sensor for a while, like its other moments, where any dashboard or template can read them. On: the open cards say them live, shared screens too, and they're kept nowhere: not on a sensor, not for a card opened later. The `virtual_pet_news` event keeps its headline either way (it's your automation's own words); `virtual_pet_house_moment` never carries the words while this is on. Per pet. | default |

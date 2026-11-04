@@ -395,8 +395,8 @@ def test_spoken_status_reads_well_aloud():
         "Hi, sunbeam! Pip is cozy: toasty by the fire."
     )
     # A reason that only repeats the mood isn't said twice.
-    assert spoken_status("Pip", "at the sitter's", "at the sitter's", [], None) == (
-        "Pip is at the sitter's."
+    assert spoken_status("Pip", "with the sitter", "with the sitter", [], None) == (
+        "Pip is with the sitter."
     )
     assert spoken_status("Pip", "excited", "♪ dancing ♪", ["night owl"], None) == (
         "Pip is excited: dancing. Traits: night owl."
