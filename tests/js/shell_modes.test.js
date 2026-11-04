@@ -99,7 +99,7 @@ function probe(over = {}) {
       null, null, null,
       { icon: "✕", cap: "done", aria: "done", act: (card, s) => card._modeExit(s, "quit") },
     ],
-    exit: { slot: 8, escape: true, status: "end", idleMs: 60000, on: ["asleep", "away", "egg"] },
+    exit: { slot: 8, escape: true, status: "end", idleMs: 60000, on: ["asleep", "egg"] },
     onExit: (card, s, reason) => exits.push(["exit", reason]),
     ...over,
   };
@@ -333,9 +333,9 @@ test("Escape runs the exit slot when the mode takes it; not otherwise", () => {
   assert.ok(s.mode);
 });
 
-test("_modeGuard: asleep, away and egg when listed; idle after idleMs unless idleHold", () => {
+test("_modeGuard: asleep and egg when listed; idle after idleMs unless idleHold", () => {
   const { card, s } = shell();
-  for (const reason of ["asleep", "away", "egg"]) {
+  for (const reason of ["asleep", "egg"]) {
     card._modeEnter(s, probe());
     exits.length = 0;
     s[reason] = true;
@@ -473,7 +473,7 @@ test("slice 2: the three games' entries: slots 1, 4 and 8 only, the study's capt
     assert.strictEqual(m.exit.slot, 8);
     assert.strictEqual(m.exit.escape, true);
     assert.strictEqual(m.exit.status, "end");
-    assert.deepStrictEqual([...m.exit.on], ["asleep", "away", "egg"]);
+    assert.deepStrictEqual([...m.exit.on], ["asleep", "egg"]);
     assert.strictEqual(m.exit.idleMs, 3 * 60 * 1000);
     // the Tab order: live and blocked slots are focusable, off slots are native disabled
     const { card, s } = shell();

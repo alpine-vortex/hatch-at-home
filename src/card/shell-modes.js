@@ -10,7 +10,7 @@
 //     owns,      // owns the screen (default true): the card's _owned(s), section 3.7
 //     busy,      // the director treats the device as busy (default true)
 //     exit,      // { slot: 1-8 | null, escape, status: "end" | "keep",
-//                //   idleMs, idleAt(s), idleHold(s), on: ["asleep" | "away" | "egg"] }
+//                //   idleMs, idleAt(s), idleHold(s), on: ["asleep" | "egg"] }
 //     announce,  // the lead of the one announcement when the buttons swap
 //     onExit }   // optional (card, s, reason): ends whatever the mode started
 // A slot: { icon, cap, aria, title, act, enabled, on }. `cap`, `aria` and `title` are a string or a
@@ -20,7 +20,7 @@
 const SHELL_SLOTS = 8;
 // The reasons a mode may list in exit.on (the always-on ones, a slide change, another pet on the
 // slide, the card going, a reload, cannot be turned off and are not listed).
-const SHELL_EXIT_ON = Object.freeze(["asleep", "away", "egg"]);
+const SHELL_EXIT_ON = Object.freeze(["asleep", "egg"]);
 const SHELL_EXIT_STATUS = Object.freeze(["end", "keep"]);
 // One colour for every game (owner decision D5), not the world's accent. A later non-game mode may add
 // its own key.
@@ -31,7 +31,7 @@ const SHELL_TINTS = Object.freeze({ game: "#c4e2f2" });
 // while the basket is empty. A game's slot functions read `s.game` (its own state); the engine does not.
 // The glyphs are the stopgaps of decision D5 (the pixel icons are slice 4). Escape and the quit slot run
 // the game's own quit path (the server's "end" call, then _endGame, which exits the mode); an exit from
-// outside the game (idle, asleep, away, egg, a reload) ends the game with no server call, as the
+// outside the game (idle, asleep, egg, a reload) ends the game with no server call, as the
 // card-layout idle block did: the server has dropped it already. The dig's idle line is its bubble.
 function shellGame(id, left, right, idleLine) {
   const open = (s) => !s.game?.busy;
@@ -45,7 +45,7 @@ function shellGame(id, left, right, idleLine) {
     tint: "game",
     announce: "game buttons on",
     exit: {
-      slot: 8, escape: true, status: "end", on: ["asleep", "away", "egg"],
+      slot: 8, escape: true, status: "end", on: ["asleep", "egg"],
       idleMs: GAME_IDLE_MS, idleAt: (s) => s.game?.lastAt, idleHold: (s) => !!s.game?.busy,
     },
     onExit: (card, s, reason) => {

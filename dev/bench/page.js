@@ -124,7 +124,24 @@
       const flags = [...new Set([...(["hungry", "bored", "dirty", "sick", "sleepy"].includes(mood) ? [mood] : []), ...(pet.flags || [])])];
       if (shot.scene === "rain" && !flags.includes("rainy")) flags.push("rainy");
       if (pet.resting && !flags.includes("resting")) flags.push("resting"); // R1: the mood's flag
-      put("sensor", "mood", mood, { flags, ...(pet.lay ? { requests: ["lay_egg"] } : {}), ...(pet.reason ? { reason: pet.reason, reason_key: pet.reason_key } : {}) });
+      const moodAttrs = { flags, ...(pet.lay ? { requests: ["lay_egg"] } : {}), ...(pet.reason ? { reason: pet.reason, reason_key: pet.reason_key } : {}) };
+      // Sitter visits S2: `sitter: "day" | "night"` is a visit in progress on the lead pet (`night` also draws
+      // the night scene unless the shot names one). The sensors say what the server says: with privacy off
+      // the mood is "away" (the asleep sensor is real); with `privacy: "on"` the mood is "asleep" and the
+      // asleep sensor "on" (the mask). The channel's `house.sitter` view is the real mood either way
+      // (set below with the house; `noChannel: true` leaves it out, the card's degraded fallback).
+      const visit = i === 0 && !!shot.sitter;
+      if (visit) {
+        const reason = pet.reason || (mood === "hungry" ? "i'm hungry" : "i'm fine");
+        const reasonKey = pet.reason_key || (mood === "hungry" ? "hungry" : "content");
+        shot.sitterView = { mood, key: mood, reason, reason_key: reasonKey, flags: ["away", ...flags], asleep: mood === "asleep",
+          lights_out: false, last: null };
+        if (shot.privacy === "on") {
+          put("sensor", "mood", "asleep", { ...moodAttrs, flags: ["asleep"], reason: "zzz", reason_key: "asleep" });
+        } else {
+          put("sensor", "mood", "away", { ...moodAttrs, flags: ["away", ...flags], reason: "the sitter's here", reason_key: "away" });
+        }
+      } else put("sensor", "mood", mood, moodAttrs);
       // `moments`: [{type, ago (minutes), ...}], the public moments the away note reads.
       const moments = (pet.moments || []).map(({ ago = 30, ...m }) => ({ ...m, at: iso(-ago) }));
       put("sensor", "last_care", iso(-45), { log: pet.log || [], ...(pet.moments ? { moments } : {}) });
@@ -134,7 +151,7 @@
       put("sensor", "poop", String(pet.poop ?? (mood === "dirty" ? 2 : 0)));
       put("sensor", "care_misses", "0");
       put("binary_sensor", "calling", pet.calling || mood === "calling" ? "on" : "off");
-      put("binary_sensor", "asleep", mood === "asleep" ? "on" : "off");
+      put("binary_sensor", "asleep", mood === "asleep" || (visit && shot.privacy === "on") ? "on" : "off");
       for (const key of ["feed", "snack", "play", "clean", "medicine", "scold", "praise", ...(pet.lay ? ["lay_egg"] : [])]) put("button", key, "unknown");
       if (pet.lay) { // the select: "Surprise me" then the names, its state the pick
         const names = attrs.egg_roster.map((r) => r.name);
@@ -957,6 +974,12 @@
         }
         card._askPlace(cur, step.box);
       }
+    }
+    // The sitter's view, as the channel sends it (`house.sitter`), unless the shot has no channel.
+    if (shot.sitterView && !shot.noChannel) {
+      const s = slides[0];
+      s.house = { ...(s.house || {}), sitter: shot.sitterView };
+      card._redraw(s);
     }
     // The house view the channel would send (`house`, an object over it), and `basket`:
     // how many finds wait (house.basket, 0-3), so the basket shows through _basketSync.

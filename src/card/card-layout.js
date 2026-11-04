@@ -504,6 +504,7 @@ class HatchPetCardLayout extends HatchPetCardBuild {
       this._show(s, s.bg, sp.backgrounds?.day || Object.values(sp.backgrounds || {})[0]);
       this._show(s, s.perch, null);
       this._show(s, s.awaysign, null);
+      s.sitterEl.hidden = true;
       for (const img of [...s.poops, s.murk, s.attention, s.prop]) this._show(s, img, null);
       s.frames = [];
       this._show(s, s.pet, sp.egg?.idle?.[0]);
@@ -536,16 +537,18 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     const calling = this._state(s, "binary_sensor.calling")?.state === "on";
     const lightsOut = this._state(s, "switch.lights_out")?.state === "on";
     const asleep = this._state(s, "binary_sensor.asleep")?.state === "on";
-    const away = mood?.state === "away";
-    s.away = away;
-    s.resting = flags.includes("resting") && !away; // its idle lines (card-tick), the odd hello
+    // The sitter is here (nobody home for away_after, 6.1): the pet is drawn and cared for as at home,
+    // with the sitter beside it. `mood` and `asleep` are the real ones (the channel's view, _state).
+    const sitter = this._sitter(s);
+    s.sitter = sitter;
+    s.resting = flags.includes("resting"); // its idle lines (card-tick), the odd hello
     s.egg = stage === "egg";
     const haDevice = this._hass.devices?.[s.ids?.device]; // its given name, as on the title
     s.pat.setAttribute("aria-label", `pat ${haDevice?.name_by_user || haDevice?.name || sp.name || "pet"}`);
     s.asleep = asleep;
     s.lightsOut = lightsOut;
     // A new call chirps once (not on load: wasCalling starts undefined).
-    const newCall = calling && s.wasCalling === false && !away;
+    const newCall = calling && s.wasCalling === false;
     if (newCall) this._chirp(s, "call");
     s.wasCalling = calling;
     // A lights scene (care reactions D, plan 4.9) owns the sleep transition and the background for its
@@ -564,29 +567,25 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     if (!lightsScene) this._bgApply(s, scene);
     this._renderSeason(s);
 
-    this._show(s, s.perch, away ? null : sp.perch);
-    if (away) {
-      s.frames = [];
-      s.pet.classList.remove("resting");
-      this._show(s, s.pet, null);
-      this._show(s, s.awaysign, sp.props?.away);
-      s.awaylabel.textContent = "at the sitter's";
-    } else {
-      this._show(s, s.awaysign, null);
-      // Resting (R1): a quiet label where the sitter's sign has its own, and slow breathing on
-      // the idle pose; asleep, sick and the egg win (restLabel).
-      const rest = restLabel(flags, { away, asleep, egg: s.egg });
-      s.awaylabel.textContent = rest;
-      s.pet.classList.toggle("resting", !!rest && !lightsScene); // not breathing through a tuck or a wake
-      s.frames = this._petFrames(sp, stage, mood?.state, calling, this._eggMinutes(stageState), flags);
-      const key = s.frames.join(",");
-      if (calm() && s.framesKey !== key) s.frame = 0; // a new mood or stage: its first frame
-      s.framesKey = key;
-      const frames = this._frames(s);
-      // A stage that changes while it is on show comes in edge-on (_swapFlip, at the scale below).
-      turning = s.stageSeen !== undefined && s.stageSeen !== stage && !calm() && s === this._slides?.[this._index];
-      if (!turning) this._show(s, s.pet, frames[s.frame % frames.length]);
-    }
+    this._show(s, s.perch, sp.perch);
+    this._show(s, s.awaysign, null); // the old sign is retired (owner decision D5; S4 deletes its art)
+    // Resting (R1): a quiet label, and slow breathing on the idle pose; asleep, sick and the egg
+    // win (restLabel). The sitter's own label shows where it has none: the resting label wins (3.1).
+    const rest = restLabel(flags, { asleep, egg: s.egg });
+    s.awaylabel.textContent = rest || (sitter ? SITTER_LABEL : "");
+    // The placeholder sitter (S2; the art is A1): beside the pet, standing by day, dozing in a chair at
+    // night (D4, the night and the dim scenes). Its own element: Pip's transform is not touched.
+    s.sitterEl.hidden = !sitter; // an egg gets no round, but the sitter is still in the house
+    s.sitterEl.classList.toggle("doze", scene === "night" || scene === "dim");
+    s.pet.classList.toggle("resting", !!rest && !lightsScene); // not breathing through a tuck or a wake
+    s.frames = this._petFrames(sp, stage, mood?.state, calling, this._eggMinutes(stageState), flags);
+    const key = s.frames.join(",");
+    if (calm() && s.framesKey !== key) s.frame = 0; // a new mood or stage: its first frame
+    s.framesKey = key;
+    const frames = this._frames(s);
+    // A stage that changes while it is on show comes in edge-on (_swapFlip, at the scale below).
+    turning = s.stageSeen !== undefined && s.stageSeen !== stage && !calm() && s === this._slides?.[this._index];
+    if (!turning) this._show(s, s.pet, frames[s.frame % frames.length]);
     if (stage) s.stageSeen = stage;
     // Excitement lasts a while (rates.py EXCITED_MINUTES), but the bounce only
     // celebrates its start; after that, idle life adds an occasional hop.
@@ -597,7 +596,7 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     if (excitedNow) s.excitedSince = Date.now();
     if (!excited) s.excitedSince = 0;
     s.pet.classList.remove("hop");
-    if (excitedNow && !calm() && !asleep && !away && !s.scene && !(s.poseUntil > Date.now())) this._animate(s, s.pet, "greethop", 1400);
+    if (excitedNow && !calm() && !asleep && !s.scene && !(s.poseUntil > Date.now())) this._animate(s, s.pet, "greethop", 1400);
     s.pet.alt = s.species?.name || "pet";
     // Some stages are drawn smaller in the frame (long adults fit 256 px wide by
     // coming out shorter); species.json "scale" sizes them back up, feet fixed.
@@ -611,33 +610,33 @@ class HatchPetCardLayout extends HatchPetCardBuild {
         s.pet.style.scale = petScale;
       });
     } else s.pet.style.scale = petScale;
-    if (!lightsScene) this._drapeSync(s, asleep && lightsOut && !away && !s.egg);
+    if (!lightsScene) this._drapeSync(s, asleep && lightsOut && !s.egg);
     // A heavy pet is drawn a little wider (gaps-seams 2c, owner: x1.06, only while heavy).
     const weight = Number.parseFloat(this._state(s, "sensor.weight")?.state);
     const heavy = stage !== "egg" && isHeavy(Number.isFinite(weight) ? weight : null);
     s.pet.classList.toggle("heavy", heavy);
     s.ghost?.classList.toggle("heavy", heavy);
     // Baby, teen and adult have no house poses: a hop dances, a shake shivers.
-    const standIn = drawn !== "child" && !away && !asleep && POSE_MOODS.has(mood?.state);
+    const standIn = drawn !== "child" && !asleep && POSE_MOODS.has(mood?.state);
     s.pet.classList.toggle("dance", standIn && flags.includes("dancing"));
     s.pet.classList.toggle("shiver", standIn && (flags.includes("chilly") || flags.includes("storm")));
-    s.screen.classList.toggle("stormy", flags.includes("storm") && !away);
-    s.screen.classList.toggle("windy", flags.includes("windy") && !away);
-    s.vroom = flags.includes("vroom") && !away && !asleep; // a robot is cleaning (H4): idle sends it across
+    s.screen.classList.toggle("stormy", flags.includes("storm"));
+    s.screen.classList.toggle("windy", flags.includes("windy"));
+    s.vroom = flags.includes("vroom") && !asleep; // a robot is cleaning (H4): idle sends it across
     s.moodState = mood?.state;
     s.calling = calling;
     const rainScene = scene === "rain" && !!sp.backgrounds?.rain;
-    s.screen.classList.toggle("raining", flags.includes("rainy") && !rainScene && !away);
+    s.screen.classList.toggle("raining", flags.includes("rainy") && !rainScene);
     s.screen.classList.toggle("watery", world.mess === "murk");
 
-    const poop = away ? 0 : Number(this._state(s, "sensor.poop")?.state || 0);
+    const poop = Number(this._state(s, "sensor.poop")?.state || 0);
     // Water worlds cloud over instead of showing poop (worlds.json "mess": "murk").
     const murky = world.mess === "murk" && !!sp.murk;
     s.poops.forEach((img, i) => this._show(s, img, !murky && i < poop ? sp.props?.poop?.[i] : null));
     this._show(s, s.murk, murky ? sp.murk : null);
     s.murk.style.opacity = murky ? [0, 0.45, 0.75, 1][Math.min(poop, 3)] : 0;
-    this._show(s, s.attention, calling && !away ? sp.props?.attention : null);
-    if (!calling || away) s.attention.classList.remove("arrive");
+    this._show(s, s.attention, calling ? sp.props?.attention : null);
+    if (!calling) s.attention.classList.remove("arrive");
     else if (newCall) { // the icon pops in once, as the call arrives
       s.attention.classList.remove("arrive");
       void s.attention.offsetWidth;
@@ -682,14 +681,14 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     const egg = stage === "egg";
     // The picker (no mode) ends here; a server game's idle and these reasons are its shell mode's exit
     // (_modeGuard below, SHELL_MODES): the server has dropped it already, so no call.
-    if (s.game && (asleep || away || egg)) this._endGame(s, null);
+    if (s.game && (asleep || egg)) this._endGame(s, null);
     s.hatchesAt = egg ? stageState?.attributes.hatches_at : null;
     if (!s.sayUntil || Date.now() > s.sayUntil) {
       if (s.game?.prompt) this._write(s, s.game.prompt, 60000); // a game waiting on a guess asks again
       else {
         const coming = egg ? this._eggComing(s) : null; // the egg's first look (S2, C15')
         if (coming) this._write(s, coming, 8000);
-        else this._write(s, this._say(s, mood, away));
+        else this._write(s, this._say(s, mood));
       }
     }
 
@@ -699,14 +698,14 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     for (const action of ACTIONS) {
       const c = care[action.key];
       const ent = this._state(s, `button.${action.key}`);
-      c.disabled = !ent || ent.state === "unavailable" || egg || away;
+      c.disabled = !ent || ent.state === "unavailable" || egg;
       c.wanted = !c.disabled && !asleep && !!action.wants && flags.includes(action.wants);
       c.desc = c.wanted ? "wanted now" : null;
     }
     const wanted = (mood?.attributes.requests || []).find((r) => this._state(s, `button.${r}`));
     // The pet can't lay any more (stage, or the entry reloaded after a world change): no sheet.
     if (s.laySheet && !(mood?.attributes.requests || []).includes("lay_egg")) this._closeLay(s);
-    s.request.classList.toggle("show", !!wanted && !away && !asleep);
+    s.request.classList.toggle("show", !!wanted && !asleep);
     if (wanted) {
       s.request.dataset.key = wanted;
       const confirming = wanted === "lay_egg" && confirmArmed(s, wanted);
@@ -717,7 +716,7 @@ class HatchPetCardLayout extends HatchPetCardBuild {
 
     const lights = care.lights;
     const lightsEnt = this._state(s, "switch.lights_out");
-    lights.disabled = !lightsEnt || lightsEnt.state === "unavailable" || away;
+    lights.disabled = !lightsEnt || lightsEnt.state === "unavailable";
     // Asleep counts even when it dozed off by itself (the switch stays off then).
     const sleeping = lightsOut || asleep;
     lights.on = sleeping;
@@ -726,14 +725,13 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     lights.cap = sleeping ? "wake" : "sleep";
     lights.title = sleeping ? "Lights on: wake the pet" : "Lights out: put the pet to bed";
     this._paintCaps(s, care);
-    this._modeGuard(s); // asleep, away, egg (when the mode lists them) and idle, on this push's flags
+    this._modeGuard(s); // asleep and egg (when the mode lists them) and idle, on this push's flags
     this._patSync(s);
 
     if (s.screen.classList.contains("show-status")) this._renderStatus(s, log);
   }
 
-  _say(s, mood, away) {
-    if (away) return "";
+  _say(s, mood) {
     if (s.hatchesAt) {
       const minutes = Math.max(1, Math.ceil((new Date(s.hatchesAt) - serverNow()) / 60000));
       if (minutes <= 1) return "crack... crack...";

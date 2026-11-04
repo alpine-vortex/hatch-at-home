@@ -319,6 +319,32 @@ const PRESETS = {
     rimShot("medicine", "medicine (no cue)", { rimCue: { action: "medicine", at: 450 } });
     return out;
   },
+  // Sitter visits S2 (docs/plan-2026-11-04-sitter-visits.md 6.2, S2 acceptance): Pip drawn as at home with a
+  // placeholder sitter beside it and the "sitter's here" label, never the old sign. `--sitter day|night`,
+  // `--privacy on` (the sensors' mask), `--no-channel` (the degraded card).
+  sitter() {
+    const out = [];
+    const shot = (name, label, extra) => out.push({ name: `sitter/${name}`, group: "sitter", label, world: "woodland", width: 330,
+      sitter: "day", ...extra });
+    shot("day", "day", {});
+    shot("night", "night: the sitter in a chair, Pip awake", { sitter: "night" });
+    shot("night-asleep", "night: Pip asleep, the dim", { sitter: "night", scene: "dim", mood: "asleep" });
+    shot("hungry", "hungry, no call (a visit settles calls)", { mood: "hungry" });
+    shot("resting", "resting: the resting label wins", { pet: { resting: true } });
+    shot("game", "a game running through the visit", { game: "dig" });
+    shot("shared", "a shared screen", { storage: { "hatch-shared-screen": "on" } });
+    shot("privacy-off", "privacy off, hungry", { mood: "hungry", privacy: "off" });
+    shot("privacy-on", "privacy on, hungry (the same as off)", { mood: "hungry", privacy: "on" });
+    shot("nochannel-off", "no channel, privacy off: the sitter, generic mood", { mood: "hungry", noChannel: true });
+    shot("nochannel-on", "no channel, privacy on: a napping pet, no sitter", { mood: "hungry", privacy: "on", noChannel: true });
+    shot("egg", "an egg", { stage: "egg" });
+    for (const [species, world] of [["fox", "woodland"], ["otter", "tidepool"], ["owl", "nightsky"]]) {
+      shot(`species-${species}`, species, { species, world });
+    }
+    shot("no-visit", "no visit (control)", { sitter: undefined });
+    for (const width of [420, 300]) shot(`day-${width}`, `day ${width}`, { width });
+    return out;
+  },
   // The card around the toy: status screen, game picker, a speech bubble.
   ui() {
     const out = [];
@@ -338,6 +364,9 @@ const PRESETS = {
       say: "*yawn* i had the best dream" });
     out.push({ name: "ui/woodland-bubble-pop", group: "ui", label: "clean, a bubble pops", world: "woodland", view: "card",
       bubblePop: true });
+    // Sitter S2: a visit, by day and at night (the full set is the `sitter` preset).
+    out.push({ name: "ui/woodland-sitter-day", group: "ui", label: "sitter, day", world: "woodland", view: "card", sitter: "day" });
+    out.push({ name: "ui/woodland-sitter-night", group: "ui", label: "sitter, night", world: "woodland", view: "card", sitter: "night" });
     return out;
   },
   // The Berry dig (playtime 2a) with scripted replies, at 420 and 330 (compact): a
@@ -1310,6 +1339,8 @@ function normalize(raw) {
   for (let i = 1; i < count; i++) {
     shot.pets.push({ species: roster[i % roster.length], stage: "child", mood: "content", world: shot.world, ...(extra[i] || {}) });
   }
+  if (shot.sitter !== undefined && !["day", "night"].includes(shot.sitter)) throw new Error(`--sitter wants day or night, not ${shot.sitter}`);
+  if (shot.sitter === "night" && !raw.scene) shot.scene = "night"; // the sitter dozes in a chair at night (D4)
   shot.name ||= `shot-${shot.species || "x"}-${shot.stage}-${shot.mood}`;
   if (shot.lcd !== undefined || shot.booted || shot.mono || shot.bigText) {
     shot.storage = { ...(shot.booted ? { "hatch-booted": "1" } : {}), ...(shot.lcd !== undefined ? { "hatch-lcd": String(shot.lcd) } : {}),
@@ -1338,6 +1369,7 @@ function parseArgs(argv) {
     else if (key === "big-text") opts.shot.bigText = true; // the "big text" switch on (top10 4b)
     else if (key === "boot") opts.shot.booted = false;
     else if (key === "mine") opts.shot.mine = true;
+    else if (key === "no-channel") opts.shot.noChannel = true; // with --sitter: the card has no channel (the degraded fallback)
     else if (key === "finds-shown") opts.shot.findsShown = true; // FINDS_SHOWN on
     else if (key === "gift") { const [world, id] = val().split("/"); opts.shot.gift = { id, world }; } // --gift woodland/pinecone
     else if (key === "journal") Object.assign(opts.shot, { journal: true, view: "journal" });

@@ -410,6 +410,20 @@ const STYLE = `
     100% { transform: translateY(-30px) scale(0); opacity: 0; } }
   @keyframes pop { from { transform: scale(.3); opacity: 0; } }
   .awaysign { left: 50%; bottom: 12%; height: 40%; margin-left: -20%; }
+  /* The placeholder sitter (sitter plan S2; the art is A1, S3 swaps this for it): a plain figure
+     beside the pet, behind it. Standing by day; at night it dozes in a chair (D4). Still: no motion. */
+  .sitter { position: absolute; right: 5%; bottom: 10%; width: 17%; height: 36%; pointer-events: none; }
+  .sitter[hidden] { display: none; }
+  .sitter i { position: absolute; display: block; }
+  .sitter .sit-head { left: 24%; top: 0; width: 52%; aspect-ratio: 1; border-radius: 50%; background: #e8c9a4;
+    box-shadow: inset 0 -4px 0 #3a2a1a; }
+  .sitter .sit-body { left: 8%; top: 36%; width: 84%; bottom: 0; border-radius: 40% 40% 12% 12%; background: #5b7fa6; }
+  .sitter .sit-chair { display: none; left: -18%; right: -18%; bottom: -6%; height: 46%; border-radius: 6px;
+    background: #8a5a35; box-shadow: inset 0 -6px 0 #5e3b20; }
+  .sitter.doze { height: 30%; bottom: 8%; }
+  .sitter.doze .sit-chair { display: block; }
+  .sitter.doze .sit-head { top: 8%; rotate: 18deg; }
+  .sitter.doze .sit-body { top: 42%; bottom: 14%; }
   .awaylabel { position: absolute; left: 0; right: 0; bottom: 5%; text-align: center;
     color: #fff; font-size: 15px; text-shadow: 0 1px 3px #000; }
   .bubble .untyped { visibility: hidden; } /* laid out whole, so it never grows */

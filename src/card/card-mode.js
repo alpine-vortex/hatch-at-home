@@ -187,7 +187,7 @@ class HatchPetCardMode extends HatchPetCardActions {
   }
 
   // The engine's own reasons to end a mode: idle (exit.idleMs since idleAt(s), default the last accepted
-  // press, unless idleHold(s)), and asleep, away and egg when exit.on lists them. From _update (the care
+  // press, unless idleHold(s)), and asleep and egg when exit.on lists them. From _update (the care
   // flags are fresh there) and _tick (idle must not wait for a hass push).
   _modeGuard(s, now = Date.now()) {
     const m = s.mode;

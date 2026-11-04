@@ -141,6 +141,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
           <div class="bezel"><i class="hw guts"></i><i class="mould"></i><i class="hw stripes"></i><i class="hw light"></i><i class="hw rim" aria-hidden="true"><b></b><b></b><b></b></i><div class="screen">
             <img class="bg" alt="">
             <img class="awaysign" alt=""><div class="awaylabel"></div>
+            <div class="sitter" hidden aria-hidden="true"><i class="sit-head"></i><i class="sit-body"></i><i class="sit-chair"></i></div>
             <div class="season"></div>
             <img class="poop p0" alt="mess"><img class="poop p1" alt="mess"><img class="poop p2" alt="mess">
             <img class="perch" alt="">
@@ -181,7 +182,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     const q = (sel) => slide.querySelector(sel);
     const s = {
       el: slide, device: q(".device"), label: q(".label"), screen: q(".screen"), bg: q(".bg"),
-      awaysign: q(".awaysign"), awaylabel: q(".awaylabel"), pet: q(".pet"), prop: q(".prop"),
+      awaysign: q(".awaysign"), awaylabel: q(".awaylabel"), sitterEl: q(".sitter"), pet: q(".pet"), prop: q(".prop"),
       perch: q(".perch"), drape: q(".drape"), drapeImg: q(".drape img"), ghost: q(".ghost"), monoGrid: q(".mono-grid"), pat: q(".pat"),
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
@@ -930,10 +931,41 @@ class HatchPetCardBuild extends HatchPetCardBase {
   }
 
   _state(s, key) {
+    const held = s.scene?.held; // a care scene shows the pet as it was at the tap
+    return held && key in held ? held[key] : this._live(s, key);
+  }
+
+  // The sitter's visit, or null (sitter plan 6.1): the channel's `house.sitter` (the real mood and
+  // sleep, unmasked, for every card). A card with no channel (not subscribed, or an older server that
+  // sends no `sitter` key) reads the mood sensor: "away" there is the sitter without its mood, so a
+  // marker with no view. A channel that answered `sitter: null` is trusted.
+  _sitter(s) {
+    const view = s.house?.sitter;
+    if (view && typeof view === "object") return view;
+    if (s.house && "sitter" in s.house) return null;
+    const mood = this._hass?.states[s.ids?.["sensor.mood"]];
+    return mood?.state === "away" ? SITTER_BLIND : null;
+  }
+
+  // The unheld read: the hass state, except the two the privacy mask bends. With privacy on the mood
+  // sensor says asleep and binary_sensor.asleep says on for an empty house; with it off the mood says
+  // "away". The card shows the sitter and the real pet either way (owner decision D1), so while the
+  // sitter is in, `sensor.mood` (state, flags, reason, reason_key) and `binary_sensor.asleep` answer
+  // from the view; the sitter's mood is "content" where there is no view (SITTER_BLIND). One place, so
+  // every reader (and a care scene's held copy, and the lights' live read) follows.
+  _live(s, key) {
     const id = s.ids?.[key];
     if (!id) return undefined;
-    const held = s.scene?.held; // a care scene shows the pet as it was at the tap
-    return held && key in held ? held[key] : this._hass.states[id];
+    const raw = this._hass.states[id];
+    if ((key !== "sensor.mood" && key !== "binary_sensor.asleep") || !raw || GONE_STATES.has(raw.state)) return raw;
+    const sitter = this._sitter(s);
+    if (!sitter) return raw.state === "away" ? { ...raw, state: "content" } : raw; // a stale sensor, a moment
+    if (key === "binary_sensor.asleep") return sitter === SITTER_BLIND ? raw : { ...raw, state: sitter.asleep ? "on" : "off" };
+    if (sitter === SITTER_BLIND) return { ...raw, state: "content" };
+    return {
+      ...raw, state: sitter.mood || "content",
+      attributes: { ...raw.attributes, flags: sitter.flags || [], reason: sitter.reason ?? "", reason_key: sitter.reason_key },
+    };
   }
 
   _go(index, auto = false) { // auto: the opening pet's late move, not the player's swipe
