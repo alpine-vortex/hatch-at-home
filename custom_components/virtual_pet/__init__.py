@@ -141,13 +141,18 @@ PLAY_GAME_SCHEMA = vol.Schema(
         vol.Optional("shared", default=False): cv.boolean,
     }
 )
-# virtual_pet.hop (Hop of the Day). "board" only for now: ship 3a adds the
-# settle action. No `shared` and no person: the board is the pet's, the same
-# on every screen, and the call changes nothing.
+# virtual_pet.hop (Hop of the Day). "board": today's board (the pet's, the
+# same on every screen; no person). "settle": the card's move list for a board
+# it played to the nest, replayed and paid. `id`, `moves` and `shared` are the
+# settle's; board ignores them. `moves` may be one letter over the cap, so the
+# server answers too_long, while a huge string is refused here.
 HOP_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_ENTITY_ID): cv.entity_id,
-        vol.Required(ATTR_ACTION): vol.In(["board"]),
+        vol.Required(ATTR_ACTION): vol.In(["board", "settle"]),
+        vol.Optional("id"): vol.All(cv.string, vol.Length(max=32)),
+        vol.Optional("moves"): vol.All(cv.string, vol.Length(max=R.HOP_MAX_MOVES + 1)),
+        vol.Optional("shared", default=False): cv.boolean,
     }
 )
 SHARE_NEWS_SCHEMA = vol.Schema(
@@ -353,7 +358,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         )
 
     async def hop(call: ServiceCall) -> ServiceResponse:
-        # Only "board" so far (the schema holds the list).
+        if call.data[ATTR_ACTION] == "settle":
+            # A settle with no id or no moves is answered, not raised: no id
+            # matches no board (board_changed), no moves is illegal at 0.
+            return await pet_of(call).async_hop_settle(
+                call.data.get("id", ""),
+                call.data.get("moves", ""),
+                call.context,
+                call.data["shared"],
+            )
         return await pet_of(call).async_hop_board()
 
     async def share_news(call: ServiceCall) -> ServiceResponse:

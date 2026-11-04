@@ -544,6 +544,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     }
     this._dirty = false;
     this._sig = sig;
+    for (const s of this._slides) if (s.game?.picking) this._hopRowRefresh(s); // another screen settled Hop
 
     if (!devices.length) {
       const configured = [].concat(

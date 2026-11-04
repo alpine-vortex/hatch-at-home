@@ -110,6 +110,22 @@ hop:
         select:
           options:
             - board
+            - settle
+    id:
+      required: false
+      example: 3f2a9c01be
+      selector:
+        text:
+    moves:
+      required: false
+      example: abgh
+      selector:
+        text:
+    shared:
+      required: false
+      default: false
+      selector:
+        boolean:
 share_news:
   fields:
     entity_id:

@@ -1,7 +1,7 @@
 # Plan: board mode and Hop of the Day (2026-11-02)
 
-Status: ships 1 and 2a are built (2a: s2779, `73564bfb`, awaiting the batch gate); the rest is
-plan. The build is five numbered ships, seven builds (section
+Status: ships 1, 2a and 3a are built (2a: s2779, `73564bfb`, awaiting the batch gate; **3a: s2857,
+`5c0b2ad8`, awaiting owner merge OK**); the rest is plan. The build is five numbered ships, seven builds (section
 9: 1, 2a, 2b, 3a, 3b, 4, 5). **Ship 3a is tier 2** (it adds a saved field, `PetState.hop_day`);
 the others are tier 1. The owner picked Hop on 2026-11-02 from scout s2713's five concepts.
 The decisions made on 2026-11-02 are recorded at the end ("Decided"); nothing is left open
@@ -24,6 +24,10 @@ empty `hop_day` and never writes it; the day rolls over only forward; `tidy` is 
 the find's outcome; the reply is one table (`ok` with `won`, `tidy`, `paid`, `found`,
 `already`; plus `not_won`); the pay block re-checks after its awaits; `hop_day` is published
 on the life-stage sensor. Ship 3a can be built from this plan alone.
+Reconciled on 2026-11-03 (s2858) after ship 3a as built (s2857, `5c0b2ad8`): Decided 21 records
+the first mate's acceptance of its readings; ship 3a is marked built; ship 3b is rewritten
+against the as-built reply and refusals, and carries the review of 3b itself (P1-P12, Q1-Q4).
+Ship 3b can be built from this plan alone.
 
 Sources: scout s2713's report (Pick, Shared base, section 1, Owner decisions) and its
 `renders/hop-sample-solver.py` (the sample board below is its board, rules adjusted in
@@ -207,8 +211,14 @@ Terrain (a character per cell; all boards are at most 6 wide by 4 tall):
   pad or spends a use, so with no two stones side by side the moves can't loop and the count
   of winning lists is finite. Two touching stones make a free loop (o1, o2, o1, ...) and an
   endless count. The generator never places them; the solver raises on a state met twice on
-  one line rather than loop. Ship 4's never-sinking walkable twists (stumps, rugs) take the
-  same rule.
+  one line rather than loop. **Ship 4's rule (Decided 34):** no two orthogonally
+  touching cells of the **never-sinking walkable class**: stones `o`, stumps `1` `2` (a stump
+  beside its own twin too: the pet on one would name the other and land where it stands), rugs
+  `=` and pools `%` (a pool is a stone every other move, so a pool beside a stone is a free
+  loop). The generator places twist cells with the same "near" test it uses for stones, the
+  check is `touching_never_sinking(board)` (it replaces `touching_stones`), and `check()` also
+  catches the solver's `CycleError` and rejects the candidate (`Verdict(False, "loop")`), so a
+  missed adjacency costs a candidate, never the day's `board` call.
 - **Win:** the pet is in the nest with every find picked up.
 - **Tidy:** a win in which **every pad** (`.`, `f`, `P`) has sunk. Stones needn't be touched.
 - **Undo and restart:** free and unlimited. The move list that counts is the one left after
@@ -241,7 +251,7 @@ shape on different terrain on purpose, so the rules read in one line each.
 | stage | specials | largest board | notes |
 |---|---|---|---|
 | egg | n/a | n/a | refused, as every game (`_refuse_play`) |
-| baby | 0 | 4×3 | starter boards: steps, pads and stones only |
+| baby | 0 | 4×3 | starter boards: steps, pads and stones only; **no twist** (Decided 26) |
 | child | 1 | 5×4 | the family's special appears |
 | teen | 2 | 6×4 | |
 | adult | 3 | 6×4 | |
@@ -261,43 +271,147 @@ the day).
 
 All six worlds come from `worlds.json` (woodland, terrarium, hearth, tidepool, pond,
 nightsky). A world adds **one** rule to its boards, with its own cell glyph, from ship 4
-(ships 1-3 have no twist). No twist uses real time. The scout gave examples for three; the
-other three are this plan's proposals.
+(ships 1-3 have no twist). **Babies have no twist** (Decided 26: a 4×3 with one obstacle,
+one stone and one find has no room for one, and the shared `base` fallback and every baby test
+stay as they are); a twist starts at child. No twist uses real time. The scout gave examples
+for three; the other three are this plan's proposals.
 
-| world | twist (draft name) | rule |
-|---|---|---|
-| woodland | **stump holes** `1` `2` | stumps come in pairs. Stepping onto one puts the pet out of its twin in the same move, free. Stumps never sink. |
-| terrarium | **crackle pads** `c` | a crackle pad sinks only on the **second** time it is left (it is walkable once more after the first). Tidy needs two visits to every one. |
-| hearth | **rug** `=` | a rug is walkable and slides the pet one **more** cell the way it was going, if that cell is walkable (else it stops on the rug). Rugs never sink. (scout) |
-| tidepool | **tide pools** `%` | a pool is a stone while the **count of moves made is odd**, water while it is even; undo rewinds the count. (scout: "open and close every 2 moves" — this is the 1-move version; the build tunes 1 or 2.) |
-| pond | **ripple pads** `r` | a pad that, when it sinks, also sinks the pad to its right if it is a pad. Chains. |
-| nightsky | **dark cells** `?` and a **lantern** `*` | a dark cell is drawn dim and **can't be entered** until the lantern `*` (an ordinary pad) has been stepped on; then every dark cell becomes a pad for the rest of the board. (scout: dark cells light next to a lantern; this turns it into a rule instead of a view, because a view-only twist makes nothing harder with free undo.) |
+| world | twist (draft name) | glyph(s) | rule |
+|---|---|---|---|
+| woodland | **stump holes** | `1` `2` | stumps come in pairs. Stepping onto one puts the pet out of its twin in the same move, free. Stumps never sink. |
+| terrarium | **crackle pads** | `c` | a crackle pad sinks only on the **second** time it is left (it is walkable once more after the first). Tidy needs two visits to every one. |
+| hearth | **rug** | `=` | a rug is walkable and slides the pet one **more** cell the way it was going, if that cell is walkable (else it stops on the rug). Rugs never sink. (scout) |
+| tidepool | **tide pools** | `%` | a pool is a stone while the **count of moves made is odd**, water while it is even; undo rewinds the count. (scout: "open and close every 2 moves"; this plan fixes the 1-move version, Decided 28.) |
+| pond | **ripple pads** | `r` | a pad that, when it is left, also sinks the pads to its right (chain below). It never sinks a find pad (Decided 27). |
+| nightsky | **dark cells** and a **lantern** | `?` `*` | a dark cell is drawn dim and **can't be entered** until the lantern `*` (an ordinary pad) has been entered; then every dark cell becomes a pad for the rest of the board. (scout: dark cells light next to a lantern; this turns it into a rule instead of a view, because a view-only twist makes nothing harder with free undo.) |
+
+**Engines read the grid glyphs only** (Decided 32). A board's twist is whatever its glyphs
+say, so a fallback, a hand-written fixture and an older parked list play correctly with no
+field, and a board cannot disagree with its own `twist`. The `board` reply's `twist` is a
+**string id for copy and the bench only**, derived from the grid by one function
+(`twist_of(board)` in `hop.py`): `"stumps"`, `"crackle"`, `"rug"`, `"pool"`, `"ripple"`,
+`"lantern"`, or `null` for a board with none (a baby's, a fallback's). No rule reads it. One
+board holds the glyphs of **one** twist only (`Board.__post_init__` and `valid()` refuse a
+mix; P13).
 
 **The holes the review found, settled** (each is a fixture case in ship 4):
 - **Tide pool.** A pool's phase is judged **when the pet steps onto it**, by the move count
   that move makes (odd: stone, enterable; even: water, blocked). The pet leaves the pool on
   its next move, and every move changes the count, so a pet never stands on a pool when it
-  turns to water. A special move counts as one move. A swim use onto a pool in its water
-  phase is a water entry like any other. Undo rewinds the count.
+  turns to water. A special move counts as one move. **The phase is fixed at one move**
+  (Decided 28: the build does not tune 1 or 2). **A special move that lands on a pool**
+  (hop, glide) follows the same test, so a pool in its water phase is blocked to it as any
+  water is; a swim use onto a pool in its water phase is a water entry like any other. Undo
+  rewinds the count. **What the card draws** (P11) is the phase of the **next** move: the
+  board on screen sits at count *n*, and a pool is drawn as stone when *n + 1* is odd (so
+  every pool is a stone at the start, *n* = 0), water when it is even. The key labels follow
+  the same phase (a pool in its water phase is "blocked", never "sunk").
 - **Rug.** Stepping onto a rug in direction *d* slides the pet one more cell in *d*, only if
-  that cell is walkable and unsunk; else it stops on the rug. The landing cell is an
-  ordinary entry (a find is picked up; the nest opens only if every find is in, else the
-  pet stops on the rug; a stump's twin applies). A rug onto a rug stops on the first (one
-  slide per move). A rug is not a pad, so it never sinks and "leaving" it sinks nothing; the
-  cell the pet left before the rug sinks as usual. Hop and glide land on a rug without
-  sliding (only a step slides).
+  that cell is walkable and unsunk; else it stops on the rug. **"Walkable" is the plain
+  meaning**: for the swim and climb families a water or wall cell is not walkable, so a rug
+  never slides the pet into one (a swim use is a separate move; the slide is not a use). The
+  landing cell is an ordinary entry (a find is picked up; the nest opens only if every find
+  is in, else the pet stops on the rug; a stump's twin applies). A rug is not a pad, so it
+  never sinks and "leaving" it sinks nothing; the cell the pet left before the rug sinks as
+  usual. Hop and glide land on a rug without sliding (only a step slides). Rugs never touch
+  another never-sinking cell (section 2), so a slide never meets a second rug. **The landing
+  differs from the named cell** (see "Landing" below).
 - **Stump pair.** Stepping onto a stump puts the pet on its twin in the same move; it never
   stops on the first. Stumps never sink, so the twin is always free. A special move may land
-  on a stump (then the twin rule applies).
+  on a stump (then the twin rule applies). **Each glyph is exactly one pair**: `1` appears
+  twice and `2` twice or not at all. A child's board has the one pair (`1`), a teen's or
+  adult's one or two (draft, tuned by the generator's candidate table, not by a rule). The two
+  cells of a pair never touch each other or any other never-sinking cell (section 2).
 - **Crackle pad.** Never carries a find, the start or the nest. It sinks on the second
-  leaving; a squeeze use steps back only onto a fully sunk pad.
+  leaving: the first leaving makes it **half-sunk** (still walkable, still a pad for tidy); a
+  squeeze use steps back only onto a **fully sunk** pad, never onto a half-sunk one. A crackle
+  pad is a pad: tidy needs every one fully sunk, so two visits each.
+- **Ripple pad, the chain** (P2, Decided 27). On leaving a ripple pad `r`, it sinks as
+  any pad does; then, going **right along the same row** (no wrap), the pads to its right sink
+  while they are `r` (each of those sinks too, and the chain goes on); the chain **stops at
+  the first cell that is not `r`**, and that cell sinks as well only if it is a plain pad
+  `.`. It stops at the row's edge and at a cell already sunk. It **never sinks a find pad
+  `f`, the start `P`, a stone, a nest or a non-pad**, so a ripple never changes which finds
+  are in: "the find is in" is still "the find pad sinks, or the pet is on it" in both engines,
+  the solver, the bots and the card, and no picked-finds mask is added. **The entry is judged
+  before any sinking**: the pet may step from `r` onto its right neighbour `X`, and `X` is
+  then sunk while the pet stands on it (it cannot be stepped back onto; leaving it sinks
+  nothing new). A special move that leaves a ripple pad fires the chain too.
+- **Lantern and dark cells** (P10, Decided 31). The lantern `*` is an ordinary pad; it is
+  **lit by any entry** onto it (a step, a hop or glide landing, a squeeze back onto it).
+  **Lit is derived, not stored**: the lantern is lit when it is sunk or the pet stands on it
+  (one twist per world, so no ripple shares the board). Before it is lit, a dark cell is not
+  walkable, so **no special move lands on one** (2a: specials land on walkable cells) and a
+  swim or climb use cannot enter one either. Once lit, a dark cell is **a pad in every way**:
+  it sinks when left, a squeeze may step back onto it once sunk, and **it counts toward
+  tidy** (Decided 31): the pad mask for tidy holds every dark cell from the start, so tidy
+  means lighting the lantern and sinking each dark cell. The static reach (the cut-off test)
+  treats a dark cell as walkable only once the lantern is in the reached set. A dark cell
+  never carries a find, the start or the nest.
+- **Landing.** Stump and rug make the landing cell differ from the named cell. The move letter
+  is still the **stepped-on cell's** index; `step()` returns the state at the landing, and
+  nothing in either engine, the solver, the bots or `reach` may assume that the landing is
+  the target (ship 4a lists the places). A rug slide into the nest, with every find in, is a
+  win on that move.
 - **Move letters.** A letter is the **stepped-on cell's** index (reading order, `a` to `x`),
   not the landing cell: for a rug or a stump the server derives the landing. `a`-`x` is
   exactly 24 letters, 6×4; the 6×4 cap is deliberate, and a wider board is a format change
   (a `GEN_VERSION` bump and a longer alphabet), not a tweak.
+- **The state.** The twist's state is **never in a board without that twist** (P5, Decided 32):
+  `State` and the JS `view()` keep `{pos, sunk, uses, done}` and gain, only on boards that
+  hold the glyph, `parity` (the move count mod 2; pool boards) and `half` (the half-sunk
+  crackle pads as a list of cells in `view()`, a bit mask inside; crackle boards). The lantern
+  flag is derived (above). `fromView` defaults a missing `parity` or `half` to 0, so a parked
+  list, `_hopNest` and every existing fixture's `final` stay as they are. The memo key
+  widens by those fields on the boards that have them, and on none else, so the other
+  worlds' state counts do not double.
+- **Cells and invariants** (P13). The engines' `CELLS` grow from `.fo~#PN` by the glyphs above,
+  in both engines in the same commit. `Board.__post_init__` and `valid()` refuse: a stump
+  glyph that is not exactly paired, a `?` with no `*` (or a `*` with no `?`, or two), a
+  second twist kind on one board, and a twist glyph on a baby board (`specials == 0` and a
+  4×3 is never given one). `tests/fixtures/hop_cases.json` has a `bad_boards` case
+  `"P.o?"` ("a cell that is not one"); it becomes a valid dark cell, so the 4b commit that
+  adds `?` changes it in the same commit.
+- **Old cards.** A card cached from before the ship refuses a twist board (`valid()` is false:
+  `card-board.js` ends the game with one console warning and no copy). The release's
+  VERSION cache-bust covers that in normal use; no extra line is added.
 
 Each twist is a small addition to the shared engine (Python and JS) and the generator, and
-gets its own fixture cases and one bench shot per world.
+gets its own fixture cases and one bench shot per world. Ship 4 is built in two parts
+(Decided 33): **4a** (stump, rug: the landing differs from the target) and **4b** (crackle,
+pool, ripple, lantern: new state, key packing, parity).
+
+**Player copy** (Q4, Decided 29). There is no tutorial text: the art is the explanation. A
+twist is never named on screen. Each new cell kind carries one **aria label** (the `.hc`
+cell gets `role="img"` and the label; the plain cell kinds keep no label, as today), drafted
+here for the first mate to approve; **a worker uses these and invents none** (Decided 24's
+rule: a line the plan does not quote is not here):
+
+| cell | aria label (draft) |
+|---|---|
+| stump | `stump hole, leads to its twin` |
+| rug | `rug, slides you one more` |
+| crackle pad, whole | `crackle pad, holds two visits` |
+| crackle pad, half-sunk | `crackle pad, cracked, one visit left` |
+| tide pool, stone on the next move | `tide pool, a stone on the next move` |
+| tide pool, water on the next move | `tide pool, water on the next move` |
+| ripple pad | `ripple pad, sinks the pads to its right` |
+| dark cell, unlit | `dark cell, not lit yet` (first mate, ship 4b brief) |
+| lantern | `lantern, step here to light the dark cells` |
+
+A lit dark cell has the plain pad's look and no label. The **keys' labels** keep
+`HOP_COPY.blocked` and `.sunk` (no new key copy): a key onto a twist cell says "sunk" when the
+cell is a pad that has sunk (`.`, `f`, `P`, a ripple `r`, a crackle `c` fully sunk, the
+lantern `*`, a lit dark cell) and "blocked" otherwise (water, wall, a pool in its water phase,
+an unlit dark cell). `card-board.js` tests `".fP".includes(cell)` today; ship 4b widens that
+to the pad class of the board's glyphs.
+
+**Motion** (P17). A stump jump and a rug slide are `translate` transitions on `.hpiece`
+(`_hopPlace`), not `.pet.<cls>` animations, so `tests/js/motion_rule.test.js` is not touched
+and `calm()` already switches the transition off. A crackle crack or a pool flip drawn
+with a new `@keyframes` on `.hc` is a new one-shot: it is not an infinite loop and it
+honours the OS reduced-motion rule at the top of `style.js` (a plain class swap with no
+animation needs neither).
 
 ### 2d. Sample (the scout's, adapted to the rules above)
 
@@ -443,16 +557,34 @@ family, or `base` for the baby's shared board) that passed
 every check (a child's with its win needing the use) and that the noisy bot won 20 times in
 20, then pinned in `hop.py`, so a generator change does not move them and a fallback is
 instant. A test asserts they pass. The fallback share must stay at or under 10% per (family,
-stage); ship 1 measured it (section "Measured").
+stage); ship 1 measured it (section "Measured"). **The fallbacks stay twist-free and shared**
+(Decided 30): `fallback_grid` keys on `(family|"base", specials, w, h)` and ship 4 does not
+touch it, so **a fallback day has no twist** (the board's `twist` is `null`, and every
+screen plays the same plain board). Ship 4 therefore asserts the share per **(world, family,
+stage)** over the 21 real pairs (below), at most 10%, and with `PER_CELL = 5` that means
+none may fall back in the default suite.
 
 **The solver:** `solve(board, state=None)`, a memoised depth-first search over (position,
-sunk set, uses left; ship 4 adds the twist's state: the move count's parity, the lantern flag,
-a crackle pad's half-sunk set) from any state, not only the start (ship 5's hint solves from
-where the pet is). It counts winning and tidy lists, finds the shortest of each, and returns
+sunk set, uses left; ship 4b adds the twist's state on the boards that have the twist only:
+the move count's parity (pools) and a crackle pad's half-sunk set, section 2c "The state"; the
+lantern flag is derived) from any state, not only the start (ship 5's hint solves from
+where the pet is). The memo key is packed by hand in two places (`rec` and the replay in
+`walk`); the 4b widening changes both together, and a test asserts `walk` finds the memo
+entry for every step (it already asserts "broken memo"). It counts winning and tidy lists, finds the shortest of each, and returns
 one of each. It drops a state from which a find or the nest is cut off on the static board
 (a relaxed reach: sinking aside, a use never spent), which leaves the counts exact and about
 halves the states. It raises past the state cap, and on a state met twice on one line (a
 loop; section 2). The same solver serves `hint` (ship 5) and `scripts/hop_solve.py`.
+**Where the landing is not the target** (ship 4a; Decided 33): the solver, the bots and
+`reach` read the move's **landing**, never its named cell. In `hop.py` that is `State(t,
+..., t == self.nest)` in `step`, the solver's `if t == nest: win += 1` shortcut and its `walk`
+twin, the bots' BFS `_plan` (nest and finds as goals by target) and `_greedy`, and the
+cell-based `reach()`; in `hop-engine.js` it is `done: cells[t] === "N"` in `apply`. Each of
+those asks the rules for the move's landing instead. The bots' planner replays every step of
+a planned path with `rules.step`, and `_greedy` treats a `None` from `step` as a **failed
+plan** (it returns the moves so far; today's `path = []; continue` re-plans the same illegal
+path forever, which the BFS can only produce once the landing differs from the target, so a
+test forces it).
 
 **Two bots stand in for players, and bracket the difficulty:**
 - **Casual bot:** goes to the nearest find not yet in by a shortest walk **on the live
@@ -522,11 +654,11 @@ because the row is not inside `.gpick`.
 **Where the row learns its state.** The card does not call `board` on every Play press: that
 call writes the save at a day rollover (section 8) and runs the generator in the executor.
 (As built in 2a, `board` writes nothing; the write at a rollover is 3a's, section 8.)
-Instead ship 3a **publishes `hop_day` as an attribute** next to `games` on the mood sensor
-(`sensor.py:314`, and in the unrecorded list at `~160`): `{day, done, tidy}`, nothing
-personal. The card treats a `day` other than today as "open". Until ship 3a ships the
-attribute is absent and the row always reads "open" (ship 2b is behind a flag). The `board`
-call is made only when the row is pressed.
+Instead ship 3a **publishes `hop_day` as an attribute** next to `games` on the **life-stage
+sensor** (as built in 3a, `LifeStageSensor`, in its unrecorded set; not the mood sensor):
+`{day, stage, done, tidy}`, nothing personal (the stage is not personal). The card treats a
+`day` other than today as "open". The attribute is absent on a pet that never asked for a
+board, and the row reads "open" then. The `board` call is made only when the row is pressed.
 
 **What does not change.** Left or Right stays in the server (`GAMES`, `play_game`, the
 service's `vol.In(list(GAMES))`, old saves and automations) and in the card (`GAMES` in
@@ -577,8 +709,8 @@ earlier text contradicted itself).** The rule, in one place:
   shows the **solved view** (the pet curled in the nest, a "solved" or "tidy" line, draft).
   Its one key is **restart** (draft label "try for tidy"), free, which loads the same board
   from the start. Undo does not reach back across the nest: the solved view has no undo; to
-  undo a long path the player restarts. The parked list is cleared on a settle and restarts
-  from empty.
+  undo a long path the player restarts. The parked list is cleared when the settle answers `ok` (kept for a
+  refused one, which re-sends on reopen: ship 3b) and a restart starts from empty.
 - **Server side, per settle** (a pure function of the replay and the `hop_day` map):
   first settle of the day, plain or tidy: pays the 23 (`done` set). A tidy settle also pays
   the find if `tidy` is not set (and sets it, whatever the find's outcome: Decided 20). A plain
@@ -621,11 +753,11 @@ by this settle), `found` (a find was picked and added by this settle, to the bas
 when the basket was full, straight to the collection; `false` if none was picked or the
 tidy find was already paid), and `already` (`true` when this settle paid nothing at all:
 no 23 and no find). `already` is a boolean beside `result: "ok"`, never a `result` code;
-ship 3b reads it so. The reply always carries all four booleans on `ok`.
+ship 3b reads `tidy`, not `already`, for the day's tidy (Decided 21, D2). The reply always carries all four booleans on `ok`.
 
 Targets, not move kinds: the server derives the move from where the pet was to the stepped-on
 cell (the pet has one family, so a two-cell straight move is unambiguous), and applies the
-board's rules (a rug's slide, a stump's twin, so the landing cell) itself. `moves` is capped
+board's rules (a rug's slide, a stump's twin, so the landing cell) itself (ship 4a). `moves` is capped
 at 200 letters.
 **`settle`:** `shared`, privacy and the person work as in `play_game`: a shared screen's call
 is the household's; the private-pet `away` answer is rewritten to `asleep`. **`board` takes no
@@ -842,12 +974,14 @@ hop_day: dict = field(default_factory=dict)   # {"day": "2026-11-02", "stage": "
 
 ## 9. Slices
 
-Five numbered ships, seven builds: ship 2 splits into 2a (server, `board`) and 2b (card),
-and ship 3 into 3a (server, settle and save) and 3b (card). The review found ship 2 added
-server code under a "card, tier 1" label and ship 3 was too big. Gates follow `AGENTS.md`:
+Five numbered ships, eight builds: ship 2 splits into 2a (server, `board`) and 2b (card),
+ship 3 into 3a (server, settle and save) and 3b (card), and ship 4 into 4a (stump, rug) and
+4b (crackle, pool, ripple, lantern). The review found ship 2 added
+server code under a "card, tier 1" label and ship 3 was too big; ship 4's review (s2860)
+found it was L, not M. Gates follow `AGENTS.md`:
 ships run `scripts/gate --auto`; the first mate gates the merged batch once. A build that
 adds server code (1 is Python and JS, 2a, 3a, 5) makes `pick-sections` choose `all`, so it
-uses `scripts/ci-gate`. 3a is tier 2.
+uses `scripts/ci-gate`. 3a is tier 2; 4a and 4b are tier 1 (no saved field).
 
 ### Ship 1: the Hop engine, generator and solver (Python and JS, tier 1, L)
 
@@ -1099,7 +1233,13 @@ Acceptance:
   row adds nothing to that. That is the picker's and the dig's own fit at the smallest width,
   not 2b's; it is on the device queue.
 
-### Ship 3a: settle, pay, saved state (server, tier 2, M)
+### Ship 3a: settle, pay, saved state (server, tier 2, M) — BUILT (s2857, `5c0b2ad8`, awaiting owner merge OK)
+
+Built on 2026-11-03 on branch `crew/hatch-at-home-s2857-hop-of-the-day-ship-3a-settle`
+(12 files, +1169 -40; one commit on `e3aadcd3`; full pytest 2331 passed, ruff clean; the
+first mate gates the batch with `scripts/ci-gate`). Readings and deviations the first mate
+accepted are Decided 21. The text below is the plan it was built from; where the build
+differs, Decided 21 and ship 3b's "As built" list win.
 
 `settle` in `virtual_pet.hop`, the replay in `hop.py`, `settle_hop` and the pay (section 7),
 the `hop_day` map, its published attribute and `games["hop"].tidy`, the tidy find, the
@@ -1196,65 +1336,415 @@ Acceptance:
 ### Ship 3b: the row's state, settle wiring, flag removal (card, tier 1, S-M)
 
 The card sends the move list when the pet enters the nest, shows the solved view with its
-restart ("try for tidy"), reads `hop_day` for the row's label, shows the settle replies
-(`ok` with `paid`/`found`/`already`, `illegal`, `not_won`, `board_changed`, `too_long`,
-`egg`/`away`/`asleep`; section 6's table), and removes
-`experimental_hop` (a YAML-only key; with it gone no config key is left to remove, and the
-card-check run "flag off builds nothing" is dropped); `strings`/guide/README/how-to-play
-lines (draft). It reads `done` and `tidy` from `hop_day`, as the sensor attribute, and from
-the `board` reply once 3a fills them (2b ignores both).
+restart ("try for tidy"), reads `hop_day` for the row's label, shows the settle replies, and
+removes `experimental_hop` (a YAML-only key; with it gone no config key is left to remove, and
+the card-check run "flag off builds nothing" is dropped); `strings`/guide/README/how-to-play
+lines (draft). **No server change**: ship 3a is built (s2857, `5c0b2ad8`), and this ship
+reads what it built.
 
-**What 2b left for 3b (reconciled after 2b shipped).**
+**What 3a built, as the card sees it (read before building; Decided 21).**
+- **The `settle` call:** `callService("virtual_pet", "hop", {entity_id, action: "settle", id,
+  moves, ...(sharedScreen() ? {shared: true} : {})}, undefined, false, true)`; `id` is the
+  `board` reply's, `moves` is `HATCH_HOP.encode(g.moves)`. `shared` is accepted and ignored by
+  the server (Decided 21), so the card sends it only for parity with `play_game`; leaving it
+  out would change nothing. The schema caps `moves` at 201 letters and `id` at 32 characters;
+  a card that sends more gets a thrown call, not a code.
+- **The reply on `ok`:** exactly `{result: "ok", won: true, tidy, paid, found, already}`. `tidy`
+  is whether *this list* was tidy, not whether the day is; `paid` is the 23; `found` is a find
+  added by this settle (basket, or straight to the collection when the basket was full);
+  `already` is `not (paid or found)`. A tidy list that finds nothing to pick (or after the
+  day's find) is `tidy: true, found: false`, and `already: true` if no 23 was paid either
+  (D2): so **the card reads `tidy` for "the day is tidy", never `already`**, and shows the
+  tidy view whenever `tidy` is true.
+- **The refusal and error replies:** `{result}` alone, `result` one of `board_changed`
+  (stale or empty `hop_day`, another board's id, a missing `id`, or a day that turned during
+  the build), `too_long`, `illegal` (adds `bad_index`; a missing `moves` is `illegal` at 0),
+  `not_won`, `egg`, `asleep`, `away` (a private pet's `away` arrives as `asleep`). Never
+  `too_tired` (Decided 17). `REFUSALS` in `lines.js` already has `egg`, `away` and `asleep`;
+  it has none for the rest.
+- **The `board` reply** now carries real `done` and `tidy` for the pinned day (booleans), and
+  `day` is the stored day. The card's `valid` check ignores them today; 3b reads them.
+- **The attribute:** `hop_day` on the **life-stage sensor** (`s.ids["sensor.life_stage"]`, where
+  `card-journal.js` reads `games`), `{day, stage, done, tidy}`; absent until the pet's first
+  `board` call, and `{}` after a new egg.
+
+**What 2b left for 3b (reconciled after 2b shipped, and again after 3a).**
 - **Where it plugs in.** `_hopMove` in `card-board.js`: on entering the nest it sets
   `g.done`/`g.tidy` (local `HATCH_HOP.isTidy`), clears the parked list, reacts and says
   "solved"/"tidy". 3b adds the settle call there with the `_hopFetch` pattern (a seam of its
-  own, `_hopSettle`, for card-check). The **parked list must not be cleared at the nest any
-  more**: it is cleared when the settle answers `ok` (any of its flags), and kept for a
-  refused settle (the acceptance row below), so the line in `_hopMove` (`_hopStore(g.key, null)`)
-  moves into the settle's reply handler. The reply's `result` decides: `ok` clears the list
-  and shows the solved view (tidy from the reply's `tidy`, which also ends "try for tidy"
-  for the day, whether `found` is true or false: Decided 20); `board_changed` loads the
-  new board and drops the list; `egg`/`away`/`asleep` keep it; `illegal`, `not_won`,
-  `too_long` keep it too (they are bugs; the board stays as it is and the bubble says so).
-  `settle` never answers `too_tired` (Decided 17), so the card has no line for it there.
+  own, `_hopSettle(id, moves)`, for card-check). The solved view shows **at once** from the
+  local result (no wait on "thinking…"), and the settle runs behind it. The **parked list
+  must not be cleared at the nest any more**: the line in `_hopMove` (`_hopStore(g.key,
+  null)`) moves into the settle's reply handler. The reply's `result` decides:
+  - `ok`: clear the list; `g.tidy = reply.tidy || g.tidy` (see P1: never lowered by a plain
+    list); `g.settled = true`. "Try for tidy" ends for the day whenever `g.tidy` is true,
+    `found` or not (Decided 20).
+  - `board_changed`: drop the list, call `board`, load the new board (the day turned, or
+    another screen's generator moved on).
+  - `egg`/`away`/`asleep`: keep the list; the bubble is `REFUSALS[result]`; `g.settled` stays
+    false (P3 for what the board then offers).
+  - `illegal`, `not_won`, `too_long`: bugs, or an engine drift between hop-engine.js and
+    hop.py. Keep the list, say "hmm, that didn't work", and `console.warn` once per code (as
+    `HOP_WARNED` does for the board), naming the code and, for `illegal`, `bad_index`; never
+    the move list.
+  - a thrown call (network, HA restarting): as a refusal, keep the list, "hmm, that didn't
+    work".
+  - **In every case the handler first checks that `s.game === g`** (the player did not
+    restart, quit or open another board meanwhile; a restart plus a second nest entry sends a
+    second settle while the first is in flight, and the server pays once either way). A stale
+    reply changes nothing on the card. The first reply to the older list still clears or keeps
+    its own key (`g.key`), whoever is on screen.
+- **The reopen path.** `_hopStart` today resumes a parked list only when it is legal and *not*
+  won, and drops one that won. With the list kept at the nest this drops exactly the lists
+  3b means to keep (asleep, a thrown call, a closed tab before the reply). So `_hopStart`
+  changes (P2): a parked list that is legal **and won** opens the solved view (the pet in the
+  nest, `g.done`, the local `tidy`) and **sends the settle again**; its reply is handled as
+  above. A parked list that is illegal on this board is dropped, as now. A `board` reply with
+  `done: true` and `tidy: true` drops any parked list (nothing is left to pay) and opens the
+  tidy solved view.
+- **A reload on the same day** (the `board` reply's `done`/`tidy`, no parked list): the solved
+  view with the pet in the nest and no path. `g.st` is built from a replay of nothing, so 3b
+  needs the nest state without a list: `{pos: <index of "N">, sunk: 0, uses: 0, done: true}`
+  (`HATCH_HOP.fromView` takes the view form), or the solved view draws the pet on the
+  start pad. `g.done = reply.done`, `g.tidy = reply.tidy` from the `board` reply, and "try for
+  tidy" is offered while `!g.tidy`, restarting from the start pad with the board's own `st`.
 - **Already built in 2b, not 3b's:** the solved view's keys (undo off once `g.done`, restart on
   only while `!g.tidy`, aria "try for tidy"), `_hopRestart`, the bubble lines. 3b changes the
-  *source* of `tidy` (the settle reply, then `hop_day`) and the bubble's text per settle code.
+  *source* of `tidy` (the settle reply, the `board` reply and `hop_day`) and the bubble's text
+  per settle code.
 - **The row's label is one constant** (`HOP_COPY.row`; `_hopRow` in `card-board.js`); 3b adds
-  open / solved / tidy to it and the row's `aria-label`, and a reload on the same day must start
-  on the solved view: today `_hopStart` resumes a parked list only when it is legal and *not*
-  won, so a won board on reload would open fresh unless 3b passes `done` in.
-- **The flag.** Removing `experimental_hop` takes out `_hopOn()` (one line), the flag-off
-  checks in card-check's `board` section ("flag off: the picker has three games and no Hop row"
-  and "flag off again"), and the bench's `hop: true`/`experimental_hop` lines in `page.js`.
-  The card-check `board` baseline in the picker-fit check (flag off first) goes with them.
+  open / solved / tidy to it and the row's `aria-label` (all draft). The state is read from
+  `hop_day` on the life-stage sensor: `open` when the attribute is absent, or its `day` is not
+  today, or `done` is false; `solved` when `done`; `tidy` when `tidy`. "Today" is the server's
+  day, the HA local date (Q1). The row is rebuilt when the picker opens, and also when the
+  sensor's attribute changes while the picker is open (another screen settled): the local
+  game's own settle updates it from the reply.
+- **The flag.** Removing `experimental_hop` takes out `_hopOn()` (one line) and its guards in
+  `_hopRow`, the flag-off checks in card-check's `board` section ("flag off: the picker has
+  three games and no Hop row" and "flag off again"), and the bench's `hop: true` /
+  `experimental_hop` lines in `page.js`, `scripts/bench.js`, `dev/bench/README.md`,
+  `docs/features.md` (the grep above lists the files). The card-check `board` baseline in the
+  picker-fit check (flag off first) goes with them. **A saved YAML with `experimental_hop:
+  true` must still load** (P7): `setConfig` does not validate unknown keys today; a check
+  asserts it.
 - **Cell size.** The tap-then-confirm path is the common case (cells 19-28 px), so 3b's
   settle must not assume a one-tap commit anywhere.
+- **Docs.** `docs/guide.md` (the life-stage attribute list near line 519 gains `hop_day`; 3a
+  left it for this ship), the games text, README, how-to-play, `docs/features.md` and
+  `dev/bench/README.md` (draft copy; section 10).
 
-Acceptance:
-- card-check on stubbed replies: the settle contract above; a plain win then a restart then a
-  tidy settle (stubbed `ok` with `already: true`, then `ok` with `found: true`, then one with
-  `found: false` that still ends "try for tidy"); the solved view has no undo and a restart
-  only while tidy is not set; `board_changed` loads the new board and drops the parked
-  moves; a refused settle (asleep) keeps the moves; the row reads open / solved / tidy from
-  the attribute and from a stale `day` (open); a reload on the same day shows the solved
-  view.
-- bench: the row in each of its three states at 300, 330 and 420; the solved view.
+Acceptance (P-numbers are the review's, below):
+- card-check on stubbed replies, each stub carrying the full as-built shape (`result`, `won`,
+  `tidy`, `paid`, `found`, `already` on `ok`; `{result}` on a refusal):
+  - a plain win: the solved view at once, the settle sent once with the board's `id`, the encoded `moves`
+    string, no `shared` on a private screen, the list cleared on the `ok` (`paid: true,
+    tidy: false, found: false, already: false`), "try for tidy" on;
+  - then a restart and a tidy list: settle sent again, stub `ok` with `tidy: true, paid: false,
+    found: true, already: false`: the tidy view, restart off; and the same with
+    `found: false, already: true`: tidy view, restart off (D2: `already` is not read);
+  - a plain list after a tidy day (stub `ok, tidy: false, already: true` with the `board`
+    reply's `tidy: true`): the view stays tidy and restart stays off (P1);
+  - `board_changed` loads the new board (a stubbed `board`) and drops the parked moves; `egg`,
+    `away` and `asleep` each keep the moves and say their `REFUSALS` line; `illegal`,
+    `not_won`, `too_long` and a thrown call keep the moves, say "hmm, that didn't work" and warn
+    once each; none of them shows "paid";
+  - the reopen after a refused settle: the parked won list opens the solved view and the
+    settle goes out again, answered `ok` this time (P2);
+  - a reply that arrives after a restart or a quit changes nothing on screen (P4);
+  - the solved view has no undo; restart only while tidy is not set (the 2b check stands);
+  - the row reads open / solved / tidy from the attribute, from a stale `day` (open), from an
+    absent attribute (open), and from the local settle's reply;
+  - a reload on the same day (the stubbed `board` with `done: true`): the solved view, pet in
+    the nest, "try for tidy" offered when `tidy: false`, and a restart then plays from the
+    start pad; with `tidy: true` no restart;
+  - `experimental_hop: true` in a config does nothing and raises nothing; a card with no key
+    has the row (P7).
+- JS (`tests/js`): the reply handler as a pure function of (reply, game), if it is split out:
+  the table above, one row each (P8).
+- bench: the row in each of its three states at 300, 330 and 420; the solved view of a won
+  board, of a tidy one, and of a reload (the nest state without a path).
+- **Not verifiable without a device (device queue):** the real round trip from the card (the
+  3a pytest covers server through the service with `hop_solve.py`, the card-check stubs cover
+  the card; nothing runs the two together outside the batch gate's HA); how the settle reads
+  on a real phone at 19-28 px cells; the "found" moment against a real find event (P6); a
+  settle racing a bedtime on a real pet.
 
-### Ship 4: world twists (engine and generator, tier 1, M)
+**Review of ship 3b itself (s2858, adversarial; against 3a as built).** What was wrong or
+missing in the draft, and what was done:
+- **P1 (wrong; fixed above).** The draft said the card takes `tidy` from the reply. The reply's
+  `tidy` is *this list's*: a plain list on a day that is already tidy (a second screen, a
+  second pass after a tidy settle that the card dropped, another person) answers `tidy:
+  false, already: true`. Setting `g.tidy` from it would offer "try for tidy" again on a tidy
+  day. The card keeps `g.tidy` as an OR of the `board` reply's `tidy`, the attribute, and every
+  reply's `tidy`; nothing lowers it. Fixed: the `ok` handler and an acceptance row.
+- **P2 (missing; fixed above).** The draft kept the list for a refused settle and then
+  reopened through a `_hopStart` that drops any parked list that is won, so "the player can
+  retry once the pet wakes" was not true in code: the first reopen threw the list away. Fixed:
+  the reopen path, and its acceptance row.
+- **P3 (missing; question Q2).** A refused settle leaves a solved board on screen that is not
+  paid. The solved view then offers "try for tidy" (restart) whose handler clears the parked
+  list: the player loses an unsettled win. See Q2.
+- **P4 (missing; fixed above).** Nothing said what a reply for a board that is no longer on
+  screen does; with restart plus a second nest entry two settles are in flight. Fixed: the
+  `s.game === g` check, and an acceptance row.
+- **P5 (wrong; fixed above).** The draft's acceptance stubbed `ok` with `already: true` and
+  then `found: true`, with no value for the other fields, so a card that read `already` for
+  tidy would have passed. Each stub now carries the full shape, and one row asserts D2.
+- **P6 (unverifiable; device queue).** The draft said nothing of what the card says for
+  `found: true` or for `paid`. The basket find already has its own moment through the
+  `found` event, and a full-basket find has none (Decided 20: `found: true`, no event). This
+  ship adds no new copy beyond the draft lines for the row and the solved view; for
+  `found: true` with no event, Q3.
+- **P7 (missing; fixed above).** Removing the flag with a YAML that still has it, and the
+  card-check/bench/docs files that mention it (the grep), were not listed.
+- **P8 (missing; fixed above).** No JS-level test: the reply table is a small pure function
+  and cheap to cover without HA.
+- **P9 (missing; fixed above).** The reload on the same day needs a nest state without a path;
+  `HATCH_HOP.start` puts the pet on the start pad.
+- **P10 (stale; fixed above).** The draft said the card reads `done`/`tidy` "once 3a fills
+  them" and that 2b ignores both: 3a is built, and the `board` reply has them.
+- **P11 (wrong in section 6; fixed there).** "The parked list is cleared on a settle" and
+  "ship 3b reads [`already`] so" are edited: cleared on `ok` only; `tidy` for the day.
+- **P12 (judgement; Q4).** Removing the flag exposes the row to every household with tier 1
+  and no device pass.
 
-The six twists of section 2c, with the holes settled there, in `hop.py` and
-`hop-engine.js`, their generator terrain and checks, fixtures, one bench shot per world.
-"Per world" first appears here: the acceptance and bot ranges are now per (world, family,
-stage).
+Questions (answer before or during the build; each has a recommendation):
+- **Q1. What is "today" for the row's label?** The server's day is the HA local date
+  (`_today`); the card has no HA-timezone day (nothing reads `hass.config.time_zone`), and a
+  browser in another timezone or a day-turn mismatch would show "solved" or "open" wrongly
+  for hours. *Recommend:* compute the date with `Intl.DateTimeFormat("en-CA", {timeZone:
+  hass.config.time_zone})`, fall back to the device's local date, and let the `board` reply's
+  `done`/`tidy` correct the row when it opens. A wrong label costs a tap, not a pay.
+- **Q2. A refused settle and the restart key.** *Recommend:* while `g.settled` is false the
+  solved view's restart is disabled, and the list is kept; the player leaves and returns, and
+  the reopen re-sends it (P2). The alternative (a "send again" key) is a new key and new copy.
+- **Q3. `found: true` with a full basket gives no event.** *Recommend:* the card says one
+  draft line ("found something!") from the reply's `found`, not from the event, and the
+  basket's own `found` moment is not duplicated when the event also arrives (the `found` line
+  wins within a short window). If the owner wants no new line, say nothing for a full basket.
+- **Q4. Flag removal in the same ship as the settle.** *Recommend:* keep it in 3b as planned,
+  but land the flag removal as the last commit, so the owner can merge 3b without it and
+  after a device pass.
 
-Acceptance: each twist has fixture cases both engines pass (a stump pair, a crackle pad's
-two visits, a rug slide against an edge and against a wall, a pool across the move
-parity with an undo, a ripple chain, a lantern then a dark cell); checks 1-6 hold for each
-world; the bot ranges hold per world; card-check `board` is rerun on a board per twist
-(stubbed); the bench `--preset hop` shows all six worlds. A save made before this ship loads
-(the board changes, the saved map doesn't); a settle on yesterday's generator id answers
-`board_changed`.
+### Ship 4: world twists (engine and generator, tier 1, split 4a + 4b)
+
+The six twists of section 2c, with the holes settled there, in `hop.py` and `hop-engine.js`,
+their generator terrain and checks, fixtures, one bench shot per world. Built in **two
+ships, 4a then 4b** (review s2860 Q8, Decided 33), because the first changes what a move
+*is* (the landing differs from the target) and the second adds state. Each has its own
+acceptance, and 4b is built on 4a's merge.
+
+**Shared by 4a and 4b** (read section 2c first; it holds every rule):
+- "Per world" first appears here: the acceptance and bot ranges are now per (world, family,
+  stage), over the **21** (world, family) pairs the roster has (woodland 5, terrarium 4,
+  hearth 3, tidepool 4, pond 3, nightsky 2), not 36. The test derives the pairs from
+  `FAMILY_OF` and the roster rather than hard-coding 21. `cell_boards` in
+  `tests/test_hop.py` takes the world (it hard-codes `"woodland"` today).
+- **Babies get no twist** (Decided 26); stages child, teen and adult do. A fallback day has
+  no twist (Decided 30).
+- **No saved field.** `hop_day` is `{day, stage, done, tidy}` before and after, so ship 4
+  stays tier 1 (review P15). It stays tier 1 only while the world and the twist stay out of
+  `hop_day`. `lay_egg` already clears `hop_day`. The one mid-day effect is `GEN_VERSION`:
+  **each of 4a and 4b bumps it by one** (2 to 3, then 3 to 4), because each changes boards;
+  ids change, a settle on an old id answers `board_changed`, and the card loads the new board
+  (once per release per pet). Each bump regenerates the golden boards
+  (`tests/fixtures/hop_golden.json`), `dev/bench/hop-boards.json` (`scripts/hop_bench_boards.py`;
+  it is woodland-only today and gains one board per twist world as they land) and updates the
+  `card-check` board stub (`scripts/card-check.js`, which hard-codes `twist: null`).
+- **The reply's `twist`** is `twist_of(board)` (section 2c), filled by `async_hop_day_board`
+  (`coordinator.py` hard-codes `None`; `tests/test_hop_service.py`'s assertion on it changes
+  with it). The card's `_hopStart` copies `w, h, grid, family, specials` and drops `twist`
+  and `world`; it may keep `twist` for copy and the bench, and no rule reads it.
+- **Cost** (Decided 9 holds here, where the solve gets bigger): median `hop_board` under 1 s
+  and worst under 5 s on this machine, states under `HOP_STATE_CAP` (100,000), fallback share
+  at most 10% per (world, family, stage) with `PER_CELL = 5` (so none in the default suite).
+  The report states the measured numbers per twist world.
+- **Every twist world's seeded board holds its glyph** (a test per twist world: of the
+  `PER_CELL` boards of a (world, family, stage) cell at child and up, none is a fallback and
+  each holds its twist's glyph). Goldens (`GOLDEN_INPUTS` already spans worlds, all
+  twist-less) are regenerated, and each golden of a twist world asserts its glyph. A
+  fresh-process determinism test (`test_same_inputs_same_board_in_a_fresh_process`) runs per
+  twist world.
+- **Python and JS agree** on `replay`'s `final` for every new field and every fixture case
+  (`tests/fixtures/hop_cases.json`, which both engines read). `to_dict`/`view()` and
+  `from_dict`/`fromView` follow section 2c "The state".
+- **The touching rule and the loop net** (Decided 34): `touching_never_sinking(board)`
+  replaces `touching_stones` in `check()` for the glyphs each ship adds; the generator
+  places the ship's twist cells with `_candidate`'s "near" test for stones; `check()` catches
+  `CycleError` (`Verdict(False, "loop")`); a test runs seeded boards of every world and
+  asserts none raises out of `hop_board`.
+- **Player copy**: section 2c "Player copy". The aria labels for the ship's cell kinds, the
+  `role="img"` on twist cells, and the key labels' widened pad class come in with the ship
+  whose cell it is.
+- **Motion**: section 2c "Motion".
+- **Bench**: the bench `board:` shot gains the fields it needs to pin each ship's states
+  (4a: none beyond a fixture name; 4b: `parity` for the pool and `lantern: "lit"` or
+  `"unlit"`, and a half-sunk crackle by playing its first leaving), and the README lists them.
+  One bench shot per world at 300 / 330 / 420, each read by a worker for overlaps
+  (`<shot>.json`); `--preset hop` shows the worlds the built ships cover.
+- **The device** judges what no worker can (device queue, below): how the new cells read at
+  300 px, the dim dark cell's contrast, the crackle's half-sunk look, the pool's phase, and
+  the stump jump and rug slide as `translate` transitions on `.hpiece`. No acceptance line
+  depends on those.
+
+#### Ship 4a: stump holes and rugs (the landing differs from the target; M)
+
+Woodland's stumps `1` `2` and hearth's rug `=`. The engine change is the landing: `step`
+returns the state at the **landing** (a rug's slide, a stump's twin), and every place that
+took the named cell for the landing is changed (section 4, "Where the landing is not the
+target"): `step` and `apply`, the solver's nest shortcut and its `walk` twin, the bots' `_plan`
+and `_greedy` (with the failed-plan fix), `reach()`, the card's `_hopNest` and key/tap
+targets (`targets()` names the stepped-on cell; the card draws the landing). Also in 4a:
+`CELLS` gains `1 2 =` in both engines; `Board` invariants for stumps; `touching_never_sinking`
+for stones, stumps and rugs; the generator's stump and rug placement; woodland and hearth
+boards at child and up carry the twist; `twist_of`; `GEN_VERSION` 3.
+
+Acceptance (4a): fixture cases both engines pass: a stump pair (step in, land on the twin;
+a hop and a glide landing on a stump, twin applies), a rug slide against an edge and against a
+wall, a rug slide that stops on the rug because the next cell is sunk, a rug slide into the nest
+with a find still missing (stops on the rug) and with every find in (wins on that move), a
+hop and a glide landing on a rug (no slide), a swim or climb step from a water or wall cell
+onto a rug and a rug facing water or a wall (no slide into it), a squeeze that names a stump
+or a rug (refused: neither is a sunk pad), undo across a stump jump and across a rug slide;
+`bad_boards` cases for an unpaired stump, a stump glyph used three times, and a mixed-twist
+board; the casual bot **cannot hang** (a test forces `rules.step` to return `None` in
+`_greedy` and the bot returns); checks 1-6 hold for woodland and hearth; the bot ranges hold
+per (world, family, stage) for those two worlds; every woodland and hearth seeded board at
+child and up holds its glyph with no fallback; `check()` rejects a stump beside its twin,
+a rug or stump beside a stone, and a candidate whose solve raises `CycleError`
+(`"loop"`); a pytest that a save made before the ship loads (a `hop_day` saved with the old
+stage and day loads, `board` serves a new id, a `settle` with the old id answers
+`board_changed`); card-check `board` is rerun on a stubbed board per twist (stump, rug);
+the bench shows a woodland and a hearth board at 300 / 330 / 420; `scripts/gate --auto` plus
+the first mate's `ci-gate` for the batch.
+
+#### Ship 4b: crackle, pool, ripple, lantern (new state; M-L) — BUILT (s2869, awaiting merge)
+
+Terrarium's crackle `c`, tidepool's pool `%`, pond's ripple `r`, nightsky's `?` and `*`. The
+new state (section 2c "The state"): `parity` on pool boards and `half` on crackle boards,
+in `State`, `view()`, `fromView` and the memo key (both places it is packed, and the walk).
+Also in 4b: the **bots' BFS** gets nodes `(cell, spent, parity)` for pools, plans a path and
+replays each step with `rules.step`; a ripple's chain in `step` (and the solver, and `reach`'s
+relaxed relation, which may over-approximate); the lantern's derived flag in `entry` and
+`reach`; dark cells in the tidy pad mask; the card reads `parity` from the state view and
+draws pools in the next move's phase and a half-sunk crackle; the key labels' pad class;
+`CELLS` gains `c % r ? *`; invariants for `?`/`*`; `touching_never_sinking` gains `%`;
+`twist_of` the rest of its values; `GEN_VERSION` 4; the `"P.o?"` `bad_boards` case changes in
+the same commit.
+
+**What 4a built that 4b extends** (reconciled after ship 4a, s2866):
+- **Tables, not branches.** `hop.py` holds `TWIST_GLYPHS` (twist to glyphs), `WORLD_TWIST`
+  (world to twist; 4a: woodland `stumps`, hearth `rug`) and `NEVER_SINKING = "o12="`, which
+  `entry`, the walk mask and `touching_never_sinking` read; `hop-engine.js` mirrors
+  `CELLS`, `NEVER_SINKING` and `TWIST_GLYPHS`. 4b adds its four rows to `TWIST_GLYPHS` and
+  `WORLD_TWIST` and `%` to `NEVER_SINKING` in both engines. `Board` already refuses more than
+  one twist kind and a twist on a baby's board (`specials == 0`); 4b adds the `?`/`*` counts.
+- **The landing.** `_Rules.land(pos, t, special, sunk)` gives the cell after entering `t`
+  (JS: `land(board, cells, pos, t, special, sunk)`, direction from `t - pos`); `step`, the
+  solver's `rec` and `walk` (nest test and memo key on the landing) and the JS `apply` use it.
+  A ripple's chain goes in `step` next to it, not in `land` (it sinks cells, it does not move
+  the pet). `reach` seeds the twin of a pos on a stump and pushes a stump's twin; the rug needs
+  nothing there (the cell past it is a neighbour).
+- **The bots.** `_plan` returns `(named, landing)` pairs over landing nodes; `_greedy` steps
+  the named cell, returns its moves when a planned step is `None`, and re-plans when the
+  landing is not the planned one. 4b's `(cell, spent, parity)` nodes extend that node. The
+  re-plan fires on the landing only, so a ripple's or a crackle's change of `sunk` must be in
+  the plan's own step (or trigger a re-plan too), or the next planned step returns `None` and
+  the bot gives up.
+- **The generator.** `_place_twist(rng, cells, order, twist, specials, w, h, clear)` places a
+  twist on a candidate (stumps in whole pairs, a rug only where a row or a column gives it a
+  pad-or-stone neighbour on both sides, so it can slide); `clear(i)` is `_candidate`'s near
+  test over `NEVER_SINKING`. A twist-free world draws exactly as before. 4b adds one branch
+  per twist, with the same care that each cell can act (a ripple with a pad to its right, a
+  lantern not walled off from its dark cells), and `hop_board` already skips a candidate whose
+  `twist_of` is not its world's.
+- **Squeeze "refused".** A squeeze naming a cell that is not a sunk pad is never an illegal
+  letter: the plain step onto the cell is legal, so the move is taken as a plain step and no
+  use is spent. 4a's fixture for a stump and a rug asserts that (`uses` unchanged); 4b's
+  "squeeze back onto a half-sunk crackle" asserts the same (one visit spent, `uses`
+  unchanged), and the squeeze onto a fully sunk one spends the use.
+- **Tests.** `cell_boards` takes the world and `PAIRS` derives the 21 pairs. With
+  `PER_CELL = 5` the bot ranges are too noisy per cell (hearth dig cells scored 12/15 and
+  13/15 at 5, and at least 0.96 at 200), so the default suite asserts them per (world, family) over its stages and per
+  (world, family, stage) only under `HOP_FULL`; 4b keeps that split. The old-save test
+  (`test_hop_settle.py`) builds the old board by monkeypatching `GEN_VERSION` and
+  `WORLD_TWIST`; 4b's version sets 3 and drops its four worlds.
+- **Bench and card-check.** `scripts/hop_bench_boards.py` lists `(world, family, stage)`;
+  a board outside woodland is named `<world>-<family>-<stage>`, and each fixture's
+  `landing` holds the shortest list whose last move lands off its named cell. `--preset hop`
+  shoots `HOP_TWIST_WORLDS` (scripts/bench.js) at each width, at start and `-landed`; 4b adds
+  its worlds there and its pins (`parity`, `lantern`) to the `board:` shot. card-check's stub
+  reply derives `twist` from the grid (`twistOf`) and sets `world`.
+- **Card.** `legalTargets` already names stepped-on cells and `_hopPlace` draws the landing;
+  `_hopNest` needed no change. `HOP_LABELLED` maps a glyph to its `HOP_COPY.cell` label
+  (`role="img"`); 4b's labels depend on state (crackle half, pool phase, dark lit), so it
+  becomes a function of the cell and the state.
+
+Acceptance (4b): fixture cases both engines pass: a crackle pad's two visits (and tidy needing
+both), a squeeze back onto a half-sunk crackle (taken as a plain step, no use spent) and onto a
+fully sunk one; a pool
+across the move parity with an undo, a swim onto a pool in its water phase (a water entry),
+a hop and a glide onto a pool in its water phase (blocked) and in its stone phase, an undo
+across a parity change; a ripple chain (a run of `r`, then a plain pad that sinks with it, then
+a find pad that does **not**), a chain stopped by the row's edge and by a sunk cell, a step
+from `r` onto its sinking right neighbour, a ripple left by a special move; a lantern then a
+dark cell, a hop onto the lantern (lit), a special onto an unlit dark cell (refused), a
+lit dark cell left (sinks), a squeeze onto it, a tidy list that must light and sink every
+dark cell; `bad_boards` for a `?` with no `*`, two lanterns and a mixed-twist board; the Python
+replay and the JS engine agree on `final` for `parity` and `half`; `walk` finds the memo entry
+at every step; checks 1-6 hold for the four worlds; the bot ranges hold per (world, family,
+stage) over the four worlds' 13 pairs (terrarium 4, tidepool 4, pond 3, nightsky 2); every
+seeded board at child and up holds its glyph with no fallback; the cost numbers above are
+reported per world, and if a world exceeds the cap or the fallback share the report says so
+rather than loosening them; the loop net test covers all six worlds (no `CycleError` out of
+`hop_board`); card-check `board` is rerun on a stubbed board per twist (crackle, pool, ripple,
+lantern), with the key labels (a crackle `sunk` only when fully sunk, a water-phase pool
+`blocked`) and the aria labels of section 2c asserted; the bench shows each world's board at
+300 / 330 / 420, a pool in both phases and the lantern unlit and lit
+(`--preset hop`); `scripts/gate --auto` plus the first mate's `ci-gate` for the batch.
+
+**As built (s2869).** Where the build settled something the text above leaves open:
+- **State.** `parity` and `half` are on a board's state only when it has a pool or a crackle
+  (`None` in `State`, absent from `view()` and the JS state elsewhere; a missing one reads
+  0), so a board without them has the same views, ids and save shape as before. The lantern's
+  lit flag is derived (the lantern sunk or under the pet) and is not in the state or the memo
+  key. `_Rules.leave(pos, sunk, half)` (JS `leave(board, cells, pos, sunk, half)`) is the one
+  place a cell is left: a crackle's first visit only sets its `half` bit, a ripple sinks its
+  `r` run to the right and then the first plain pad, stopping at the edge or a sunk cell and
+  never sinking `f` or `P`. Leaving a cell already sunk (a squeeze's lift) sinks nothing.
+- **Memo key.** `sunk | pos << 24 | uses << 29 | parity << 31 | half << 32`, packed the same
+  in `rec` and `walk`; a board with no twist state keeps a fast path with parity and half 0.
+- **Bots.** `_plan`'s nodes are `(cell, spent, phase)`, where the phase is the parity on a pool
+  board, the lantern's lit bit on a lantern board (so a plan can light the lantern before it
+  names a dark cell), and 0 elsewhere. `_greedy` re-plans when a step sinks more than the cell
+  left (a ripple's chain), besides a landing that is not the planned one.
+- **Pools and the square colour.** On a step-only family a move changes the pet's square
+  colour (the grid is bipartite), so each pool's phase on arrival is fixed by its colour; only
+  a special (hop, glide, dig) moves without changing colour while counting a move, and so
+  changes which pools a path can enter. The generator does not use this; the bot ranges hold.
+- **Generator.** One branch per twist with `(specials -> count)` tables: crackles where three
+  or more neighbours are open, pools where `clear()` holds and two or more are open, ripples
+  with a plain pad to the right, the lantern where two or more are open and then the dark
+  cells where one or more are; a lantern with no dark cell that fits is taken back. Cost per
+  world over 40 boards a (world, family, stage) at child, teen and adult: no fallback in any
+  world, the worst board 2.3 s (terrarium hop adult), the most states 99,229 (terrarium squeeze
+  adult: a crackle's half bits widen the key, and that is close to `HOP_STATE_CAP`'s 100,000,
+  past which a candidate is redrawn); the ship report has the table.
+- **Card.** `hopCellLabel(board, state, i)` replaces `HOP_LABELLED`: a whole or half crackle,
+  a pool in the next move's phase, a ripple, an unlit dark cell and the lantern carry their
+  2c label; a sunk twist pad and a lit dark cell carry none (no line is quoted for them). The
+  classes are `wet` (a pool in its water phase), `half` and `dark` (`lit` was taken: the tap
+  highlight), plain class swaps with no animation. A key reads "sunk" onto any sunk cell of
+  `HATCH_HOP.PADS` (`.fPcr*?`).
+- **Tests.** The default suite's per (world, family) bot bracket now runs in its own test per
+  twist world over 10 boards a stage (`BRACKET_CELL`, 120 noisy games a pair; about 19 s): at
+  `PER_CELL`'s 60 games one board the bot loses three times moves a pair 5%, and tidepool swim
+  scored 53/60 there while scoring 0.94 on 120 and 0.93 or more on 60 boards a cell. The
+  threshold (90% / 20%) is unchanged.
+- **Bench.** Each fixture in `dev/bench/hop-boards.json` gains `acted` (the shortest list
+  that shows the twist acting: the landing, a half crackle, a ripple's chain); the `board:`
+  shot takes `parity` and `lantern: "lit"`, and `hopInfo` writes the cells' `labels`,
+  `parity` and `half`.
 
 ### Ship 5: hints and practice boards (server and card, tier 1, S-M)
 
@@ -1271,6 +1761,19 @@ takes it as a defaulted argument `n=0`, so the day's entry is unchanged and prac
 are kept by the same rule, today's only, with a cap on the keys per day), and the settle for a
 practice board is **free and unpaid** (answers `practice`), which has no cheat surface
 because it pays nothing. They fill the row's idle time after the day's board is done.
+
+**Reconciled after 4a and 4b** (s2869): the hint replays the move list (as `settle` does) and
+runs `solve(board, state)` from that state, which already starts anywhere and carries 4b's
+`parity` and `half`, so no new saved field. The hint is `solve(...).win[0]`, the **named**
+cell (a move letter): on a stump or rug board the pet lands elsewhere, so the card lights the
+named cell (what the player taps), not the landing, and the pet's glance looks at that cell
+too. The cost is the generator's own solve (worst 2.3 s on a terrarium hop adult board;
+the most states 99,229, under the cap of 100,000), so the executor and the per-minute limit stand as planned.
+Practice boards carry their world's twist like the day's board (the same `hop_board` with `n`
+in the seed and `GEN_VERSION` 4); a practice settle that answers `practice` needs no
+`board_changed` path. The hint key is a ninth key: the board's key column is two keys by four
+(the arrows, the special key, undo, restart, close) at every width, so it needs a fifth row
+or a new layout, read on the bench at 300 / 330 / 420.
 
 Acceptance: pytest — a hint from any reachable position is the first move of some
 winning list (checked on the fixtures and on generated boards), a hint from a dead end
@@ -1305,6 +1808,21 @@ Only a phone shows these. Each ship above stands without them; they tune numbers
 - The piece's 140 ms glide, the dotted path and the arc (hop, glide) on a real LCD: too
   quick, too slow, or invisible at 19 px?
 - Glide's diagonal special has no key; it is tapped only. Is that found without a hint?
+- **Ship 4 on a real phone and pet** (review s2860 P16; no worker can judge these, and no
+  acceptance line depends on them). 4a: whether a stump hole and a rug read at 300 px (cell
+  12-44 px by width) and are told apart from a stone and a pad; the stump jump and the rug
+  slide as `translate` transitions on `.hpiece`: is the move followed by eye, or does the pet
+  seem to vanish? 4b: a dim dark cell's contrast against the LCD (unlit and lit); a crackle
+  pad's half-sunk look beside a whole one; a pool's phase (drawn as the next move's) read
+  during play, and whether the water-phase pool is taken for a wall; a ripple pad's look and
+  whether the chain to its right is guessed without text; the nine aria labels read by a screen
+  reader. The decision is the owner's eye, then the first mate's copy if a world wants a
+  one-line "what is this" on open (new copy, Decided 29).
+- **Ship 3b on a real phone and pet.** The real round trip from the card to the server and
+  back (the stubs and `hop_solve.py` cover the halves); the settle at 19 / 22 / 28 px cells
+  (tap, confirm, nest, solved view, no one-tap assumption); the "found" moment and its line
+  against a real find event and a full basket; a settle racing a bedtime (the pet falls asleep
+  with the win on screen, the list stays parked, the reopen sends it again).
 - The picker at the smallest width (a 284 px card, LCD 180×135): the three games already run
   6 px past the LCD's foot and the second touches the close button (found by 2b's baseline, not
   caused by the row). Is that visible on a phone, and does the picker need its own 300 px fix?
@@ -1335,6 +1853,10 @@ page. All with draft copy.
   pass if the picker at `tight` has no room for it.
 - The twists for terrarium, pond and nightsky, and the squeeze family, are this plan's
   proposals and are the likeliest to be changed after the owner looks.
+- Ship 4's review (s2860, folded by s2861) found no saved field: `hop_day` is
+  `{day, stage, done, tidy}` before and after, the board and the twist are rebuilt from
+  the entry's data, and the world is not pinned. Pinning the world or the twist in `hop_day`
+  would make ship 4 tier 2 (a validation row in `test_damaged.py`); nothing here does.
 - Checked by the review and the fold: nothing in `intent.py`, `llm.py` or `blueprints/`
   calls `play_game`; callers of `left_right` are `__init__.py`, `services.yaml`, strings,
   `coordinator.py`, `model.py`, tests, `scripts/balance_sim.py`, `scripts/card-check.js`
@@ -1435,3 +1957,82 @@ The first mate answered review s2855's Q1-Q4 on 2026-11-03 (they are folded into
     backwards (timezone, clock, restore) is the same day. One test.
 20. **`tidy` is set on the first tidy settle even if the find cannot be added** (first mate,
     Q4). The reply carries `found: true/false`; the card stops offering "try for tidy".
+
+## Decided (2026-11-03, ship 3a as built)
+
+The first mate accepted ship 3a's readings D1-D3 and its other deviations (report of s2857,
+"Deviations and readings"), recorded by s2858.
+
+21. **Ship 3a as built, accepted** (first mate):
+    - **D1, the find-only settle.** A tidy settle after a plain win pays only the find (and the
+      `found` event if the find went into the basket). It has no play costs, no care-log entry,
+      no `game_finished` event and no bond. That day's log shows `win`; the later tidy shows
+      only in `games.hop.tidy` and `hop_day.tidy`. Section 6's "one care entry on a paid settle"
+      is the 23's.
+    - **D2, `already` is `not (paid or found)`.** A tidy settle after a plain win with no find to
+      pick answers `ok, tidy: true, paid: false, found: false, already: true`, and `hop_day.tidy`
+      and the tidy count are still set (Decided 20). **The card reads `tidy` from the reply, never
+      `already`**, to decide that the day is tidy.
+    - **D3, "writes nothing"** means nothing beyond what `_advance` saves on every call (as in
+      2a's `board`); the tests count saves outside `_advance` and compare `to_dict()`.
+    - **Egg is refused in `hop_day`.** The load validation drops a map with `stage: "egg"` (an egg
+      has no board; `params_for` would raise). Otherwise as section 8.
+    - **The sensor attribute is `{day, stage, done, tidy}`** (sections 5 and 8; the stage is not
+      personal).
+    - **`shared` is accepted and ignored** by `settle`: nothing of Hop is kept per person, and the
+      bond goes to the signed-in person, only when the 23 was paid (as `play_game`).
+    - **The checks after the build run in this order:** board id mismatch (`board_changed`), then
+      `too_long`, `illegal` (with `bad_index`), `not_won`. So another board's list answers
+      `board_changed`, not `illegal`. A `settle` with no `id` answers `board_changed`; with no
+      `moves`, `illegal` at index 0 (answered, not raised by the schema).
+    - **The `ok` reply** is `{result, won, tidy, paid, found, already}` and nothing else (no `day`,
+      no `done`): `tidy` is whether *this list* was tidy, not whether the day is. A refusal or
+      `board_changed`/`too_long`/`not_won` is `{result}` alone; `illegal` adds `bad_index`.
+
+## Decided (2026-11-03, ship 3b questions)
+
+The first mate answered ship 3b's Q1-Q4 on 2026-11-03 (brief of s2859).
+
+22. **Q1: the row's "today" comes from `Intl` with `hass.config.time_zone`** (first mate). The
+    `board` reply's `done`/`tidy` corrects the row when it opens. Fall back to the device's
+    local date when the zone is missing or unknown.
+23. **Q2: restart is disabled while a won board is unsettled** (first mate), whether the settle
+    was refused or is still in flight. The list is kept; the reopen re-sends it (P2).
+24. **Q3: one short line for a find from `found: true`** (first mate), in the house voice of
+    the existing find lines. It is the only new player copy in 3b; any other missing line is a
+    question for the first mate, not a guess.
+25. **Q4: flag removal (`experimental_hop`) is the last commit of 3b, on its own** (first
+    mate), so it can be dropped. Old YAML that still sets the flag must load (P7).
+
+## Decided (2026-11-04, review s2860, ship 4)
+
+The first mate answered review s2860's Q1-Q9 on 2026-11-04, all as the review recommended
+(brief of s2861). They are folded into sections 2, 2b, 2c and 4, the device queue and ship 4,
+which is built as 4a and 4b. The numbering continues.
+
+26. **Q1: no twists for babies** (first mate). A twist starts at child; babies stay steps,
+    pads and stones, which keeps the shared `base` fallback and every baby test unchanged.
+27. **Q2: a ripple never sinks a find pad** (first mate), with the P2 chain wording (section
+    2c). Only `.` and `r` sink by a ripple; no picked-finds mask in the engines, the solver,
+    the bots or the card.
+28. **Q3: the pool phase is fixed at one-move parity** (first mate): a stone when the move
+    count the entering move makes is odd. The build does not tune 1 or 2. The card draws the
+    **next** move's phase.
+29. **Q4: no tutorial text** (first mate). The art explains; one aria string per new cell kind,
+    quoted in section 2c for the first mate to approve (a worker invents none); `twist` is a
+    copy-only id. A one-line "what is this" per world, if wanted, is new copy.
+30. **Q5: fallbacks stay twist-free and shared** (first mate). "A fallback day has no
+    twist". The fallback share is asserted at most 10% per (world, family, stage) over the 21
+    real pairs.
+31. **Q6: lit dark cells count toward tidy** (first mate): they are pads, so tidy means
+    lighting the lantern and sinking each of them.
+32. **Q7: the engines read the grid glyphs only** (first mate). A board's `twist` is derived
+    from its glyphs and is never read by a rule. The twist's state fields (`parity`, `half`)
+    exist only on boards with that twist.
+33. **Q8: ship 4 is split** (first mate): **4a** stump and rug (the landing differs from the
+    target: `step`, solver, bots, `reach`, fixtures), **4b** crackle, pool, ripple and lantern
+    (new state, key packing, parity), each with its own acceptance and tests, and each bumping
+    `GEN_VERSION` by one.
+34. **Q9: `check()` rejects a candidate on `CycleError`** (`Verdict(False, "loop")`), beside the
+    generalised touching rule over the never-sinking walkable class (section 2), so a missed
+    adjacency costs a candidate, never the day's board.

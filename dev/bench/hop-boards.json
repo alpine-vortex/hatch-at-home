@@ -1,156 +1,168 @@
 {
- "gen_version": 2,
+ "gen_version": 4,
  "day": "2026-06-15",
  "boards": {
   "hop-adult": {
    "reply": {
     "result": "ok",
     "day": "2026-06-15",
-    "id": "dbc32a5fe1",
+    "id": "bf26915b78",
     "w": 6,
     "h": 4,
     "grid": [
-     "fo.fN.",
-     ".~~#..",
-     "f.....",
-     "P~.~.."
+     "#..Nf.",
+     "f.f.#.",
+     "#1..1.",
+     "P##o.."
     ],
     "family": "hop",
     "specials": 3,
     "world": "woodland",
-    "twist": null,
+    "twist": "stumps",
     "done": false,
     "tidy": false
    },
-   "win": "mabde",
-   "tidy": "mgabcdpnouwxrqklfe"
+   "win": "giced",
+   "tidy": "ghbnwxrlfeciopjd",
+   "landing": "ghn",
+   "acted": "ghn"
   },
   "glide-adult": {
    "reply": {
     "result": "ok",
     "day": "2026-06-15",
-    "id": "6b30c44888",
+    "id": "748969a87a",
     "w": 6,
     "h": 4,
     "grid": [
-     ".N....",
-     ".f#o..",
-     "..#.f~",
-     "f.o#.P"
+     "..#N1.",
+     "#f.o..",
+     "#f.~.1",
+     "P.o.~f"
     ],
     "family": "glide",
     "specials": 3,
     "world": "woodland",
-    "twist": null,
+    "twist": "stumps",
     "done": false,
     "tidy": false
    },
-   "win": "qputsmhb",
-   "tidy": "wqpklfedchntsmgab"
+   "win": "nhijexrd",
+   "tidy": "tnhabiouvqklfexrd",
+   "landing": "nije",
+   "acted": "nije"
   },
   "swim-adult": {
    "reply": {
     "result": "ok",
     "day": "2026-06-15",
-    "id": "bf46fed905",
+    "id": "c57255afe1",
     "w": 6,
     "h": 4,
     "grid": [
-     "..N~.f",
-     "o~~...",
-     ".#....",
-     "..ff.P"
+     "N.~..1",
+     "...f.f",
+     "f..~1.",
+     "~#o.#P"
     ],
     "family": "swim",
     "specials": 3,
     "world": "woodland",
-    "twist": null,
+    "twist": "stumps",
     "done": false,
     "tidy": false
    },
-   "win": "wvuoijklfedc",
-   "tidy": "wvpqrlfekjioutsmgabc"
+   "win": "rlkjihnmga",
+   "tidy": "rlkedcbhijpvuonmga",
+   "landing": "rq",
+   "acted": "rq"
   },
   "dig-adult": {
    "reply": {
     "result": "ok",
     "day": "2026-06-15",
-    "id": "8155b17a4f",
+    "id": "32de4003f6",
     "w": 6,
     "h": 4,
     "grid": [
-     "..N...",
-     ".o.#..",
-     ".f#f.#",
-     "#.f..P"
+     "1.#fN1",
+     "...#..",
+     ".f#f..",
+     "Po.~.o"
     ],
     "family": "dig",
     "specials": 3,
     "world": "woodland",
-    "twist": null,
+    "twist": "stumps",
     "done": false,
     "tidy": false
    },
-   "win": "wvutnpdc",
-   "tidy": "wqpvutnmgabhiklfedc"
+   "win": "mnpde",
+   "tidy": "tutnmgalrxwqpdbhike",
+   "landing": "mga",
+   "acted": "mga"
   },
   "climb-adult": {
    "reply": {
     "result": "ok",
     "day": "2026-06-15",
-    "id": "c5d5de854a",
+    "id": "41e4270320",
     "w": 6,
     "h": 4,
     "grid": [
-     "..N.o#",
-     ".~..#o",
-     "..f.#.",
-     "#f#.fP"
+     ".N.f#.",
+     "1~#f1#",
+     ".#o..~",
+     "o.f..P"
     ],
     "family": "climb",
     "specials": 3,
     "world": "woodland",
-    "twist": null,
+    "twist": "stumps",
     "done": false,
     "tidy": false
    },
-   "win": "wvutnoic",
-   "tidy": "wvpqrlkedjiontsmgabc"
+   "win": "wvuoijdcb",
+   "tidy": "wvutsmgjpqkagefedcb",
+   "landing": "wqk",
+   "acted": "wqk"
   },
   "squeeze-adult": {
    "reply": {
     "result": "ok",
     "day": "2026-06-15",
-    "id": "da4683aa9e",
+    "id": "93777dbb22",
     "w": 6,
     "h": 4,
     "grid": [
-     "~#~N~o",
-     "......",
-     "#f...f",
-     "P..~f."
+     "N..of.",
+     "1.f~..",
+     "..#..~",
+     "..f~1P"
     ],
     "family": "squeeze",
     "specials": 3,
     "world": "woodland",
-    "twist": null,
+    "twist": "stumps",
     "done": false,
     "tidy": false
    },
-   "win": "tnopqwqrqpjd",
-   "tidy": "tnhghiouopqwxrlkjd"
+   "win": "wmstutnhicdedcba",
+   "tidy": "wmstutnmgqpqklfedcihba",
+   "landing": "w",
+   "acted": "w"
   },
   "hop-baby": {
    "reply": {
     "result": "ok",
     "day": "2026-06-15",
-    "id": "59254ba214",
+    "id": "d77549e6d1",
     "w": 4,
     "h": 3,
     "grid": [
-     ".N..",
-     ".~..",
-     "of.P"
+     "..#N",
+     "....",
+     "P.fo"
     ],
     "family": "hop",
     "specials": 0,
@@ -159,54 +171,210 @@
     "done": false,
     "tidy": false
    },
-   "win": "kjieab",
-   "tidy": "hdcgkjieab"
+   "win": "jkghd",
+   "tidy": "eabfjkghd",
+   "landing": null,
+   "acted": null
   },
   "hop-child": {
    "reply": {
     "result": "ok",
     "day": "2026-06-15",
-    "id": "9f7930a876",
+    "id": "95686c96b5",
     "w": 5,
     "h": 4,
     "grid": [
-     "..N.o",
-     "o.#f.",
-     "f..~.",
-     "P~.#."
+     "..N..",
+     "f1~of",
+     "1..#~",
+     "P~..."
     ],
     "family": "hop",
     "specials": 1,
     "world": "woodland",
-    "twist": null,
+    "twist": "stumps",
     "done": false,
     "tidy": false
    },
-   "win": "kfgidc",
-   "tidy": "kfabglmrtojidc"
+   "win": "kfkijidc",
+   "tidy": "kfabglmrstjedc",
+   "landing": "k",
+   "acted": "k"
   },
   "hop-teen": {
    "reply": {
     "result": "ok",
     "day": "2026-06-15",
-    "id": "0c3af48de6",
+    "id": "11a72f3cb6",
     "w": 6,
     "h": 4,
     "grid": [
-     ".f..oN",
-     "..~.f.",
-     "##~.o.",
-     "P#...."
+     "...N#.",
+     "#o~..1",
+     "off.~.",
+     "P.~..1"
     ],
     "family": "hop",
     "specials": 2,
     "world": "woodland",
-    "twist": null,
+    "twist": "stumps",
     "done": false,
     "tidy": false
    },
-   "win": "gabhjkef",
-   "tidy": "uvpjhgabcdekqwxrlf"
+   "win": "mnocd",
+   "tidy": "tnmabcopvwxflrxkjd",
+   "landing": "tvx",
+   "acted": "tvx"
+  },
+  "hearth-hop-adult": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-06-15",
+    "id": "31ad5c3d0c",
+    "w": 6,
+    "h": 4,
+    "grid": [
+     ".N.f..",
+     "##o~..",
+     ".~ff=.",
+     ".=..~P"
+    ],
+    "family": "hop",
+    "specials": 3,
+    "world": "hearth",
+    "twist": "rug",
+    "done": false,
+    "tidy": false
+   },
+   "win": "vuopdb",
+   "tidy": "rlkefdcopvutmab",
+   "landing": "rq",
+   "acted": "rq"
+  },
+  "hearth-dig-child": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-06-15",
+    "id": "476051ca10",
+    "w": 5,
+    "h": 4,
+    "grid": [
+     "N#.f.",
+     "#....",
+     "o.=fo",
+     "...=P"
+    ],
+    "family": "dig",
+    "specials": 1,
+    "world": "hearth",
+    "twist": "rug",
+    "done": false,
+    "tidy": false
+   },
+   "win": "onidca",
+   "tidy": "sqpklghmnijedca",
+   "landing": "s",
+   "acted": "s"
+  },
+  "terrarium-hop-adult": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-06-15",
+    "id": "55973e76ad",
+    "w": 6,
+    "h": 4,
+    "grid": [
+     "..Nff.",
+     ".c.#~o",
+     ".~..#f",
+     "..~..P"
+    ],
+    "family": "hop",
+    "specials": 3,
+    "world": "terrarium",
+    "twist": "crackle",
+    "done": false,
+    "tidy": false
+   },
+   "win": "rpdec",
+   "tidy": "wvtsmaghbhioprlfedc",
+   "landing": null,
+   "acted": "vthb"
+  },
+  "tidepool-swim-adult": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-06-15",
+    "id": "f1cb80bb37",
+    "w": 6,
+    "h": 4,
+    "grid": [
+     "N%~...",
+     ".f..~.",
+     ".~.f.o",
+     "%.~.fP"
+    ],
+    "family": "swim",
+    "specials": 3,
+    "world": "tidepool",
+    "twist": "pool",
+    "done": false,
+    "tidy": false
+   },
+   "win": "wvponhga",
+   "tidy": "wvutsmnopqklfedjihga",
+   "landing": null,
+   "acted": null
+  },
+  "pond-hop-adult": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-06-15",
+    "id": "9af6f4ea41",
+    "w": 6,
+    "h": 4,
+    "grid": [
+     ".~.N..",
+     "r.#f..",
+     ".f#.o.",
+     "P...~f"
+    ],
+    "family": "hop",
+    "specials": 3,
+    "world": "pond",
+    "twist": "ripple",
+    "done": false,
+    "tidy": false
+   },
+   "win": "mntuvxljd",
+   "tidy": "tuvxrlfekjpnmgacd",
+   "landing": null,
+   "acted": "ga"
+  },
+  "nightsky-glide-adult": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-06-15",
+    "id": "51f6d15bc3",
+    "w": 6,
+    "h": 4,
+    "grid": [
+     ".f~No.",
+     ".f*.#.",
+     ".~o~?.",
+     "P#??f#"
+    ],
+    "family": "glide",
+    "specials": 3,
+    "world": "nightsky",
+    "twist": "lantern",
+    "done": false,
+    "tidy": false
+   },
+   "win": "mghbiovwqjd",
+   "tidy": "mgabhiouvwqrlfejd",
+   "landing": null,
+   "acted": "mhi"
   }
  }
 }

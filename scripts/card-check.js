@@ -19,7 +19,7 @@
 // dev's seeded bond and wish back). Sections lean on the state their
 // predecessors leave (the open sheet, the bond, the slide on show), so a lone
 // one may need its neighbour: add it to --only. oldcard pulls in restart.
-// --shard k/4 runs the k-th of four contiguous runs (see SHARD_STARTS).
+// --shard k/5 runs the k-th of five contiguous runs (see SHARD_STARTS).
 
 const { chromium } = require("playwright");
 const fs = require("fs");
@@ -52,11 +52,12 @@ if (argv.includes("--list")) {
   console.log(SECTIONS.join("\n"));
   process.exit(0);
 }
-// --shard k/4 runs one of four contiguous runs of sections, split where these
+// --shard k/5 runs one of five contiguous runs of sections, split where these
 // start (CI runs them side by side). A new section lands in whichever run it
-// falls in, so none is skipped. Balanced by CI's seconds per section (2026-11-01:
-// about 225, 225, 200 and 175 s each, plus the prelude).
-const SHARD_STARTS = ["shelf", "moments", "backlight", "infrared"];
+// falls in, so none is skipped. Balanced by CI's seconds per section (2026-11-04:
+// about 230 to 275 s each, plus the prelude). restart and the
+// sections that NEED it all sit in the last run.
+const SHARD_STARTS = ["shelf", "board", "photos", "pat", "infrared"];
 let ONLY = null;
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === "--shard") {
@@ -74,7 +75,7 @@ for (let i = 0; i < argv.length; i++) {
     continue;
   }
   if (argv[i] !== "--only") {
-    console.error(`card-check: unknown argument ${argv[i]} (--list, --only <name>[,<name>...], --shard k/4)`);
+    console.error(`card-check: unknown argument ${argv[i]} (--list, --only <name>[,<name>...], --shard k/5)`);
     process.exit(2);
   }
   ONLY ||= new Set();
@@ -155,6 +156,27 @@ async function unpinAwake(card) {
       return st && el._hass.callApi("POST", `states/${id}`, { state: "off", attributes: st.attributes });
     }));
   }, !!process.env.CARD_CHECK_NIGHT).catch(() => {});
+}
+
+// Quiet the card's own random idle for a check's window (the wander/look turns, the poses, the
+// idle chatter, the first-day move). `_idle` sleeps while `nextIdle` is in the future, so
+// Infinity stops it without touching the card's code; `quietIdle(card, false)` hands it back (a
+// fresh draw). A move the idle tick already scheduled (a speck's later look, a wander ending)
+// is waited out, so the window starts still. Use it round a check that reads the pet's classes
+// or bubble over a second or two; never to hide a real change (the check still asserts it).
+async function quietIdle(card, on = true) {
+  await card.evaluate((el, on) => {
+    for (const s of el._slides) {
+      s.nextIdle = on ? Infinity : 0;
+      if (on) s.firstMoveAt = 0;
+    }
+  }, on);
+  if (!on) return;
+  for (let i = 0; i < 40; i++) {
+    const moving = await card.evaluate((el) => el._slides.some((s) => s.movingUntil > Date.now()));
+    if (!moving) break;
+    await card.page().waitForTimeout(100);
+  }
 }
 
 // The frontend may reload itself once after a page opens: wait until the page has
@@ -399,7 +421,16 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     el._realState4c = real;
     el._state = (x, key) => {
       const st = real.call(el, x, key);
-      return key === "sensor.life_stage" && st && x === el._slides[el._index] ? { ...st, attributes: { ...st.attributes, social_level: 5 } } : st;
+      if (key === "sensor.life_stage" && st && x === el._slides[el._index]) {
+        return { ...st, attributes: { ...st.attributes, social_level: 5 } };
+      }
+      // Whatever the dev pet wants right now (a call, a blanket or fan request, sick, resting) adds
+      // a "would like" row or a line to this 158 px box at 330: measure the controls with no want,
+      // as the check means to, whatever the pet happens to be doing on the run.
+      if (key === "sensor.mood" && st && st.state !== "away") {
+        return { ...st, state: "content", attributes: { ...st.attributes, reason: "all good", reason_key: "content", flags: [], requests: [] } };
+      }
+      return st;
     };
     for (const s of el._slides) { s.statusHtml = null; s.drawnSig = null; }
     el._redraw();
@@ -4314,10 +4345,15 @@ async function main() {
   await pinAwake(card, "board");
   {
     const cases = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "tests", "fixtures", "hop_cases.json"), "utf8")).boards;
+    // The twist as hop.py's twist_of names it from the glyphs (ship 4: one per world); copy only, no rule reads it.
+    const TWISTS = [["stumps", "12", "woodland"], ["rug", "=", "hearth"], ["crackle", "c", "terrarium"],
+      ["pool", "%", "tidepool"], ["ripple", "r", "pond"], ["lantern", "?*", "nightsky"]];
+    const twistRow = (grid) => TWISTS.find(([, glyphs]) => [...glyphs].some((ch) => grid.join("").includes(ch)));
+    const twistOf = (grid) => twistRow(grid)?.[0] ?? null;
     const replyOf = (name, id = name) => {
       const { w, h, grid, family, specials } = cases[name];
-      return { result: "ok", day: "2026-11-03", id, w, h, grid, family, specials, world: "woodland", twist: null,
-        done: false, tidy: false };
+      return { result: "ok", day: "2026-11-03", id, w, h, grid, family, specials, world: twistRow(grid)?.[2] ?? "woodland",
+        twist: twistOf(grid), done: false, tidy: false };
     };
     const warnings = [];
     page.on("console", (m) => { if (m.type() === "warning" && /hop board/.test(m.text())) warnings.push(m.text()); });
@@ -4497,7 +4533,12 @@ async function main() {
       g.cell < 44 && lit.lit === aim && lit.moves === 0 && done.moves === 1 && done.pos === aim && done.lit === null,
       JSON.stringify({ cell: g.cell, aim, lit, done }));
     await shot("board-300-lit-commit");
-    // A tap far from every legal cell does nothing and says nothing.
+    // A tap far from every legal cell does nothing and says nothing. The bubble is read twice, 100 ms
+    // apart round the tap, so settle it first: a held line ending is rewritten by the next tick (700 ms)
+    // with the mood's own, which is not a tap's doing. Idle is quiet for the window too.
+    await quietIdle(card);
+    await card.evaluate((el) => { el._slides[el._index].sayUntil = 0; });
+    await page.waitForTimeout(1600);
     const far = await cur().locator(".hc.wall, .hc.stone, .hc.sunk").first().boundingBox().catch(() => null);
     const before = await game();
     const sayBefore = await cur().locator(".bubble").innerText();
@@ -4518,6 +4559,7 @@ async function main() {
     check("a tap farther than 22 px from every legal cell does nothing and says nothing",
       !!dead && after.moves === before.moves && after.lit === before.lit && (await cur().locator(".bubble").innerText()) === sayBefore,
       JSON.stringify({ dead, before, after, far: !!far }));
+    await quietIdle(card, false);
     const arrows = await card.evaluate((el) => [...el._slides[el._index].gameBox.querySelectorAll('.hk[aria-disabled="false"]')].map((k) => k.dataset.k));
     const arrow = arrows.find((k) => ["left", "up", "down", "right"].includes(k));
     const beforeArrow = await game();
@@ -4554,6 +4596,155 @@ async function main() {
     check("undo restores a sunk pad and a spent use",
       !!jump && jumped.moves === 1 && jumped.uses === start.uses - 1 && jumped.sunk !== 0 && undone.moves === 0 && undone.uses === start.uses &&
         undone.sunk === 0 && undone.pos === start.pos, JSON.stringify({ start, sp: sp.special, jump, jumped, undone }));
+    await quit();
+
+    // Ship 4a: a stump's jump and a rug's slide land off the named cell; the key names the stepped-on cell, the
+    // card draws the landing, undo puts the pet back. Only the twist cells carry role="img" and the plan's label.
+    const twistLook = () => card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const g = s.game;
+      const cells = [...s.gameBox.querySelectorAll(".hc")];
+      const box = (e) => { const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+      const [px, py] = box(g.el.piece);
+      const [cx, cy] = box(cells[g.st.pos]);
+      return { labelled: cells.filter((c) => c.getAttribute("role") === "img").map((c) => [Number(c.dataset.i), c.getAttribute("aria-label")]),
+        unlabelled: cells.filter((c) => c.getAttribute("role") !== "img").every((c) => !c.hasAttribute("aria-label")),
+        pieceOnPos: Math.abs(px - cx) < 2 && Math.abs(py - cy) < 2 };
+    });
+    const settleFx = async () => { await page.waitForTimeout(400); };
+    await open(replyOf("stumps_hop")); // N.f.1 / .#.~. / P.1.. : P at k (10), the pair at e (4) and m (12)
+    const stumpCells = await twistLook();
+    check("stumps: each stump cell is role=img with the plan's label, and no other cell has a label",
+      JSON.stringify(stumpCells.labelled) === JSON.stringify([[4, "stump hole, leads to its twin"], [12, "stump hole, leads to its twin"]]) &&
+        stumpCells.unlabelled, JSON.stringify(stumpCells));
+    await key("right").click(); // k to l
+    const onL = await targets();
+    await key("right").click(); // l onto the stump m: out of its twin e
+    await settleFx();
+    const jumpedTo = await game();
+    const jumpLook = await twistLook();
+    await key("undo").click();
+    await settleFx();
+    const backOnL = await game();
+    check("stumps: the step onto a stump names it (a legal target), lands the pet on its twin, the piece drawn there; undo puts it back",
+      onL.plain.includes(12) && jumpedTo.pos === 4 && JSON.stringify(jumpedTo.list) === "[11,12]" && jumpedTo.uses === 1 &&
+        jumpLook.pieceOnPos && backOnL.pos === 11 && backOnL.moves === 1,
+      JSON.stringify({ onL, jumpedTo, jumpLook, backOnL }));
+    await shot("board-300-stump");
+    await quit();
+    await open(replyOf("rug_hop")); // ...=N / f#... / P..=. : P at k (10), rugs at d (3) and n (13)
+    const rugCells = await twistLook();
+    check("rug: each rug cell is role=img with the plan's label, and no other cell has a label",
+      JSON.stringify(rugCells.labelled) === JSON.stringify([[3, "rug, slides you one more"], [13, "rug, slides you one more"]]) &&
+        rugCells.unlabelled, JSON.stringify(rugCells));
+    await key("right").click(); // k to l
+    await key("right").click(); // l to m
+    const onM = await targets();
+    await key("right").click(); // m onto the rug n: one more, onto o
+    await settleFx();
+    const slid = await game();
+    const slideLook = await twistLook();
+    await key("undo").click();
+    await settleFx();
+    const backOnM = await game();
+    check("rug: the step onto a rug names it, slides the pet one more (onto o), the piece drawn there; undo puts it back on m",
+      onM.plain.includes(13) && slid.pos === 14 && JSON.stringify(slid.list) === "[11,12,13]" && slideLook.pieceOnPos &&
+        backOnM.pos === 12 && backOnM.moves === 2, JSON.stringify({ onM, slid, slideLook, backOnM }));
+    await shot("board-300-rug");
+    await quit();
+
+    // Ship 4b: the state on the cells (a crackle's half, a pool's phase on the next move, the ripple's chain, the
+    // lantern's dark cells), the aria labels of plan 2c "Player copy" as the state changes, and the keys' labels
+    // ("sunk" for a pad of any kind that has sunk, a crackle only fully; "blocked" for a pool in its water phase
+    // and an unlit dark cell).
+    const look4b = () => card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const cells = [...s.gameBox.querySelectorAll(".hc")];
+      return { labelled: cells.filter((c) => c.getAttribute("role") === "img").map((c) => [Number(c.dataset.i), c.getAttribute("aria-label")]),
+        unlabelled: cells.filter((c) => c.getAttribute("role") !== "img").every((c) => !c.hasAttribute("aria-label")),
+        cls: Object.fromEntries(cells.map((c) => [c.dataset.i, c.className])) };
+    });
+    const keyLabel = (k) => key(k).getAttribute("aria-label");
+    const has = (look, i, cls) => look.cls[i].split(" ").includes(cls);
+    const same4b = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const C = { crackle: "crackle pad, holds two visits", half: "crackle pad, cracked, one visit left",
+      stone: "tide pool, a stone on the next move", water: "tide pool, water on the next move",
+      ripple: "ripple pad, sinks the pads to its right", dark: "dark cell, not lit yet",
+      lantern: "lantern, step here to light the dark cells" };
+
+    await open(replyOf("crackle_hop")); // N.f. / .c.. / P... : P at i (8), the crackle at f (5)
+    const crack0 = await look4b();
+    await key("up").click(); // i to e
+    await key("right").click(); // e onto the crackle f
+    await key("right").click(); // f to g: f half-sunk
+    const crack1 = await look4b();
+    const backLabel = await keyLabel("left");
+    const backOn = (await targets()).plain.includes(5);
+    await key("left").click(); // g onto the half-sunk f, its second visit
+    await key("down").click(); // f to j: f sinks fully
+    const crack2 = await look4b();
+    const sunkLabel = await keyLabel("up");
+    check("crackle: whole, then half-sunk and still walkable (its key enabled), then fully sunk; the labels follow",
+      same4b(crack0.labelled, [[5, C.crackle]]) && crack0.unlabelled && same4b(crack1.labelled, [[5, C.half]]) &&
+        has(crack1, 5, "half") && !has(crack1, 5, "sunk") && backOn && backLabel === "Step left" &&
+        same4b(crack2.labelled, []) && crack2.unlabelled && has(crack2, 5, "sunk") && sunkLabel === "Step up, sunk",
+      JSON.stringify({ crack0: crack0.labelled, crack1, backLabel, crack2: crack2.labelled, sunkLabel }));
+    await shot("board-300-crackle");
+    await quit();
+
+    await open(replyOf("pool_hop")); // N.f. / ..%. / P... : P at i (8), the pool at g (6); hop, 2 uses
+    const pool0 = await look4b();
+    await key("special").click();
+    await key("right").click(); // the hop i to k: one move made, so the next makes the count even: water
+    await settleFx();
+    const pool1 = await look4b();
+    const wetLabel = await keyLabel("up");
+    const wetState = await card.evaluate((el) => el._slides[el._index].game.st.parity);
+    await shot("board-300-pool-water");
+    await key("undo").click();
+    await settleFx();
+    const pool2 = await look4b();
+    check("pool: a stone on the next move at the start; after one move water (drawn wet, its key 'blocked'); undo puts the stone back",
+      same4b(pool0.labelled, [[6, C.stone]]) && !has(pool0, 6, "wet") && pool0.unlabelled && wetState === 1 &&
+        same4b(pool1.labelled, [[6, C.water]]) && has(pool1, 6, "wet") && wetLabel === "Step up, blocked" &&
+        same4b(pool2.labelled, [[6, C.stone]]) && !has(pool2, 6, "wet"),
+      JSON.stringify({ pool0: pool0.labelled, pool1: pool1.labelled, wetLabel, wetState, pool2: pool2.labelled }));
+    await quit();
+
+    await open(replyOf("ripple_hop")); // N.rf. / .rr.. / P..rr : P at k (10); ripples c g h n o, the find d
+    const rip0 = await look4b();
+    await key("right").click(); // k to l
+    await key("up").click(); // l onto the ripple g
+    await key("up").click(); // g to b: g sinks, the ripple h and the pad i with it
+    await settleFx();
+    const rip1 = await look4b();
+    const ripLabel = await keyLabel("down");
+    check("ripple: each ripple labelled; leaving g sinks g, the ripple h and the pad i (sunk ripples lose the label); its key says sunk",
+      same4b(rip0.labelled, [[2, C.ripple], [6, C.ripple], [7, C.ripple], [13, C.ripple], [14, C.ripple]]) && rip0.unlabelled &&
+        [6, 7, 8].every((i) => has(rip1, i, "sunk")) && !has(rip1, 9, "sunk") && !has(rip1, 3, "sunk") &&
+        same4b(rip1.labelled, [[2, C.ripple], [13, C.ripple], [14, C.ripple]]) && ripLabel === "Step down, sunk",
+      JSON.stringify({ rip0: rip0.labelled, rip1, ripLabel }));
+    await shot("board-300-ripple");
+    await quit();
+
+    await open(replyOf("lantern_hop")); // N?f. / .#*. / P... : P at i (8), the dark cell b (1), the lantern g (6)
+    const lan0 = await look4b();
+    for (const k of ["right", "right", "right", "up", "up", "left"]) await key(k).click(); // i j k l h d c, the lantern unlit
+    const darkLabel = await keyLabel("left");
+    const darkShut = !(await targets()).plain.includes(1);
+    await shot("board-300-lantern-unlit");
+    await key("restart").click();
+    for (const k of ["right", "right", "up"]) await key(k).click(); // i j k, onto the lantern g
+    const lan1 = await look4b();
+    await key("up").click(); // g to c: the lantern sinks, lit
+    const lan2 = await look4b();
+    const litLabel = await keyLabel("left");
+    await shot("board-300-lantern-lit");
+    check("lantern: the dark cell dim and labelled, its key 'blocked'; on the lantern the dark cell is a plain pad with no label",
+      same4b(lan0.labelled, [[1, C.dark], [6, C.lantern]]) && has(lan0, 1, "dark") && lan0.unlabelled && darkShut &&
+        darkLabel === "Step left, blocked" && same4b(lan1.labelled, [[6, C.lantern]]) && !has(lan1, 1, "dark") &&
+        same4b(lan2.labelled, []) && lan2.unlabelled && litLabel === "Step left",
+      JSON.stringify({ lan0: lan0.labelled, darkLabel, darkShut, lan1: lan1.labelled, lan2: lan2.labelled, litLabel }));
     await quit();
 
     // Park and resume: every move is written, and every way out leaves the same moves for the way back.
@@ -4617,6 +4808,264 @@ async function main() {
     // A refusal is the ordinary refusal line.
     await open({ result: "too_tired" });
     check("a refusal reuses the refusal line", (await cur().locator(".bubble").innerText()) === "too tired to play" && !(await game()));
+
+    // Ship 3b (plan 2026-11-02-hop-of-the-day): a nest entry settles. `_hopSettle` is stubbed with the
+    // as-built reply shapes (ok: result, won, tidy, paid, found, already; a refusal is {result}); the first
+    // win goes through the hass.callService seam instead, to see the service call itself. The boards are the
+    // bench's (dev/bench/hop-boards.json, from hop.py): `hop-child`, a win and a tidy list.
+    {
+      const fx = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "dev", "bench", "hop-boards.json"), "utf8")).boards["hop-child"];
+      // The card's constants are not globals under HA, so today is worked out here, as the card does (Intl, HA's zone).
+      const today = () => card.evaluate((el) => new Intl.DateTimeFormat("en-CA", { timeZone: el._hass.config?.time_zone || undefined,
+        year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()));
+      const boardOf = async (id, over = {}) => ({ ...fx.reply, day: await today(), id, done: false, tidy: false, ...over });
+      const okR = (over) => ({ result: "ok", won: true, tidy: false, paid: true, found: false, already: false, ...over });
+      const settleWarns = [];
+      page.on("console", (m) => { if (m.type() === "warning" && /hop settle/.test(m.text())) settleWarns.push(m.text()); });
+      // The settle stub: `replies` in order (the last repeats); "throw" throws; `hold` waits for __release().
+      const settleStub = (replies, hold = false) => card.evaluate((el, [rs, hold]) => {
+        el.__settles = [];
+        el.__fetches = 0;
+        el._hopSettle = (entity, id, moves) => {
+          el.__settles.push({ entity, id, moves });
+          const r = rs.length > 1 ? rs.shift() : rs[0];
+          if (r === "throw") return Promise.reject(new Error("offline"));
+          return hold ? new Promise((done) => { el.__release = () => done(r); }) : Promise.resolve(r);
+        };
+      }, [replies, hold]);
+      const openBoard = async (reply, then) => {
+        await card.evaluate((el, [r, then]) => {
+          el._slides[el._index].hopSeen = null; // each board here starts from an unsolved day, whatever the last one did
+          el.__fetches = 0;
+          el._hopFetch = async () => { el.__fetches++; return el.__fetches > 1 && then ? then : r; };
+        }, [reply, then || null]);
+        await picker();
+        await cur().locator(".ghop").click();
+        await page.waitForTimeout(500);
+      };
+      const play = (letters) => card.evaluate((el, l) => {
+        const s = el._slides[el._index];
+        for (const ch of l) el._hopMove(s, "abcdefghijklmnopqrstuvwx".indexOf(ch));
+        const g = s.game;
+        return { done: g.done, settled: g.settled, tidy: g.tidy, sent: (el.__settles || []).length, bubble: s.bubble.textContent,
+          parked: Object.keys(localStorage).filter((k) => k.startsWith("hatch-hop|")).map((k) => localStorage.getItem(k)) };
+      }, letters);
+      const view = () => card.evaluate((el) => {
+        const s = el._slides[el._index];
+        const g = s.game;
+        const k = (n) => g?.el?.keys.querySelector(`[data-k="${n}"]`);
+        return g && { id: g.id, done: g.done, settled: g.settled, tidy: g.tidy, moves: g.moves.length, pos: g.st.pos,
+          nest: g.board.grid.join("").indexOf("N"), start: g.board.grid.join("").indexOf("P"), bubble: s.bubble.textContent,
+          restart: k("restart").getAttribute("aria-disabled"), restartAria: k("restart").getAttribute("aria-label"),
+          undo: k("undo").getAttribute("aria-disabled"), sent: (el.__settles || []).length, fetches: el.__fetches };
+      });
+      const settles = () => card.evaluate((el) => el.__settles);
+      await card.evaluate((el) => { el._lines = (s, key, normal) => ({ text: normal }); }); // no persona or baby voice in a text check
+      await card.evaluate((el) => { el._slides[el._index].hopSeen = null; });
+
+      // A plain win, through the service call: the solved view at once, one settle with the board's id and the encoded
+      // list, no `shared` on a private screen, the list cleared on the ok, "try for tidy" on, no undo.
+      await page.evaluate(() => { window.__hopCalls = []; });
+      await card.evaluate((el) => {
+        const real = el._hass.callService;
+        el.__realCall = real;
+        el._hass.callService = async (d, svc, data, ...r) => {
+          if (d === "virtual_pet" && svc === "hop" && data.action === "settle") {
+            (window.__hopCalls ??= []).push(data);
+            return { response: { result: "ok", won: true, tidy: false, paid: true, found: false, already: false } };
+          }
+          return real.call(el._hass, d, svc, data, ...r);
+        };
+        delete el._hopSettle;
+      });
+      await openBoard(await boardOf("settle-1"));
+      const w1 = await play(fx.win);
+      await page.waitForTimeout(200);
+      const v1 = await view();
+      const sent1 = await page.evaluate(() => window.__hopCalls);
+      await card.evaluate((el) => { el._hass.callService = el.__realCall; });
+      check("a plain win: the solved view at once, the list parked until the reply, the settle sent once",
+        w1.done && !w1.settled && w1.bubble === "solved" && w1.tidy === false && w1.parked[0] === fx.win && sent1.length === 1,
+        JSON.stringify({ w1, sent1 }));
+      check("... the settle carries the board's id and the encoded list, and no `shared` on a private screen",
+        sent1[0]?.action === "settle" && sent1[0].id === "settle-1" && sent1[0].moves === fx.win && !("shared" in sent1[0]) &&
+          typeof sent1[0].entity_id === "string", JSON.stringify(sent1));
+      check("... on `ok` the list is cleared, \"try for tidy\" is on and the solved view has no undo",
+        Object.keys(await stored()).length === 0 && v1.settled && !v1.tidy && v1.restart === "false" && v1.restartAria === "try for tidy" &&
+          v1.undo === "true" && v1.bubble === "solved", JSON.stringify(v1));
+
+      // Then a restart and a tidy list: the tidy view, restart off. (`found: true`: the one new line.)
+      await settleStub([okR({ tidy: true, paid: false, found: true, already: false })]);
+      await key("restart").click();
+      const r1 = await view();
+      const w2 = await play(fx.tidy);
+      await page.waitForTimeout(200);
+      const v2 = await view();
+      const s2 = await settles();
+      check("restart after a plain win plays from the start pad, then a tidy list settles again: tidy, restart off, the find line",
+        r1.moves === 0 && r1.pos === r1.start && !r1.done && w2.bubble === "tidy" && s2.length === 1 && s2[0].moves === fx.tidy &&
+          v2.tidy && v2.settled && v2.restart === "true" && v2.bubble === "ooh, I found something ♪", JSON.stringify({ r1, w2, v2, s2 }));
+      await quit();
+
+      // A tidy list that finds nothing to pick: `already` is not read.
+      await settleStub([okR({ tidy: true, paid: false, found: false, already: true })]);
+      await openBoard(await boardOf("settle-2"));
+      await play(fx.tidy);
+      await page.waitForTimeout(200);
+      const v3 = await view();
+      check("tidy with found: false and already: true is the tidy view, restart off, no find line (D2)",
+        v3.tidy && v3.settled && v3.restart === "true" && v3.bubble === "tidy", JSON.stringify(v3));
+      await quit();
+
+      // A plain list on a day another screen made tidy: the reply says tidy: false, already: true. The view stays tidy (P1).
+      await settleStub([okR({ tidy: false, paid: false, already: true })]);
+      await openBoard(await boardOf("settle-3"));
+      await card.evaluate((el) => { el._slides[el._index].game.tidy = true; }); // what the board reply or the attribute said
+      await play(fx.win);
+      await page.waitForTimeout(200);
+      const v4 = await view();
+      check("a plain list after a tidy day: the view stays tidy and restart stays off (P1)",
+        v4.tidy && v4.settled && v4.restart === "true" && v4.bubble === "tidy", JSON.stringify(v4));
+      await quit();
+
+      // board_changed: the parked list goes and the new board loads (the stubbed board call is asked again).
+      await settleStub([{ result: "board_changed" }]);
+      await openBoard(await boardOf("settle-4"), await boardOf("settle-5"));
+      await play(fx.win);
+      await page.waitForTimeout(700);
+      const v5 = await view();
+      check("board_changed drops the parked moves and loads the new board",
+        v5?.id === "settle-5" && v5.moves === 0 && !v5.done && v5.fetches === 2 && Object.keys(await stored()).every((k) => !k.includes("settle-4")),
+        JSON.stringify({ v5, stored: await stored() }));
+      await quit();
+
+      // egg, away, asleep: the list is kept, the REFUSALS line is said, restart is off while unsettled (Q2).
+      for (const [result, line] of [["egg", "..."], ["away", "i'm at the sitter's!"], ["asleep", "shh... sleeping"]]) {
+        const id = `settle-${result}`;
+        await settleStub([{ result }]);
+        await openBoard(await boardOf(id));
+        await play(fx.win);
+        await page.waitForTimeout(200);
+        const v = await view();
+        const kept = await stored();
+        check(`${result}: the moves are kept, the bubble says its refusal line, restart is off, nothing is shown as paid`,
+          v.done && !v.settled && v.bubble === line && v.restart === "true" && Object.values(kept).includes(fx.win),
+          JSON.stringify({ v, kept }));
+        await quit();
+        if (result === "asleep") {
+          // The reopen after a refused settle: the parked won list opens the solved view and sends again (P2).
+          await settleStub([okR()]);
+          await openBoard(await boardOf(id));
+          await page.waitForTimeout(200);
+          const back = await view();
+          const again = await settles();
+          check("the reopen after a refused settle opens the solved view, sends the list again, and `ok` clears it (P2)",
+            back.done && back.pos === back.nest && back.moves === fx.win.length && again.length === 1 && again[0].moves === fx.win &&
+              back.settled && Object.keys(await stored()).length === 0 && back.restart === "false", JSON.stringify({ back, again }));
+          await quit();
+        }
+      }
+
+      // illegal, not_won, too_long and a thrown call: the moves are kept, "hmm, that didn't work", one warning per code.
+      const codes = [["illegal", { result: "illegal", bad_index: 2 }], ["not_won", { result: "not_won" }],
+        ["too_long", { result: "too_long" }], ["thrown", "throw"]];
+      const before = settleWarns.length;
+      for (const [code, reply] of codes) {
+        for (const again of [0, 1]) {
+          await settleStub([reply]);
+          await openBoard(await boardOf(`settle-${code}`));
+          await play(fx.win);
+          await page.waitForTimeout(200);
+          const v = await view();
+          if (!again) {
+            check(`${code}: the moves are kept and the bubble says "hmm, that didn't work"`,
+              v.done && !v.settled && v.bubble === "hmm, that didn't work" && v.restart === "true" &&
+                Object.values(await stored()).includes(fx.win), JSON.stringify(v));
+          }
+          await quit();
+        }
+      }
+      const warned = settleWarns.slice(before);
+      check("... and each logs once, naming the code (bad_index for illegal) and never the move list",
+        warned.length === 4 && codes.every(([code], i) => warned[i].includes(`(${code}`)) && /illegal, bad_index 2/.test(warned[0]) &&
+          warned.every((w) => !w.includes(fx.win)), JSON.stringify(warned));
+      await card.evaluate(() => { for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-hop|")) localStorage.removeItem(k); });
+
+      // A reply that arrives after a quit changes nothing on screen (P4); the older list still clears its own key.
+      await settleStub([okR({ tidy: true, found: true })], true);
+      await openBoard(await boardOf("settle-late"));
+      await play(fx.win);
+      await quit();
+      await settleStub([okR()]);
+      await openBoard(await boardOf("settle-other"));
+      // The bubble is read twice, 200 ms apart: settle it first (as the dead-tap check does), since
+      // the 700 ms tick rewrites an ended line with the mood's own, which is not the reply's doing.
+      await quietIdle(card);
+      await card.evaluate((el) => { el._slides[el._index].sayUntil = 0; });
+      await page.waitForTimeout(1600);
+      const bubbleBefore = await cur().locator(".bubble").innerText();
+      await card.evaluate((el) => { el.__release?.(); });
+      await page.waitForTimeout(200);
+      const other = await view();
+      await quietIdle(card, false);
+      check("a settle reply for a board that is no longer on screen changes nothing there, and clears its own parked list",
+        other.id === "settle-other" && other.moves === 0 && !other.done && !other.tidy && (await cur().locator(".bubble").innerText()) === bubbleBefore &&
+          Object.keys(await stored()).every((k) => !k.includes("settle-late")), JSON.stringify({ other, bubbleBefore, stored: await stored() }));
+      await quit();
+      await card.evaluate((el) => { delete el._hopSettle; });
+
+      // A reload on the same day (the board reply says done): the solved view, the pet in the nest, no path, no settle.
+      await settleStub([okR()]);
+      await openBoard(await boardOf("reload-1", { done: true, tidy: false }));
+      const rl = await view();
+      check("a reload on a solved day: the pet is in the nest with no path, \"try for tidy\" is offered, nothing is sent",
+        rl.done && rl.settled && rl.pos === rl.nest && rl.moves === 0 && rl.restart === "false" && rl.restartAria === "try for tidy" &&
+          rl.bubble === "solved" && rl.sent === 0, JSON.stringify(rl));
+      await key("restart").click();
+      const rl2 = await view();
+      check("... and a restart there plays from the start pad", !rl2.done && rl2.pos === rl2.start && rl2.moves === 0, JSON.stringify(rl2));
+      await quit();
+      await openBoard(await boardOf("reload-2", { done: true, tidy: true }));
+      const rl3 = await view();
+      check("a reload on a tidy day: the tidy view with no restart",
+        rl3.done && rl3.tidy && rl3.pos === rl3.nest && rl3.restart === "true" && rl3.bubble === "tidy", JSON.stringify(rl3));
+      await quit();
+
+      // The row: open / solved / tidy from the sensor's attribute, a stale day, no attribute, and the local settle.
+      const rowText = () => card.evaluate((el) => {
+        const row = el._slides[el._index].gameBox.querySelector(".ghop");
+        return row && { text: row.textContent, aria: row.getAttribute("aria-label") };
+      });
+      const attr = async (hop_day) => { await inject(pet["sensor.life_stage"], { attributes: { hop_day } }); await page.waitForTimeout(500); };
+      const day = await today();
+      await card.evaluate((el) => { el._slides[el._index].hopSeen = null; });
+      await attr(undefined);
+      await picker();
+      const absent = await rowText();
+      await attr({ day, stage: "child", done: true, tidy: false });
+      const solved = await rowText(); // the picker is open: the row follows the attribute
+      await attr({ day, stage: "child", done: true, tidy: true });
+      const tidy = await rowText();
+      await attr({ day: "2000-01-01", stage: "child", done: true, tidy: true });
+      const stale = await rowText();
+      await attr({ day, stage: "child", done: false, tidy: false });
+      const notDone = await rowText();
+      await quit();
+      check("the row reads open / solved / tidy from hop_day: absent, solved, tidy, a stale day, not done, while the picker is open",
+        absent.text === "Hop of the Day" && absent.aria === "Play Hop of the Day" && solved.text === "Hop ✓" && tidy.text === "Hop ✓ tidy" &&
+          stale.text === "Hop of the Day" && notDone.text === "Hop of the Day", JSON.stringify({ absent, solved, tidy, stale, notDone }));
+      await settleStub([okR()]);
+      await openBoard(await boardOf("row-1"));
+      await play(fx.win);
+      await page.waitForTimeout(200);
+      await quit();
+      await picker();
+      const local = await rowText();
+      await quit();
+      check("the local settle's reply updates the row (no attribute needed)", local.text === "Hop ✓", JSON.stringify(local));
+      await card.evaluate((el) => { el._slides[el._index].hopSeen = null; delete el._hopSettle; delete el._lines; delete el._hopFetch; });
+      await attr({});
+    }
 
     // The scene engine: a feed scene live when the row is pressed leaves nothing in the LCD; a scene
     // offered late during a board is not played over it.
@@ -4703,7 +5152,8 @@ async function main() {
   }
   if (enter("moments")) {
   await pinAwake(card, "moments");
-  // A shard opens here (SHARD_STARTS) straight after the prelude's 1 h fast-forward, with
+  // A shard opened here (it did until SHARD_STARTS went five-way, and `--only moments` still
+  // does) straight after the prelude's 1 h fast-forward, with
   // no play or resume section to calm the pet first: a hatchling's whine then held
   // "play with me?" over every flavour line (CI, 2026-11-01).
   await calm();
@@ -11242,9 +11692,15 @@ async function main() {
     await redraw();
     out.beforeCall = s.attention.classList.contains("arrive");
     force["binary_sensor.calling"] = "on";
-    await redraw();
+    el._redraw(s);
+    // The pop is a .3 s animation, so it is read as soon as the class is on (two frames in), not
+    // after the redraw's 300 ms settle: a timer a few ms late found only the pulse left (the
+    // check failed with popAnim "pulse" on a slow runner). The assertion is unchanged.
+    for (let i = 0; i < 100 && !s.attention.classList.contains("arrive"); i++) await wait(10);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     out.popped = s.attention.classList.contains("arrive");
     out.popAnim = s.attention.getAnimations().map((a) => a.animationName).join();
+    await wait(300);
     s.attention.classList.remove("arrive"); // a redraw of the same call is not an arrival: no new pop
     await redraw();
     out.popOnce = !s.attention.classList.contains("arrive");
@@ -13397,6 +13853,8 @@ async function main() {
         s.pet.classList.remove("look", "wander-l", "wander-r", "hop");
         s.pinVariant = { feed: "A", "feed.extra": "none", snack: "A" };
       });
+      // The idle wander/look and chatter would turn the pet or change the line during the ~1.5 s scene.
+      await quietIdle(card);
     };
     const feedTap = (twice = false, kind = "feed") => card.evaluate(async (el, [twice, kind]) => {
       const s = el._slides[el._index];
@@ -13596,6 +14054,7 @@ async function main() {
       measured.scene && measured.answerAt !== null && measured.answerAt <= 650, JSON.stringify(measured));
     await feedEnd();
     await card.evaluate((el) => { delete el._slides[el._index].pinVariant; });
+    await quietIdle(card, false); // the meal and snack checks are done: idle runs again
     // Lights on the real server (care D, plan 13): the tap to the live asleep, logged and never failed on: the hour and
     // the pet's energy decide whether a tuck sleeps at all (model.py _apply_lights), and the answer is a sensor push after
     // the service call, slower than a log entry. If it is often over the gate (400 ms) the gate moves later (a code change,
@@ -14212,6 +14671,12 @@ async function main() {
           };
         }
         el.__linkTypes = new Map([[host, "mellow"], [guest, "sweet"]]);
+        // The window starts clean: no line of the idle's still held (the hello would wait for its
+        // sayUntil and the extra, queued 3.3 s behind it, miss the calm visit's 4.8 s), and the
+        // last run's extra gone from the live region (it would read as this run's).
+        for (const s of el._slides) Object.assign(s, { sayUntil: 0, queue: [] });
+        host.bubble.textContent = "";
+        host.live.textContent = "";
         const nm = (s) => { const d = el._hass.devices[s.ids.device]; return d.name_by_user || d.name; };
         const extra = `${nm(guest)}, we do cosy well ♥`;
         const real = Math.random;
@@ -14223,6 +14688,12 @@ async function main() {
           if (run === "swipe" && i === 10) el._go(1);
           if (run === "swipe" && i === 15) el._go(-1);
           await new Promise((r) => setTimeout(r, 100));
+          // The card's tick (700 ms) is what says a queued line, so the extra, queued 3.3 s behind
+          // the hello, lands anywhere in a 0.7 s phase of the calm visit's 4.8 s: a loaded runner
+          // pushed it past the end (run 41811794211: endMs 4708, never said). While the visit is on,
+          // the check does the tick's saying itself every 100 ms: the same call, the same rules
+          // (still(), sayUntil), only not waiting for the tick's phase. After the visit it does not.
+          if (el._link) el._sayQueued(host);
           const says = host.bubble.textContent.includes(extra);
           if (el._link) {
             seen.during ||= says;
@@ -14239,7 +14710,9 @@ async function main() {
       for (const run of ["visit", "calm", "swipe"]) {
         await prep();
         if (run === "calm") await lp.emulateMedia({ reducedMotion: "reduce" });
+        await quietIdle(card); // the idle starts no line or move in the window (it would hold the hello back)
         const k = await kindred(run);
+        await quietIdle(card, false);
         await lp.emulateMedia({ reducedMotion: null });
         if (run === "swipe") {
           check("kindred: a swipe away and back leaves no extra line said after the visit", !k.after && k.left === 0, JSON.stringify(k));
@@ -14706,13 +15179,26 @@ async function main() {
   // _goPersonal asks the channel again; dev's own view (mine, with the seeded gift) is
   // back when it answers, which on a slow runner after a restart takes more than the
   // checks below would wait. Wait for that answer (a dev with a bond has a mine).
-  await everyCard(async (els, e) => {
+  // On a loaded runner that answer has been seen not to come at all in 30 s (the personal ask
+  // sent right after the restart, no event on it: mine stayed null and both gift checks below read
+  // null). So the wait is for the gift itself, and if the first ask is still unanswered after 10 s
+  // the card is made to ask again (what its own retry does after an error), once, with a NOTE.
+  // The checks below are unchanged: a gift that never reaches mine still fails them.
+  const reasked = await everyCard(async (els, e) => {
+    const find = () => els[0]?._slides?.find((x) => x.ids?.["sensor.life_stage"] === e);
+    let again = false;
     for (let i = 0; i < 300; i++) {
-      const s = els[0]?._slides?.find((x) => x.ids?.["sensor.life_stage"] === e);
-      if (s?.subscribed && s.mine) return;
+      const s = find();
+      if (s?.subscribed && s.mine?.gift) return again;
+      if (i === 100 && !(s?.subscribed && s.mine)) {
+        again = true;
+        els.forEach((el) => el._slides.forEach((x) => el._subscribe(x, true)));
+      }
       await new Promise((r) => setTimeout(r, 100));
     }
+    return again;
   }, seedPet);
+  if (reasked) console.log("NOTE: gifts: the card's personal ask after the restart went unanswered for 10 s; asked again");
   await pinAwake(card, "gifts");
   // FINDS_SHOWN on (the default): with restart's basket waiting, the basket shows on the
   // slide on screen.
