@@ -158,7 +158,7 @@ class HatchPetCardLooks extends HatchPetCardTick {
     const clock = this._followClock(s);
     // Audit 0.43.0 F-01: an evening's "how did it go?" would take the open question's
     // answer (and may not show): wait for a later tick, not consumed.
-    if (at === "look" && clock.eve && (s.asking || this._owned(s))) return null;
+    if (at === "look" && clock.eve && (s.asking || s.game)) return null;
     s.following = true;
     let reply = null;
     try {
@@ -176,7 +176,7 @@ class HatchPetCardLooks extends HatchPetCardTick {
     if (at === "picker") return reply; // F6: the picker says it
     // Audit s2635 H1: a big day's evening is its "how did it go?" (opp #1), asked in this
     // slot with how_day's buttons; the plain evening line only when an ask can't show.
-    if (reply.ask === "big_how" && !s.asking && !this._owned(s)) {
+    if (reply.ask === "big_how" && !s.asking && !s.game) {
       const it = this._followIt(reply);
       s.asking = true;
       (s.queue ??= []).push({ text: it ? BIG_DAY.howText(it) : BIG_DAY.how, ms: ASK_MS, ask: true, cls: KEPT, perk: true,
@@ -221,7 +221,7 @@ class HatchPetCardLooks extends HatchPetCardTick {
     const clock = this._followClock(s);
     if (!s.lookedFirst || s.asleep || !clock.eve) return;
     if (s.followEve === clock.day || !this._followWanted(s) || !this._channelHeard(s)) return;
-    if (s.queue?.length || s.asking || this._owned(s)) return; // the first look's lines first: a fourth would crowd them
+    if (s.queue?.length || s.asking || s.game) return; // the first look's lines first: a fourth would crowd them
     if (s.followRetry && Date.now() < s.followRetry) return; // a deferred or failed try waits, not every tick
     this._followFetch(s);
   }

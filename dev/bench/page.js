@@ -1252,69 +1252,7 @@
     window.bench.screenClass = cur.screen.className;
     if (shot.view === "board" || shot.view === "games") (window.bench.info ||= {}).hop = hopInfo(card, cur);
     if (shot.lightsAlign) (window.bench.info ||= {}).lights = lightsInfo(cur);
-    if (shot.mode === "probe") (window.bench.info ||= {}).mode = await modeInfo(card, cur);
     return true;
-  }
-
-  // `mode: "probe"` (shell modes slice 1, acceptance 10 and 11): a probe shell mode, an object the bench
-  // injects (not a SHELL_MODES entry), entered through the card's own _modeEnter. Its captions are the
-  // longest set a planned mode has (Hop's eight, with the special's count), so the fit is the worst case;
-  // test copy only, never shipped. Measures every .toy and .cap rect, each caption's fit in its column, the
-  // eight caps' computed colour and the device's --cap-tones before, during and after the mode, and the
-  // shot is taken with the mode on. Writes `<shot>.json` (`mode`).
-  // The special is "✦2", the plan's fallback (3.6) for a column too narrow for "special 2"; that longer
-  // caption is measured on its own (`long`) at every width.
-  const PROBE_CAPS = [["prev", "left"], ["▲", "up"], ["▼", "down"], ["next", "right"], ["✦", "✦2"], ["↶", "undo"], ["↻", "restart"], ["✕", "quit"]];
-  const PROBE_LONG = "special 2";
-  const probeMode = () => ({
-    id: "bench-probe", tint: "game", announce: "probe on",
-    slots: PROBE_CAPS.map(([icon, cap]) => ({ icon, cap, aria: `probe ${cap}`, act: () => {} })),
-    exit: { slot: 8, escape: true, status: "end" },
-  });
-  async function modeInfo(card, cur) {
-    const root = card.shadowRoot;
-    const rest = async () => {
-      clearTimeout(cur.swapTimer);
-      for (const b of Object.values(cur.buttons)) b.classList.remove("swap");
-      for (const a of root.getAnimations()) if (a instanceof CSSTransition) a.finish();
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    };
-    const box = (el) => {
-      const b = el.getBoundingClientRect();
-      return [b.x, b.y, b.width, b.height].map((v) => Math.round(v * 100) / 100);
-    };
-    const read = () => card._modeButtons(cur).map((b) => {
-      const caption = b.lastElementChild;
-      return { toy: box(b), cap: box(b.querySelector(".cap")), caption: caption.textContent, captionW: caption.scrollWidth,
-        column: b.clientWidth, fits: caption.scrollWidth <= b.clientWidth, color: getComputedStyle(b.querySelector(".cap")).backgroundColor };
-    });
-    const tones = () => getComputedStyle(cur.device).getPropertyValue("--cap-tones");
-    await rest();
-    const before = read();
-    const tonesBefore = tones();
-    card._modeEnter(cur, probeMode());
-    await rest();
-    const during = read();
-    const tonesDuring = tones();
-    const slot5 = card._modeButtons(cur)[4].lastElementChild;
-    slot5.textContent = PROBE_LONG; // measured in slot 5's column, then put back
-    const long = { caption: PROBE_LONG, width: slot5.scrollWidth, column: slot5.parentElement.clientWidth };
-    long.fits = long.width <= long.column;
-    slot5.textContent = PROBE_CAPS[4][1];
-    const tint = getComputedStyle(cur.device).getPropertyValue("--mode-tint").trim();
-    const probe = document.createElement("i");
-    probe.style.color = tint;
-    document.body.append(probe);
-    const tintRgb = getComputedStyle(probe).color;
-    probe.remove();
-    card._modeExit(cur, "quit");
-    await rest();
-    const after = read();
-    const tonesAfter = tones();
-    card._modeEnter(cur, probeMode()); // the shot shows the mode
-    await rest();
-    return { finish: [...cur.device.classList].find((c) => c.startsWith("finish-")) || null, tint, tintRgb,
-      long, before, during, after, tonesSame: tonesBefore === tonesDuring && tonesDuring === tonesAfter, tonesSet: !!tonesBefore };
   }
 
   const HATCH_HOP_LETTERS = "abcdefghijklmnopqrstuvwx";

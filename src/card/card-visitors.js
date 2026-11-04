@@ -106,7 +106,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
   // Still fine to go on (each beat checks): the slide on show, awake, no game, scene,
   // link, gag, call or status. Else the visit ends at once, its picture gone.
   _visitorLive(s) {
-    return s === this._slides[this._index] && !s.asleep && !this._owned(s) && !s.scene && !s.linking &&
+    return s === this._slides[this._index] && !s.asleep && !s.game && !s.scene && !s.linking &&
       !s.power && !s.calling && !s.away && !s.screen.classList.contains("show-status");
   }
 
@@ -354,7 +354,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
     const b = s.basket;
     if (!b || s.collecting) return;
     const n = this._basketCount(s);
-    const show = n > 0 && !s.reveal && !s.egg && !!s.species && !s.away && !this._owned(s) && !s.scene;
+    const show = n > 0 && !s.reveal && !s.egg && !!s.species && !s.away && !s.game && !s.scene;
     if (show) {
       const src = `${BASE}/ui/basket_${n}.png?v=${VERSION}`;
       const img = b.firstElementChild;

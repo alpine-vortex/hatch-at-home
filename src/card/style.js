@@ -1711,26 +1711,6 @@ const STYLE = `
     pointer-events: none; }
   .toy.on .cap { background: #3a2a1a; color: #ffe9a8; }
   .toy[disabled] { opacity: .45; cursor: default; }
-  /* Shell modes (card-mode.js): the eight caps take the mode's tint, one colour for every game (owner
-     decision D5). The rule outranks every finish's cap rule (.finish-* .toy:nth-child(..) .cap, 0,4,0) and
-     the wanted/on rule (.device[class*="finish-"] .toy.on .cap, 0,5,0) at 0,6,0, and comes after them;
-     --cap-tones (the shading) stays, so only the colour changes. tests/js/shell_modes.test.js holds the
-     specificity, the bench (--mode probe) the computed colour on every finish. */
-  .device.moded .buttons > .toy.tinted .cap { background: var(--mode-tint, #c4e2f2); color: #3a2a1a; }
-  /* The swap's one rebound: down a press's depth for 90 ms, then the cap's own release curve (translate,
-     never transform: AGENTS.md's motion rule). Reduced motion never sets the class (calm()). */
-  .toy.swap .cap { translate: 0 calc(var(--px, 2px) * 2); transition-duration: .04s, .2s, .25s; transition-timing-function: ease-out; }
-  /* A slot that stays pressed (its on(s): Hop's armed special) is held down, not the lights' dark .on. */
-  .toy.armed .cap { translate: 0 calc(var(--px, 2px) * 2); clip-path: var(--cap-clip-dn); }
-  .toy.armed .cap::before { clip-path: var(--cap-side-dn); }
-  .toy.armed .cap::after { background-image: var(--cap-tones-dn); height: calc(var(--px, 2px) * (var(--cap-n, 23) + 1)); }
-  /* Blocked (aria-disabled, still focusable) reads dimmer than live; off is native [disabled] above. */
-  .toy[aria-disabled="true"] { opacity: .6; cursor: default; }
-  .toy .cap .glyph { font: 400 20px 'Tiny5', monospace; line-height: 1; }
-  /* A swapped caption stays one line of the cap font: a wrap, or a glyph from a fallback font ("✦2") with a
-     taller line, would make the row taller and move the shell (_mould reads the .toy rects). A caption
-     too long for its column shows as a clip on the bench (--mode probe). */
-  .toy.tinted > :last-child { white-space: nowrap; height: 1lh; }
   .compact .toy { font-size: 12px; }
   .compact .egg .body { padding: 28px 14px 32px; }
   .warn { padding: 16px; color: var(--error-color, #c00); background: var(--card-background-color); }

@@ -29,7 +29,6 @@ class HatchPetCardTick extends HatchPetCardLayout {
       if (s.textStep && (document.hidden || s !== this._slides[this._index] || Date.now() > s.textStep.until)) {
         this._askTextEnd(s);
       }
-      this._modeGuard(s); // a shell mode's idle exit, which must not wait for a hass push
       this._patSync(s);
       this._basketSync(s);
       if (s === this._slides[this._index] && !s.reloading && !s.empty) { // a reloading pet greets and asks nothing
@@ -115,7 +114,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
   // Nothing else is going on: is the pet free for a small idle behaviour?
   _free(s) {
     const now = Date.now();
-    return s.species && !s.asleep && !s.calling && !this._owned(s) && !s.scene && IDLE_MOODS.has(s.moodState) &&
+    return s.species && !s.asleep && !s.calling && !s.game && !s.scene && IDLE_MOODS.has(s.moodState) &&
       !s.screen.classList.contains("show-status") &&
       !(s.sayUntil > now) && !(s.poseUntil > now) && !(s.propUntil > now) &&
       !(s.flairUntil > now) && !(s.movingUntil > now);
@@ -124,7 +123,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
   // Free but for a line being said: a move with no words may play over it (fresh-moment 7).
   _freeBody(s) {
     const now = Date.now();
-    return s.species && !s.asleep && !s.calling && !this._owned(s) && !s.scene && !s.linking && !s.power && !s.visitor &&
+    return s.species && !s.asleep && !s.calling && !s.game && !s.scene && !s.linking && !s.power && !s.visitor &&
       IDLE_MOODS.has(s.moodState) && !s.screen.classList.contains("show-status") &&
       !(s.poseUntil > now) && !(s.propUntil > now) && !(s.flairUntil > now) && !(s.movingUntil > now);
   }
@@ -434,7 +433,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
     if (!s.nextWobble) s.nextWobble = now + EGG_WOBBLE_MIN_MS + Math.random() * EGG_WOBBLE_SPREAD_MS;
     if (now < s.nextWobble) return;
     s.nextWobble = now + EGG_WOBBLE_MIN_MS + Math.random() * EGG_WOBBLE_SPREAD_MS;
-    if (s.asleep || s.away || this._owned(s) || s.scene || s.linking || s.power || s.visitor || s.calling ||
+    if (s.asleep || s.away || s.game || s.scene || s.linking || s.power || s.visitor || s.calling ||
         s.screen.classList.contains("show-status") || s.sayUntil > now || s.poseUntil > now ||
         s.movingUntil > now) return;
     const cracking = this._eggMinutes(this._state(s, "sensor.life_stage")) <= 6;
@@ -589,7 +588,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
       }, 40);
       s.typing = job;
       s.bubble.dataset.typing = "1";
-      if (sound && soundsOn() && babbleOn() && this._mayPlay(s) && !this._owned(s)) { // "sounds here" is the master (UX7 F11)
+      if (sound && soundsOn() && babbleOn() && this._mayPlay(s) && !s.game) { // "sounds here" is the master (UX7 F11)
         try {
           s.babbling = babble(text, voice);
         } catch (err) {
@@ -656,7 +655,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
   _reactFrames(s, kind, { inGame = false, ms, frames, variant } = {}) {
     const r = REACTIONS[kind];
     if (!r || !s.species || s.scene || s.linking || s.power ||
-      s.asleep || s.away || s.egg || (this._owned(s) && !inGame)) return;
+      s.asleep || s.away || s.egg || (s.game && !inGame)) return;
     // Not care: a child's visitor greet is the line only, and its bored look at a game's bee
     // (card-games) stays as it was. Ship A lifts the guard for care.
     if (s.drawn === "child" && (kind === "greet" || (kind === "refused" && inGame))) return;
@@ -799,7 +798,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
   // also hides it at once for the status, a game, a question, a link and the boot screen).
   _patOn(s) {
     return !!s.species && !s.reloading && !s.empty && s === this._slides[this._index] && !this._booting && !s.scene && !s.linking &&
-      !s.power && !this._owned(s) && !s.away && !this._questionOn(s) &&
+      !s.power && !s.game && !s.away && !this._questionOn(s) &&
       !s.screen.classList.contains("show-status");
   }
 
@@ -821,7 +820,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
   // reaches its tenth pat inside the 2.5 s the first one's line is held.
   _patMayTalk(s, own = false) {
     const heldOwn = own && s.patSaid && s.sayEntry?.text === s.patSaid;
-    return !s.calling && !s.power && !this._owned(s) && !this._questionOn(s) && !(s.visitUntil > Date.now()) &&
+    return !s.calling && !s.power && !s.game && !this._questionOn(s) && !(s.visitUntil > Date.now()) &&
       (heldOwn || !(s.sayUntil > Date.now() && s.sayClass >= KEPT)) && !s.queue?.some((q) => lineClass(q) >= KEPT);
   }
 
@@ -1048,7 +1047,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
   // A call holds lines below kept, except its own news (C6, which comes with the sick call).
   _mayInterrupt(s, cls, type) {
     if (cls >= MINE) return true;
-    if (this._owned(s) || this._questionOn(s) || (s.calling && cls < KEPT && type !== "became_sick")) return false;
+    if (s.game || this._questionOn(s) || (s.calling && cls < KEPT && type !== "became_sick")) return false;
     if (s.queue?.some((q) => lineClass(q) >= cls)) return false;
     return !(s.sayUntil > Date.now()) || cls > (s.sayClass || 0);
   }
@@ -1069,7 +1068,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
     const now = Date.now();
     if (cls === FLAVOUR) {
       // During a kept line, a game or a question (or with a kept line next): dropped.
-      if (this._owned(s) || this._questionOn(s) || (s.sayUntil > now && s.sayClass >= KEPT) ||
+      if (s.game || this._questionOn(s) || (s.sayUntil > now && s.sayClass >= KEPT) ||
         s.queue?.some((q) => lineClass(q) >= KEPT)) return;
       const wait = Math.max(0, (s.sayUntil || 0) - now) +
         (s.queue || []).reduce((n, q) => n + (q.ms || 0), 0);
@@ -1131,7 +1130,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
     // server's side); only a question is dropped, it may come another day. A
     // beat ("good night...") or flavour may still be said, as it would have been.
     if (s.asleep && s.queue.some((q) => q.ask)) this._clearAsk(s);
-    if (!s.queue.length || s.sayUntil > now || this._owned(s) || s.power || s.screen.classList.contains("show-status")) return;
+    if (!s.queue.length || s.sayUntil > now || s.game || s.power || s.screen.classList.contains("show-status")) return;
     let ready = s.asleep ? s.queue.filter((q) => lineClass(q) < KEPT) : s.queue;
     // A call's own words hold: while it's calling, only a kept line (not a wish) is said (2c).
     if (s.calling) ready = ready.filter((q) => q.type === "became_sick" || (lineClass(q) >= KEPT && q.type !== "wish"));

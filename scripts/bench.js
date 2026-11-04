@@ -1449,7 +1449,7 @@ async function runShots(browser, base, shots, outDir, workers) {
           }, shot.lines);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(n));
         }
-        if (shot.costume || shot.deviceFx || shot.glassMark || shot.momentCue || shot.gift || shot.look || shot.care || shot.lightsAlign || shot.mode || shot.view === "board" || shot.view === "games") {
+        if (shot.costume || shot.deviceFx || shot.glassMark || shot.momentCue || shot.gift || shot.look || shot.care || shot.lightsAlign || shot.view === "board" || shot.view === "games") {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
         }
@@ -1656,51 +1656,6 @@ async function pixelShares(browser, pairs) {
 // scene's end and its dim step each within 2% of the plain state, the drape's box within 1 px of the
 // pet's through a settle and a pat, and every species' drape on frame 3 as the card's table says.
 const LIGHTS_SHARE_MAX = 0.02;
-// The shell mode pass rule (shell modes plan, slice 1 acceptance 10 and 11), over the `mode` info a
-// `--mode probe` shot writes: every .toy at least 44 px wide and every caption inside its column; the
-// .toy and .cap rects the same before, during and after the mode (R3); with the mode on, all eight caps'
-// computed colour is the tint, on every finish; --cap-tones unchanged.
-const MODE_MIN_TOY = 44;
-function modePass(shots) {
-  const rows = [];
-  for (const s of shots.filter((x) => x.mode === "probe" && x.file)) {
-    const m = JSON.parse(fs.readFileSync(s.file.replace(/\.png$/, ".json"), "utf8")).mode;
-    const why = [];
-    if (!m) why.push("no mode info");
-    else {
-      // within 0.05 px: the first layout and a re-layout can differ by a float's last digit
-      const near = (p, q) => p.every((v, i) => Math.abs(v - q[i]) <= 0.05);
-      const same = (a, b) => a.every((x, i) => near(x.toy, b[i].toy) && near(x.cap, b[i].cap));
-      if (!same(m.before, m.during) || !same(m.during, m.after)) why.push("a .toy or .cap rect moved");
-      const clipped = m.during.filter((x) => !x.fits);
-      if (clipped.length) why.push(`caption past its column: ${clipped.map((x) => `${x.caption} ${x.captionW}/${x.column}`).join(", ")}`);
-      const off = m.during.filter((x) => x.color !== m.tintRgb);
-      if (off.length) why.push(`cap not the tint (${m.tintRgb}): ${off.map((x) => `${x.caption} ${x.color}`).join(", ")}`);
-      if (!m.tonesSet || !m.tonesSame) why.push("--cap-tones changed or unset");
-    }
-    const toyW = m ? Math.min(...m.during.map((x) => x.toy[2])) : null;
-    rows.push({ name: s.name, width: s.width, dpr: s.dpr, finish: m?.finish ?? null, pass: !why.length, why,
-      toyW, wide: toyW >= MODE_MIN_TOY, worstFit: m ? Math.max(...m.during.map((x) => x.captionW - x.column)) : null, long: m?.long ?? null });
-  }
-  const bad = rows.filter((r) => !r.pass);
-  console.log(`shell mode pass rule (captions fit, rects unchanged, caps = tint, tones unchanged): ${rows.length - bad.length} of ${rows.length} pass`);
-  for (const r of bad.slice(0, 30)) console.log(`  FAIL ${r.name}: ${r.why.join("; ")}`);
-  // The plan's touch claim (3.6) is a measure, not a rule: it holds only where the toy is that wide.
-  const byWidth = {};
-  for (const r of rows) {
-    const w = (byWidth[r.width] ||= { toyMin: Infinity, toyMax: 0, longFits: 0, n: 0 });
-    w.toyMin = Math.min(w.toyMin, r.toyW);
-    w.toyMax = Math.max(w.toyMax, r.toyW);
-    w.longFits += r.long?.fits ? 1 : 0;
-    w.n++;
-  }
-  for (const [w, v] of Object.entries(byWidth)) {
-    console.log(`  card ${w}: toy ${v.toyMin}-${v.toyMax} px wide (${v.toyMin >= MODE_MIN_TOY ? "all" : "not all"} >= ${MODE_MIN_TOY}); "special 2" fits ${v.longFits} of ${v.n}`);
-  }
-  if (bad.length) process.exitCode = 1;
-  return rows;
-}
-
 async function lightsPass(browser, shots) {
   const rows = [];
   const info = (name) => {
@@ -1796,10 +1751,6 @@ async function main() {
       const bad = l.share <= MONO_LIT_MIN;
       console.log(`mono backlight ${bad ? "FAIL" : "ok"}: ${l.label} differ on ${(l.share * 100).toFixed(1)}% of pixels (need > ${MONO_LIT_MIN * 100}%)`);
       if (bad) process.exitCode = 1;
-    }
-    if (shots.some((s) => s.mode === "probe")) {
-      const rows = modePass(shots);
-      fs.writeFileSync(path.join(opts.out, "mode-pass.json"), JSON.stringify(rows, null, 1));
     }
     if (opts.preset === "tuck") {
       const rows = await lightsPass(browser, shots);
