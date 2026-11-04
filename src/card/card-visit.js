@@ -375,7 +375,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
   // A question with its answers as buttons (the line is already in the bubble).
   _ask(s, kind, entity = s.ids?.["sensor.life_stage"]) {
     const question = QUESTIONS[kind];
-    if (!question || s.game || s.ids?.["sensor.life_stage"] !== entity) {
+    if (!question || this._owned(s) || s.ids?.["sensor.life_stage"] !== entity) {
       s.asking = false; // a game, or another pet on this slide now: not now
       return;
     }

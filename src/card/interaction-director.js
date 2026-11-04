@@ -53,6 +53,9 @@ const HATCH_DIRECTOR = Object.freeze(
     const BUSY_OWNERS = Object.freeze(
       [
         { name: "game", busy: (s) => !!s.game },
+        // A shell mode (card-mode.js) unless it opts out (busy: false). `game` stays: the picker and Hop's
+        // loading window have s.game and no mode.
+        { name: "mode", busy: (s) => !!s.mode && s.mode.busy !== false },
         { name: "scene", busy: (s) => !!s.scene },
         { name: "power", busy: (s) => !!s.power },
         { name: "powerPending", busy: (s) => !!s.powerPending },

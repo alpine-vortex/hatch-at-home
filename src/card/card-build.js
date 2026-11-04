@@ -158,6 +158,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
             <img class="attention" alt="wants attention">
             <div class="bubble"></div>
             <div class="sr" role="status"></div>
+            <div class="sr modelive" role="status"></div>
             <button class="pat" type="button" hidden></button>
             <button class="basket" type="button" aria-label="the basket" hidden><img alt=""></button>
             <div class="game" hidden>
@@ -187,7 +188,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
-      propEl: q(".gprop"), live: q(".sr[role=status]"), seasonBox: q(".season"),
+      propEl: q(".gprop"), live: q(".sr[role=status]"), modeLive: q(".modelive"), seasonBox: q(".season"),
       basket: q(".basket"), glass: q(".glass"), mark: q(".glass .mark"), rim: q(".rim"),
     };
     // The glass effect ends with its own clock, the glass's `dir-glass-life` (the director's watchdog is
@@ -266,8 +267,13 @@ class HatchPetCardBuild extends HatchPetCardBase {
     });
     // Taps on the game mustn't reach the screen behind (which opens the status).
     s.gameBox.addEventListener("click", (e) => e.stopPropagation());
-    s.gameBox.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && s.game) this._quitGame(s, this._quitLine(s));
+    // Escape is the device's (shell modes 3.5): the focus may be on a swapped cap, outside the game box.
+    // A shell mode that takes Escape runs its exit slot; else a game (the picker too) quits as ever. The
+    // status sheet keeps its own Escape (its handler runs first and marks the key as used).
+    s.device.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented || s.screen.classList.contains("show-status")) return;
+      if (this._modeEscape(s)) e.preventDefault();
+      else if (s.game) this._quitGame(s, this._quitLine(s));
     });
     // The settings sheet and its picker keep the player's place (UX fix 1, F1/F2): a tap
     // that misses a button (a label, a gap, a note) must not fall through to the screen's
@@ -344,7 +350,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     s.screen.addEventListener("click", () => {
       // A game on show keeps its screen: a stray tap must not end it unseen (the
       // Status button still does, on purpose).
-      if (s.game) return;
+      if (this._owned(s)) return;
       // A tap on a visit in progress is a pat on the host, not the Status button: it
       // would end the hello (UX8 F1).
       if (s.linking) {
@@ -364,15 +370,17 @@ class HatchPetCardBuild extends HatchPetCardBase {
       const i = this._slides.indexOf(s);
       if (i !== this._index && !this._swiped) this._go(i);
     });
+    // The eight round buttons. Each has one click handler, the shell mode router (_modeClick): at rest
+    // it runs the care tap below, in a mode the slot's act. What a button shows (icon, caption, label,
+    // disabled, wanted) is written by _paintCaps only (card-mode.js), first here with the rest state.
     const box = q(".buttons");
+    s.careTaps = [];
     for (const action of ACTIONS) {
       const b = document.createElement("button");
       b.className = "toy";
       b.dataset.action = action.key; // the cap's rebound curve (style.js)
-      b.innerHTML = `<span class="cap">${pixelIcon(ACTION_ICONS[action.key])}</span><span>${action.label}</span>`;
-      if (action.aria) b.setAttribute("aria-label", action.aria);
-      b.addEventListener("click", () =>
-        action.key === "play" ? this._startGame(s, b) : this._press(s, action.key));
+      b.innerHTML = `<span class="cap"></span><span></span>`;
+      s.careTaps.push(() => (action.key === "play" ? this._startGame(s, b) : this._press(s, action.key)));
       box.append(b);
       s.buttons[action.key] = b;
     }
@@ -380,9 +388,11 @@ class HatchPetCardBuild extends HatchPetCardBase {
     lights.className = "toy";
     lights.dataset.action = "lights";
     lights.innerHTML = `<span class="cap"></span><span class="lbl"></span>`;
-    lights.addEventListener("click", () => this._toggleLights(s));
+    s.careTaps.push(() => this._toggleLights(s));
     box.append(lights);
     s.buttons.lights = lights;
+    this._modeButtons(s).forEach((b, i) => b.addEventListener("click", () => this._modeClick(s, i)));
+    this._paintCaps(s, this._careRest());
     this._track.append(slide);
     return s;
   }
@@ -413,13 +423,13 @@ class HatchPetCardBuild extends HatchPetCardBase {
   // Once the pet on show is awake and free, the gag plays; an asleep pet waits
   // (at most POWER_DEFER_MS from the boot). A call or a game cuts it short.
   _powerTick(s) {
-    if (s.power && (s.asleep || s.calling || s.game)) this._powerEnd(s, true);
+    if (s.power && (s.asleep || s.calling || this._owned(s))) this._powerEnd(s, true);
     if (!s.powerPending || s.power) return;
     if (serverNow() - Date.parse(s.powerPending) >= POWER_DEFER_MS) {
       s.powerPending = null;
       return;
     }
-    if (this._booting || s.asleep || s.calling || s.game || s.scene || s.linking || !s.species ||
+    if (this._booting || s.asleep || s.calling || this._owned(s) || s.scene || s.linking || !s.species ||
         this._eggMinutes(this._state(s, "sensor.life_stage")) !== null ||
         s.screen.classList.contains("show-status") || !this._visible || document.hidden) return;
     s.powerPending = null;
@@ -453,7 +463,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     }
     at(0, () => this._speak(s, pick(POWER_LINES.low), 2000));
     at(2200, () => {
-      if (s.calling || s.game || s.asleep) return this._powerEnd(s, true);
+      if (s.calling || this._owned(s) || s.asleep) return this._powerEnd(s, true);
       s.poseUntil = 0;
       if (!isCalm) level(3, false);
       this._speak(s, pick(POWER_LINES.back), 1800);
@@ -750,6 +760,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
   // pet's (a game, an armed "sure?", the moments already seen) carries over.
   _forget(s) {
     if (s.game) this._endGame(s, null);
+    this._modeExit(s, "forget"); // a shell mode too (a no-op once the game's end has left it)
     this._sceneEnd(s, { quiet: true });
     s.sceneOwes = s.sceneFade = null;
     // The last pet's blanket: a landing timer must not draw it on this one, and a stale want must not
@@ -938,6 +949,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     this._slides.forEach((x, i) => {
       // A game stops on the slide being left: nobody plays it unseen.
       if (x.game && i !== to) this._quitGame(x, null);
+      if (i !== to) this._modeExit(x, "slide"); // and a shell mode (a no-op once the game's end has left it)
       this._stopTyping(x);
       if (x.laySheet && i !== to) this._closeLay(x); // the lay sheet stays with its pet
       if (x.nameSheet && i !== to) this._closeName(x); // and so does the name sheet (S3)

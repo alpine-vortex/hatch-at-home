@@ -147,7 +147,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
       case "news_live": // the same, said on the channel only (house_words_private, H8)
       case "news": { // virtual_pet.share_news: a passing moment, like a TV title
         const h = String(m.headline || "");
-        if (!h || s.game) break; // a game's prompt owns the bubble: dropped, like asleep
+        if (!h || this._owned(s)) break; // a game's prompt owns the bubble: dropped, like asleep
         // A long headline gets only the shortest lead-in (the bubble holds ~60).
         const lines = h.length > 45 ? [`news! ${h}`]
           : [`did you hear? ${h}`, `did you hear? ${h}`, `guess what? ${h}`, `ooh, news! ${h}`];
@@ -162,7 +162,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         break;
       }
       case "weather": { // the weather just changed (or a hot or freezing day)
-        if (s.game) break; // a game's prompt owns the bubble
+        if (this._owned(s)) break; // a game's prompt owns the bubble
         const t = degrees(m.temperature);
         const lines = {
           rain_started: ["ooh, it's raining!", "pitter patter...", "here comes the rain!"],
@@ -183,7 +183,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         break;
       }
       case "house_answered": { // the heating (cooling) came on for a chilly (warm) pet (H3)
-        if (s.game) break;
+        if (this._owned(s)) break;
         const kind = HOUSE_REQUEST[m.request];
         if (!kind) break;
         speak(pick(HOUSE_LINES[kind]), 4500, () => {
@@ -195,7 +195,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
       }
       case "robot_out": // a robot vacuum started a run: the stand-in crosses the floor (H4)
       case "robot_home": { // ... and went home: a word, no robot
-        if (s.game) break;
+        if (this._owned(s)) break;
         speak(pick(HOUSE_LINES[m.type]), 4500, () => {
           this._animate(s, s.pet, "perk", 320);
           if (m.type === "robot_out") this._robotFx(s);
@@ -204,7 +204,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         break;
       }
       case "appliance_done": { // a washer, dryer or dishwasher finished its cycle (H6)
-        if (s.game) break;
+        if (this._owned(s)) break;
         const kind = ["washer", "dishwasher", "dryer"].includes(m.kind) ? m.kind : "machine"; // only the kind comes in
         const lines = HOUSE_LINES[kind];
         speak(pick(lines), 4500, () => {
@@ -215,7 +215,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         break;
       }
       case "doorbell_live": { // a doorbell press, said live and kept nowhere: a startle and two notes (H5)
-        if (s.game) break; // a game's prompt owns the bubble
+        if (this._owned(s)) break; // a game's prompt owns the bubble
         // The startle and the chime are the bell's own: at once, not waiting on the
         // line (a FLAVOUR line can wait up to FLAVOUR_WAIT_MS, or be dropped).
         now(() => {
@@ -228,7 +228,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
       }
       case "house_moment": // virtual_pet.react: something in the house, by category (H8)
       case "house_live": { // ... said on the channel only: it says someone's home, or the words are kept off the sensor
-        if (s.game) break; // a game's prompt owns the bubble
+        if (this._owned(s)) break; // a game's prompt owns the bubble
         const cat = Object.hasOwn(HOUSE_CATEGORY, m.category ?? "") ? HOUSE_CATEGORY[m.category] : null;
         if (!cat) break;
         const custom = m.category === "custom";
@@ -246,7 +246,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         break;
       }
       case "forecast": { // something worth a word in today's or tomorrow's forecast
-        if (s.game) break;
+        if (this._owned(s)) break;
         const today = m.when === "today";
         const hi = degrees(m.high);
         const lines = {
@@ -688,7 +688,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
       // The smug beat (plan 4.4): two rocks after the praise, snack or play it was whining for.
       if (spoiled && !busy && !calm()) {
         setTimeout(() => {
-          if (!s.scene && !s.asleep && !s.game) this._animate(s, s.pet, "rock2", 1250);
+          if (!s.scene && !s.asleep && !this._owned(s)) this._animate(s, s.pet, "rock2", 1250);
         }, 1300);
       }
       out();
