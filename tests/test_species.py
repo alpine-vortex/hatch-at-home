@@ -47,6 +47,12 @@ def test_every_referenced_sprite_exists(species: str) -> None:
     for stage, frames in (sp.get("waves") or {}).items():
         assert stage in sp["stages"] and stage != "child", f"{species} waves.{stage}"
         names += frames
+    # The adult signature pose (species nature N4): an idle pose past the child stage.
+    for stage, frames in (sp.get("signature") or {}).items():
+        assert stage in sp["stages"] and stage not in ("baby", "child"), (
+            f"{species} signature.{stage}"
+        )
+        names += frames
     for prop in (sp.get("props") or {}).values():
         names += prop if isinstance(prop, list) else [prop]
     names += list((sp.get("backgrounds") or {}).values())

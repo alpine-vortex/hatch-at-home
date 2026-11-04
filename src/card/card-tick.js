@@ -461,8 +461,12 @@ class HatchPetCardTick extends HatchPetCardLayout {
     s.nextIdle = now + scale * (IDLE_MIN_MS + Math.random() * (s.vroom ? 20000 : IDLE_SPREAD_MS)); // vroom: every 20-40 s
     if (!this._free(s)) return;
     const isCalm = calm();
+    // A child picks from its own extras; a later stage has at most its species.json "signature" pose
+    // (N4: the adult's, two frames), the one idle thing it does that the others don't.
+    const sig = s.drawn !== "child" && s.species.signature?.[s.drawn];
     const own = s.drawn === "child"
-      ? Object.keys(s.species.extras || {}).filter((k) => !SHARED_POSES.has(k)) : [];
+      ? Object.keys(s.species.extras || {}).filter((k) => !SHARED_POSES.has(k))
+      : Array.isArray(sig) && sig.length ? ["signature"] : [];
     if (this._promisePractice(s)) return; // the promise's practice, days 1-3 (F3)
     if (this._skyReact(s, isCalm)) return; // its sky is up: a body reaction, once a day (species nature)
     // While a robot is cleaning (vroom) it is the choice: across the floor, and the pet perks.
@@ -472,7 +476,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
       this._robotFx(s);
       this._animate(s, s.pet, "perk", 320);
     } else if (move === "pose") {
-      const frames = s.species.extras[pick(own)];
+      const frames = s.drawn === "child" ? s.species.extras[pick(own)] : sig;
       s.poseFrames = Array.isArray(frames) ? frames : [frames];
       s.poseUntil = now + 2500;
       this._show(s, s.pet, s.poseFrames[0]);
