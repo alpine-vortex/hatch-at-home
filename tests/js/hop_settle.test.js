@@ -48,8 +48,8 @@ test("board_changed: the list goes and the board is loaded again", () => {
   assert.strictEqual(o.warn, null);
 });
 
-test("egg, away and asleep: the list is kept and the refusal is said, nothing is warned", () => {
-  for (const result of ["egg", "away", "asleep"]) {
+test("egg and asleep: the list is kept and the refusal is said, nothing is warned", () => {
+  for (const result of ["egg", "asleep"]) {
     const o = out({ result });
     assert.deepStrictEqual([o.kind, o.clear, o.settled, o.refusal, o.warn], ["refused", false, false, result, null]);
   }

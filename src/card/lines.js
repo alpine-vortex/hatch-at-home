@@ -12,7 +12,6 @@ const REFUSALS = {
   spoiled: "hehe, whining works",
   no_game: "let's start over",
   egg: "...",
-  away: "i'm at the sitter's!",
   not_sleepy: "not sleepy yet ♪",
 };
 

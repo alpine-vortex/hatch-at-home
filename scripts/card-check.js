@@ -427,7 +427,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, inject
       // Whatever the dev pet wants right now (a call, a blanket or fan request, sick, resting) adds
       // a "would like" row or a line to this 158 px box at 330: measure the controls with no want,
       // as the check means to, whatever the pet happens to be doing on the run.
-      if (key === "sensor.mood" && st && st.state !== "away") {
+      if (key === "sensor.mood" && st) {
         return { ...st, state: "content", attributes: { ...st.attributes, reason: "all good", reason_key: "content", flags: [], requests: [] } };
       }
       return st;
@@ -5031,8 +5031,8 @@ async function main() {
         JSON.stringify({ v5, stored: await stored() }));
       await quit();
 
-      // egg, away, asleep: the list is kept, the REFUSALS line is said, restart is off while unsettled (Q2).
-      for (const [result, line] of [["egg", "..."], ["away", "i'm at the sitter's!"], ["asleep", "shh... sleeping"]]) {
+      // egg, asleep: the list is kept, the REFUSALS line is said, restart is off while unsettled (Q2).
+      for (const [result, line] of [["egg", "..."], ["asleep", "shh... sleeping"]]) {
         const id = `settle-${result}`;
         await settleStub([{ result }]);
         await openBoard(await boardOf(id));
@@ -5295,7 +5295,7 @@ async function main() {
             slot(8, { cap: "quit", aria: "quit the probe", act: (card, s) => { sm.acts.push(8); card._modeExit(s, "quit"); } })],
           onExit: (card, s, reason) => sm.log.push(`${m.id}:${reason}`),
           ...over,
-          exit: { slot: 8, escape: true, status: "end", on: ["asleep", "away", "egg"], ...(over.exit || {}) },
+          exit: { slot: 8, escape: true, status: "end", on: ["asleep", "egg"], ...(over.exit || {}) },
         };
         return m;
       };
@@ -5469,7 +5469,7 @@ async function main() {
       return sm.row("asleep");
     });
     row("asleep (a push)", r);
-    for (const reason of ["away", "egg"]) {
+    for (const reason of ["egg"]) {
       r = await card.evaluate((el, reason) => {
         const sm = el.__sm;
         const s = sm.s();
@@ -5740,7 +5740,7 @@ async function main() {
         el._renderSlide(s);
         rows.push(sm.gone(s, "asleep (a push, no end call)", kind));
         rows.at(-1).ok = rows.at(-1).ok && !rows.at(-1).ended;
-        for (const reason of ["away", "egg"]) {
+        for (const reason of ["egg"]) {
           s = await sm.start(kind);
           s[reason] = true;
           el._modeGuard(s);
@@ -12266,11 +12266,10 @@ async function main() {
   await flagged("link", (el) => { el._slides[el._index].screen.classList.add("linking"); }, (el) => { el._slides[el._index].screen.classList.remove("linking"); });
   await flagged("power", (el) => { el._slides[el._index].power = { timers: [] }; }, (el) => { el._slides[el._index].power = null; });
   await flagged("boot", (el) => { el._slides[el._index].boot.hidden = false; }, (el) => { el._slides[el._index].boot.hidden = true; });
-  await flagged("away", (el) => { el._slides[el._index].away = true; }, (el) => { el._slides[el._index].away = false; });
   // An egg is patted now (UX fix 4, F2); a pet whose states are reloading is not.
   await flagged("reloading", (el) => { el._slides[el._index].reloading = true; }, (el) => { el._slides[el._index].reloading = false; });
-  check("the pat box is hidden in the status, a game, a question, a scene, a link, low battery, boot, away and while reloading",
-    Object.values(hiddenIn).length === 9 && Object.values(hiddenIn).every(Boolean), JSON.stringify(hiddenIn));
+  check("the pat box is hidden in the status, a game, a question, a scene, a link, low battery, boot and while reloading (the sitter is no reason, S2)",
+    Object.values(hiddenIn).length === 8 && Object.values(hiddenIn).every(Boolean), JSON.stringify(hiddenIn));
   check("the pat box is back after", (await patState()).shown);
   // A peeking neighbour: its box is hidden and its device inert, so a real tap there reaches
   // the slide (which brings it forward); even a pat sent to it says nothing.
@@ -12674,7 +12673,7 @@ async function main() {
       return out;
     });
     check(`react: ${stage} a won game's log reacts even if the game is still open`, won.live && won.src.includes(`/${stage}_${own("cheer")}_`), JSON.stringify(won));
-    for (const result of ["asleep", "egg", "away", "no_game"]) {
+    for (const result of ["asleep", "egg", "no_game"]) {
       const r = await react({ action: "play", result });
       check(`react: ${stage} ${result} does nothing`, !r.live && r.moves.length === 0, JSON.stringify(r));
     }
@@ -12754,12 +12753,12 @@ async function main() {
       check(`react: ${stage} an act's sprites are probed once while loading`,
         once.made === 2 && once.applied === 3 && once.ok === false, JSON.stringify(once));
     }
-    // Never while: a scene, a link, a game, the low-battery gag, asleep, away, egg.
+    // Never while: a scene, a link, a game, the low-battery gag, asleep, egg.
     for (const [name, patch] of [["scene", { scene: { kind: "feed", frames: [] } }], ["linking", { linking: true }],
-      ["game", { game: { cur: null } }], ["power", { power: {} }], ["asleep", { asleep: true }], ["away", { away: true }], ["egg", { egg: true }]]) {
+      ["game", { game: { cur: null } }], ["power", { power: {} }], ["asleep", { asleep: true }], ["egg", { egg: true }]]) {
       const r = await card.evaluate((el, patch) => {
         const s = el._slides[el._index];
-        const keep = { scene: s.scene, linking: s.linking, game: s.game, power: s.power, asleep: s.asleep, away: s.away, egg: s.egg };
+        const keep = { scene: s.scene, linking: s.linking, game: s.game, power: s.power, asleep: s.asleep, egg: s.egg };
         Object.assign(s, { poseUntil: 0 }, patch);
         s.pet.classList.remove("munch");
         el._reactFrames(s, "fed");
@@ -13085,7 +13084,6 @@ async function main() {
     const undo = [];
     const set = (obj, k, v) => { undo.push([obj, k, obj[k]]); obj[k] = v; };
     if (setup === "asleep") set(s, "asleep", true);
-    if (setup === "away") { set(s, "away", true); set(s, "moodState", "away"); }
     if (setup === "game") set(s, "game", { cur: null });
     if (setup === "scene") set(s, "scene", { kind: "clean" });
     if (setup === "linking") set(s, "linking", true);
@@ -13118,7 +13116,7 @@ async function main() {
     const r = await tick(null);
     check("visitors: not due, nothing starts and the day isn't used up", !r.started && !r.used, JSON.stringify(r));
   }
-  const skips = ["asleep", "away", "egg", "game", "scene", "linking", "link running", "calling", "power", "status open",
+  const skips = ["asleep", "egg", "game", "scene", "linking", "link running", "calling", "power", "status open",
     "a line queued", "before its first look", "in its first 10 s", "a link 1 min ago", "off-slide"];
   const bad = [];
   for (const setup of skips) {
@@ -13126,7 +13124,7 @@ async function main() {
     const r = await tick(setup);
     if (r.started || r.used) bad.push(`${setup}: ${JSON.stringify(r)}`);
   }
-  check("visitors: no visit when asleep, away, egg, in a game or scene, linking, calling, power, status open, queued, " +
+  check("visitors: no visit when asleep, egg, in a game or scene, linking, calling, power, status open, queued, " +
     "early or off-slide; the day's flag unused", bad.length === 0, bad.join(" | "));
   // UX8 F2: the pet faces a visitor coming from the left and holds the look through the greet; it
   // never turns away from one coming in on the right. UX8 F4: a played day visitor reports
@@ -14720,10 +14718,44 @@ async function main() {
       const s = el._slides[el._index];
       return { slides: el._slides.length, pet: !!s.pet.getAttribute("src"), shown: s.screen.isConnected };
     });
-    check("sitter S1 (B7): privacy on, a visiting pet shows napping; Feed goes out once, ends ok, and the card carries on",
+    check("sitter S1 (B7), S2 fallback: privacy on and no channel view, a visiting pet shows napping; Feed goes out once, ends ok, and the card carries on",
       sitterEnabled && sitterDone.calls === sitterCalls + 1 && !sitterDone.scene && sitterDone.els === 0 &&
       !/didn't work/.test(sitterDone.line) && sitterAlive.pet && sitterAlive.shown && errors.length === sitterErrors,
       JSON.stringify({ sitterEnabled, sitterDone, sitterAlive, errors: errors.slice(sitterErrors) }));
+    // Sitter S2 (plan sitter-visits 6.1, owner decision D1): the sensors are still masked (mood asleep, asleep on), but the
+    // channel's house.sitter reaches every card, a shared screen too. It draws the real mood (hungry, awake), the sitter and its
+    // label, never the old sign, with the buttons on; sitter: null takes it away. The channel handler alone redraws it.
+    const sitterView = { mood: "hungry", key: "hungry", reason: "i'm hungry", reason_key: "hungry", flags: ["away", "hungry"],
+      asleep: false, lights_out: false, last: null };
+    // One evaluate, so a real push of the house (sitter: null) cannot land between the injected view and the read.
+    // The shared-screen switch makes the card ask its channel again (a new snapshot): turn it on and let that settle first.
+    await card.evaluate((el) => localStorage.setItem("hatch-shared-screen", "on"));
+    await page.waitForTimeout(2500);
+    const sitterRun = await card.evaluate(async (el, view) => {
+      const s = el._slides[el._index];
+      const look = () => ({ mood: el._state(s, "sensor.mood")?.state, asleepEntity: el._state(s, "binary_sensor.asleep")?.state,
+        asleep: !!s.asleep, shown: !s.sitterEl.hidden, label: s.awaylabel.textContent, sign: s.awaysign.style.display !== "none",
+        feedOn: !s.buttons.feed.disabled, lightsOn: !s.buttons.lights.disabled, shared: localStorage.getItem("hatch-shared-screen") === "on" });
+      const push = (sitter) => {
+        // Read at once: a real push of the house (the shared screen's own snapshot) may land a few ms later and put sitter: null back.
+        el._channel(s, { house: { ...(s.house || {}), sitter } }, el._hass.user.id);
+        el._renderSlide(s); // the channel's own redraw (_redraw -> _update) is async: draw the slide now, as the card would
+        return look();
+      };
+      const before = look();
+      const inn = push(view);
+      const out = push(null);
+      return { before, inn, out };
+    }, sitterView);
+    await card.evaluate((el) => localStorage.setItem("hatch-shared-screen", "off"));
+    await page.waitForTimeout(1500);
+    const { before: sitterBefore, inn: sitterIn, out: sitterOut } = sitterRun;
+    check("sitter S2 (D1): a shared-screen card with privacy on shows the sitter and the real mood from the channel, no sign, care on; sitter: null takes it away",
+      sitterBefore.shared && !sitterBefore.shown &&
+      sitterIn.shared && sitterIn.mood === "hungry" && sitterIn.asleepEntity === "off" && !sitterIn.asleep && sitterIn.shown &&
+      sitterIn.label === "sitter's here" && !sitterIn.sign && sitterIn.feedOn && sitterIn.lightsOn &&
+      !sitterOut.shown && sitterOut.label === "",
+      JSON.stringify({ sitterBefore, sitterIn, sitterOut }));
     // No reply: it holds at the gate, gives up 2 s on, and a late reply plays the floor (pose, prop, line).
     await feedState(pet);
     await feedTap();

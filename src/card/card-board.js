@@ -68,7 +68,7 @@ const hopSettleOutcome = (reply, game) => {
       found: reply.found === true };
   }
   if (result === "board_changed") return { ...HOP_NOTHING, kind: "reload", clear: true, reload: true, tidy };
-  if (result === "egg" || result === "away" || result === "asleep") {
+  if (result === "egg" || result === "asleep") {
     return { ...HOP_NOTHING, kind: "refused", refusal: result, tidy };
   }
   const known = ["illegal", "not_won", "too_long", "thrown"].includes(result) ? result

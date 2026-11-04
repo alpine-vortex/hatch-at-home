@@ -44,27 +44,24 @@ test("every resting line has a baby variant", () => {
   }
 });
 
-test("the label shows for the resting flag only, up and home", () => {
+test("the label shows for the resting flag only, up and about", () => {
   assert.strictEqual(restLabel(["resting"]), REST_LABEL);
   assert.strictEqual(REST_LABEL, "resting ☁");
   assert.strictEqual(restLabel(["resting", "cozy"]), REST_LABEL);
   assert.strictEqual(restLabel([]), "");
-  assert.strictEqual(restLabel(["away"]), "");
-  assert.strictEqual(restLabel(["resting", "away"]), "");
-  assert.strictEqual(restLabel(["resting"], { away: true }), "");
+  assert.strictEqual(restLabel(["resting", "away"]), REST_LABEL, "the sitter's here: the resting label still shows (3.1)");
   assert.strictEqual(restLabel(["resting", "asleep"], { asleep: true }), "");
   assert.strictEqual(restLabel(["resting", "sick"]), "");
   assert.strictEqual(restLabel(["resting"], { egg: true }), "");
   assert.strictEqual(restLabel(undefined), "");
 });
 
-test("the label goes where the sitter's sign isn't", () => {
-  const branch = grab(/if \(away\) \{[\s\S]*?\n {4}\} else \{[\s\S]*?s\.frames = this\._petFrames/);
-  const [awayPart, homePart] = branch.split("} else {");
-  assert.match(awayPart, /awaysign, sp\.props\?\.away/);
-  assert.doesNotMatch(awayPart, /restLabel/);
-  assert.match(homePart, /this\._show\(s, s\.awaysign, null\)/);
-  assert.match(homePart, /restLabel\(flags/);
+test("the old sign is never drawn; the resting label wins over the sitter's own", () => {
+  const branch = grab(/this\._show\(s, s\.perch, sp\.perch\);[\s\S]*?s\.frames = this\._petFrames/);
+  assert.match(branch, /this\._show\(s, s\.awaysign, null\)/);
+  assert.doesNotMatch(branch, /props\?\.away/);
+  assert.match(branch, /restLabel\(flags, \{ asleep, egg: s\.egg \}\)/);
+  assert.match(branch, /rest \|\| \(sitter \? SITTER_LABEL : ""\)/);
 });
 
 test("the settings row: a switch at home, its state only on a shared screen", () => {

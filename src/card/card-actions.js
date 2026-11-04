@@ -120,7 +120,7 @@ class HatchPetCardActions extends HatchPetCardJournal {
     const mood = this._state(s, "sensor.mood");
     const stage = this._state(s, "sensor.life_stage")?.state;
     // Asleep or the lights out stops every scene but the lights' own: a wake is about exactly that.
-    if (!mood || mood.state === "away" || stage === "egg" || ((s.asleep || s.lightsOut) && kind !== "lights")) return;
+    if (!mood || stage === "egg" || ((s.asleep || s.lightsOut) && kind !== "lights")) return;
     if (!entry.due.call(this, s, mood, stage)) return; // read after _press ended any scene (plan 4.2)
     if (calm()) {
       s.sceneFade = { kind, until: Date.now() + 10000 }; // no scene: the news fades in
@@ -129,7 +129,7 @@ class HatchPetCardActions extends HatchPetCardJournal {
     }
     const held = {};
     for (const [key, id] of Object.entries(s.ids || {})) {
-      if (key !== "sensor.last_care" && key !== "device") held[key] = this._hass.states[id];
+      if (key !== "sensor.last_care" && key !== "device") held[key] = this._live(s, key);
     }
     // answerAt (ms since the tap) and result come with the answer (_sceneAnswer); a scene with a
     // gate holds there until then (_sceneClock).

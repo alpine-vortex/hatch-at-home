@@ -23,7 +23,7 @@ const ALLOWED = [
   ["card-build.js", "if (s.game) this._endGame(s, null);", "an exit site: _forget ends the last pet's game (3.5)"],
   ["card-build.js", "if (x.game && i !== to) this._quitGame(x, null);", "an exit site: a slide change quits the game (3.5)"],
   ["card-layout.js", "if (s.game?.picking) this._fitPicker(s);", "the picker's own fit (D2)"],
-  ["card-layout.js", "if (s.game && (asleep || away || egg)) this._endGame(s, null);", "an exit site: asleep, away, egg end a game (3.5)"],
+  ["card-layout.js", "if (s.game && (asleep || egg)) this._endGame(s, null);", "an exit site: asleep and egg end a game (3.5); the sitter does not (6.1)"],
   ["card-layout.js", "if (s.game?.prompt) this._write(s, s.game.prompt", "the game's prompt: it needs the game object"],
   ["card-layout.js", "if (open && s.game) this._quitGame(s, null);", "an exit site: the status sheet ends a game (D8)"],
   ["card-moment.js", "g.key === m.game", "a moment record's game key, not the slide"],

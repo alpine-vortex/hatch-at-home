@@ -80,8 +80,8 @@ test("the guard lift is for care: a child's visitor greet and a game's bored loo
   assert.strictEqual(b.s.poseUntil, 0);
 });
 
-test("the guard still holds off a scene, sleep, away, the egg, a link and a game", () => {
-  for (const flag of ["scene", "asleep", "away", "egg", "linking", "power", "game"]) {
+test("the guard still holds off a scene, sleep, the egg, a link and a game", () => {
+  for (const flag of ["scene", "asleep", "egg", "linking", "power", "game"]) {
     const { self, s } = card();
     s[flag] = flag === "scene" || flag === "game" ? {} : true;
     self._reactFrames(s, "fed");
@@ -107,10 +107,10 @@ test("a fan is leant into, a fair scold flinches, a game start perks: kinds in R
   assert.strictEqual(ctx.STAGE_POSES.aired, undefined);
 });
 
-test("unfair joins the reacting refusals; asleep, egg, away and no_game still do not; spoiled is a reaction", () => {
+test("unfair joins the reacting refusals; asleep, egg and no_game still do not; spoiled is a reaction", () => {
   const { ctx } = card();
   assert.ok(ctx.REACT_REFUSALS.has("unfair"));
-  for (const r of ["asleep", "egg", "away", "no_game", "spoiled"]) assert.ok(!ctx.REACT_REFUSALS.has(r), r);
+  for (const r of ["asleep", "egg", "no_game", "spoiled"]) assert.ok(!ctx.REACT_REFUSALS.has(r), r);
   assert.deepStrictEqual([...ctx.SPOILED_BY].sort(), ["play", "praise", "snack"]);
 });
 
@@ -183,7 +183,7 @@ test("the prop drops and leaves in steps; the star rises, the finger wags, the f
 
 test("the excited bounce is one greethop at the start, not a 10 s hop loop", () => {
   assert.doesNotMatch(src, /BOUNCE_MS/);
-  assert.match(src, /excitedNow && !calm\(\) && !asleep && !away && !s\.scene[^;]*this\._animate\(s, s\.pet, "greethop", 1400\)/);
+  assert.match(src, /excitedNow && !calm\(\) && !asleep && !s\.scene[^;]*this\._animate\(s, s\.pet, "greethop", 1400\)/);
 });
 
 test("lights on stretches the pet (no line); the play beat, meds sniff and clean hop are wired", () => {
@@ -472,8 +472,8 @@ test("feed's prediction: hunger under 95 (the server's >=), parsed; unavailable,
   assert.strictEqual(due("94.99"), true);
   assert.strictEqual(due("95"), false);
   for (const h of ["unavailable", "unknown", undefined, "NaN"]) assert.strictEqual(due(h), false, String(h));
-  // The shared guard (asleep, egg, away, lights out) runs before any due: today's _sceneStart line.
-  assert.match(method("_sceneStart"), /if \(!mood \|\| mood\.state === "away" \|\| stage === "egg" \|\| \(\(s\.asleep \|\| s\.lightsOut\) && kind !== "lights"\)\) return;\n.*entry\.due/);
+  // The shared guard (asleep, egg, lights out; the sitter is no reason, 6.1) runs before any due: today's _sceneStart line.
+  assert.match(method("_sceneStart"), /if \(!mood \|\| stage === "egg" \|\| \(\(s\.asleep \|\| s\.lightsOut\) && kind !== "lights"\)\) return;\n.*entry\.due/);
 });
 
 test("feed's variants: C (gobble) only under hunger 30, a pin wins, never the same twice in a row", () => {
@@ -975,7 +975,7 @@ function lightsCard({ calm = false, energy = "60", asleep = false, lights = fals
   };
   s.screen.classList = Object.assign(s.screen.classList, { contains: () => false });
   const self = Object.assign(Object.create(ctx.api), {
-    _hass: { states }, _state: (_s, k) => states[k],
+    _hass: { states }, _state: (_s, k) => states[k], _live: (_s, k) => states[k],
     _rimCue() {}, _tapped: (_b, _s, o) => log.tapped.push(o?.perk !== false), _careMarks() {},
     _call: () => { log.calls.push(1); return Promise.resolve(self.callResult ?? true); },
     _line: (_s, _c, text) => log.lines.push(text), _lines: (_s, _k, text) => ({ text }),
@@ -1205,7 +1205,7 @@ test("lights: _layout leaves the background, the settle and wasAsleep to the sce
   assert.match(m, /const lightsScene = s\.scene\?\.kind === "lights";\n\s+if \(lightsScene\) this\._lightsWatch\(s\);/);
   assert.match(m, /if \(!lightsScene\) \{\n\s+if \(asleep && s\.wasAsleep === false && !s\.egg && !calm\(\)\) this\._animate\(s, s\.pet, "settle", 2500\);\n\s+s\.wasAsleep = asleep;/);
   assert.match(m, /if \(!lightsScene\) this\._bgApply\(s, scene\);/);
-  assert.match(m, /if \(!lightsScene\) this\._drapeSync\(s, asleep && lightsOut && !away && !s\.egg\);/);
+  assert.match(m, /if \(!lightsScene\) this\._drapeSync\(s, asleep && lightsOut && !s\.egg\);/);
   // The scene keys as the layout did: dim wins, then night, then rain.
   const { self } = lightsCard();
   const sun = (state) => ({ "sun.sun": { state } });
