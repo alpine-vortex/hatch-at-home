@@ -565,36 +565,36 @@ Nothing here ships until the first mate approves it. Lines for Pip follow the ca
 (lowercase, short). All "draft".
 
 **Card**
-- Label by the sitter: "sitter's here" (draft, FM approves).
-- Arrival bubble: "the sitter's here!" / "hi, sitter!" (draft, FM approves).
-- After a round, fed: "yum! thank you, sitter" (draft, FM approves).
-- After a round, played: "that was fun!" (draft, FM approves).
-- After a round, cleaned: "all tidy!" (draft, FM approves).
-- After medicine: "i feel better" (draft, FM approves).
-- Leaving, to the sitter: "bye, sitter!" (draft, FM approves).
+- Label by the sitter: "sitter's here" (approved).
+- Arrival bubble: "the sitter's here!" / "hi, sitter!" (approved).
+- After a round, fed: "yum! thank you, sitter" (approved).
+- After a round, played: "that was fun!" (approved).
+- After a round, cleaned: "all tidy!" (approved).
+- After medicine: "i feel better" (approved).
+- Leaving, to the sitter: "bye, sitter!" (approved).
 - The return: the existing greeting.
 - Idle, night: none (the sitter dozes; Pip sleeps).
 - The away note: "while you were out, the sitter and I played!" / "while you were out, the
-  sitter fed me!" (draft, FM approves); the existing form otherwise.
+  sitter fed me!" (approved); the existing form otherwise.
 
 **Mood and Assist (privacy off)**
-- Mood reason: "the sitter's here" (draft, FM approves).
-- Assist, "how is Pip": "Pip is with the sitter" (draft, FM approves); `MOOD_WORDS["away"]` and
+- Mood reason: "the sitter's here" (approved).
+- Assist, "how is Pip": "Pip is with the sitter" (approved); `MOOD_WORDS["away"]` and
   the "is at the sitter's" line (`intent.py:36, :83`) change to match. With privacy on it stays
   "asleep" (5.1).
 
 **Settings (`strings.json`, `translations/en.json`, `docs/guide.md:620-622`)**
-- "Off to the sitter's after" becomes "The sitter comes after" (draft, FM approves); its text:
+- "Off to the sitter's after" becomes "The sitter comes after" (approved); its text:
   "With nobody home this long, a sitter looks after your pet. It still gets older and hungry,
-  and the sitter feeds it and tidies up at set times." (draft, FM approves)
+  and the sitter feeds it and tidies up at set times." (approved)
 - "Keep presence private": "On: sensors, Assist and the mood show your pet napping when nobody
   is home, and the pet never names anyone. The card still shows the sitter. For a wall tablet,
-  also turn on "shared screen" in the card's settings." (draft, FM approves)
+  also turn on "shared screen" in the card's settings." (approved)
 - "The sitter calms a fussy pet": text unchanged.
-- The `away` mood label (`strings.json:273`): "With the sitter" (draft, FM approves).
+- The `away` mood label (`strings.json:273`): "With the sitter" (approved).
 
 **The journal / guide**
-- Journal line: "The sitter looked after Pip." (draft, FM approves). A round's detail is not
+- Journal line: "The sitter looked after Pip." (approved). A round's detail is not
   journalled (the log has it).
 
 ## 10. Risks, and the questions left for the owner
@@ -633,6 +633,14 @@ its behaviour, so they are asked before it starts)
   "the sitter's here") so automations on `mood == away` still work, though Pip is not
   literally away. Alternative: it reports the real mood and `away` is only a flag, which breaks
   those automations.
+
+
+**Answered 2026-11-04** (owner Q-A, Q-C; first mate Q-B, Q-D as recommended, low risk):
+- Q-A: poop is **tidied the moment it happens** during a visit (owner).
+- Q-B: buttons and services **work during a visit** under privacy on; only Assist refuses (FM).
+- Q-C: aging **goes on** during any absence; the guide drops "frozen" (owner).
+- Q-D: the `mood` sensor **keeps the value `away`** with privacy off (FM).
+- Section 9 copy: **approved by the first mate** as drafted (D6). Workers ship those lines verbatim.
 
 ## 11. What the scout got wrong (checked against the code)
 
