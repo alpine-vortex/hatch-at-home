@@ -4981,10 +4981,16 @@ async function main() {
       await quit();
       await settleStub([okR()]);
       await openBoard(await boardOf("settle-other"));
+      // The bubble is read twice, 200 ms apart: settle it first (as the dead-tap check does), since
+      // the 700 ms tick rewrites an ended line with the mood's own, which is not the reply's doing.
+      await quietIdle(card);
+      await card.evaluate((el) => { el._slides[el._index].sayUntil = 0; });
+      await page.waitForTimeout(1600);
       const bubbleBefore = await cur().locator(".bubble").innerText();
       await card.evaluate((el) => { el.__release?.(); });
       await page.waitForTimeout(200);
       const other = await view();
+      await quietIdle(card, false);
       check("a settle reply for a board that is no longer on screen changes nothing there, and clears its own parked list",
         other.id === "settle-other" && other.moves === 0 && !other.done && !other.tidy && (await cur().locator(".bubble").innerText()) === bubbleBefore &&
           Object.keys(await stored()).every((k) => !k.includes("settle-late")), JSON.stringify({ other, bubbleBefore, stored: await stored() }));
