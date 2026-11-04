@@ -146,7 +146,7 @@ edits, art) and runs just the sections that use them, printing why. Add a neighb
 with `scripts/gate -- --only <list>` when a section needs one. If it picks `all`
 (server code), use `scripts/ci-gate`. A partial run writes no gate marker. The full
 gate is the first mate's, once per merged batch, through `scripts/ci-gate`; CI runs
-card-check as four parallel shards (`--shard k/4`), about 5-6 min. Login, the dashboard, stubs and the pet-finding prelude always
+card-check as five parallel shards (`--shard k/5`), about 5-6 min. Login, the dashboard, stubs and the pet-finding prelude always
 run, and `restart` puts dev's seeded bond and wish back. Sections lean on state their
 predecessors leave (the open sheet, the bond, the slide on show), so a lone section may
 need its neighbour in `--only`; `oldcard` pulls in `restart` by itself.

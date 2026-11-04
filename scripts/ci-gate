@@ -6,7 +6,8 @@
 #
 #   scripts/ci-gate          # gate HEAD's branch on GitHub (~5-6 min)
 #
-# A failed run prints the failing card-checks and the run's link.
+# A failed run prints the failing card-checks (and the NOTE lines beside them: a
+# flake's hint) and the run's link.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
@@ -40,7 +41,7 @@ done
 echo "ci-gate: run $ID on $BRANCH @$(git rev-parse --short "$SHA")"
 # Poll rather than `gh run watch`, which can return before the run ends. A
 # blank status (a failed API call) is not an answer: ask again.
-while [ "$(gh run view "$ID" --json status -q .status 2>/dev/null)" != completed ]; do sleep 30; done
+while [ "$(gh run view "$ID" --json status -q .status 2>/dev/null)" != completed ]; do sleep 10; done
 CONC=""
 for _ in $(seq 1 10); do
   CONC=$(gh run view "$ID" --json conclusion -q .conclusion 2>/dev/null)
@@ -53,11 +54,11 @@ if [ "$CONC" = success ]; then
   echo "ci-gate: PASS, marker written for tree $(git rev-parse --short "$TREE")"
   exit 0
 fi
-# The card jobs are "card (1/4)" and so on, one per shard.
+# The card jobs are "card (1/5)" and so on, one per shard.
 # (--log-failed comes back empty for long jobs; the job log endpoint doesn't.)
 for JOB in $(gh run view "$ID" --json jobs -q '.jobs[] | select((.name | startswith("card")) and .conclusion == "failure") | .databaseId'); do
   gh api "repos/{owner}/{repo}/actions/jobs/$JOB/logs" 2>/dev/null |
-    grep -E ' FAIL ' | sed -E 's/^[^ ]* //' | cut -c1-160 | head -20
+    grep -E ' (FAIL|NOTE: )' | sed -E 's/^[^ ]* //' | cut -c1-160 | head -30
 done
 echo "ci-gate: FAIL ($CONC), https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/actions/runs/$ID"
 exit 1
