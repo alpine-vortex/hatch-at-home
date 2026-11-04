@@ -14255,6 +14255,12 @@ async function main() {
           };
         }
         el.__linkTypes = new Map([[host, "mellow"], [guest, "sweet"]]);
+        // The window starts clean: no line of the idle's still held (the hello would wait for its
+        // sayUntil and the extra, queued 3.3 s behind it, miss the calm visit's 4.8 s), and the
+        // last run's extra gone from the live region (it would read as this run's).
+        for (const s of el._slides) Object.assign(s, { sayUntil: 0, queue: [] });
+        host.bubble.textContent = "";
+        host.live.textContent = "";
         const nm = (s) => { const d = el._hass.devices[s.ids.device]; return d.name_by_user || d.name; };
         const extra = `${nm(guest)}, we do cosy well ♥`;
         const real = Math.random;
@@ -14266,6 +14272,12 @@ async function main() {
           if (run === "swipe" && i === 10) el._go(1);
           if (run === "swipe" && i === 15) el._go(-1);
           await new Promise((r) => setTimeout(r, 100));
+          // The card's tick (700 ms) is what says a queued line, so the extra, queued 3.3 s behind
+          // the hello, lands anywhere in a 0.7 s phase of the calm visit's 4.8 s: a loaded runner
+          // pushed it past the end (run 41811794211: endMs 4708, never said). While the visit is on,
+          // the check does the tick's saying itself every 100 ms: the same call, the same rules
+          // (still(), sayUntil), only not waiting for the tick's phase. After the visit it does not.
+          if (el._link) el._sayQueued(host);
           const says = host.bubble.textContent.includes(extra);
           if (el._link) {
             seen.during ||= says;
@@ -14282,7 +14294,9 @@ async function main() {
       for (const run of ["visit", "calm", "swipe"]) {
         await prep();
         if (run === "calm") await lp.emulateMedia({ reducedMotion: "reduce" });
+        await quietIdle(card); // the idle starts no line or move in the window (it would hold the hello back)
         const k = await kindred(run);
+        await quietIdle(card, false);
         await lp.emulateMedia({ reducedMotion: null });
         if (run === "swipe") {
           check("kindred: a swipe away and back leaves no extra line said after the visit", !k.after && k.left === 0, JSON.stringify(k));
@@ -14749,13 +14763,26 @@ async function main() {
   // _goPersonal asks the channel again; dev's own view (mine, with the seeded gift) is
   // back when it answers, which on a slow runner after a restart takes more than the
   // checks below would wait. Wait for that answer (a dev with a bond has a mine).
-  await everyCard(async (els, e) => {
+  // On a loaded runner that answer has been seen not to come at all in 30 s (the personal ask
+  // sent right after the restart, no event on it: mine stayed null and both gift checks below read
+  // null). So the wait is for the gift itself, and if the first ask is still unanswered after 10 s
+  // the card is made to ask again (what its own retry does after an error), once, with a NOTE.
+  // The checks below are unchanged: a gift that never reaches mine still fails them.
+  const reasked = await everyCard(async (els, e) => {
+    const find = () => els[0]?._slides?.find((x) => x.ids?.["sensor.life_stage"] === e);
+    let again = false;
     for (let i = 0; i < 300; i++) {
-      const s = els[0]?._slides?.find((x) => x.ids?.["sensor.life_stage"] === e);
-      if (s?.subscribed && s.mine) return;
+      const s = find();
+      if (s?.subscribed && s.mine?.gift) return again;
+      if (i === 100 && !(s?.subscribed && s.mine)) {
+        again = true;
+        els.forEach((el) => el._slides.forEach((x) => el._subscribe(x, true)));
+      }
       await new Promise((r) => setTimeout(r, 100));
     }
+    return again;
   }, seedPet);
+  if (reasked) console.log("NOTE: gifts: the card's personal ask after the restart went unanswered for 10 s; asked again");
   await pinAwake(card, "gifts");
   // FINDS_SHOWN on (the default): with restart's basket waiting, the basket shows on the
   // slide on screen.
