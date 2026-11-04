@@ -300,7 +300,7 @@ async function reloadFor(p, sel, timeout = 60000) {
 // locked tiles, the live preview and every way out of it, saving and a reload, a
 // second pet, a shared screen, an older server and each error line. Every test ends
 // on the world's own shell and checks it.
-async function shellChecks({ page, context, check, cur, evaluate, inject, shot, after }) {
+async function shellChecks({ page, context, check, cur, evaluate, inject, injectUntil, shot, after }) {
   const card = page.locator("hatch-pet-card");
   // The pet on show: its name, stage, world and life stage sensor.
   const onShow = () => card.evaluate((el) => {
@@ -1874,7 +1874,7 @@ async function main() {
   }
   if (enter("shell")) {
   // 2b. The pet's shell picker.
-  await shellChecks({ page, context, check, cur, evaluate, inject, shot, after: {
+  await shellChecks({ page, context, check, cur, evaluate, inject, injectUntil, shot, after: {
     url: CLIENT,
     reload: async () => {
       await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
