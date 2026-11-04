@@ -11997,6 +11997,9 @@ async function main() {
     if (window.__patRandom) Math.random = window.__patRandom;
   });
   // Care reactions C, touch (plan 5.4): where the tap lands, the lean, the ladder, saturation.
+  // The idle stays quiet for the block: an idle look or wander-l between the taps puts `look` on, and a
+  // lean never starts over a look (CI shard 4 caught one in the 1.3 s wait).
+  await quietIdle(card);
   await patReset();
   const touch = async (fx, fy) => {
     const r = await cur().locator(".pat").boundingBox();
@@ -12073,6 +12076,7 @@ async function main() {
   check("touch: an asleep pet stirs on the third pat (the sleepy face, still asleep); an egg's third pat is a double rock",
     asleepEgg.stir.src.includes("sleepy") && asleepEgg.stir.asleep && asleepEgg.stir.until > 0 && asleepEgg.egg.join() === "rock,rock,rock2",
     JSON.stringify(asleepEgg));
+  await quietIdle(card, false); // the touch checks are done: idle runs again
   await patReset();
   // Motion ship 1 (CSS-first wins), on the awake pet. A wander left turns first: `look` goes on
   // with `wander-l` and both go off on the one timer; a wander right never turns. The call icon
@@ -13028,6 +13032,9 @@ async function main() {
   }, (V0.in || 1400) + 1300);
   check("visitors: a game starting mid-visit ends it, the picture removed, no line", !abort.on && !abort.inDom && !abort.said, JSON.stringify(abort));
   // Reduced motion: one still first frame at the edge, on screen, then the greet frame and line, no hop.
+  // The idle stays quiet from the prep to the tick: an idle move in the 150 ms wait (movingUntil, a pose,
+  // a line) left the pet not free, and no visitor came (CI shard 4).
+  await quietIdle(card);
   await vprep(V0);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.waitForTimeout(150);
@@ -13049,6 +13056,7 @@ async function main() {
     (still.drawn === "child" || /_(cheer|excited|wave)_1/.test(still.src)) && lines.some((l) => still.text.includes(l)), JSON.stringify(still));
   await page.emulateMedia({ reducedMotion: null });
   await page.waitForTimeout(150);
+  await quietIdle(card, false);
   // A baby (baby talk on for this viewer) says the BABY.visit babble.
   await vprep(V0);
   const babyKey = `hatch-baby-talk-${me}`;
