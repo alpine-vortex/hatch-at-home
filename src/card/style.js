@@ -443,7 +443,6 @@ const STYLE = `
   .game button[aria-disabled="true"] { opacity: .5; cursor: default; }
   .game button:focus-visible { outline: 3px solid #fffdf5; outline-offset: 2px;
     box-shadow: 0 0 0 6px #1d2a22; }
-  .game .gx { right: 4%; top: 6%; min-width: 44px; min-height: 44px; font: inherit; font-size: 14px; }
   .game .gpick { position: absolute; inset: 22% 0 0; display: flex; flex-direction: column; gap: 8px;
     align-items: center; justify-content: center; }
   .game .gpick[hidden], .game .gnum[hidden] { display: none; }
@@ -491,8 +490,8 @@ const STYLE = `
   .game .ghop.tight { padding: 0 6px; font-size: 11px; white-space: nowrap; }
   .game .ghop.snug { min-height: 36px; line-height: 1.05; white-space: normal; }
   .game .ghop:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
-  /* The board: the grid on the left, the keys on the right (2 x 4; the close button is the eighth).
-     Sizes are set in JS (_hopLayout) from the overlay: --hk the key, --c the cell. No new art:
+  /* The board: the grid, centred in the whole overlay (the keys are the shell's eight buttons).
+     Sizes are set in JS (_hopLayout) from the overlay: --c the cell. No new art:
      the cells are CSS. The real pet stays under the board, still, and the piece wears its frame. */
   .game .hopb[hidden] { display: none; }
   .game .hgrid { position: absolute; display: grid; grid-auto-rows: var(--c); outline: none;
@@ -542,13 +541,6 @@ const STYLE = `
   .game .hpath path { fill: none; stroke: #3a2a1a; stroke-width: 2; stroke-dasharray: 2 4; stroke-linecap: round; }
   .game .hpiece { position: absolute; left: 0; top: 0; z-index: 2; image-rendering: pixelated;
     pointer-events: none; object-fit: contain; transition: translate .14s ease-out; }
-  .game .hkeys { position: absolute; display: grid; grid-template-columns: repeat(2, var(--hk));
-    grid-auto-rows: var(--hk); gap: 3px; pointer-events: none; }
-  .game .hk { position: static; min-width: 0; min-height: 0; width: var(--hk); height: var(--hk);
-    font: inherit; font-size: calc(var(--hk) * .42); line-height: 1; }
-  .game .hk.on { background: #3a2a1a; color: #fffdf5; }
-  .game.hop .gx { top: auto; right: var(--hr); bottom: var(--hb); width: var(--hk); height: var(--hk);
-    min-width: 0; min-height: 0; font-size: calc(var(--hk) * .42); }
   .screen:has(> .game.hop:not([hidden])) :is(.pet, .ghost, .drape, .perch, .attention) { visibility: hidden; }
   .screen:has(> .game.hop:not(.end):not([hidden])) .bubble { display: none; }
   /* Trait flair: placed in JS from the head point and the feet line. Every piece

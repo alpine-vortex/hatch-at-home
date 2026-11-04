@@ -168,7 +168,6 @@ class HatchPetCardBuild extends HatchPetCardBase {
               <img class="gprop" alt="" hidden>
               <span class="gnum" aria-live="polite" hidden></span>
               <span class="gscore" aria-live="polite"></span>
-              <button class="gx" aria-label="Stop the game">✕</button>
             </div>
             <div class="status" tabindex="-1"></div>
             <i class="batt" data-level="1" aria-hidden="true" hidden><b></b><b></b><b></b></i>
@@ -300,10 +299,6 @@ class HatchPetCardBuild extends HatchPetCardBase {
       this._toggleStatus(s);
       this._card.querySelector(".statusbtn")?.focus({ preventScroll: true });
     });
-    q(".gx").addEventListener("click", (e) => {
-      this._tapped(e.currentTarget, s);
-      this._quitGame(s, this._quitLine(s));
-    });
     q(".gpick").addEventListener("click", (e) => {
       const b = e.target.closest("button[data-game]");
       if (b) {
@@ -347,6 +342,12 @@ class HatchPetCardBuild extends HatchPetCardBase {
     s.screen.addEventListener("click", () => {
       // A game on show keeps its screen: a stray tap must not end it unseen (the
       // Status button still does, on purpose).
+      // The picker has no close button (shell modes slice 3): a tap on the screen outside its list closes it.
+      // A swipe is not a tap. A game that has started keeps its screen.
+      if (s.game?.picking) {
+        if (!this._swiped) this._endGame(s, null);
+        return;
+      }
       if (this._owned(s)) return;
       // A tap on a visit in progress is a pat on the host, not the Status button: it
       // would end the hello (UX8 F1).

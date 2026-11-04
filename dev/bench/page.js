@@ -796,11 +796,21 @@
     const info = { box: [Math.round(box.width * 10) / 10, Math.round(box.height * 10) / 10] };
     if (s.game?.kind === "hop") {
       info.cell = s.game.cell;
-      info.key = Math.round(s.gameBox.querySelector(".hk").getBoundingClientRect().width * 10) / 10;
+      // Shell modes slice 3: the keys are the shell's eight buttons (the `hop` mode), the board takes the whole
+      // overlay (`box`): the grid's margins, whether it is centred, and whether any cell is clipped by it.
+      const toys = card._modeButtons(s);
+      info.key = Math.round(toys[0].getBoundingClientRect().width * 10) / 10;
       info.oneTap = s.game.cell >= 44;
       info.grid = rel(r(s.gameBox.querySelector(".hgrid")));
-      info.keys = rel(r(s.gameBox.querySelector(".hkeys")));
-      info.close = rel(r(s.gameBox.querySelector(".gx")));
+      const gr = r(s.gameBox.querySelector(".hgrid"));
+      const margins = [gr.left - box.left, gr.top - box.top, box.right - gr.right, box.bottom - gr.bottom];
+      info.margins = margins.map((n) => Math.round(n * 10) / 10);
+      info.centred = Math.abs(margins[0] - margins[2]) <= 1 && Math.abs(margins[1] - margins[3]) <= 1;
+      info.clipped = [...s.gameBox.querySelectorAll(".hc")].some((c) => {
+        const q = c.getBoundingClientRect();
+        return q.left < box.left - 0.5 || q.top < box.top - 0.5 || q.right > box.right + 0.5 || q.bottom > box.bottom + 0.5;
+      });
+      info.mode = s.mode?.id || null;
       info.moves = s.game.moves.length;
       info.uses = s.game.st.uses;
       info.done = s.game.done;
@@ -809,10 +819,10 @@
       info.labels = [...s.gameBox.querySelectorAll('.hc[role="img"]')].map((c) => [Number(c.dataset.i), c.getAttribute("aria-label")]);
       if (s.game.st.parity !== undefined) info.parity = s.game.st.parity;
       if (s.game.st.half !== undefined) info.half = s.game.st.half;
-      info.keyState = Object.fromEntries([...s.gameBox.querySelectorAll(".hk")].map((k) => [k.dataset.k,
-        `${k.getAttribute("aria-disabled") === "true" ? "off" : "on"}: ${k.getAttribute("aria-label")}`]));
+      info.keyState = Object.fromEntries(["left", "up", "down", "right", "special", "undo", "restart", "quit"].map((name, i) => [name,
+        `${toys[i].getAttribute("aria-disabled") === "true" ? "off" : "on"}: ${toys[i].getAttribute("aria-label")}` +
+        ` [${toys[i].children[1].textContent}${toys[i].getAttribute("aria-pressed") === "true" ? " pressed" : ""}]`]));
     } else {
-      const gx = r(s.gameBox.querySelector(".gx"));
       const bubble = r(s.bubble);
       const row = r(s.gameBox.querySelector(".ghop"));
       const games = [...s.gameBox.querySelectorAll(".gpick button")].map(r);
@@ -821,9 +831,9 @@
       info.rowClass = row ? s.gameBox.querySelector(".ghop").className : null;
       info.pick = s.gameBox.querySelector(".gpick").className;
       info.overlaps = [];
-      const all = [["close", gx], ["prompt", bubble], ["row", row], ...games.map((g, i) => [`game${i}`, g])];
+      const all = [["prompt", bubble], ["row", row], ...games.map((g, i) => [`game${i}`, g])];
       for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
-        if (all[i][0] === "row" || all[j][0] === "row" || all[i][0] === "close" || all[i][0] === "prompt") {
+        if (all[i][0] === "row" || all[j][0] === "row" || all[i][0] === "prompt") {
           if (hit(all[i][1], all[j][1])) info.overlaps.push(`${all[i][0]}+${all[j][0]}`);
         }
       }
