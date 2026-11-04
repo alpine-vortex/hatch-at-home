@@ -2,14 +2,60 @@
 
 **Date:** 2026-11-04
 **Status:** Plan only, revised 2026-11-04 after the adversarial review (s2878, findings P1-P22,
-folded in here and cited as "review P#"). No code in this document's commit. Four slices, none
-started.
-**Basis:** `5e7616c0` (`fm-hop-exp`). Every "built" claim carries a file and line from that
-tree; recheck when a slice starts (the card parts move often).
+folded in here and cited as "review P#"). Four slices; **slice 1 (the engine) is built and on
+main** (`a698d6d7`), slices 2-4 are not started.
+**Basis:** `5e7616c0` (`fm-hop-exp`) for sections 2 and 4 (the "as it was" tree). Where a ref in
+sections 3.5-3.6 and 6 names a line that slice 1 moved, it has been re-pointed to main
+(`a75f00e1`, 2026-11-04); recheck when a slice starts (the card parts move often).
 **Owner decisions** D1-D6 are in section 1. D7-D10 (the owner's answers to the review's four
 questions, 2026-11-04) are cited where they bite, listed in section 10 and in the section 1 table.
 **Source:** the s2875 design study (`report.md` and two mocks, `today-330.png` and
 `proposed-330.png`, archived with that worker). Its five questions are answered in section 1.
+
+## Reconcile after slice 1 (s2886, 2026-11-04)
+
+Slice 1 shipped as built (report: s2880, `report.md` in the archive; merged `a698d6d7`, with
+the shard 4 fix). The engine is `src/card/shell-modes.js` (data, schema `shellCheck`,
+`shellIcon`, `shellText`, `shellFreeze`), `src/card/card-mode.js` (`HatchPetCardMode`:
+`_modeEnter/_modeExit/_modeSync/_modeClick/_modeGuard/_modeEscape`, `_paintCaps`), `_owned` in
+`card-base`, and `tests/js/shell_modes.test.js`, `owned_reads.test.js`. `SHELL_MODES` is empty.
+What changed in this document:
+
+- **Wrong claim fixed: the 44 px touch target (3.6, slice 1 acceptance 10, R3).** The `.toy` is
+  **39.5 px wide at card width 284 and 43.02 px at 300** (49.61 at 330, 59.3 at 420; grid
+  `repeat(4, minmax(0,1fr))`, 6 px gap), so "at least 44 px" and "beats Hop's keys" do not hold at
+  the two narrow widths. Slice 1 changed no layout (R3, goldens) and the engine still ships. What
+  slice 2 does about it is **question Q-A** below; until answered, slice 2 builds on the
+  measured widths and changes no layout.
+- **Caption fit:** "special 2" clips at 284 and 300 everywhere, and at 330 on the `pad` mould;
+  slice 3 uses the fallback "✦2" (3.6, section 9). Keep every caption at or under about 40 px at
+  284 (`mode-pass-widths.json` has `column` and `captionW`).
+- **Acceptance 11 names `--preset finishes`**, not only `shells` (`shells` has no see-through
+  finish).
+- **Slice 2 was missing `.gl`/`.gr` sites** (focus calls, the tap feedback, the `showgo` fade,
+  the click listeners, the CSS), and had the lit "go" fade backwards. Corrected in slice 2.
+- **Line refs re-pointed** in 3.5, 3.6 and slices 2-3 (the engine moved Escape to the device and
+  added the sibling `_modeExit` calls); the idle row now says what `_modeGuard` reads.
+- **Shard 4 lesson (a new rule, section 6):** a card-check step that taps or reads the pet
+  over a second or two must hold the card's idle still with `quietIdle(card)` (card-check.js:167)
+  when a section shifts. Two CI failures that got slice 1 reverted were idle moves landing in a
+  check's wait (touch: an idle `look` between two head taps; visitors: a move in the 150 ms
+  between `vprep` and `__vtick`), on a slow runner. The fix was `quietIdle` round those steps,
+  no assertion edited. Slices 2 and 3 move sections around and add steps: use it.
+
+**Open for the FM (neither is the owner's unless the FM says so):**
+
+**Answered 2026-11-04 (FM, as recommended):** Q-A: **accept** 39.5/43 px at 284/300; no layout change. Q-B: captions **"left"** and **"right"**, approved copy.
+
+- **Q-A, touch at 284 and 300.** Accept 39.5/43 px (drop the 44 px claim; the shell's round
+  buttons are the same targets players use for care today) or have slice 2 (or a slice 1b) widen
+  the grid at narrow widths (a layout and golden change, R3)? Recommendation: accept; Hop's
+  keys today are 32 px at 300 and 38 at 330, so the swap is still larger than they were, and the
+  care buttons already live at this size.
+- **Q-B, left_right's captions.** Section 9 gave its two slots "no caption", but the schema test
+  (`shell_modes.test.js` `entryProblems`) and acceptance 1 need non-empty, unique resolved
+  captions. Recommendation: caption them "left" and "right" (in the voice of "lo"/"hi", "keep"/
+  "dig"). That is new player copy, so it needs FM approval before slice 2 ships it.
 
 The goal: the eight round buttons on the shell stop being "care only". A **shell mode** swaps
 all eight (icon, caption, label, action, enabled rule) for the length of the mode, and the
@@ -30,7 +76,7 @@ All six are the owner's, 2026-11-04. Cite them as "owner decision D#".
 | D5 | **Existing icons and glyphs first, pixel icons later; one game tint colour.** The first slices ship the current SVG icons and glyphs (`icon("prev")` etc., `prefs.js:17-20`; the "✦ ↶ ↻ ✕" the mock used). The pixel icons follow in slice 4. The tint is one colour for every game, not the world's accent. |
 | D6 | **The engine is a general shell mode.** The owner: "We may use this for other modes and features in the future outside of games, so keep that in mind during design." So a mode is a table entry (8 slots, a tint, an exit rule) with its own enter and exit; games call them. Nothing in slice 1 may assume a game. |
 | D7 | **Hop idles out after 3 minutes**, like the server games; the care buttons come back on its quit, so a forgotten board can't lock the shell. (Owner 2026-11-04, review Q1.) |
-| D8 | **Opening the status sheet keeps ending a game** (`card-layout.js:785`, as built). A non-game mode chooses per mode (`exit.status`). (Owner 2026-11-04, review Q2.) |
+| D8 | **Opening the status sheet keeps ending a game** (`card-layout.js:786`, as built). A non-game mode chooses per mode (`exit.status`). (Owner 2026-11-04, review Q2.) |
 | D9 | **Hop's future hint goes on the board** (a tap on the nest or a long-press), never a ninth key; the 8 slots stay. (Owner 2026-11-04, review Q3.) |
 | D10 | **An integration reload (`s.reloading`) ends the mode.** Modes are not saved across a reload. (Owner 2026-11-04, review Q4.) |
 | FM | Server games enter the mode at `_gameView` (before the server answers) and accept a one-beat swap-and-restore on a refusal (review P11). First mate, 2026-11-04. |
@@ -204,8 +250,11 @@ Rules the engine keeps:
   (feed's curve on slot 1), and `_modeClick` calls no `_rimCue`, so no rim class lands.
   `tests/js/cap_press.test.js` is extended to say so.
 - The pet-side feedback stays where it is: the score, the number, `.gnum`, the bubble and
-  the prompt. Only the inputs move. A 2-input game's lit "go" fade (`style.js:431`) becomes
-  "the live slots are lit, the rest are dimmed".
+  the prompt. Only the inputs move. A 2-input game's "go" fade (`.game.showgo .gl, .gr {
+  opacity: .15 }`, `style.js:431`, set at `card-games.js:412`) exists so the pet shows from under
+  the two on-screen buttons; once the inputs are on the shell nothing covers the pet, so
+  `showgo` goes with `.gl`/`.gr` (slice 2). The slots are already dimmed while the guess is out,
+  by the blocked state (`g.busy`, `.toy[aria-disabled="true"]`, `style.js:1728`, opacity .6).
 
 ### 3.4 The mapping (4x2 grid, slots 1-4 top, 5-8 bottom)
 
@@ -238,22 +287,22 @@ the engine adds. Reasons in **bold** are always on for every mode; the others ar
 
 | call site | way out | game (as built, stays) | mode (new) |
 |---|---|---|---|
-| `card-build.js:269-271` | Escape | `_quitGame(s, _quitLine)` | moves to the device (below); runs `exit.slot`'s act |
-| `card-build.js:302` | the `.gx` click | `_quitGame` | unchanged until slice 3 removes `.gx` |
+| `card-build.js:273-277` | Escape | `_quitGame(s, _quitLine(s))` (`:276`) | **built (slice 1):** on `.device`, `_modeEscape` runs `exit.slot`'s act (below) |
+| `card-build.js:306-308` | the `.gx` click | `_quitGame` | unchanged until slice 3 removes `.gx` |
 | quit slot (new) | slot 8 | n/a | `exit.slot`'s act: `_quitGame` for a game, `_modeExit(s,"quit")` otherwise |
-| `card-build.js:940` (`_go`) | **slide change**, a swipe, an arrow or a dot (`x.game && i !== to`) | `_quitGame(x, null)` | `_modeExit(x, "slide")` beside it |
-| `card-build.js:752` (`_forget`) | **the slide now shows another pet** | `_endGame(s, null)` | `_modeExit(s, "forget")` beside it |
-| `card-base.js:186` | **card teardown (disconnect)** | `_endGame(s, null)` | `_modeExit(s, "teardown")` beside it |
-| `card-layout.js:515-519` (`s.reloading`) | **integration reload** (owner decision D10) | none today: the screen fades and the game stays | `_modeExit(s, "reload")` before the loop that disables the eight; a game's `onExit` ends the game (a game-side change, slice 2) |
-| `card-layout.js:681` | asleep, away, egg | `_endGame(s, null)` | `_modeGuard` reasons `asleep`/`away`/`egg`, if listed in `exit.on` (games list all three) |
-| `card-layout.js:682-686` | idle | the three server games: `lastAt` and `!busy` (`GAME_IDLE_MS`, 3 min) | `_modeGuard`: `exit.idleMs` with `idleAt(s)` (default `s.modeAt`) and `idleHold(s)` (default false). Hop gets 3 min (owner decision D7): `idleAt` is its last accepted press, `idleHold` is `g.busy`, a settle in flight and `hopLoading`; the exit is the quit path, so the board parks as it does on a quit. Slice 3 sets `lastAt` on every Hop input. |
-| `card-layout.js:785` (`_toggleStatus`) | the status sheet opening | `_quitGame(s, null)` (D8: this stays) | `exit.status`: `"end"` (the games, `_modeExit(s,"status")`) or `"keep"` (the mode stays, and a press on a swapped cap closes the sheet first). A non-game mode picks per mode in its table entry (D8). |
+| `card-build.js:951` (`_go`) | **slide change**, a swipe, an arrow or a dot (`x.game && i !== to`) | `_quitGame(x, null)` | **built:** `_modeExit(x, "slide")` beside it (`:952`) |
+| `card-build.js:762` (`_forget`) | **the slide now shows another pet** | `_endGame(s, null)` | **built:** `_modeExit(s, "forget")` beside it (`:763`) |
+| `card-base.js:193` | **card teardown (disconnect)** | `_endGame(s, null)` | **built:** `_modeExit(s, "teardown")` beside it (`:194`) |
+| `card-layout.js:515-518` (`s.reloading`) | **integration reload** (owner decision D10) | none today: the screen fades and the game stays | **built:** `_modeExit(s, "reload")` (`:518`) before the loop that disables the eight; a game's `onExit` ends the game (a game-side change, slice 2) |
+| `card-layout.js:683` | asleep, away, egg | `_endGame(s, null)` | **built:** `_modeGuard` reasons `asleep`/`away`/`egg`, if listed in `exit.on` (games list all three); `_modeGuard` is called at `card-layout.js:732` and `card-tick.js:32` |
+| `card-layout.js:684-687` | idle | the three server games: `lastAt` and `!busy` (`GAME_IDLE_MS`, 3 min); the dig's idle line is `GAME_COPY.idle` | **built:** `_modeGuard`: `exit.idleMs` with `idleAt(s)` (default `s.modeAt`; a falsy `idleAt` never idles, as an unset `lastAt` today) and `idleHold(s)` (default false); slice 2 moves the block (the dig's idle line moves to its `onExit`, which gets reason `"idle"`). Hop gets 3 min (owner decision D7): `idleAt` is its last accepted press, `idleHold` is `g.busy`, a settle in flight and `hopLoading`; the exit is the quit path, so the board parks as it does on a quit. Slice 3 sets `lastAt` on every Hop input. |
+| `card-layout.js:786-788` (`_toggleStatus`) | the status sheet opening | `_quitGame(s, null)` (`:786`, D8: this stays) | **built (`:788`):** `exit.status`: `"end"` (the games, `_modeExit(s,"status")`) or `"keep"` (the mode stays, and a press on a swapped cap closes the sheet first). A non-game mode picks per mode in its table entry (D8). |
 | `card-games.js:426, :583` | game over (win, loss) | `_endGame` after the result | `_endGame` calls `_modeExit(s,"game")` |
 | `card-games.js:365, :400, :543`; `card-board.js:180/185/193` | a refusal, someone else playing, a reply that cannot be played | `_endGame(s, line)` | the same. The server games enter at `_pickGame`, before the answer, so a refusal swaps the shell and restores it within a few frames: accepted (review P11), and slice 2 proves the restore. Hop enters at `_hopStart`, after the answer, so Hop's open failures never swap. |
 | `card-games.js:8` (`_startGame`) | Play pressed during the picker | `_quitGame` and a new picker | only reachable with no mode on: with D1 the Play cap is swapped during a game. No mode exit. |
 | `_modeEnter` | another mode | n/a | replaced (3.2) |
 
-Escape (review P5): the handler moves from `s.gameBox` (`card-build.js:269-271`) to the device
+Escape (review P5, **built in slice 1**): the handler moved from `s.gameBox` (it was `card-build.js:269-271`) to the device
 element (`.device`, which holds `.game` and `.buttons` in the template at `card-build.js:133`),
 bound once at build in slice 1, because focus sits on a swapped cap (outside `.game`) after the
 enter. It acts when `s.mode?.exit.escape` or `s.game` (the picker, as today) and the status
@@ -271,14 +320,19 @@ Escape. The `gameBox` listener goes in the same slice so Escape never fires twic
   natively. Hop reuses today's labels (`HOP_COPY`, the bench's `keyState`).
 - **Focus.** The focus is on the pressed Play cap (slot 3) at enter. It moves to the first
   live slot (slot 1), as `_hopRefocus` does (which tests the slot instead of `.hk` from slice
-  3), and goes back to `from` at exit (replacing `_endGame`'s `s.buttons.play?.focus`,
-  `card-flair.js:208`; rule in 3.2).
-- **Touch.** The `.toy` hit area is measured, not assumed (review P16): slice 1 records the
-  `.toy` rect and the longest caption's fit at the bench's card widths 284, 300, 330 and 420.
-  The claim "wider than 44 px, beats Hop's keys today (32 px at 300, 38 px at 330)" stays only
-  if that measurement holds; the 284 px narrow card is checked first. Captions are one word,
-  except Hop's special, which carries its count: its caption is whatever fits the measured
-  width (a glyph and the count, "✦2", if "special 2" clips).
+  3), and goes back to `from` at exit (`_modeExit`'s rule, 3.2; `_endGame`'s own `s.buttons.play?.focus`,
+  `card-flair.js:207`, only fires when focus was inside `.game`, so it is a no-op once the inputs
+  are on the shell; slice 2 removes it).
+- **Touch (measured in slice 1, review P16; the 44 px claim did not hold).** The `.toy` is
+  **39.5 px wide at card width 284, 43.02 at 300, 49.61 at 330 and 59.3 at 420** (woodland
+  default mould, every dpr and big text; over the presets 330 is 44.94-55 and 420 is
+  56.98-69). So the buttons are under 44 px at the two narrow widths, and above it from 330.
+  They are still wider than Hop's keys today (32 px at 300, 38 px at 330) at 300 and up, and
+  the same size as the care buttons players already press. What to do at 284/300 is **Q-A**
+  (top of this document); slice 2 changes no layout until it is answered. Captions are one
+  line, clipped rather than wrapped, each at or under about 40 px at 284. Hop's special
+  carries its count and **"special 2" clips at 284 and 300 everywhere and at 330 on the `pad`
+  mould**, so slice 3 uses the glyph and the count, "✦2" (it fits at 420).
 - **Keyboard.** Today only Tab and Escape work (no arrow handler on the board). Escape works
   from the moment the handler is on the device (slice 1), including with focus on a swapped
   cap. Slice 4 adds a mode-level `keys` map (arrows and WASD are Hop's directions, `Z` is
@@ -310,7 +364,8 @@ _owned(s)  =  !!s.game  ||  !!(s.mode && s.mode.owns !== false)      // card-bas
   their basket, the first look and the follow-ups, the link, power-on and low-battery turns,
   care scenes, `_reactFrames` outside a game. The care request chip is not one of the eight and
   not in the swap; slice 1 checks its CSS state while a mode is on and lists what it finds.
-- A node test (`tests/js/owned_reads.test.js`) reads the joined text: every `s.game` read
+- **As built (slice 1):** 32 reads became `_owned(s)`, and 18 stay `s.game`, each on the allow-list
+with its reason (the list, not "about 40", is the count to trust). A node test (`tests/js/owned_reads.test.js`) reads the joined text: every `s.game` read
   outside `card-games`, `card-board` and `card-flair` is on an allow-list in the test (file,
   snippet, reason), and the count of `_owned(` calls is at least the number of replaced reads.
   A new `s.game` read fails with "use `_owned(s)` or list it with a reason".
@@ -382,7 +437,19 @@ the first mate gates the merged batch with it. Each slice that adds a part adds 
 `src/card/manifest.txt` and to the part table in AGENTS.md, and runs card-check once for the TDZ
 order (`node --check` sees syntax only).
 
-### Slice 1: the mode engine (no game changes)
+**Card-check timing rule (the shard 4 lesson).** Slice 1's first merge was reverted when CI's
+shard 4 failed on a slow runner: idle moves (`look`, `wander`) landed in a check's wait, between
+two head taps in `touch` and between `vprep` and `__vtick` in the visitors' reduced-motion step.
+The fix was `quietIdle(card)` before the step and `quietIdle(card, false)` after
+(`scripts/card-check.js:167`; no assertion edited). Slices 2-4 re-point and add sections, so a
+touch, visitor or timed-read step that a slice moves or adds is wrapped the same way, and the
+same flake is likely on any section whose steps wait a second or two on a pet that can move.
+A local pass does not prove it (the runner was 3-4x slower than a green one); wrapping is cheap.
+
+### Slice 1: the mode engine (no game changes) - BUILT, merged `a698d6d7`
+
+As written before the build; the as-built differences are in "Reconcile after slice 1" at the top
+(acceptance 10 and 11 are corrected below, the rest held).
 
 New parts: `shell-modes` (the data; after `ui-copy`) and `card-mode` (the five methods and
 `_paintCaps`; after `card-actions`, before `card-care`). `_owned` goes in `card-base`. The final
@@ -438,31 +505,73 @@ Acceptance:
    same id sends no `onExit` and no second announcement.
 8. A second slide keeps its care caps while the first is in a mode.
 9. Under emulated reduced motion, no rebound class is set on enter or exit.
-10. Bench (`--mode probe`, widths 284, 300, 330, 420): each `.toy` rect is at least 44 px wide
-    and the longest caption fits its column (`scrollWidth <= clientWidth`) at every width;
-    `.cap` and `.toy` rects are equal before, during and after the mode (R3); both written to
-    the json the bench already makes.
-11. Bench `--preset shells --mode probe`: for every finish in the preset, including the five
-    see-through ones, the computed `background-color` of all 8 caps equals the tint (a numeric
+10. Bench (`--mode probe`, widths 284, 300, 330, 420): the `.toy` width and the longest
+    caption's fit (`scrollWidth <= clientWidth`) are recorded at every width, and the captions
+    fit; `.cap` and `.toy` rects are equal before, during and after the mode (R3); written to
+    the json the bench already makes (`mode-pass.json`). **As built: the plan's "each `.toy` is
+    at least 44 px" is dropped; it is 39.5 px at 284 and 43.02 at 300 (3.6, Q-A).**
+11. Bench `--preset shells --mode probe` and `--preset finishes --mode probe` (`shells` has no
+    see-through finish): for every finish, including the five see-through ones, the computed `background-color` of all 8 caps equals the tint (a numeric
     read, not a look), and `--cap-tones` is unchanged.
 12. With the probe off, every existing card-check section passes with no assertion edited
     (slice 1 changes no game behaviour; the game's reload and Hop's idle land in slices 2 and 3).
 
 ### Slice 2: the three server games on the shell
 
-`left_right`, `higher_lower` and `dig` get table entries (3.4). `.gl` and `.gr` leave the
-overlay; `.game` keeps `.gscore`, `.gnum`, the prompt and (for now) `.gx`. `_pickGame` calls
-`_modeEnter` from `_gameView`, with every slot but quit blocked while `g.busy`. The nine
-`.gl/.gr` `aria-disabled` writes (`card-games.js:243/266/274/386/432/506-507/528/552`,
-`card-flair.js:209`) become `g.busy` flips and `_modeSync` calls (review P11); the keep slot
-keeps its empty-basket rule (`card-games.js:506`). `_update`'s idle block (`card-layout.js:
-681-686`) moves into `_modeGuard`, reading `lastAt` as today. The reload branch ends a game
-(D10). The glyphs and SVG icons ship (D5). The lit "go" fade becomes the live/dimmed slots.
+`left_right`, `higher_lower` and `dig` get table entries in `SHELL_MODES` (3.4; they are empty
+today, and the node test's "slice 1 ships the engine only" assertion on `Object.keys(SHELL_MODES)`
+changes with it). Each entry: `tint: "game"`, `exit: { slot: 8, escape: true, status: "end",
+on: ["asleep", "away", "egg"], idleMs: GAME_IDLE_MS, idleAt: s => s.game.lastAt, idleHold: s =>
+s.game.busy }`, and an `onExit(card, s, reason)` that does nothing for `"game"` and `"replace"`
+and otherwise (idle, asleep, away, egg, reload) calls `card._endGame(s, line)` if `s.game` is
+still set (3.2 rule 1: `_endGame` ends with `_modeExit(s, "game")`, which cannot loop). It is
+`_endGame`, **not** `_quitGame`: as built, idle, asleep, away and egg make no server call
+(`card-layout.js:683`, `:684-687`: "the server has dropped it already"). The sites that do call
+`_quitGame` (Escape, the quit slot, `_go`, the status sheet) run it first, and its `_endGame`
+exits the mode before the sibling `_modeExit` fires. The quit slot's `act` is
+`_quitGame(s, _quitLine(s))`, as Escape's is today. The dig's idle line (`GAME_COPY.idle`) is the
+`line` for reason `"idle"` on the dig only. `card-layout.js:683` (asleep/away/egg) stays: it still
+serves the picker and Hop (no mode yet) and runs before `_modeGuard`, so for a game the two are
+equal and `_modeExit` is idempotent.
+
+How the card enters: `_gameView` is where the views are set (`card-games.js:223`; it is also
+called with `"pick"` and `"hop"`, which must not enter a mode), so the three kinds call
+`this._modeEnter(s, SHELL_MODES[kind], { from: s.buttons.play })` from `_pickGame` right after
+`_gameView(s, kind)` (`:256`), with every slot but quit blocked while `g.busy`. The F13 restart
+path (`_pickGame(s, data.game)` after the server lost the game, `card-games.js:362`) re-enters the
+same kind while the mode is on: the same id only repaints (no `onExit`, no new announcement,
+`from` kept), and `_pickGame` has already replaced `s.game`, so `idleAt` reads the new game's
+`lastAt`. Slice 2 gets a card-check row for it.
+
+What leaves the overlay and where each reference goes (the complete list, from a grep at main):
+`.gl` and `.gr` leave `.game`; `.gscore`, `.gnum`, the prompt and (for now) `.gx` stay.
+- `_gameView` (`card-games.js:234-243`): the innerHTML, `aria-label` and `hidden` writes become
+  the entries' icons ("prev"/"next" for left_right, the stopgap glyphs, D5), captions and labels.
+- The nine `aria-disabled` writes (`card-games.js:243/266/274/386/432/506-507/528/552`,
+  `card-flair.js:209`) become `g.busy` flips and `_modeSync` calls (review P11); the keep slot
+  keeps its empty-basket rule (`card-games.js:506`) as its `enabled(s)`.
+- Focus calls on `.gl`/`.gr` (`card-games.js:290, 301, 592-594, 611`): "move focus to keep or
+  dig" is now "focus slot 1 or 4"; `_modeEnter` already moves focus to the first live slot at the
+  enter, so these only matter for the dig on an empty basket (focus must go to slot 4 when slot 1
+  is blocked) and the post-reply re-check at `:592-594` (focus moves off a keep that just went blocked).
+- `_guess`'s tap feedback (`card-games.js:375`, `this._tapped(.gl|.gr, s)`) points at the slot
+  button instead (`s.buttons.<care key of slot 1 / 4>`), or is dropped; the press itself is
+  `_modeClick`'s.
+- The listeners `card-build.js:304-305` go. The `showgo` fade (`card-games.js:255/412/423`,
+  `card-flair.js:211`, `card-board.js:245`, `style.js:431`) goes (3.3). The `.gl`/`.gr` CSS
+  (`style.js:431-439, 708-709`) goes.
+- `_endGame`'s own play-focus (`card-flair.js:207`) goes (3.6 Focus).
+
+`_update`'s idle block (`card-layout.js:684-687`) moves into the entries' `exit.idleMs`, reading
+`lastAt` as today; the matching `owned_reads.test.js` allow-list lines (`card-layout.js` idle x3)
+go in the same commit, and the test fails on a listed read that is gone. The reload branch ends a
+game (D10): the entry's `onExit` with reason `"reload"`. The glyphs and SVG icons ship (D5).
 
 Card-check sections that change, and no others: `play`, `resume` and `board` (the lines that
-read `.gl`/`.gr` are 3 in `play`, 16 in `resume`, 2 in `board`; each is re-pointed to the slot,
-and the commit lists them, review P17). The `.hk`, `.gx` and `.hkeys` lines (1, 2 and 12) wait
-for slice 3.
+read `.gl`/`.gr` are 3 in `play`, 16 in `resume`, 2 in `board`: 21 lines at main, recounted by
+`grep -F`; each is re-pointed to the slot, and the commit lists them, review P17). The `.hk`,
+`.gx` and `.hkeys` lines (1, 2 and 12: 15 at main) wait for slice 3. Every re-pointed or added
+step that taps and waits wraps `quietIdle` (the shard 4 rule above).
 
 Acceptance:
 1. After the pick, within one frame, the 8 buttons show the game's slots; slots 1 and 4 play
@@ -486,6 +595,12 @@ Acceptance:
 8. Two cards on the same pet (review P22; the three games share `digShared`,
    `prefs.js:339`): card A in a dig and card B at rest keeps its care caps; B's Play then dig
    gets the "someone else is playing" refusal, restores its caps, and leaves A's untouched.
+9. The F13 restart path (3.5 table, slice 2 text): with the server answering `no_game` to a
+   guess, the same kind is re-entered with the mode kept: one announcement only, `from` kept,
+   the stable-field snapshot restored at the end. The idle exits end the game with `_endGame`
+   (no `end` call on the spy) and the dig's idle line is the bubble.
+10. Every new or re-pointed card-check step that waits on a pet that can move is inside
+    `quietIdle` (the shard 4 rule in section 6); the commit lists the sections it touched.
 
 ### Slice 3: Hop on the shell
 
@@ -494,7 +609,7 @@ and `HOP_KEYS`'s rendering go; `_hopKey`, `_hopTap`, `_hopRefocus` stay and are 
 (`_hopRefocus` tests the slot, not `.hk`); `_hopDraw` ends with `_modeSync`, the one place that
 sets Hop's key state. `g.lastAt` is set on every accepted Hop input and Hop gets
 `exit.idleMs = GAME_IDLE_MS` (D7). The board takes the whole overlay. The bench's `hopInfo`
-(`dev/bench/page.js:782-798`) and `keyState` and the Hop sections of card-check (the `.hk`,
+(`dev/bench/page.js:774-798`) and `keyState` and the Hop sections of card-check (the `.hk`,
 `.gx` and `.hkeys` lines: 12 in `board`, 2 in `resume`, 1 in `play`) move to `.toy`. There is
 no visual golden to regenerate: the only Hop golden, `tests/fixtures/hop_golden.json`, is
 server boards, which this change cannot touch (review P17).
@@ -545,7 +660,7 @@ Acceptance:
 |---|---|---|
 | R1 | Care buttons are unavailable mid-game: a behaviour change (D1). | Decided. Slice 2 acceptance 2 proves it; the swap and the announcement say so. |
 | R2 | `_update` repaints `disabled`, `.wanted`, `.on`, `aria-description`, the icon and the caption of all eight (`card-layout.js:697-731`) and the reload loop disables them (`:518`); a swap would be painted over, or a quit slot natively disabled. | `_paintCaps` is the one writer (3.2 rule 2); slice 1 acceptances 6 and 7 prove an entity going `unavailable` mid-mode, and the new state at exit. |
-| R3 | A swapped icon changes the cap box, and `_bands`/`_mould` (which read `.toy` rects and `--cap-*`) misplace the shell. | Same box rule (3.2 rule 4); slice 1 acceptance 10 compares rects before, during and after and measures the hit area and caption fit; slice 4 re-checks with the pixel icons. |
+| R3 | A swapped icon changes the cap box, and `_bands`/`_mould` (which read `.toy` rects and `--cap-*`) misplace the shell. | Same box rule (3.2 rule 4); slice 1 acceptance 10 compares rects before, during and after and records the hit area (39.5 px at 284) and caption fit; slice 4 re-checks with the pixel icons. |
 | R4 | A stale cap after an exit path nobody tested. | The 3.5 table lists every real call site; slices 1-3 prove each row on the stable-field snapshot; `_modeExit` restores from `careHome`. |
 | R5 | Bench `keyState`/`hopInfo` and the Hop card-check sections read `.hk`. | Slice 3 re-points them; its acceptance 8 forbids silent assertion edits; the lines are counted in the slice text. |
 | R6 | Screen-reader users lose the Hop labels, or hear "Feed" on a dead slot. | The swap carries the labels (3.6); off slots are `disabled`, `aria-hidden`, unlabelled; one announcement in its own node, listing the live buttons. Slice 3 acceptance 3 checks the labels. |
@@ -583,7 +698,9 @@ The study proposed only these, as proposals. Nothing else here is player-facing.
   column clips it (3.6).
 - The slot captions: "keep" and "dig" (dig), "lo" and "hi" (higher_lower, today's `.gl`/`.gr`
   text), and the Hop labels from `HOP_COPY`, which stay as built. The left_right slots reuse
-  the existing prev/next arrows with no caption.
+  the existing prev/next arrows. **Their captions are open (Q-B, top of this document):** this
+  line said "no caption", but the schema and slice 1's acceptance 1 need non-empty, unique
+  captions. Proposed: "left" and "right". Needs first-mate copy approval like the rest.
 - Off slots have no caption and no label.
 
 ## 10. Owner decisions on the review, and what is open
@@ -597,9 +714,12 @@ Answered 2026-11-04 (the first mate adds them to the section 1 table as D7-D10):
 | D9 | **Hop's future hint goes on the board (a tap on the nest, or a long-press), never a ninth key; the 8 slots stay.** | 3.4 |
 | D10 | **An integration reload (`s.reloading`) ends the mode.** | 3.5 reload row, slice 1 acceptance 7, slice 2 acceptance 4 |
 
-Open: none for the owner. The two small things the slices settle on their own: the final
+Open for the first mate after slice 1: Q-A (touch at 284/300) and Q-B (left_right's captions),
+at the top of this document. Open for the owner: none. The two small things the slices settle on their own: the final
 manifest position of the two new parts (slice 1 finds it with card-check), and whether the
-`.moded` tint is a custom property or a class (slice 1; either serves the one colour of D5).
+`.moded` tint is a custom property or a class (slice 1 settled both: the parts sit after `ui-copy`
+and after `card-actions`, and the tint is a class, `.device.moded .buttons > .toy.tinted .cap`,
+with a `--mode-tint` property it reads).
 The one decision this revision took without the owner, for the first mate to confirm: the
 server games enter the mode at `_gameView`, before the server answers, and accept a one-beat
 swap-and-restore on a refusal (3.5), rather than moving the entry after `_playCall`.
