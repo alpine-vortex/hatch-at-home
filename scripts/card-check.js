@@ -4373,7 +4373,7 @@ async function main() {
     const playLive = await gameLive();
     // Shell modes slice 2 (owner decision D1, plan 3.5): the Play cap is swapped out during a game, so it is
     // an off slot and the old "Play mid-game restarts as the picker" cannot happen; the game stays, and
-    // Play pressed in the picker (no mode yet) still starts the picker over.
+    // Play pressed in the picker (no mode yet) closes it (slice 3: the picker has no close button).
     const playOff = await button(2).evaluate((b) => b.disabled && b.getAttribute("aria-hidden") === "true");
     await card.evaluate((el) => el._modeClick(el._slides[el._index], 2));
     await page.waitForTimeout(400);
@@ -4382,11 +4382,12 @@ async function main() {
       const stays = { game: s.game?.kind === "left_right" && !s.game.picking, mode: s.mode?.id === "left_right" };
       el._endGame(s, null);
       el._startGame(s, s.buttons.play);
-      el._startGame(s, s.buttons.play); // Play in the picker starts it over
-      return { ...stays, picking: !!s.game?.picking, prop: !s.propEl.hidden, again: !s.mode };
+      const opened = !!s.game?.picking;
+      el._startGame(s, s.buttons.play); // Play in the picker closes it
+      return { ...stays, opened, closed: !s.game, prop: !s.propEl.hidden, again: !s.mode };
     });
-    check("Play mid-game is an off slot (D1): the game stays; Play in the picker starts it over, no prop over it",
-      playLive && playOff && playEnd.game && playEnd.mode && playEnd.picking && playEnd.again && !playEnd.prop, `${playLive} ${playOff} ${JSON.stringify(playEnd)}`);
+    check("Play mid-game is an off slot (D1): the game stays; Play in the picker closes it, no prop over it",
+      playLive && playOff && playEnd.game && playEnd.mode && playEnd.opened && playEnd.closed && playEnd.again && !playEnd.prop, `${playLive} ${playOff} ${JSON.stringify(playEnd)}`);
     await card.evaluate((el) => el._endGame(el._slides[el._index], null));
     if (slides > 1) {
       await open("left_right");
