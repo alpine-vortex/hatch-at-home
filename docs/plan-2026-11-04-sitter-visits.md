@@ -894,7 +894,7 @@ its behaviour, so they are asked before it starts)
 - Q-D: the `mood` sensor **keeps the value `away`** with privacy off (FM).
 - Section 9 copy: **approved by the first mate** as drafted (D6). Workers ship those lines verbatim.
 - The review's fixes (section 12) change numbers, rules and file lists only. They add **no copy**;
-  Q-E above is the one open item.
+  Q-E: **accept the plain wording** with privacy on (FM, as recommended, 2026-11-04). No open items.
 
 ## 11. What the scout got wrong (checked against the code)
 
