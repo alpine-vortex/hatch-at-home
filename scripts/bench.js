@@ -94,6 +94,23 @@ const PRESETS = {
     }
     return out;
   },
+  // Species nature N4: every adult with a species.json "signature", its content frame beside the pose's
+  // frames 1 and 2 (the card's own _idle, idle.pose), day and night. One sheet per scene.
+  signature() {
+    const out = [];
+    for (const id of allSpecies()) {
+      const sp = speciesData(id);
+      if (sp.ready === false || !sp.signature?.adult) continue;
+      for (const scene of ["day", "night"]) {
+        const base = { species: id, world: worldOf(id), scene, width: 330, clip: "screen", say: "", tile: 150, group: `signature-${scene}` };
+        out.push({ ...base, name: `signature/${id}-${scene}-content`, label: `${id} content` });
+        for (const pose of [1, 2]) {
+          out.push({ ...base, idle: { mood: "content", pose }, name: `signature/${id}-${scene}-${pose}`, label: `${id} pose ${pose}` });
+        }
+      }
+    }
+    return out;
+  },
   // Every shell finish on every world's own shape, day and night, at both card widths:
   // a sheet per world. Keep FINISHES in step with the card's.
   finishes() {

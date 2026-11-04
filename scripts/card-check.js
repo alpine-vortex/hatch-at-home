@@ -7666,8 +7666,10 @@ async function main() {
           return s.bubble.textContent;
         },
         idle: (mood) => { // with reduced motion on, the only idle move is a mumble
-          const saved = { moodState: s.moodState, drawn: s.drawn };
-          Object.assign(s, { moodState: mood, drawn: "adult", sayUntil: 0, nextIdle: 1, poseUntil: 0, movingUntil: 0 });
+          // N4: an adult's species.json "signature" adds a pose even when calm, so hide it for the call.
+          const saved = { moodState: s.moodState, drawn: s.drawn, species: s.species };
+          const { signature, ...bare } = s.species || {};
+          Object.assign(s, { moodState: mood, drawn: "adult", species: bare, sayUntil: 0, nextIdle: 1, poseUntil: 0, movingUntil: 0 });
           s.plain = undefined;
           const shelf = el._slides;
           el._slides = [s]; // no neighbour lines (gaps-seams 5b, checked on their own)

@@ -902,7 +902,16 @@
         Math.random = () => (n < seq.length ? seq[n++] : (n++, 0.5));
       }
       Object.assign(cur, { moodState: shot.idle.mood || "content", nextIdle: 1, sayUntil: 0, poseUntil: 0, movingUntil: 0 });
+      // `idle.pose` (1 or 2, species nature N4): the move list is just "pose", so the child's own extra or the
+      // adult's species.json "signature" plays through the card's own _idle, held on that frame.
+      const moves = card._idleMoves;
+      if (shot.idle.pose) card._idleMoves = () => ["pose"];
       card._idle(cur);
+      card._idleMoves = moves;
+      if (shot.idle.pose && cur.poseFrames) {
+        card._show(cur, cur.pet, cur.poseFrames[Math.min(shot.idle.pose, cur.poseFrames.length) - 1]);
+        cur.poseUntil = Date.now() + 1e9;
+      }
       Math.random = real;
       cur.sayUntil = Date.now() + 1e9;
     }

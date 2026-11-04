@@ -999,18 +999,18 @@ character grown up. Eight are new ideas (marked **new**).
 | fox | explorer | `pounce` | `pounce` |
 | bananaslug | explorer | `slime_slide` | `slime_slide` |
 | gecko | groomer | `eye_lick` | `eye_lick` |
-| tarantula | builder | `web_mend` **new** | (`wave`, `hair_flick`, `molt`) |
+| tarantula | builder | `dig` **new** (first mate 2026-11-03: matches the note "digs a burrow"; was `web_mend`) | (`wave`, `hair_flick`, `molt`) |
 | tortoise | basker | `neck_sun` **new** | (`hide`, `dig`, `munch`) |
 | beardeddragon | basker | `bask` | `bask` |
 | ballpython | watcher | `tongue_flick` | `tongue_flick` |
-| kitten | groomer | `lick_paw` **new** | (`knead`, `loaf`, `zoomies`) |
+| kitten | groomer | `knead` (first mate 2026-11-03: matches the note "kneads a blanket"; was `lick_paw`) | `knead` |
 | bunny | groomer | `ear_wash` **new** | (`binky`, `flop`, `thump`) |
 | corgi | explorer | `ball_fetch` | `ball_fetch` |
 | hamster | hoarder | `cheeks` | `cheeks` |
 | ferret | hoarder | `stash` **new** | (`war_dance`, `tunnel`, `dook`) |
 | otter | groomer | `float_groom` **new** | (`rock`, `hold_paws`, `kelp_wrap`) |
 | octopus | explorer | `jar` | `jar` |
-| seal | basker | `banana` | `banana` |
+| seal | basker | `bask` **new** (first mate 2026-11-03: matches the note "hauls out to bask"; was `banana`) | (`banana`, `flipper_clap`, `splash`) |
 | hermitcrab | hoarder | `shell_try` | `shell_try` |
 | puffin | builder | `fish_bill` | `fish_bill` |
 | treefrog | performer | `croak` | `croak` |
@@ -1045,7 +1045,7 @@ h, **under one day** of the cap if nothing else runs. The cap is shared with the
 already in flight (aww, ready, splash, the beetle redraw), so the plan does **not** claim
 "one to two days"; the art lead schedules N4 around those. **Two batches**: the 22 poses
 that redraw an existing child idea (the child's frames are the reference and the head
-point is known), then the **8 new ideas** (`sing`, `web_mend`, `neck_sun`, `lick_paw`,
+point is known), then the **8 new ideas** (`sing`, tarantula `dig`, `neck_sun`, seal `bask`,
 `ear_wash`, `stash`, `float_groom`, `leaf_bundle`), which have no reference and need a
 prompt, a pose sketch and a head-point check first. They run as a normal art ship through
 the first mate's art review. **What is committed:** the raw sheets and logs stay in
