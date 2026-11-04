@@ -804,6 +804,18 @@ settles it). Two frames per pose unless marked. Reuse the existing care props (`
 About 14 poses, about 28 frames, plus the chair. The chair sits at the bottom edge of the
 screen so it does not cross Pip. The sign `sitter_sign` is retired in S4.
 
+Owner 2026-11-04: more pose variety. Beyond the 14 poses, about 6 extra idles at 2 frames
+each (stretching, sipping tea, knitting or reading a book, watering a plant, looking out of
+the window, tidying a shelf, phone or notebook, laughing), drawn after the core poses.
+
+Owner 2026-11-04: a different sitter for each of the 24 shell finishes
+(`rates.py` `SHELL_FINISHES`). One base body serves every pose, built so a look layer (hair,
+skin tone, outfit, colours, one shell-themed accessory) swaps over the same poses; 24 look
+sheets, one per finish, each a distinct person.
+
+Owner 2026-11-04 (later, not A1): five fully redrawn sitters, one per world shell
+(woodland, aqua, grove, celestial, dune).
+
 ## 9. Copy (draft, FM approves — owner decision D6)
 
 Nothing here ships until the first mate approves it. Lines for Pip follow the card's voice
