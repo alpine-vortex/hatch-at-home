@@ -44,6 +44,7 @@
     "adult": [178, 66],
     "adult_hungry": [194, 94]
   },
+  "signature": {"adult": ["adult_flag_1", "adult_flag_2"]},
   "waves": {"baby": ["baby_wave_1", "baby_wave_2"], "teen": ["teen_wave_1", "teen_wave_2"], "adult": ["adult_wave_1", "adult_wave_2"]},
   "acts": {"eat": ["baby", "teen", "adult"], "cheer": ["baby", "teen", "adult"], "pat": ["baby", "child", "teen", "adult"], "refuse": ["baby", "teen", "adult"], "aww": ["baby", "teen", "adult"], "ready": ["baby", "teen", "adult"], "splash": ["baby", "teen", "adult"]}
 }
