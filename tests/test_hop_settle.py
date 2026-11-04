@@ -445,6 +445,28 @@ async def test_another_pets_or_a_stale_generators_id_is_board_changed(
         assert info == {"result": "board_changed"}
 
 
+async def test_a_save_from_before_ship_4a_loads_and_its_id_is_board_changed(
+    hass, now, hass_storage, monkeypatch
+):
+    """Ship 4a stays tier 1: hop_day keeps {day, stage, done, tidy}. A pet saved
+    mid-day under GEN_VERSION 2 loads, `board` serves the new board (a new id,
+    the stumps), and a settle of the old board's id answers board_changed."""
+    old_day = {"day": MONDAY, "stage": "child", "done": False, "tidy": False}
+    pet, reply = await today(hass, now, hass_storage, hop_day=dict(old_day))
+    assert pet.state.hop_day == old_day  # loaded as saved, no field added
+    # The board that pet had: the generator with no twist draws as before 4a.
+    monkeypatch.setattr(H, "GEN_VERSION", 2)
+    monkeypatch.setattr(H, "WORLD_TWIST", {})
+    old = H.hop_board("test_pet", MONDAY, "woodland", reply["family"], 1, 5, 4)
+    monkeypatch.undo()
+    assert H.twist_of(old) is None and old.id != reply["id"]
+    assert reply["twist"] == "stumps"
+    old_win = H.encode(H.solve(old).win)
+    info = await bad_settle(hass, pet, old.id, old_win)
+    assert info == {"result": "board_changed"}
+    assert set(pet.state.hop_day) == {"day", "stage", "done", "tidy"}
+
+
 @pytest.mark.parametrize(
     ("stats", "code"),
     [

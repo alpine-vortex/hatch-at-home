@@ -72,9 +72,11 @@ async def test_reply_shape_and_round_trip(hass, now, hass_storage):
     }
     assert reply["result"] == "ok"
     assert reply["day"] == "2026-10-26"
-    assert (reply["twist"], reply["done"], reply["tidy"]) == (None, False, False)
+    # A woodland child's board: the stumps (ship 4a), named from its glyphs.
+    assert (reply["twist"], reply["done"], reply["tidy"]) == ("stumps", False, False)
     assert (reply["w"], reply["h"], reply["specials"]) == (5, 4, 1)
     parsed = H.Board.from_dict(reply)
+    assert H.twist_of(parsed) == reply["twist"]
     assert parsed.id == reply["id"]
     assert parsed.to_dict() == {
         k: reply[k] for k in ("id", "w", "h", "grid", "family", "specials", "world")
@@ -150,6 +152,21 @@ async def test_a_world_change_changes_the_board(hass, now, hass_storage):
     second = await board(hass)
     assert second["world"] == pet.world != first["world"]
     assert second["id"] != first["id"]
+    assert (first["twist"], second["twist"]) == ("stumps", None)  # pond: ship 4b's
+
+
+async def test_the_twist_follows_the_world_and_the_stage(hass, now, hass_storage):
+    """Hearth's rug from child up; a baby's board has no twist in any world
+    (Decided 26)."""
+    await ready(hass, now, hass_storage)
+    pet = coordinator(hass)
+    pet.world = "hearth"
+    reply = await board(hass)
+    assert reply["twist"] == "rug" and "=" in "".join(reply["grid"])
+    pet.state.hop_day = {}
+    pet.state.age_hours = 10.0  # a baby
+    baby = await board(hass)
+    assert (baby["specials"], baby["twist"]) == (0, None)
 
 
 async def test_an_unknown_species_gets_the_hop_family(hass, now, hass_storage):

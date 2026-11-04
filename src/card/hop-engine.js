@@ -8,7 +8,11 @@
 // A board is the server's reply: {w, h, grid (rows, top first), family, specials}. Cells:
 // "." pad (sinks when left), "f" find pad, "o" stone (never sinks), "~" water, "#" wall,
 // "P" start (a pad), "N" nest (open once every find is in; entering it ends the board).
-// A move names the cell stepped onto, by index in reading order ("a"-"x" on the wire).
+// A world's twist (one per board, never a baby's): "1" "2" stump pairs (stepping onto one puts
+// the pet on its twin), "=" rug (a step onto it slides the pet one more cell the same way, if a
+// step could enter that cell; a special landing on it does not slide). Neither ever sinks.
+// A move names the cell stepped onto, by index in reading order ("a"-"x" on the wire); the
+// state is at the landing (the twin, the cell past a rug), which may not be the named cell.
 // A state is {pos, sunk (bit mask of sunk pads), uses (specials left), done (in the nest)}.
 // Undo is a replay of the list without its last move. view() is the plain form (sunk as a list
 // of cells); fromView() turns it back into a state, which is what apply and legalTargets take.
@@ -17,7 +21,9 @@ const HATCH_HOP = Object.freeze(
     const LETTERS = "abcdefghijklmnopqrstuvwx";
     const MAX_MOVES = 200; // rates.py HOP_MAX_MOVES
     const PADS = ".fP";
-    const CELLS = ".fo~#PN";
+    const CELLS = ".fo~#PN12=";
+    const NEVER_SINKING = "o12="; // hop.py's: walkable, never sinks
+    const TWIST_GLYPHS = ["12", "="]; // one twist per board (hop.py's TWIST_GLYPHS)
     const FAMILIES = ["hop", "glide", "swim", "dig", "climb", "squeeze"];
     const MAX_SPECIALS = 3; // hop.py's
     const STEPS = [
@@ -84,12 +90,34 @@ const HATCH_HOP = Object.freeze(
         if (board.family === "squeeze") return PADS.includes(cell) && ((sunk >> t) & 1) === 1;
       }
       if (PADS.includes(cell)) return ((sunk >> t) & 1) === 0;
-      if (cell === "o") return true;
+      if (NEVER_SINKING.includes(cell)) return true;
       if (cell === "N") {
         const finds = maskOf(cells, (ch) => ch === "f");
         return (finds & ~(sunk | (1 << pos))) === 0;
       }
       return false;
+    };
+    // The cell the pet ends on after entering `t` from `pos` (a legal entry): `t`, a stump's twin,
+    // or the cell past a rug a step slid it to. `sunk` is after leaving `pos`. hop.py's land().
+    const twinOf = (cells, t) => {
+      if (cells[t] !== "1" && cells[t] !== "2") return -1;
+      const a = cells.indexOf(cells[t]);
+      return a === t ? cells.indexOf(cells[t], t + 1) : a;
+    };
+    const land = (board, cells, pos, t, special, sunk) => {
+      const twin = twinOf(cells, t);
+      if (twin >= 0) return twin;
+      if (!special && cells[t] === "=") {
+        const { w, h } = board;
+        const [dr, dc] = [Math.floor(t / w) - Math.floor(pos / w), (t % w) - (pos % w)];
+        const [r, c] = [Math.floor(t / w) + dr, (t % w) + dc];
+        if (r >= 0 && r < h && c >= 0 && c < w && entry(board, cells, t, r * w + c, false, sunk, 0)) {
+          const y = r * w + c;
+          const yt = twinOf(cells, y);
+          return yt >= 0 ? yt : y;
+        }
+      }
+      return t;
     };
     // hop.py's Board checks: is this reply a board the rules can play?
     const valid = (board) => {
@@ -102,10 +130,15 @@ const HATCH_HOP = Object.freeze(
       if (cells.some((c) => !CELLS.includes(c))) return false;
       if (cells.filter((c) => c === "P").length !== 1 || cells.filter((c) => c === "N").length !== 1) return false;
       if (!FAMILIES.includes(family)) return false;
-      return Number.isInteger(specials) && specials >= 0 && specials <= MAX_SPECIALS;
+      const kinds = TWIST_GLYPHS.filter((g) => cells.some((c) => g.includes(c))).length;
+      if (kinds > 1) return false;
+      const [ones, twos] = ["1", "2"].map((g) => cells.filter((c) => c === g).length);
+      if (![0, 2].includes(ones) || ![0, 2].includes(twos) || (twos && !ones)) return false;
+      if (!Number.isInteger(specials) || specials < 0 || specials > MAX_SPECIALS) return false;
+      return !(kinds && specials === 0); // no twist on a baby's board
     };
     const start = (board) => ({ pos: cellsOf(board).indexOf("P"), sunk: 0, uses: board.specials, done: false });
-    // The cells the pet may name next, in index order.
+    // The cells the pet may name next, in index order: the stepped-on cell, not the landing.
     const legalTargets = (board, state) => {
       if (state.done) return [];
       const cells = cellsOf(board);
@@ -122,12 +155,9 @@ const HATCH_HOP = Object.freeze(
       for (const [t, special] of movesFrom(board, cells, state.pos)) {
         if (t !== cell || !entry(board, cells, state.pos, t, special, state.sunk, state.uses)) continue;
         const pads = maskOf(cells, (ch) => PADS.includes(ch));
-        return {
-          pos: t,
-          sunk: state.sunk | (pads & (1 << state.pos)),
-          uses: state.uses - (special ? 1 : 0),
-          done: cells[t] === "N",
-        };
+        const sunk = state.sunk | (pads & (1 << state.pos));
+        const to = land(board, cells, state.pos, t, special, sunk);
+        return { pos: to, sunk, uses: state.uses - (special ? 1 : 0), done: cells[to] === "N" };
       }
       return null;
     };

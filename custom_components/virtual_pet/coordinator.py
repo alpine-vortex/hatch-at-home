@@ -3238,7 +3238,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "result": model.OK,
             "day": day,
             **board.to_dict(),
-            "twist": None,  # ship 4's
+            "twist": hop.twist_of(board),  # copy and the bench only; no rule reads it
             "done": same and paid["done"],
             "tidy": same and paid["tidy"],
         }
