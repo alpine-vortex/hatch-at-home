@@ -4,8 +4,7 @@ class HatchPetCardLooks extends HatchPetCardTick {
   _firstLook(s) {
     if (!this._channelHeard(s)) return; // the viewer's bond and wish first
     if (this._resumeHeld()) return; // fresh states first
-    const away = this._state(s, "sensor.mood")?.state === "away";
-    if (s.lookedFirst || !s.species || s.asleep || away || this._eggMinutes(this._state(s, "sensor.life_stage")) !== null) return;
+    if (s.lookedFirst || !s.species || s.asleep || this._eggMinutes(this._state(s, "sensor.life_stage")) !== null) return;
     s.lookedFirst = true;
     followTextSweep(); // M1, again at each first look
     s.firstMoveAt = Date.now() + FIRST_MOVE_MS;
@@ -474,8 +473,7 @@ class HatchPetCardLooks extends HatchPetCardTick {
   // hold, for the slide on show). A first look in between uses it up.
   _giftReturn(s) {
     if (!s.giftAgain || !s.lookedFirst || !this._channelHeard(s)) return;
-    const away = this._state(s, "sensor.mood")?.state === "away";
-    if (!s.species || s.asleep || away || this._eggMinutes(this._state(s, "sensor.life_stage")) !== null) return;
+    if (!s.species || s.asleep || this._eggMinutes(this._state(s, "sensor.life_stage")) !== null) return;
     s.giftAgain = false;
     if (this._giftDue(s)) this._giftTake(s);
     if (this._followWanted(s)) this._followFetch(s); // F1: a beat may be due now

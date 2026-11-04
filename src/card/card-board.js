@@ -10,6 +10,7 @@ const HOP_COPY = {
   sunk: "sunk",
   special: (n) => `Special move, ${n} left`,
   restart: "Start the board again",
+  undo: "Take back the last move",
   tryTidy: "try for tidy",
   solved: "solved",
   tidy: "tidy",
@@ -68,7 +69,7 @@ const hopSettleOutcome = (reply, game) => {
       found: reply.found === true };
   }
   if (result === "board_changed") return { ...HOP_NOTHING, kind: "reload", clear: true, reload: true, tidy };
-  if (result === "egg" || result === "away" || result === "asleep") {
+  if (result === "egg" || result === "asleep") {
     return { ...HOP_NOTHING, kind: "refused", refusal: result, tidy };
   }
   const known = ["illegal", "not_won", "too_long", "thrown"].includes(result) ? result
@@ -79,13 +80,10 @@ const hopSettleOutcome = (reply, game) => {
 };
 // ◀ ▲ ▼ ▶ as hop-engine's STEPS: [name, row step, column step, glyph].
 const HOP_DIRS = [["left", 0, -1, "◀"], ["up", -1, 0, "▲"], ["down", 1, 0, "▼"], ["right", 0, 1, "▶"]];
-// The keys in their 2 x 4 block, reading order; the close button is the eighth (ship 5's hint).
-const HOP_KEYS = [
-  ["left", "◀", HOP_COPY.step.left], ["up", "▲", HOP_COPY.step.up],
-  ["down", "▼", HOP_COPY.step.down], ["right", "▶", HOP_COPY.step.right],
-  ["special", "✦", HOP_COPY.special(0)], ["undo", "↶", "Take back the last move"],
-  ["restart", "↻", HOP_COPY.restart],
-];
+// The cell the board is drawn at, from the overlay's W x H and the board's w x h: the board takes the whole
+// overlay (the keys are the shell's eight buttons now), 4 px of pad on each side, never under 12 px. The
+// widest board (the server allows 6 x 4) sets the smallest cell; a smaller one gets a cell no smaller.
+const hopCell = (W, H, w, h, pad = 4) => Math.max(12, Math.floor(Math.min((W - 2 * pad) / w, (H - 2 * pad) / h)));
 const HOP_CELLS = { ".": "pad", f: "pad find", o: "stone", "~": "water", "#": "wall", P: "pad start", N: "nest",
   1: "stump", 2: "stump two", "=": "rug", c: "pad crackle", "%": "pool", r: "pad ripple", "?": "pad dark",
   "*": "pad lantern" };
@@ -110,8 +108,9 @@ class HatchPetCardBoard extends HatchPetCardGames {
   // --- Board mode: Hop of the Day (plan 2026-11-02-hop-of-the-day, ship 2b) ---------------------
   // Behind the YAML-only `experimental_hop` key. The board is `s.game` ({kind: "hop"}), so every
   // quit path that already tests `s.game` ends it: _endGame clears it (_hopEnd), and the server
-  // never hears of it (hop is not in SERVER_GAMES). The keys are in the game overlay, as the
-  // dig's are; the care pad is not touched. The rules are HATCH_HOP's (hop-engine.js); the
+  // never hears of it (hop is not in SERVER_GAMES). The keys are the shell's eight buttons (the
+  // `hop` entry of SHELL_MODES, shell-modes.js; shell modes slice 3): _hopDraw writes their state
+  // on `g.keys` and calls _modeSync, and a press runs _hopKey. The rules are HATCH_HOP's (hop-engine.js); the
   // card plays every move locally and writes the move list to localStorage on every move. A
   // nest entry shows the solved view at once and sends the list (`settle`, ship 3b): the server
   // replays it and pays; the list stays parked until the server has answered `ok`.
@@ -247,7 +246,8 @@ class HatchPetCardBoard extends HatchPetCardGames {
     if (!s.greeted) this._greetSpent(s); // playing together is the hello (F7), as any game
     this._reactFrames(s, g.done ? "praised" : "ready", { inGame: true });
     this._hopLayout(s);
-    this._hopDraw(s, false);
+    this._hopDraw(s, false); // the keys' state is on g before the shell takes them
+    this._modeEnter(s, SHELL_MODES.hop, { from: s.buttons.play }); // the same mode again (a reloaded board) repaints
     if (g.done) {
       g.prompt = g.tidy ? HOP_COPY.tidy : HOP_COPY.solved;
       this._write(s, g.prompt, 60000);
@@ -257,6 +257,7 @@ class HatchPetCardBoard extends HatchPetCardGames {
       g.prompt = null;
     }
     this._hopFocus(s);
+    g.lastAt = Date.now();
     if (g.done && !g.settled) this._hopSend(s);
   }
 
@@ -294,18 +295,15 @@ class HatchPetCardBoard extends HatchPetCardGames {
     }
   }
 
-  // The overlay's board: the grid with its piece, and the keys (2 columns by 4 rows; the close
-  // button is the eighth, where ship 5's hint will go).
+  // The overlay's board: the grid with its piece. The keys are the shell's.
   _hopBuild(s) {
     const g = s.game;
     const box = s.gameBox;
     this._hopTeardown(s);
     const wrap = document.createElement("div");
     wrap.className = "hopb";
-    const keys = HOP_KEYS.map(([k, glyph, aria]) =>
-      `<button class="hk" data-k="${k}" aria-label="${aria}">${glyph}</button>`).join("");
     wrap.innerHTML = `<div class="hgrid" tabindex="-1"><svg class="hpath" aria-hidden="true"><path/></svg>` +
-      `<img class="hpiece" alt=""></div><div class="hkeys" role="group">${keys}</div>`;
+      `<img class="hpiece" alt=""></div>`;
     box.prepend(wrap);
     const grid = wrap.querySelector(".hgrid");
     const cells = [...g.board.grid.join("")];
@@ -316,12 +314,8 @@ class HatchPetCardBoard extends HatchPetCardGames {
       return el;
     }));
     g.el = { wrap, grid, piece: grid.querySelector(".hpiece"), path: grid.querySelector(".hpath path"),
-      cells: [...grid.querySelectorAll(".hc")], keys: wrap.querySelector(".hkeys") };
+      cells: [...grid.querySelectorAll(".hc")] };
     grid.addEventListener("click", (e) => this._hopTap(s, e));
-    g.el.keys.addEventListener("click", (e) => {
-      const b = e.target.closest("button.hk");
-      if (b) this._hopKey(s, b);
-    });
     // The piece is the pet: the real sprite stays where it is and only swaps frames (the care
     // reactions' own); the piece wears whichever frame is on show.
     const mirror = () => { g.el.piece.src = s.pet.getAttribute("src") || ""; };
@@ -338,9 +332,6 @@ class HatchPetCardBoard extends HatchPetCardGames {
     g?.ro?.disconnect();
     s.gameBox.querySelector(".hopb")?.remove();
     s.gameBox.classList.remove("hop", "end");
-    s.gameBox.style.removeProperty("--hk");
-    s.gameBox.style.removeProperty("--hr");
-    s.gameBox.style.removeProperty("--hb");
   }
 
   // Called by _endGame, whichever way the board went.
@@ -348,32 +339,19 @@ class HatchPetCardBoard extends HatchPetCardGames {
     this._hopTeardown(s);
   }
 
-  // The cell size the board is drawn at, from the overlay: the keys on the right (a key is at
-  // most 44 px, less where the LCD is short), the grid in what is left. `g.cell` is what was
-  // drawn: a tap commits at once from 44 px up, below that it lights first.
+  // The cell size the board is drawn at, from the overlay (hopCell): the board takes all of it and is
+  // centred. `g.cell` is what was drawn: a tap commits at once from 44 px up, below that it lights first.
   _hopLayout(s) {
     const g = s.game;
     if (g?.kind !== "hop" || !g.el) return;
     const rect = s.gameBox.getBoundingClientRect();
     const [W, H] = [rect.width, rect.height];
     if (!W || !H) return;
-    const [pad, gap] = [4, 3];
-    const kk = Math.max(24, Math.min(44, Math.floor((H - 2 * pad - 3 * gap) / 4)));
-    const keysW = 2 * kk + gap;
-    const keysH = 4 * kk + 3 * gap;
-    const top = Math.max(pad, Math.round((H - keysH) / 2));
     const { w, h } = g.board;
-    const c = Math.max(12, Math.floor(Math.min((W - keysW - 3 * pad) / w, (H - 2 * pad) / h)));
+    const c = hopCell(W, H, w, h);
     g.cell = c;
-    const left = Math.round(pad + (W - keysW - 3 * pad - c * w) / 2);
-    const css = s.gameBox.style;
-    css.setProperty("--hk", `${kk}px`);
-    css.setProperty("--hr", `${pad}px`);
-    css.setProperty("--hb", `${top}px`);
-    const el = g.el;
-    el.grid.style.cssText = `left:${left}px;top:${Math.round((H - c * h) / 2)}px;width:${c * w}px;height:${c * h}px;` +
-      `--c:${c}px;grid-template-columns:repeat(${w},${c}px)`;
-    el.keys.style.cssText = `top:${top}px;right:${pad}px`;
+    g.el.grid.style.cssText = `left:${Math.round((W - c * w) / 2)}px;top:${Math.round((H - c * h) / 2)}px;` +
+      `width:${c * w}px;height:${c * h}px;--c:${c}px;grid-template-columns:repeat(${w},${c}px)`;
     g.el.wrap.dataset.cell = String(c);
     this._hopPlace(s);
   }
@@ -431,11 +409,13 @@ class HatchPetCardBoard extends HatchPetCardGames {
     return null;
   }
 
-  // The keys' look and state from the board's (aria-disabled, as the dig's keep is).
+  // The cells' look from the board's, and the keys' state: written on `g.keys` (enabled, label) for the
+  // `hop` entry's slot functions, then _modeSync paints the shell's buttons from them (blocked ones are
+  // aria-disabled, as the dig's keep is). The one place that sets the keys' state.
   _hopDraw(s, move = true) {
     const g = s.game;
     if (g?.kind !== "hop" || !g.el) return;
-    const { cells, keys } = g.el;
+    const { cells } = g.el;
     const { w } = g.board;
     const targets = g.done ? { plain: [], special: [] } : this._hopTargets(g);
     const legal = new Set([...targets.plain, ...targets.special]);
@@ -464,14 +444,9 @@ class HatchPetCardBoard extends HatchPetCardGames {
         el.removeAttribute("aria-label");
       }
     });
-    const byKey = (k) => keys.querySelector(`[data-k="${k}"]`);
-    const set = (k, enabled, label) => {
-      const b = byKey(k);
-      b.setAttribute("aria-disabled", enabled ? "false" : "true");
-      if (label) b.setAttribute("aria-label", label);
-    };
+    const keys = {};
     for (const dir of HOP_DIRS) {
-      const [name, , , glyph] = dir;
+      const [name] = dir;
       const adj = this._hopAdjacent(g, dir);
       let enabled = false;
       if (!g.done) {
@@ -484,36 +459,34 @@ class HatchPetCardBoard extends HatchPetCardGames {
       // pool in its water phase, an unlit dark cell).
       const sunk = adj >= 0 && ((g.st.sunk >> adj) & 1) === 1 && HATCH_HOP.PADS.includes(cell);
       const base = HOP_COPY.step[name];
-      set(name, enabled, enabled || g.done ? base : `${base}, ${sunk ? HOP_COPY.sunk : HOP_COPY.blocked}`);
-      byKey(name).textContent = glyph;
+      keys[name] = { enabled, label: enabled || g.done ? base : `${base}, ${sunk ? HOP_COPY.sunk : HOP_COPY.blocked}` };
     }
     const left = g.st.uses;
-    const sp = byKey("special");
-    set("special", !g.done && left > 0, HOP_COPY.special(left));
-    sp.textContent = `✦${left}`;
-    sp.classList.toggle("on", g.special);
-    set("undo", !g.done && g.moves.length > 0);
+    keys.special = { enabled: !g.done && left > 0, label: HOP_COPY.special(left), count: left };
+    keys.undo = { enabled: !g.done && g.moves.length > 0, label: HOP_COPY.undo };
     // A won board the server has not answered keeps its list: no restart until it has (Q2, Decided 23).
-    set("restart", g.done ? !g.tidy && g.settled : g.moves.length > 0, g.done && !g.tidy ? HOP_COPY.tryTidy : HOP_COPY.restart);
+    keys.restart = { enabled: g.done ? !g.tidy && g.settled : g.moves.length > 0,
+      label: g.done && !g.tidy ? HOP_COPY.tryTidy : HOP_COPY.restart };
+    g.keys = keys;
+    this._modeSync(s);
     s.gameBox.classList.toggle("end", g.done);
     this._hopPlace(s, move);
   }
 
+  // The focus to the first live key (slot 1-7), else the grid; the shell's buttons are the keys.
   _hopFocus(s) {
     const g = s.game;
-    const key = g.el.keys.querySelector('.hk[aria-disabled="false"]');
+    const all = this._modeButtons(s);
+    const key = all.find((b, i) => i < 7 && b.getAttribute("aria-disabled") !== "true" && !b.disabled);
     (key || g.el.grid).focus({ preventScroll: true });
   }
 
-  _hopKey(s, button) {
+  // A key's press (`act` of the `hop` entry; _modeClick has already skipped a blocked slot and
+  // tapped the button): the key's name, one of left up down right special undo restart.
+  _hopKey(s, k) {
     const g = s.game;
-    if (g?.kind !== "hop" || g.done) {
-      if (g?.done && button.dataset.k === "restart" && button.getAttribute("aria-disabled") !== "true") this._hopRestart(s);
-      return;
-    }
-    if (button.getAttribute("aria-disabled") === "true") return; // blocked or sunk: nothing, as the dig's keep
-    this._tapped(button, s);
-    const k = button.dataset.k;
+    if (g?.kind !== "hop" || !g.keys?.[k]?.enabled) return;
+    g.lastAt = Date.now();
     if (k === "special") {
       g.special = !g.special;
       g.lit = null;
@@ -555,6 +528,7 @@ class HatchPetCardBoard extends HatchPetCardGames {
       return;
     }
     g.lit = best;
+    g.lastAt = Date.now();
     this._hopDraw(s, false);
   }
 
@@ -563,6 +537,7 @@ class HatchPetCardBoard extends HatchPetCardGames {
     const was = g.st;
     const next = HATCH_HOP.apply(g.board, was, cell);
     if (!next) return;
+    g.lastAt = Date.now(); // an accepted input (D7: the idle exit counts from it)
     g.moves.push(cell);
     g.st = next;
     g.lit = null;
@@ -602,11 +577,13 @@ class HatchPetCardBoard extends HatchPetCardGames {
     if (!entity || g?.kind !== "hop") return;
     const moves = HATCH_HOP.encode(g.moves);
     let reply;
+    g.settling = true; // the idle exit waits for the answer (D7)
     try {
       reply = await this._hopSettle(entity, g.id, moves);
     } catch (err) {
       reply = { result: "thrown" };
     }
+    g.settling = false;
     this._hopSettled(s, g, moves, reply);
   }
 
@@ -641,10 +618,10 @@ class HatchPetCardBoard extends HatchPetCardGames {
     this._hopDraw(s, false);
   }
 
-  // A key that went dark takes the focus with it: it moves to one that works.
+  // A key that went dark takes the focus with it: it moves to one that works (the shell slot).
   _hopRefocus(s) {
     const active = this.shadowRoot?.activeElement;
-    if (active?.classList?.contains("hk") && active.getAttribute("aria-disabled") === "true") this._hopFocus(s);
+    if (this._modeButtons(s).includes(active) && active.getAttribute("aria-disabled") === "true") this._hopFocus(s);
   }
 
   // The state after a list (undo): a replay from the start, so a sunk pad and a spent use come back.

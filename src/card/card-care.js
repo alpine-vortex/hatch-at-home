@@ -767,7 +767,7 @@ class HatchPetCardCare extends HatchPetCardMode {
   // reload between the tap and the answer): that is no reading, not an off.
   _lightsLive(s) {
     const read = (id) => {
-      const st = this._hass.states[s.ids?.[id]]?.state;
+      const st = this._live(s, id)?.state; // through the sitter's view: privacy on says asleep for an empty house
       return st === "on" ? true : st === "off" ? false : null;
     };
     return { asleep: read("binary_sensor.asleep"), lights: read("switch.lights_out") };
@@ -776,7 +776,7 @@ class HatchPetCardCare extends HatchPetCardMode {
   // The answer to a lights scene, read on every hass update (_layout) and every frame of the scene
   // (_sceneRender), from the live state: a tuck is answered by asleep going on, a wake by the pet and the
   // switch both off. An ok writes no log entry, so there is nothing else to wait for. No change
-  // LIGHTS_QUIET_MS after the call came back (an egg, an away pet, one tucked already, a wake of
+  // LIGHTS_QUIET_MS after the call came back (an egg, one tucked already, a wake of
   // an awake one: the server did nothing and logs nothing) is the quiet exit, not the 2 s hold.
   _lightsWatch(s) {
     const sc = s.scene;

@@ -79,6 +79,18 @@ download, restart. HACS replaces the folder you copied.
 
 - Each pet stands in its device on its world's backdrop. Use the arrows, the dots or a
   swipe to move to the next device (a mostly vertical drag, reading or selecting, does nothing). A reload comes back to the pet you were looking at.
+- **The sitter:** when nobody has been home for the "The sitter comes after" time (2 h by
+  default), a sitter comes to look after the pet. The card shows the pet as it really is,
+  with the sitter beside it (standing by day, dozing in a chair at night) and a small
+  "sitter's here" label where the resting label goes; a resting pet shows "resting" instead.
+  Everything works as at home: the buttons, the lights, the games, the pat, the pet's
+  requests, and anyone signed in can still feed, clean, play and tuck in from work. Every
+  card shows this, whether "Keep presence private" is on or off, a shared screen too (the
+  switch only hides it from sensors and Assist). The old "at the sitter's" sign is gone.
+  A card that can't reach the private channel (an older integration, or it hasn't connected
+  yet) draws the sitter beside a calmly content pet when presence is not private; with it
+  private such a card can only see a napping pet and no sitter. The sitter here is a
+  placeholder figure until its art arrives.
 - **Power-on:** the first time a browser shows the card, the screen starts like a
   new toy: a pale-green screen with the HATCH logo and a blinking "▶ tap to start".
   A tap fills in the logo and cuts to the pet (with a rising beep if you turned

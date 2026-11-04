@@ -99,7 +99,7 @@ function probe(over = {}) {
       null, null, null,
       { icon: "✕", cap: "done", aria: "done", act: (card, s) => card._modeExit(s, "quit") },
     ],
-    exit: { slot: 8, escape: true, status: "end", idleMs: 60000, on: ["asleep", "away", "egg"] },
+    exit: { slot: 8, escape: true, status: "end", idleMs: 60000, on: ["asleep", "egg"] },
     onExit: (card, s, reason) => exits.push(["exit", reason]),
     ...over,
   };
@@ -132,8 +132,8 @@ test("every SHELL_MODES entry: 8 slots, captions and labels, functions, exit fie
     assert.ok(Object.isFrozen(m) && Object.isFrozen(m.slots) && m.slots.every((x) => x === null || Object.isFrozen(x)), `${id} frozen`);
     if (m.exit) assert.ok(Object.isFrozen(m.exit) && (!m.exit.on || Object.isFrozen(m.exit.on)), `${id} exit frozen`);
   }
-  // slice 2: the three server games (slice 3 adds hop)
-  assert.deepStrictEqual(Object.keys(M.SHELL_MODES), ["left_right", "higher_lower", "dig"]);
+  // slice 2: the three server games; slice 3: hop
+  assert.deepStrictEqual(Object.keys(M.SHELL_MODES), ["left_right", "higher_lower", "dig", "hop"]);
   assert.deepStrictEqual(Object.keys(M.SHELL_TINTS), ["game"]);
   assert.match(M.SHELL_TINTS.game, /^#[0-9a-f]{6}$/);
 });
@@ -171,9 +171,9 @@ test("the schema names what is wrong", () => {
 
 test("acceptance 2: the engine part has no game words; the data part is pure", () => {
   for (const word of ["s.game", "_endGame", "GAMES"]) assert.ok(!enginePart.includes(word), `card-mode names ${word}`);
-  // The data part's schema and helpers name no game; its game entries (shellGame and the table below it, slice 2)
+  // The data part's schema and helpers name no game; its game entries (shellGame, shellHop and the table below them)
   // read `s.game` and call the game's own methods, as plan 3.1 says a slot function may.
-  const at = dataPart.indexOf("// The three server games");
+  const at = dataPart.indexOf("// The game entries");
   const rest = dataPart.slice(0, at) + dataPart.slice(dataPart.indexOf("// A cap's icon:"));
   assert.ok(at > 0 && rest.length < dataPart.length, "the comment above shellGame marks where the game entries are");
   for (const word of ["s.game", "_endGame", "GAMES"]) assert.ok(!rest.includes(word), `shell-modes names ${word} outside its game entries`);
@@ -333,9 +333,9 @@ test("Escape runs the exit slot when the mode takes it; not otherwise", () => {
   assert.ok(s.mode);
 });
 
-test("_modeGuard: asleep, away and egg when listed; idle after idleMs unless idleHold", () => {
+test("_modeGuard: asleep and egg when listed; idle after idleMs unless idleHold", () => {
   const { card, s } = shell();
-  for (const reason of ["asleep", "away", "egg"]) {
+  for (const reason of ["asleep", "egg"]) {
     card._modeEnter(s, probe());
     exits.length = 0;
     s[reason] = true;
@@ -473,7 +473,7 @@ test("slice 2: the three games' entries: slots 1, 4 and 8 only, the study's capt
     assert.strictEqual(m.exit.slot, 8);
     assert.strictEqual(m.exit.escape, true);
     assert.strictEqual(m.exit.status, "end");
-    assert.deepStrictEqual([...m.exit.on], ["asleep", "away", "egg"]);
+    assert.deepStrictEqual([...m.exit.on], ["asleep", "egg"]);
     assert.strictEqual(m.exit.idleMs, 3 * 60 * 1000);
     // the Tab order: live and blocked slots are focusable, off slots are native disabled
     const { card, s } = shell();
@@ -541,4 +541,54 @@ test("slice 2: the dig's keep is blocked on an empty basket, and the idle and ou
   assert.deepStrictEqual(ended.at(-1), ["quit", "maybe later!"], "quit is live while busy");
   q.card._modeEscape(q.s);
   assert.deepStrictEqual(ended.at(-1), ["quit", "maybe later!"]);
+});
+
+// ---- slice 3: the hop entry ----
+
+test("slice 3: the hop entry: all eight slots, the plan's order, one tint, quit on 8, the idle exit of D7", () => {
+  const m = M.SHELL_MODES.hop;
+  assert.deepStrictEqual(entryProblems(m), []);
+  assert.deepStrictEqual([...m.slots].map((x) => (typeof x.cap === "string" ? x.cap : "special")),
+    ["left", "up", "down", "right", "special", "undo", "restart", "quit"]);
+  assert.strictEqual(m.tint, "game");
+  assert.deepStrictEqual([m.exit.slot, m.exit.escape, m.exit.status, m.exit.idleMs], [8, true, "end", 3 * 60 * 1000]);
+  assert.deepStrictEqual([...m.exit.on], ["asleep", "egg"]);
+  // idle counts from the last accepted input; a settle, a load or a request holds it
+  const g = { lastAt: 5 };
+  assert.strictEqual(m.exit.idleAt({ game: g }), 5);
+  assert.deepStrictEqual([{}, { busy: true }, { settling: true }, { hopLoading: true }].map((x) => m.exit.idleHold({ game: x })),
+    [false, true, true, true]);
+  // the special's cap is the glyph and its count; it is pressed while armed
+  const s = { game: { keys: { special: { count: 2, enabled: true } }, special: true } };
+  assert.strictEqual(m.slots[4].cap(s), "✦2");
+  assert.strictEqual(m.slots[4].on(s), true);
+});
+
+test("slice 3: hop's slots read the keys the board wrote; a press runs _hopKey; every other exit ends the board", () => {
+  const m = M.SHELL_MODES.hop;
+  const { card, s } = shell();
+  const keys = { left: { enabled: true, label: "Step left" }, up: { enabled: false, label: "Step up, blocked" },
+    down: { enabled: true, label: "Step down" }, right: { enabled: false, label: "Step right, sunk" },
+    special: { enabled: false, label: "Special move, 0 left", count: 0 }, undo: { enabled: false, label: "Take back the last move" },
+    restart: { enabled: false, label: "Start the board again" } };
+  s.game = { kind: "hop", keys, special: false };
+  const pressed = [];
+  card._hopKey = (sl, k) => pressed.push(k);
+  card._modeEnter(s, m);
+  const b = [...card._modeButtons(s)];
+  assert.deepStrictEqual(b.map((x) => x.getAttribute("aria-label")),
+    ["Step left", "Step up, blocked", "Step down", "Step right, sunk", "Special move, 0 left", "Take back the last move", "Start the board again", "Stop the game"]);
+  assert.deepStrictEqual(b.map((x) => x.getAttribute("aria-disabled")), [null, "true", null, "true", "true", "true", "true", null]);
+  assert.ok(b.every((x) => !x.disabled), "no slot of hop is off: all eight are focusable");
+  assert.deepStrictEqual(b.map((x) => x.getAttribute("aria-pressed")), [null, null, null, null, "false", null, null, null]);
+  assert.strictEqual(b[4].caption.textContent, "✦0");
+  card._modeClick(s, 0);
+  card._modeClick(s, 1); // blocked: nothing
+  card._modeClick(s, 2);
+  assert.deepStrictEqual([...pressed], ["left", "down"]);
+  // exits other than the game's own end the board with no line; a restart through "game" or "replace" does not
+  const ended = [];
+  card._endGame = (sl, line) => { ended.push(line); sl.game = null; card._modeExit(sl, "game"); };
+  card._modeExit(s, "idle");
+  assert.deepStrictEqual([s.mode, [...ended]], [null, [null]]);
 });

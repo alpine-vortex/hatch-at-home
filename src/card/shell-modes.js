@@ -10,7 +10,7 @@
 //     owns,      // owns the screen (default true): the card's _owned(s), section 3.7
 //     busy,      // the director treats the device as busy (default true)
 //     exit,      // { slot: 1-8 | null, escape, status: "end" | "keep",
-//                //   idleMs, idleAt(s), idleHold(s), on: ["asleep" | "away" | "egg"] }
+//                //   idleMs, idleAt(s), idleHold(s), on: ["asleep" | "egg"] }
 //     announce,  // the lead of the one announcement when the buttons swap
 //     onExit }   // optional (card, s, reason): ends whatever the mode started
 // A slot: { icon, cap, aria, title, act, enabled, on }. `cap`, `aria` and `title` are a string or a
@@ -20,18 +20,18 @@
 const SHELL_SLOTS = 8;
 // The reasons a mode may list in exit.on (the always-on ones, a slide change, another pet on the
 // slide, the card going, a reload, cannot be turned off and are not listed).
-const SHELL_EXIT_ON = Object.freeze(["asleep", "away", "egg"]);
+const SHELL_EXIT_ON = Object.freeze(["asleep", "egg"]);
 const SHELL_EXIT_STATUS = Object.freeze(["end", "keep"]);
 // One colour for every game (owner decision D5), not the world's accent. A later non-game mode may add
 // its own key.
 const SHELL_TINTS = Object.freeze({ game: "#c4e2f2" });
 
-// The three server games (slice 2): two inputs on the outer slots 1 and 4 (owner decision D3), quit on 8,
+// The game entries (slices 2 and 3), shellGame and shellHop. The three server games (slice 2): two inputs on the outer slots 1 and 4 (owner decision D3), quit on 8,
 // the rest off. Every slot but quit is blocked while a request is out (`g.busy`); the dig's keep also
 // while the basket is empty. A game's slot functions read `s.game` (its own state); the engine does not.
 // The glyphs are the stopgaps of decision D5 (the pixel icons are slice 4). Escape and the quit slot run
 // the game's own quit path (the server's "end" call, then _endGame, which exits the mode); an exit from
-// outside the game (idle, asleep, away, egg, a reload) ends the game with no server call, as the
+// outside the game (idle, asleep, egg, a reload) ends the game with no server call, as the
 // card-layout idle block did: the server has dropped it already. The dig's idle line is its bubble.
 function shellGame(id, left, right, idleLine) {
   const open = (s) => !s.game?.busy;
@@ -45,7 +45,7 @@ function shellGame(id, left, right, idleLine) {
     tint: "game",
     announce: "game buttons on",
     exit: {
-      slot: 8, escape: true, status: "end", on: ["asleep", "away", "egg"],
+      slot: 8, escape: true, status: "end", on: ["asleep", "egg"],
       idleMs: GAME_IDLE_MS, idleAt: (s) => s.game?.lastAt, idleHold: (s) => !!s.game?.busy,
     },
     onExit: (card, s, reason) => {
@@ -55,7 +55,43 @@ function shellGame(id, left, right, idleLine) {
   };
 }
 
-// The shipped modes, by id. Slice 3 adds hop. A probe (the bench's, card-check's, the node test's) is an
+// Hop of the Day (slice 3), the one game that uses all eight: left, up, down, right on the top row, special
+// (with its count), undo, restart and quit below (plan 3.4). The keys' state is `s.game.keys`, written by
+// the board's _hopDraw (enabled, label), so these functions are pure reads of the slide. Escape and the quit
+// slot run the game's quit path; hop is not a server game, so that makes no call. The idle exit (D7) counts
+// from the last accepted input and waits while a settle, the board's load or a request is in flight.
+// Glyphs are the stopgaps of D5; the special's cap is the glyph and its count ("special 2" clips at narrow
+// widths, plan 3.6). Any other exit ends the board with no line; it is resumable from the parked list.
+function shellHop() {
+  const key = (name, icon, cap) => ({
+    icon, cap,
+    aria: (s) => s.game?.keys?.[name]?.label || name,
+    enabled: (s) => !!s.game?.keys?.[name]?.enabled,
+    act: (card, s) => card._hopKey(s, name),
+  });
+  return {
+    id: "hop",
+    slots: [
+      key("left", "◀", "left"), key("up", "▲", "up"), key("down", "▼", "down"), key("right", "▶", "right"),
+      { ...key("special", "✦", (s) => `✦${s.game?.keys?.special?.count ?? 0}`), on: (s) => !!s.game?.special },
+      key("undo", "↶", "undo"), key("restart", "↻", "restart"),
+      { icon: "✕", cap: "quit", aria: "Stop the game", act: (card, s) => card._quitGame(s, card._quitLine(s)) },
+    ],
+    tint: "game",
+    announce: "game buttons on",
+    exit: {
+      slot: 8, escape: true, status: "end", on: ["asleep", "egg"],
+      idleMs: GAME_IDLE_MS, idleAt: (s) => s.game?.lastAt,
+      idleHold: (s) => !!(s.game?.busy || s.game?.settling || s.game?.hopLoading),
+    },
+    onExit: (card, s, reason) => {
+      if (reason === "game" || reason === "replace" || !s.game) return;
+      card._endGame(s, null);
+    },
+  };
+}
+
+// The shipped modes, by id. A probe (the bench's, card-check's, the node test's) is an
 // object passed to _modeEnter, not an entry.
 const SHELL_MODES = Object.freeze({
   left_right: shellFreeze(shellGame("left_right",
@@ -67,6 +103,7 @@ const SHELL_MODES = Object.freeze({
   dig: shellFreeze(shellGame("dig",
     { icon: "✓", cap: "keep", aria: "Keep the basket", enabled: (s) => !s.game?.busy && !!s.game?.basket },
     { icon: "✱", cap: "dig", aria: "Dig a leaf" }, GAME_COPY.idle)),
+  hop: shellFreeze(shellHop()),
 });
 
 // A cap's icon: a frontend/ui pixel icon ("icon_..."), one of the shelf's outline icons (ICON_PATHS:

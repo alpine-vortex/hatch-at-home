@@ -299,7 +299,8 @@ the engine adds. Reasons in **bold** are always on for every mode; the others ar
 | `card-layout.js:786-788` (`_toggleStatus`) | the status sheet opening | `_quitGame(s, null)` (`:786`, D8: this stays) | **built (`:788`):** `exit.status`: `"end"` (the games, `_modeExit(s,"status")`) or `"keep"` (the mode stays, and a press on a swapped cap closes the sheet first). A non-game mode picks per mode in its table entry (D8). |
 | `card-games.js:426, :583` | game over (win, loss) | `_endGame` after the result | `_endGame` calls `_modeExit(s,"game")` |
 | `card-games.js:365, :400, :543`; `card-board.js:180/185/193` | a refusal, someone else playing, a reply that cannot be played | `_endGame(s, line)` | the same. The server games enter at `_pickGame`, before the answer, so a refusal swaps the shell and restores it within a few frames: accepted (review P11), and slice 2 proves the restore. Hop enters at `_hopStart`, after the answer, so Hop's open failures never swap. |
-| `card-games.js:8` (`_startGame`) | Play pressed during the picker | `_quitGame` and a new picker | only reachable with no mode on: with D1 the Play cap is swapped during a game. No mode exit. |
+| `card-games.js:6` (`_startGame`) | Play pressed during the picker | `_quitGame` and a new picker | **Changed in slice 3 (FM, 2026-11-04):** Play pressed while the picker is open **closes** it (`_endGame`), because the picker has no close button once `.gx` goes. Only reachable with no mode on: with D1 the Play cap is swapped during a game. No mode exit. |
+| `card-build.js` (the screen's click) | a tap on the screen outside the picker's list (slice 3, FM 2026-11-04) | none (a tap with a game on show did nothing) | **Closes the picker** (`_endGame`), never opens the status sheet; a swipe does not. A started game keeps its screen. |
 | `_modeEnter` | another mode | n/a | replaced (3.2) |
 
 Escape (review P5, **built in slice 1**): the handler moved from `s.gameBox` (it was `card-build.js:269-271`) to the device
@@ -701,6 +702,7 @@ The study proposed only these, as proposals. Nothing else here is player-facing.
   the existing prev/next arrows. **Their captions are open (Q-B, top of this document):** this
   line said "no caption", but the schema and slice 1's acceptance 1 need non-empty, unique
   captions. Proposed: "left" and "right". Needs first-mate copy approval like the rest.
+- Hop's captions (FM copy approval, 2026-11-04): "left", "up", "down", "right", the special's glyph and count ("✦2"), "undo", "restart", "quit".
 - Off slots have no caption and no label.
 
 ## 10. Owner decisions on the review, and what is open

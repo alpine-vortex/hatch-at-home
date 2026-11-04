@@ -427,7 +427,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, inject
       // Whatever the dev pet wants right now (a call, a blanket or fan request, sick, resting) adds
       // a "would like" row or a line to this 158 px box at 330: measure the controls with no want,
       // as the check means to, whatever the pet happens to be doing on the run.
-      if (key === "sensor.mood" && st && st.state !== "away") {
+      if (key === "sensor.mood" && st) {
         return { ...st, state: "content", attributes: { ...st.attributes, reason: "all good", reason_key: "content", flags: [], requests: [] } };
       }
       return st;
@@ -3676,7 +3676,51 @@ async function main() {
   await page.waitForTimeout(600);
   check("experimental_catch: true is ignored: the picker keeps its three games, no catch",
     (await cur().locator(".gpick button").count()) === 3 && (await cur().locator('.gpick [data-game="catch"]').count()) === 0);
-  await cur().locator(".gx").click();
+  // The picker has no close button (shell modes slice 3): Escape, Play again and a tap on the screen outside its
+  // list close it. A tap and a press over a second or two: the pet's idle is held still (the shard 4 rule).
+  await quietIdle(card);
+  const pickerState = () => card.evaluate((el) => {
+    const s = el._slides[el._index];
+    return { game: !!s.game, hidden: s.gameBox.hidden, status: s.screen.classList.contains("show-status"), mode: !!s.mode,
+      play: s.buttons.play.getAttribute("aria-label") };
+  });
+  const before = await pickerState();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  const byEscape = await pickerState();
+  await button(2).click(); // Play opens the picker again
+  await page.waitForTimeout(500);
+  const open2 = await pickerState();
+  await button(2).click(); // Play while it is open closes it
+  await page.waitForTimeout(300);
+  const byPlay = await pickerState();
+  await button(2).click();
+  await page.waitForTimeout(500);
+  const open3 = await pickerState();
+  const blank = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const r = s.screen.getBoundingClientRect();
+    const list = [...s.gameBox.querySelectorAll(".gpick button, .ghop")].map((b) => b.getBoundingClientRect());
+    // a point on the screen's left edge, level with the middle, clear of every button of the list
+    const y = r.top + r.height * 0.5;
+    return { x: r.left + 3, y, clear: list.every((b) => b.left > r.left + 3 || b.top > y || b.bottom < y) };
+  });
+  await page.mouse.click(blank.x, blank.y); // a tap outside the list
+  await page.waitForTimeout(300);
+  const byTap = await pickerState();
+  await button(2).click();
+  await page.waitForTimeout(500);
+  const open4 = await pickerState();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  const closed = await pickerState();
+  await quietIdle(card, false);
+  check("the picker closes three ways with no close button: Escape, Play pressed again, and a tap on the screen outside its list (never the status sheet)",
+    before.game && !byEscape.game && byEscape.hidden && open2.game && !byPlay.game && byPlay.hidden && !byPlay.status &&
+      open3.game && blank.clear && !byTap.game && byTap.hidden && !byTap.status && !byTap.mode,
+    JSON.stringify({ before, byEscape, open2, byPlay, open3, blank, byTap }));
+  check("the picker opens again after each close, and the care Play cap is back (a tap on a game in the list still starts it: the play section above)",
+    open4.game && !closed.game && closed.play === byPlay.play, JSON.stringify({ open4, closed, byPlay }));
   await page.waitForTimeout(300);
   // 3a. Reduced motion: the pet's src stays one still picture, even in a game. Time is
   // moved, never waited for.
@@ -3739,7 +3783,7 @@ async function main() {
       await page.waitForTimeout(1000);
     };
     const stop = async () => {
-      await cur().locator(".gx").click();
+      await button(7).click(); // the shell's quit slot
       await page.waitForTimeout(300);
     };
     await skip(page, 4500); // let the result line clear
@@ -4191,7 +4235,7 @@ async function main() {
       const again = await score();
       await button(3).click(); // and it plays on
       await page.waitForTimeout(1400);
-      const live = await cur().locator(".gx").count();
+      const live = await cur().locator(".device.moded").count(); // still in the dig: the shell is on its keys
       check("dig F16: the second screen of one person adopts the server's round, and both keep playing",
         theirs?.result === "ok" && adopted.live && adopted.said === "oh! you dug there too ♪" &&
           adopted.round >= 1 && live === 1,
@@ -4329,7 +4373,7 @@ async function main() {
     const playLive = await gameLive();
     // Shell modes slice 2 (owner decision D1, plan 3.5): the Play cap is swapped out during a game, so it is
     // an off slot and the old "Play mid-game restarts as the picker" cannot happen; the game stays, and
-    // Play pressed in the picker (no mode yet) still starts the picker over.
+    // Play pressed in the picker (no mode yet) closes it (slice 3: the picker has no close button).
     const playOff = await button(2).evaluate((b) => b.disabled && b.getAttribute("aria-hidden") === "true");
     await card.evaluate((el) => el._modeClick(el._slides[el._index], 2));
     await page.waitForTimeout(400);
@@ -4338,11 +4382,12 @@ async function main() {
       const stays = { game: s.game?.kind === "left_right" && !s.game.picking, mode: s.mode?.id === "left_right" };
       el._endGame(s, null);
       el._startGame(s, s.buttons.play);
-      el._startGame(s, s.buttons.play); // Play in the picker starts it over
-      return { ...stays, picking: !!s.game?.picking, prop: !s.propEl.hidden, again: !s.mode };
+      const opened = !!s.game?.picking;
+      el._startGame(s, s.buttons.play); // Play in the picker closes it
+      return { ...stays, opened, closed: !s.game, prop: !s.propEl.hidden, again: !s.mode };
     });
-    check("Play mid-game is an off slot (D1): the game stays; Play in the picker starts it over, no prop over it",
-      playLive && playOff && playEnd.game && playEnd.mode && playEnd.picking && playEnd.again && !playEnd.prop, `${playLive} ${playOff} ${JSON.stringify(playEnd)}`);
+    check("Play mid-game is an off slot (D1): the game stays; Play in the picker closes it, no prop over it",
+      playLive && playOff && playEnd.game && playEnd.mode && playEnd.opened && playEnd.closed && playEnd.again && !playEnd.prop, `${playLive} ${playOff} ${JSON.stringify(playEnd)}`);
     await card.evaluate((el) => el._endGame(el._slides[el._index], null));
     if (slides > 1) {
       await open("left_right");
@@ -4470,8 +4515,17 @@ async function main() {
       await cur().locator(".ghop").click();
       await page.waitForTimeout(500);
     };
+    // The board's keys are the shell's eight buttons (the `hop` mode, shell modes slice 3).
+    const HOPKEYS = ["left", "up", "down", "right", "special", "undo", "restart", "quit"];
+    const key = (k) => button(HOPKEYS.indexOf(k));
+    // The keys that are live now, by name (a blocked one is aria-disabled).
+    const liveKeys = () => card.evaluate((el, names) => el._modeButtons(el._slides[el._index])
+      .map((b, i) => [names[i], b.getAttribute("aria-disabled") !== "true" && !b.disabled]).filter(([, on]) => on).map(([n]) => n), HOPKEYS);
+    const liveDir = async () => (await liveKeys()).find((x) => ["left", "up", "down", "right"].includes(x));
+    // Out of a board: the quit slot; out of the picker (no mode, no close button now): Escape on the device.
     const quit = async () => {
-      if (await cur().locator(".game").isVisible()) await cur().locator(".gx").click();
+      if (await cur().locator(".device.moded").count()) await key("quit").click();
+      else if (await cur().locator(".game").isVisible()) await card.evaluate((el) => el._slides[el._index].device.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
       await page.waitForTimeout(250);
     };
     const game = () => card.evaluate((el) => {
@@ -4484,7 +4538,6 @@ async function main() {
     const stored = () => card.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter((k) => k.startsWith("hatch-hop|"))
       .map((k) => [k.replace(/^hatch-hop\|[^|]*\|/, ""), localStorage.getItem(k)])));
     const targets = () => card.evaluate((el) => el._hopTargets(el._slides[el._index].game));
-    const key = (k) => cur().locator(`.hk[data-k="${k}"]`);
 
     // Off by default: no row, no board; the picker's count is the old three.
     await flag(false);
@@ -4519,15 +4572,13 @@ async function main() {
       const box = s.gameBox.getBoundingClientRect();
       const games = [...s.gameBox.querySelectorAll(".gpick button")].map(rect);
       const row = rect(s.gameBox.querySelector(".ghop"));
-      const [gx, bub] = [rect(s.gameBox.querySelector(".gx")), rect(s.bubble)];
+      const bub = rect(s.bubble);
       const bad = [];
       for (const [i, g] of games.entries()) {
-        if (hit(g, gx)) bad.push(`game${i}+close`);
         if (hit(g, bub)) bad.push(`game${i}+prompt`);
         if (hit(g, row)) bad.push(`game${i}+row`);
         if (g.bottom > box.bottom + 0.5) bad.push(`game${i} off the foot`);
       }
-      if (hit(row, gx)) bad.push("row+close");
       if (hit(row, bub)) bad.push("row+prompt");
       if (row && row.bottom > box.bottom + 0.5) bad.push("row off the foot");
       return { bad, cardW: Math.round(el.getBoundingClientRect().width), boxW: Math.round(box.width), boxH: Math.round(box.height),
@@ -4575,18 +4626,19 @@ async function main() {
     await open(replyOf("sample"));
     const up = await card.evaluate((el) => {
       const s = el._slides[el._index];
-      return { kind: s.game?.kind, hopb: !!s.gameBox.querySelector(".hopb:not([hidden])"), keys: s.gameBox.querySelectorAll(".hk").length,
-        gl: !s.gameBox.querySelector(".gl"), gr: !s.gameBox.querySelector(".gr"), gpick: s.gameBox.querySelector(".gpick").hidden,
-        row: s.gameBox.querySelector(".ghop").hidden, labels: [...s.gameBox.querySelectorAll(".hk")].map((k) => k.getAttribute("aria-label")),
-        close: !s.gameBox.querySelector(".gx").hidden };
+      return { kind: s.game?.kind, hopb: !!s.gameBox.querySelector(".hopb:not([hidden])"), mode: s.mode?.id,
+        old: !s.gameBox.querySelector(".gl, .gr, .gx, .hk, .hkeys"), gpick: s.gameBox.querySelector(".gpick").hidden,
+        row: s.gameBox.querySelector(".ghop").hidden, labels: el._modeButtons(s).map((k) => k.getAttribute("aria-label")),
+        quit: el._modeButtons(s)[7].getAttribute("aria-disabled") !== "true" };
     });
-    check("the keys show with the board: seven keys and the close button, the old keys and the picker gone",
-      up.kind === "hop" && up.hopb && up.keys === 7 && up.gl && up.gr && up.gpick && up.row && up.close, JSON.stringify(up));
+    check("the keys show with the board: the eight shell buttons are the keys (seven and quit), the old keys and the picker gone",
+      up.kind === "hop" && up.hopb && up.mode === "hop" && up.old && up.gpick && up.row && up.quit && up.labels.length === 8, JSON.stringify(up));
     check("the keys carry aria labels, and a blocked direction says why",
       up.labels.every(Boolean) && up.labels.some((l) => /, (blocked|sunk)$/.test(l)) &&
         up.labels.includes("Take back the last move") && up.labels.includes("Start the board again") &&
         up.labels.some((l) => /^Special move, \d left$/.test(l)), JSON.stringify(up.labels));
-    check("the care pad is the same while a board is open", JSON.stringify(await padOf()) === JSON.stringify(padBefore));
+    check("the care pad is swapped for the keys while a board is open, and back after the quit",
+      JSON.stringify(await padOf()) !== JSON.stringify(padBefore));
     await shot("board-300-start");
     const calls = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
@@ -4598,7 +4650,7 @@ async function main() {
       el._press = (...a) => { seen.push("_press"); return press.apply(el, a); };
       el._toggleLights = (...a) => { seen.push("_toggleLights"); return lights.apply(el, a); };
       try {
-        for (const k of s.gameBox.querySelectorAll(".hk")) k.click();
+        for (const b of el._modeButtons(s).slice(0, 7)) b.click();
         el._quitGame(s, null); // a board's quit: no play_game call
       } finally {
         el._hass.callService = real;
@@ -4652,8 +4704,7 @@ async function main() {
       !!dead && after.moves === before.moves && after.lit === before.lit && (await cur().locator(".bubble").innerText()) === sayBefore,
       JSON.stringify({ dead, before, after, far: !!far }));
     await quietIdle(card, false);
-    const arrows = await card.evaluate((el) => [...el._slides[el._index].gameBox.querySelectorAll('.hk[aria-disabled="false"]')].map((k) => k.dataset.k));
-    const arrow = arrows.find((k) => ["left", "up", "down", "right"].includes(k));
+    const arrow = await liveDir();
     const beforeArrow = await game();
     await key(arrow).click();
     const afterArrow = await game();
@@ -4676,11 +4727,7 @@ async function main() {
     const start = await game();
     await key("special").click();
     const sp = await targets();
-    const jump = await card.evaluate((el) => {
-      const s = el._slides[el._index];
-      const g = s.game;
-      return g.el.keys.querySelector('.hk[data-k="left"][aria-disabled="false"], .hk[data-k="right"][aria-disabled="false"], .hk[data-k="up"][aria-disabled="false"], .hk[data-k="down"][aria-disabled="false"]')?.dataset.k;
-    });
+    const jump = await liveDir();
     if (jump) await key(jump).click();
     const jumped = await game();
     if (jumped?.moves) await key("undo").click();
@@ -4844,8 +4891,7 @@ async function main() {
     const home = await card.evaluate((el) => el._index);
     await open(replyOf("sample", id));
     for (let n = 0; n < 3; n++) {
-      const k = await card.evaluate((el) => [...el._slides[el._index].gameBox.querySelectorAll('.hk[aria-disabled="false"]')]
-        .map((b) => b.dataset.k).find((x) => ["left", "up", "down", "right"].includes(x)));
+      const k = await liveDir();
       if (k) await key(k).click();
     }
     const parked = await game();
@@ -4865,7 +4911,7 @@ async function main() {
       check(`${label}: the moves are kept and resume as they were`, gone && JSON.stringify(kept) === JSON.stringify(w1) &&
         JSON.stringify(back.list) === JSON.stringify(parked.list) && back.pos === parked.pos, JSON.stringify({ gone, kept, back, parked }));
     };
-    await same(() => cur().locator(".gx").click(), "the close button");
+    await same(() => key("quit").click(), "the quit button");
     await same(() => page.keyboard.press("Escape"), "Escape on the card");
     await same(() => card.evaluate((el) => el._endGame(el._slides[el._index], null)), "the card's own _endGame (card removal and the failed call)");
     const two = await card.evaluate((el) => el._slides.length > 1);
@@ -4942,15 +4988,16 @@ async function main() {
         return { done: g.done, settled: g.settled, tidy: g.tidy, sent: (el.__settles || []).length, bubble: s.bubble.textContent,
           parked: Object.keys(localStorage).filter((k) => k.startsWith("hatch-hop|")).map((k) => localStorage.getItem(k)) };
       }, letters);
-      const view = () => card.evaluate((el) => {
+      const view = () => card.evaluate((el, names) => {
         const s = el._slides[el._index];
         const g = s.game;
-        const k = (n) => g?.el?.keys.querySelector(`[data-k="${n}"]`);
+        const k = (n) => el._modeButtons(s)[names.indexOf(n)];
         return g && { id: g.id, done: g.done, settled: g.settled, tidy: g.tidy, moves: g.moves.length, pos: g.st.pos,
           nest: g.board.grid.join("").indexOf("N"), start: g.board.grid.join("").indexOf("P"), bubble: s.bubble.textContent,
-          restart: k("restart").getAttribute("aria-disabled"), restartAria: k("restart").getAttribute("aria-label"),
-          undo: k("undo").getAttribute("aria-disabled"), sent: (el.__settles || []).length, fetches: el.__fetches };
-      });
+          // a live slot has no aria-disabled attribute (a blocked one has "true"): read as the old keys' "false" / "true"
+          restart: k("restart").getAttribute("aria-disabled") === "true" ? "true" : "false", restartAria: k("restart").getAttribute("aria-label"),
+          undo: k("undo").getAttribute("aria-disabled") === "true" ? "true" : "false", sent: (el.__settles || []).length, fetches: el.__fetches };
+      }, HOPKEYS);
       const settles = () => card.evaluate((el) => el.__settles);
       await card.evaluate((el) => { el._lines = (s, key, normal) => ({ text: normal }); }); // no persona or baby voice in a text check
       await card.evaluate((el) => { el._slides[el._index].hopSeen = null; });
@@ -5031,8 +5078,8 @@ async function main() {
         JSON.stringify({ v5, stored: await stored() }));
       await quit();
 
-      // egg, away, asleep: the list is kept, the REFUSALS line is said, restart is off while unsettled (Q2).
-      for (const [result, line] of [["egg", "..."], ["away", "i'm at the sitter's!"], ["asleep", "shh... sleeping"]]) {
+      // egg, asleep: the list is kept, the REFUSALS line is said, restart is off while unsettled (Q2).
+      for (const [result, line] of [["egg", "..."], ["asleep", "shh... sleeping"]]) {
         const id = `settle-${result}`;
         await settleStub([{ result }]);
         await openBoard(await boardOf(id));
@@ -5194,8 +5241,7 @@ async function main() {
     // Reduced motion: a move is a cut (no transition, the piece already on its cell).
     await page.emulateMedia({ reducedMotion: "reduce" });
     await open(replyOf("sample", "board-id-4"));
-    const kr = await card.evaluate((el) => [...el._slides[el._index].gameBox.querySelectorAll('.hk[aria-disabled="false"]')]
-      .map((b) => b.dataset.k).find((x) => ["left", "up", "down", "right"].includes(x)));
+    const kr = await liveDir();
     await key(kr).click();
     const cut = await card.evaluate((el) => {
       const s = el._slides[el._index];
@@ -5295,7 +5341,7 @@ async function main() {
             slot(8, { cap: "quit", aria: "quit the probe", act: (card, s) => { sm.acts.push(8); card._modeExit(s, "quit"); } })],
           onExit: (card, s, reason) => sm.log.push(`${m.id}:${reason}`),
           ...over,
-          exit: { slot: 8, escape: true, status: "end", on: ["asleep", "away", "egg"], ...(over.exit || {}) },
+          exit: { slot: 8, escape: true, status: "end", on: ["asleep", "egg"], ...(over.exit || {}) },
         };
         return m;
       };
@@ -5469,7 +5515,7 @@ async function main() {
       return sm.row("asleep");
     });
     row("asleep (a push)", r);
-    for (const reason of ["away", "egg"]) {
+    for (const reason of ["egg"]) {
       r = await card.evaluate((el, reason) => {
         const sm = el.__sm;
         const s = sm.s();
@@ -5740,7 +5786,7 @@ async function main() {
         el._renderSlide(s);
         rows.push(sm.gone(s, "asleep (a push, no end call)", kind));
         rows.at(-1).ok = rows.at(-1).ok && !rows.at(-1).ended;
-        for (const reason of ["away", "egg"]) {
+        for (const reason of ["egg"]) {
           s = await sm.start(kind);
           s[reason] = true;
           el._modeGuard(s);
@@ -5887,6 +5933,161 @@ async function main() {
       }
       return rows;
     }));
+    // Slice 3 (acceptance 3-6): Hop of the Day on the shell. The board and the settle are stubbed on the card
+    // (_hopFetch, _hopSettle); the eight are the keys (left up down right, special, undo, restart, quit).
+    const HOPFX = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "dev", "bench", "hop-boards.json"), "utf8")).boards["hop-child"];
+    const hopRows = await card.evaluate(async (el, fx) => {
+      const sm = el.__sm;
+      const rows = [];
+      const NAMES = ["left", "up", "down", "right", "special", "undo", "restart", "quit"];
+      const wipe = () => { for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-hop|")) localStorage.removeItem(k); };
+      const stored = () => Object.keys(localStorage).filter((k) => k.startsWith("hatch-hop|")).length;
+      let settleReply = { result: "ok", won: true, tidy: false, paid: true, found: false, already: false };
+      let hold = null;
+      el._hopFetch = async () => ({ ...fx.reply, day: "2026-11-03", done: false, tidy: false });
+      el._hopSettle = async () => { await (hold || null); return settleReply; };
+      const start = async (keep = false) => {
+        const s = sm.s();
+        if (!keep) wipe();
+        s.hopSeen = null;
+        s.buttons.play.focus({ preventScroll: true });
+        sm.before = sm.snap(s);
+        sm.log.length = sm.calls.length = sm.sent.length = 0;
+        s.game = { picking: true };
+        await el._hopOpen(s);
+        return s;
+      };
+      const st = (s) => sm.slotState(s).join();
+      const play = (s, letters) => { for (const ch of letters) el._hopMove(s, "abcdefghijklmnopqrstuvwx".indexOf(ch)); };
+      const gone = (s, label, extra = {}) => { const r = sm.gone(s, label, "hop", extra); r.ok = r.ok && !r.ended; return r; };
+      const dirs = (s) => sm.eight(s).slice(0, 4).map((b, i) => (b.getAttribute("aria-disabled") === "true" ? null : i)).filter((i) => i !== null);
+      try {
+        // 3. The keys: all eight are slots (none off), one tint, the labels and the special's count; a move, undo, restart
+        let s = await start();
+        const open = { st: st(s), mode: s.mode?.id, kind: s.game?.kind, caps: sm.eight(s).map((b) => b.children[1].textContent).join(), focus: sm.focus(s),
+          live: s.modeLive.textContent, gx: s.gameBox.querySelectorAll(".gx, .hk, .hkeys, .gl, .gr").length,
+          pressed: sm.eight(s)[4].getAttribute("aria-pressed"), aria5: sm.eight(s)[4].getAttribute("aria-label"),
+          blockedLabels: sm.eight(s).slice(0, 4).filter((b) => b.getAttribute("aria-disabled") === "true").map((b) => b.getAttribute("aria-label")) };
+        const d = dirs(s);
+        sm.eight(s)[4].click(); // special on
+        const armed = { pressed: sm.eight(s)[4].getAttribute("aria-pressed"), cls: sm.eight(s)[4].classList.contains("armed"), g: s.game.special };
+        sm.eight(s)[4].click(); // and off
+        const unarmed = { pressed: sm.eight(s)[4].getAttribute("aria-pressed"), g: s.game.special };
+        const before = { moves: s.game.moves.length, restart: sm.eight(s)[6].getAttribute("aria-disabled"), undo: sm.eight(s)[5].getAttribute("aria-disabled") };
+        sm.eight(s)[d[0]].click(); // a move
+        const moved = { moves: s.game.moves.length, restart: sm.eight(s)[6].getAttribute("aria-disabled"), undo: sm.eight(s)[5].getAttribute("aria-disabled"),
+          press: sm.calls.filter((c) => c === "button.press").length };
+        sm.eight(s)[5].click(); // undo
+        const undone = s.game.moves.length;
+        sm.eight(s)[d[0]].click();
+        sm.eight(s)[6].click(); // restart
+        const restarted = s.game.moves.length;
+        rows.push({ kind: "hop", label: "the keys: all eight slots, labels, the special toggles aria-pressed, a move, undo, restart", open, armed, unarmed, before, moved, undone, restarted,
+          ok: open.mode === "hop" && open.kind === "hop" && !/off/.test(open.st) && /live$/.test(open.st) && /^left,up,down,right,✦\d,undo,restart,quit$/.test(open.caps) &&
+            open.gx === 0 && open.pressed === "false" && /^Special move, \d left$/.test(open.aria5) && open.blockedLabels.every((l) => /, (blocked|sunk)$/.test(l)) &&
+            open.live.startsWith("game buttons on: ") && open.focus === d[0] && armed.pressed === "true" && armed.cls && armed.g === true && unarmed.pressed === "false" && !unarmed.g &&
+            before.moves === 0 && before.undo === "true" && before.restart === "true" && moved.moves === 1 && moved.undo === null && moved.restart === null && moved.press === 0 &&
+            undone === 0 && restarted === 0 });
+        el._modeClick(s, 7); // 8 quits
+        rows.push(gone(s, "slot 8 quits (no server call)"));
+        // 4. A solved board: 5 and 6 blocked, 8 live; 7 live only when the board is not tidy and the server has settled it
+        s = await start();
+        hold = new Promise((done) => { sm.releaseHop = done; });
+        play(s, fx.win);
+        const unsettled = st(s); // the settle is out: 7 blocked
+        const heldIdle = (() => { s.game.lastAt = Date.now() - 3 * 60 * 1000 - 1000; el._modeGuard(s); const held = !!s.mode; s.game.lastAt = Date.now(); return held; })(); // a settle in flight holds the idle exit (the tick must not end it later)
+        sm.releaseHop();
+        hold = null;
+        await sm.sleep(80);
+        const plain = st(s);
+        settleReply = { ...settleReply, tidy: true };
+        el._hopRestart(s);
+        play(s, fx.tidy);
+        await sm.sleep(80);
+        const tidy = st(s);
+        settleReply = { ...settleReply, tidy: false };
+        el._modeClick(s, 7);
+        rows.push(gone(s, "a solved board: 5, 6 blocked, 8 live, 7 live only when not tidy and settled; leaving restores the eight", { unsettled, plain, tidy, heldIdle }));
+        rows.at(-1).ok = rows.at(-1).ok && unsettled === "blocked,blocked,blocked,blocked,blocked,blocked,blocked,live" && plain === "blocked,blocked,blocked,blocked,blocked,blocked,live,live" &&
+          tidy === "blocked,blocked,blocked,blocked,blocked,blocked,blocked,live" && heldIdle;
+        // 5. Idle: held while a settle or a load is out, then it ends; the care buttons are back and the list is parked
+        s = await start();
+        play(s, fx.win.slice(0, 2));
+        s.game.lastAt = Date.now() - 3 * 60 * 1000 + 5000;
+        el._modeGuard(s);
+        const notYet = !!s.mode;
+        s.game.lastAt = Date.now() - 3 * 60 * 1000 - 1000;
+        s.game.hopLoading = true;
+        el._modeGuard(s);
+        const loading = !!s.mode;
+        s.game.hopLoading = false;
+        s.game.settling = true;
+        el._modeGuard(s);
+        const settling = !!s.mode;
+        s.game.settling = false;
+        el._modeGuard(s);
+        rows.push(gone(s, "idle for GAME_IDLE_MS ends it (held while a settle or a load is out); the list stays parked", { notYet, loading, settling, parked: stored() }));
+        rows.at(-1).ok = rows.at(-1).ok && notYet && loading && settling && stored() === 1;
+        // ... and it comes back: the same board resumes with its moves
+        s = await start(true);
+        const resumed = s.game.moves.length;
+        el._modeClick(s, 7);
+        rows.push(gone(s, "the parked board resumes after an idle exit", { resumed }));
+        rows.at(-1).ok = rows.at(-1).ok && resumed === 2;
+        // 6. The exit rows
+        s = await start();
+        sm.eight(s)[d[0]].dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true }));
+        rows.push(gone(s, "Escape with focus on a swapped cap"));
+        rows.at(-1).ok = rows.at(-1).ok && rows.at(-1).focus === 2;
+        s = await start();
+        sm.over["binary_sensor.asleep"] = { state: "on" };
+        el._renderSlide(s);
+        sm.over = { "sensor.energy": { state: "80" } };
+        el._renderSlide(s);
+        rows.push(gone(s, "asleep (a push)"));
+        s = await start();
+        s.egg = true;
+        el._modeGuard(s);
+        s.egg = false;
+        rows.push(gone(s, "egg"));
+        s = await start();
+        const at = el._index;
+        const other = el._slides.findIndex((x, i) => i !== at && x.ids);
+        if (other >= 0) {
+          el._go(other);
+          el._go(at);
+        }
+        rows.push(gone(s, "_go to another slide", { other }));
+        await sm.sleep(600);
+        s = await start();
+        el._forget(s);
+        el._redraw(s);
+        rows.push(gone(s, "_forget"));
+        s = await start();
+        sm.over["sensor.life_stage"] = { state: "unavailable" };
+        el._redraw(s);
+        await sm.sleep(400);
+        const reloading = s.reloading && sm.eight(s).every((b) => b.disabled);
+        sm.over = { "sensor.energy": { state: "80" } };
+        el._redraw(s);
+        await sm.sleep(400);
+        rows.push(gone(s, "an integration reload (D10)", { reloading }));
+        rows.at(-1).ok = rows.at(-1).ok && reloading;
+        s = await start();
+        el._toggleStatus(s);
+        const closed = !s.mode && !s.game;
+        el._toggleStatus(s);
+        rows.push(gone(s, "the status sheet (D8)", { closed }));
+        rows.at(-1).ok = rows.at(-1).ok && closed;
+        // acceptance 9 (a flag-off card has no Hop row and no Hop mode) is the board section's first check.
+      } finally {
+        delete el._hopFetch;
+        delete el._hopSettle;
+        wipe();
+      }
+      return rows;
+    }, HOPFX);
+    gameRows(hopRows);
     await card.evaluate((el) => {
       delete el._playCall;
       el.__sm.over = {};
@@ -11505,7 +11706,9 @@ async function main() {
     const hit = (a, b) => a && b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
     const marks = () => [...s.mark.classList].filter((c) => c.startsWith("dir-mark-")).join();
     // show what the screen can show, at its own size: a long line, the wish, the pat box, the basket, the request
-    const kept = [s.attention, s.bubble, s.pat, s.basket, s.request].map((e) => [e, e.hidden, e.style.cssText, e.className, e.textContent]);
+    const kept = [s.attention, s.bubble, s.pat, s.basket, s.request].map((e) => [e, e.hidden, e.style.cssText, e.className, e.children.length ? null : e.textContent]);
+    // (text is put back only on a node with no children: textContent = "" on the basket would wipe its <img>,
+    // and the put-back _channel -> _basketSync then threw on the missing firstElementChild: the shard 3 flake.)
     s.attention.style.display = "block"; if (!s.attention.getAttribute("src")) s.attention.alt = "wants attention";
     s.bubble.textContent = "a long line the pet is saying, long enough to fill the bubble to its widest, so it reaches as far as it ever does";
     s.pat.hidden = false; s.pat.style.display = "block";
@@ -11541,7 +11744,7 @@ async function main() {
         out.dirEffect = s.dirEffect || 0; out.glass = cls();
       }
     }
-    for (const [e, h, css, cn, text] of kept) { e.hidden = h; e.style.cssText = css; e.className = cn; e.textContent = text; }
+    for (const [e, h, css, cn, text] of kept) { e.hidden = h; e.style.cssText = css; e.className = cn; if (text !== null) e.textContent = text; }
     // the real gate, no forcing: nothing on the first view, one mark when due
     el._markEnd(s, true);
     const t1 = Date.now();
@@ -12264,11 +12467,10 @@ async function main() {
   await flagged("link", (el) => { el._slides[el._index].screen.classList.add("linking"); }, (el) => { el._slides[el._index].screen.classList.remove("linking"); });
   await flagged("power", (el) => { el._slides[el._index].power = { timers: [] }; }, (el) => { el._slides[el._index].power = null; });
   await flagged("boot", (el) => { el._slides[el._index].boot.hidden = false; }, (el) => { el._slides[el._index].boot.hidden = true; });
-  await flagged("away", (el) => { el._slides[el._index].away = true; }, (el) => { el._slides[el._index].away = false; });
   // An egg is patted now (UX fix 4, F2); a pet whose states are reloading is not.
   await flagged("reloading", (el) => { el._slides[el._index].reloading = true; }, (el) => { el._slides[el._index].reloading = false; });
-  check("the pat box is hidden in the status, a game, a question, a scene, a link, low battery, boot, away and while reloading",
-    Object.values(hiddenIn).length === 9 && Object.values(hiddenIn).every(Boolean), JSON.stringify(hiddenIn));
+  check("the pat box is hidden in the status, a game, a question, a scene, a link, low battery, boot and while reloading (the sitter is no reason, S2)",
+    Object.values(hiddenIn).length === 8 && Object.values(hiddenIn).every(Boolean), JSON.stringify(hiddenIn));
   check("the pat box is back after", (await patState()).shown);
   // A peeking neighbour: its box is hidden and its device inert, so a real tap there reaches
   // the slide (which brings it forward); even a pat sent to it says nothing.
@@ -12567,6 +12769,9 @@ async function main() {
     return out;
   }, calmRun);
   await page.emulateMedia({ reducedMotion: null }); // m1calm left it on
+  // The idle stays quiet for both runs: its own wander left turns the pet (rotate "y 180deg", a legit
+  // facing) in the window the turn check reads `rotate` in (the shard flake). The check still asserts it.
+  await quietIdle(card);
   const m2 = await motion2(false);
   check("motion 2: a stage that changes live turns (turn), and leaves no class and no rotate behind",
     m2.egg || (m2.turning && /turn-swap/.test(m2.turnAnim) && !/turn/.test(m2.turnLeft[0]) && (m2.turnLeft[1] === "none" || m2.turnLeft[1] === "0deg")), JSON.stringify(m2));
@@ -12580,6 +12785,7 @@ async function main() {
   check("motion 2: under reduced motion none of turn, wipe-up, flip, lands appears, and the numbers and sheet still change",
     !m2calm.seen.length && m2calm.closedAtOnce && !m2calm.wiping && m2calm.num[0] === "3" && m2calm.num[1] === "3" && m2calm.basketN === 1, JSON.stringify(m2calm));
   await page.emulateMedia({ reducedMotion: null });
+  await quietIdle(card, false);
   await patReset();
   await unpinAwake(card);
   }
@@ -12668,7 +12874,7 @@ async function main() {
       return out;
     });
     check(`react: ${stage} a won game's log reacts even if the game is still open`, won.live && won.src.includes(`/${stage}_${own("cheer")}_`), JSON.stringify(won));
-    for (const result of ["asleep", "egg", "away", "no_game"]) {
+    for (const result of ["asleep", "egg", "no_game"]) {
       const r = await react({ action: "play", result });
       check(`react: ${stage} ${result} does nothing`, !r.live && r.moves.length === 0, JSON.stringify(r));
     }
@@ -12748,12 +12954,12 @@ async function main() {
       check(`react: ${stage} an act's sprites are probed once while loading`,
         once.made === 2 && once.applied === 3 && once.ok === false, JSON.stringify(once));
     }
-    // Never while: a scene, a link, a game, the low-battery gag, asleep, away, egg.
+    // Never while: a scene, a link, a game, the low-battery gag, asleep, egg.
     for (const [name, patch] of [["scene", { scene: { kind: "feed", frames: [] } }], ["linking", { linking: true }],
-      ["game", { game: { cur: null } }], ["power", { power: {} }], ["asleep", { asleep: true }], ["away", { away: true }], ["egg", { egg: true }]]) {
+      ["game", { game: { cur: null } }], ["power", { power: {} }], ["asleep", { asleep: true }], ["egg", { egg: true }]]) {
       const r = await card.evaluate((el, patch) => {
         const s = el._slides[el._index];
-        const keep = { scene: s.scene, linking: s.linking, game: s.game, power: s.power, asleep: s.asleep, away: s.away, egg: s.egg };
+        const keep = { scene: s.scene, linking: s.linking, game: s.game, power: s.power, asleep: s.asleep, egg: s.egg };
         Object.assign(s, { poseUntil: 0 }, patch);
         s.pet.classList.remove("munch");
         el._reactFrames(s, "fed");
@@ -13079,7 +13285,6 @@ async function main() {
     const undo = [];
     const set = (obj, k, v) => { undo.push([obj, k, obj[k]]); obj[k] = v; };
     if (setup === "asleep") set(s, "asleep", true);
-    if (setup === "away") { set(s, "away", true); set(s, "moodState", "away"); }
     if (setup === "game") set(s, "game", { cur: null });
     if (setup === "scene") set(s, "scene", { kind: "clean" });
     if (setup === "linking") set(s, "linking", true);
@@ -13112,7 +13317,7 @@ async function main() {
     const r = await tick(null);
     check("visitors: not due, nothing starts and the day isn't used up", !r.started && !r.used, JSON.stringify(r));
   }
-  const skips = ["asleep", "away", "egg", "game", "scene", "linking", "link running", "calling", "power", "status open",
+  const skips = ["asleep", "egg", "game", "scene", "linking", "link running", "calling", "power", "status open",
     "a line queued", "before its first look", "in its first 10 s", "a link 1 min ago", "off-slide"];
   const bad = [];
   for (const setup of skips) {
@@ -13120,7 +13325,7 @@ async function main() {
     const r = await tick(setup);
     if (r.started || r.used) bad.push(`${setup}: ${JSON.stringify(r)}`);
   }
-  check("visitors: no visit when asleep, away, egg, in a game or scene, linking, calling, power, status open, queued, " +
+  check("visitors: no visit when asleep, egg, in a game or scene, linking, calling, power, status open, queued, " +
     "early or off-slide; the day's flag unused", bad.length === 0, bad.join(" | "));
   // UX8 F2: the pet faces a visitor coming from the left and holds the look through the greet; it
   // never turns away from one coming in on the right. UX8 F4: a played day visitor reports
@@ -14342,8 +14547,11 @@ async function main() {
       };
     });
     const now = () => new Date().toISOString();
+    // injectUntil, not a bare inject: the check goes on once the card's own hass shows the state, so a
+    // slow runner can't tap clean before the card knows there is a mess (then no scene starts and both
+    // taps go out as calls: the shard 4 flake).
     const put = async (p, key, patch) => {
-      if (p[key]) await inject(p[key], patch);
+      if (p[key]) await injectUntil(p[key], patch);
     };
     // A pet awake and calm that needs this care (or doesn't).
     const sceneState = async (p, kind, due = true) => {
@@ -14711,10 +14919,44 @@ async function main() {
       const s = el._slides[el._index];
       return { slides: el._slides.length, pet: !!s.pet.getAttribute("src"), shown: s.screen.isConnected };
     });
-    check("sitter S1 (B7): privacy on, a visiting pet shows napping; Feed goes out once, ends ok, and the card carries on",
+    check("sitter S1 (B7), S2 fallback: privacy on and no channel view, a visiting pet shows napping; Feed goes out once, ends ok, and the card carries on",
       sitterEnabled && sitterDone.calls === sitterCalls + 1 && !sitterDone.scene && sitterDone.els === 0 &&
       !/didn't work/.test(sitterDone.line) && sitterAlive.pet && sitterAlive.shown && errors.length === sitterErrors,
       JSON.stringify({ sitterEnabled, sitterDone, sitterAlive, errors: errors.slice(sitterErrors) }));
+    // Sitter S2 (plan sitter-visits 6.1, owner decision D1): the sensors are still masked (mood asleep, asleep on), but the
+    // channel's house.sitter reaches every card, a shared screen too. It draws the real mood (hungry, awake), the sitter and its
+    // label, never the old sign, with the buttons on; sitter: null takes it away. The channel handler alone redraws it.
+    const sitterView = { mood: "hungry", key: "hungry", reason: "i'm hungry", reason_key: "hungry", flags: ["away", "hungry"],
+      asleep: false, lights_out: false, last: null };
+    // One evaluate, so a real push of the house (sitter: null) cannot land between the injected view and the read.
+    // The shared-screen switch makes the card ask its channel again (a new snapshot): turn it on and let that settle first.
+    await card.evaluate((el) => localStorage.setItem("hatch-shared-screen", "on"));
+    await page.waitForTimeout(2500);
+    const sitterRun = await card.evaluate(async (el, view) => {
+      const s = el._slides[el._index];
+      const look = () => ({ mood: el._state(s, "sensor.mood")?.state, asleepEntity: el._state(s, "binary_sensor.asleep")?.state,
+        asleep: !!s.asleep, shown: !s.sitterEl.hidden, label: s.awaylabel.textContent, sign: s.awaysign.style.display !== "none",
+        feedOn: !s.buttons.feed.disabled, lightsOn: !s.buttons.lights.disabled, shared: localStorage.getItem("hatch-shared-screen") === "on" });
+      const push = (sitter) => {
+        // Read at once: a real push of the house (the shared screen's own snapshot) may land a few ms later and put sitter: null back.
+        el._channel(s, { house: { ...(s.house || {}), sitter } }, el._hass.user.id);
+        el._renderSlide(s); // the channel's own redraw (_redraw -> _update) is async: draw the slide now, as the card would
+        return look();
+      };
+      const before = look();
+      const inn = push(view);
+      const out = push(null);
+      return { before, inn, out };
+    }, sitterView);
+    await card.evaluate((el) => localStorage.setItem("hatch-shared-screen", "off"));
+    await page.waitForTimeout(1500);
+    const { before: sitterBefore, inn: sitterIn, out: sitterOut } = sitterRun;
+    check("sitter S2 (D1): a shared-screen card with privacy on shows the sitter and the real mood from the channel, no sign, care on; sitter: null takes it away",
+      sitterBefore.shared && !sitterBefore.shown &&
+      sitterIn.shared && sitterIn.mood === "hungry" && sitterIn.asleepEntity === "off" && !sitterIn.asleep && sitterIn.shown &&
+      sitterIn.label === "sitter's here" && !sitterIn.sign && sitterIn.feedOn && sitterIn.lightsOn &&
+      !sitterOut.shown && sitterOut.label === "",
+      JSON.stringify({ sitterBefore, sitterIn, sitterOut }));
     // No reply: it holds at the gate, gives up 2 s on, and a late reply plays the floor (pose, prop, line).
     await feedState(pet);
     await feedTap();

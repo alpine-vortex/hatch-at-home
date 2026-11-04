@@ -124,7 +124,24 @@
       const flags = [...new Set([...(["hungry", "bored", "dirty", "sick", "sleepy"].includes(mood) ? [mood] : []), ...(pet.flags || [])])];
       if (shot.scene === "rain" && !flags.includes("rainy")) flags.push("rainy");
       if (pet.resting && !flags.includes("resting")) flags.push("resting"); // R1: the mood's flag
-      put("sensor", "mood", mood, { flags, ...(pet.lay ? { requests: ["lay_egg"] } : {}), ...(pet.reason ? { reason: pet.reason, reason_key: pet.reason_key } : {}) });
+      const moodAttrs = { flags, ...(pet.lay ? { requests: ["lay_egg"] } : {}), ...(pet.reason ? { reason: pet.reason, reason_key: pet.reason_key } : {}) };
+      // Sitter visits S2: `sitter: "day" | "night"` is a visit in progress on the lead pet (`night` also draws
+      // the night scene unless the shot names one). The sensors say what the server says: with privacy off
+      // the mood is "away" (the asleep sensor is real); with `privacy: "on"` the mood is "asleep" and the
+      // asleep sensor "on" (the mask). The channel's `house.sitter` view is the real mood either way
+      // (set below with the house; `noChannel: true` leaves it out, the card's degraded fallback).
+      const visit = i === 0 && !!shot.sitter;
+      if (visit) {
+        const reason = pet.reason || (mood === "hungry" ? "i'm hungry" : "i'm fine");
+        const reasonKey = pet.reason_key || (mood === "hungry" ? "hungry" : "content");
+        shot.sitterView = { mood, key: mood, reason, reason_key: reasonKey, flags: ["away", ...flags], asleep: mood === "asleep",
+          lights_out: false, last: null };
+        if (shot.privacy === "on") {
+          put("sensor", "mood", "asleep", { ...moodAttrs, flags: ["asleep"], reason: "zzz", reason_key: "asleep" });
+        } else {
+          put("sensor", "mood", "away", { ...moodAttrs, flags: ["away", ...flags], reason: "the sitter's here", reason_key: "away" });
+        }
+      } else put("sensor", "mood", mood, moodAttrs);
       // `moments`: [{type, ago (minutes), ...}], the public moments the away note reads.
       const moments = (pet.moments || []).map(({ ago = 30, ...m }) => ({ ...m, at: iso(-ago) }));
       put("sensor", "last_care", iso(-45), { log: pet.log || [], ...(pet.moments ? { moments } : {}) });
@@ -134,7 +151,7 @@
       put("sensor", "poop", String(pet.poop ?? (mood === "dirty" ? 2 : 0)));
       put("sensor", "care_misses", "0");
       put("binary_sensor", "calling", pet.calling || mood === "calling" ? "on" : "off");
-      put("binary_sensor", "asleep", mood === "asleep" ? "on" : "off");
+      put("binary_sensor", "asleep", mood === "asleep" || (visit && shot.privacy === "on") ? "on" : "off");
       for (const key of ["feed", "snack", "play", "clean", "medicine", "scold", "praise", ...(pet.lay ? ["lay_egg"] : [])]) put("button", key, "unknown");
       if (pet.lay) { // the select: "Surprise me" then the names, its state the pick
         const names = attrs.egg_roster.map((r) => r.name);
@@ -779,11 +796,21 @@
     const info = { box: [Math.round(box.width * 10) / 10, Math.round(box.height * 10) / 10] };
     if (s.game?.kind === "hop") {
       info.cell = s.game.cell;
-      info.key = Math.round(s.gameBox.querySelector(".hk").getBoundingClientRect().width * 10) / 10;
+      // Shell modes slice 3: the keys are the shell's eight buttons (the `hop` mode), the board takes the whole
+      // overlay (`box`): the grid's margins, whether it is centred, and whether any cell is clipped by it.
+      const toys = card._modeButtons(s);
+      info.key = Math.round(toys[0].getBoundingClientRect().width * 10) / 10;
       info.oneTap = s.game.cell >= 44;
       info.grid = rel(r(s.gameBox.querySelector(".hgrid")));
-      info.keys = rel(r(s.gameBox.querySelector(".hkeys")));
-      info.close = rel(r(s.gameBox.querySelector(".gx")));
+      const gr = r(s.gameBox.querySelector(".hgrid"));
+      const margins = [gr.left - box.left, gr.top - box.top, box.right - gr.right, box.bottom - gr.bottom];
+      info.margins = margins.map((n) => Math.round(n * 10) / 10);
+      info.centred = Math.abs(margins[0] - margins[2]) <= 1 && Math.abs(margins[1] - margins[3]) <= 1;
+      info.clipped = [...s.gameBox.querySelectorAll(".hc")].some((c) => {
+        const q = c.getBoundingClientRect();
+        return q.left < box.left - 0.5 || q.top < box.top - 0.5 || q.right > box.right + 0.5 || q.bottom > box.bottom + 0.5;
+      });
+      info.mode = s.mode?.id || null;
       info.moves = s.game.moves.length;
       info.uses = s.game.st.uses;
       info.done = s.game.done;
@@ -792,10 +819,10 @@
       info.labels = [...s.gameBox.querySelectorAll('.hc[role="img"]')].map((c) => [Number(c.dataset.i), c.getAttribute("aria-label")]);
       if (s.game.st.parity !== undefined) info.parity = s.game.st.parity;
       if (s.game.st.half !== undefined) info.half = s.game.st.half;
-      info.keyState = Object.fromEntries([...s.gameBox.querySelectorAll(".hk")].map((k) => [k.dataset.k,
-        `${k.getAttribute("aria-disabled") === "true" ? "off" : "on"}: ${k.getAttribute("aria-label")}`]));
+      info.keyState = Object.fromEntries(["left", "up", "down", "right", "special", "undo", "restart", "quit"].map((name, i) => [name,
+        `${toys[i].getAttribute("aria-disabled") === "true" ? "off" : "on"}: ${toys[i].getAttribute("aria-label")}` +
+        ` [${toys[i].children[1].textContent}${toys[i].getAttribute("aria-pressed") === "true" ? " pressed" : ""}]`]));
     } else {
-      const gx = r(s.gameBox.querySelector(".gx"));
       const bubble = r(s.bubble);
       const row = r(s.gameBox.querySelector(".ghop"));
       const games = [...s.gameBox.querySelectorAll(".gpick button")].map(r);
@@ -804,9 +831,9 @@
       info.rowClass = row ? s.gameBox.querySelector(".ghop").className : null;
       info.pick = s.gameBox.querySelector(".gpick").className;
       info.overlaps = [];
-      const all = [["close", gx], ["prompt", bubble], ["row", row], ...games.map((g, i) => [`game${i}`, g])];
+      const all = [["prompt", bubble], ["row", row], ...games.map((g, i) => [`game${i}`, g])];
       for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
-        if (all[i][0] === "row" || all[j][0] === "row" || all[i][0] === "close" || all[i][0] === "prompt") {
+        if (all[i][0] === "row" || all[j][0] === "row" || all[i][0] === "prompt") {
           if (hit(all[i][1], all[j][1])) info.overlaps.push(`${all[i][0]}+${all[j][0]}`);
         }
       }
@@ -957,6 +984,12 @@
         }
         card._askPlace(cur, step.box);
       }
+    }
+    // The sitter's view, as the channel sends it (`house.sitter`), unless the shot has no channel.
+    if (shot.sitterView && !shot.noChannel) {
+      const s = slides[0];
+      s.house = { ...(s.house || {}), sitter: shot.sitterView };
+      card._redraw(s);
     }
     // The house view the channel would send (`house`, an object over it), and `basket`:
     // how many finds wait (house.basket, 0-3), so the basket shows through _basketSync.

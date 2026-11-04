@@ -59,7 +59,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
         const mood = this._state(s, "sensor.mood");
         // A game waiting on a guess asks again (a care line said over it is done).
         const prompt = s.game?.prompt;
-        const text = prompt || this._say(s, mood, mood?.state === "away");
+        const text = prompt || this._say(s, mood);
         if (prompt) this._write(s, text, 60000);
         else if (s.bubble.textContent !== text) this._write(s, text);
       }
@@ -434,7 +434,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
     if (!s.nextWobble) s.nextWobble = now + EGG_WOBBLE_MIN_MS + Math.random() * EGG_WOBBLE_SPREAD_MS;
     if (now < s.nextWobble) return;
     s.nextWobble = now + EGG_WOBBLE_MIN_MS + Math.random() * EGG_WOBBLE_SPREAD_MS;
-    if (s.asleep || s.away || this._owned(s) || s.scene || s.linking || s.power || s.visitor || s.calling ||
+    if (s.asleep || this._owned(s) || s.scene || s.linking || s.power || s.visitor || s.calling ||
         s.screen.classList.contains("show-status") || s.sayUntil > now || s.poseUntil > now ||
         s.movingUntil > now) return;
     const cracking = this._eggMinutes(this._state(s, "sensor.life_stage")) <= 6;
@@ -650,13 +650,13 @@ class HatchPetCardTick extends HatchPetCardLayout {
   // move. A child has no act poses (_actPose), so it wears its mood frame (the plan's
   // rung 3, docs/plan-2026-11-02-care-reactions.md section 7); `frames` is the child's own
   // species pose (rung 1, set by _react), kept as the frames with the move added. Not over
-  // a scene, a link, the low-battery gag, sleep, away or the egg; a game only with `inGame`.
+  // a scene, a link, the low-battery gag, sleep or the egg; a game only with `inGame`.
   // Under reduced motion only the frame changes (calm() shows its first). With ms
   // (a win beat), the frame and the move both last that long.
   _reactFrames(s, kind, { inGame = false, ms, frames, variant } = {}) {
     const r = REACTIONS[kind];
     if (!r || !s.species || s.scene || s.linking || s.power ||
-      s.asleep || s.away || s.egg || (this._owned(s) && !inGame)) return;
+      s.asleep || s.egg || (this._owned(s) && !inGame)) return;
     // Not care: a child's visitor greet is the line only, and its bored look at a game's bee
     // (card-games) stays as it was. Ship A lifts the guard for care.
     if (s.drawn === "child" && (kind === "greet" || (kind === "refused" && inGame))) return;
@@ -799,7 +799,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
   // also hides it at once for the status, a game, a question, a link and the boot screen).
   _patOn(s) {
     return !!s.species && !s.reloading && !s.empty && s === this._slides[this._index] && !this._booting && !s.scene && !s.linking &&
-      !s.power && !this._owned(s) && !s.away && !this._questionOn(s) &&
+      !s.power && !this._owned(s) && !this._questionOn(s) &&
       !s.screen.classList.contains("show-status");
   }
 

@@ -410,6 +410,20 @@ const STYLE = `
     100% { transform: translateY(-30px) scale(0); opacity: 0; } }
   @keyframes pop { from { transform: scale(.3); opacity: 0; } }
   .awaysign { left: 50%; bottom: 12%; height: 40%; margin-left: -20%; }
+  /* The placeholder sitter (sitter plan S2; the art is A1, S3 swaps this for it): a plain figure
+     beside the pet, behind it. Standing by day; at night it dozes in a chair (D4). Still: no motion. */
+  .sitter { position: absolute; right: 5%; bottom: 10%; width: 17%; height: 36%; pointer-events: none; }
+  .sitter[hidden] { display: none; }
+  .sitter i { position: absolute; display: block; }
+  .sitter .sit-head { left: 24%; top: 0; width: 52%; aspect-ratio: 1; border-radius: 50%; background: #e8c9a4;
+    box-shadow: inset 0 -4px 0 #3a2a1a; }
+  .sitter .sit-body { left: 8%; top: 36%; width: 84%; bottom: 0; border-radius: 40% 40% 12% 12%; background: #5b7fa6; }
+  .sitter .sit-chair { display: none; left: -18%; right: -18%; bottom: -6%; height: 46%; border-radius: 6px;
+    background: #8a5a35; box-shadow: inset 0 -6px 0 #5e3b20; }
+  .sitter.doze { height: 30%; bottom: 8%; }
+  .sitter.doze .sit-chair { display: block; }
+  .sitter.doze .sit-head { top: 8%; rotate: 18deg; }
+  .sitter.doze .sit-body { top: 42%; bottom: 14%; }
   .awaylabel { position: absolute; left: 0; right: 0; bottom: 5%; text-align: center;
     color: #fff; font-size: 15px; text-shadow: 0 1px 3px #000; }
   .bubble .untyped { visibility: hidden; } /* laid out whole, so it never grows */
@@ -429,7 +443,6 @@ const STYLE = `
   .game button[aria-disabled="true"] { opacity: .5; cursor: default; }
   .game button:focus-visible { outline: 3px solid #fffdf5; outline-offset: 2px;
     box-shadow: 0 0 0 6px #1d2a22; }
-  .game .gx { right: 4%; top: 6%; min-width: 44px; min-height: 44px; font: inherit; font-size: 14px; }
   .game .gpick { position: absolute; inset: 22% 0 0; display: flex; flex-direction: column; gap: 8px;
     align-items: center; justify-content: center; }
   .game .gpick[hidden], .game .gnum[hidden] { display: none; }
@@ -477,8 +490,8 @@ const STYLE = `
   .game .ghop.tight { padding: 0 6px; font-size: 11px; white-space: nowrap; }
   .game .ghop.snug { min-height: 36px; line-height: 1.05; white-space: normal; }
   .game .ghop:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
-  /* The board: the grid on the left, the keys on the right (2 x 4; the close button is the eighth).
-     Sizes are set in JS (_hopLayout) from the overlay: --hk the key, --c the cell. No new art:
+  /* The board: the grid, centred in the whole overlay (the keys are the shell's eight buttons).
+     Sizes are set in JS (_hopLayout) from the overlay: --c the cell. No new art:
      the cells are CSS. The real pet stays under the board, still, and the piece wears its frame. */
   .game .hopb[hidden] { display: none; }
   .game .hgrid { position: absolute; display: grid; grid-auto-rows: var(--c); outline: none;
@@ -528,13 +541,6 @@ const STYLE = `
   .game .hpath path { fill: none; stroke: #3a2a1a; stroke-width: 2; stroke-dasharray: 2 4; stroke-linecap: round; }
   .game .hpiece { position: absolute; left: 0; top: 0; z-index: 2; image-rendering: pixelated;
     pointer-events: none; object-fit: contain; transition: translate .14s ease-out; }
-  .game .hkeys { position: absolute; display: grid; grid-template-columns: repeat(2, var(--hk));
-    grid-auto-rows: var(--hk); gap: 3px; pointer-events: none; }
-  .game .hk { position: static; min-width: 0; min-height: 0; width: var(--hk); height: var(--hk);
-    font: inherit; font-size: calc(var(--hk) * .42); line-height: 1; }
-  .game .hk.on { background: #3a2a1a; color: #fffdf5; }
-  .game.hop .gx { top: auto; right: var(--hr); bottom: var(--hb); width: var(--hk); height: var(--hk);
-    min-width: 0; min-height: 0; font-size: calc(var(--hk) * .42); }
   .screen:has(> .game.hop:not([hidden])) :is(.pet, .ghost, .drape, .perch, .attention) { visibility: hidden; }
   .screen:has(> .game.hop:not(.end):not([hidden])) .bubble { display: none; }
   /* Trait flair: placed in JS from the head point and the feet line. Every piece
