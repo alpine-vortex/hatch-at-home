@@ -337,7 +337,7 @@ const PRESETS = {
       motion: "reduce", game: "dig", digReplies: [r(1, 2, 2), r(2, 2, 0, { found: "bee", round_over: true })], digTaps: ["dig"] });
     return out;
   },
-  // Hop of the Day (ship 2b, behind experimental_hop): the picker with the Hop row, then per width and
+  // Hop of the Day (ship 2b): the picker with the Hop row, then per width and
   // family (a canned `board` reply built by hop.py, dev/bench/hop-boards.json) a board at the start, a lit
   // cell (the first tap of a two-tap commit), a spent special, the solved view (a plain win) and the tidy view
   // (both pinned by the bench's `board.moves`, not by a reply's done/tidy), and a blocked key (a corner:
@@ -347,10 +347,10 @@ const PRESETS = {
     const families = ["hop", "glide", "swim", "dig", "climb", "squeeze"];
     for (const width of [300, 330, 420]) {
       const base = { width, world: "woodland", group: `hop-${width}` };
-      out.push({ ...base, name: `hop/${width}-picker`, label: "picker with the Hop row", view: "games", hop: true });
+      out.push({ ...base, name: `hop/${width}-picker`, label: "picker with the Hop row", view: "games" });
       // Ship 3b: the row in its other two states (hop_day on the life-stage sensor), and a reload on a solved / tidy day.
       for (const state of ["solved", "tidy"]) {
-        out.push({ ...base, name: `hop/${width}-picker-${state}`, label: `picker, the row ${state}`, view: "games", hop: true, hopDay: state });
+        out.push({ ...base, name: `hop/${width}-picker-${state}`, label: `picker, the row ${state}`, view: "games", hopDay: state });
       }
       for (const state of [true, "tidy"]) {
         out.push({ ...base, group: `hop-${width}-reload`, name: `hop/${width}-reload-${state === true ? "solved" : "tidy"}`,

@@ -4307,8 +4307,8 @@ async function main() {
 
   }
   if (enter("board")) {
-  // Hop of the Day, ship 2b (plan 2026-11-02-hop-of-the-day): board mode behind the YAML-only
-  // experimental_hop key. The `hop` service is stubbed on the card (_hopFetch) with replies
+  // Hop of the Day, ship 2b (plan 2026-11-02-hop-of-the-day): board mode (the YAML-only
+  // experimental_hop key went in ship 3b; a config that still has it loads and does nothing). The `hop` service is stubbed on the card (_hopFetch) with replies
   // from tests/fixtures/hop_cases.json's boards, never a random draw. The real-HA run owns the
   // wiring only (the last check: the row calls `board` and the reply has the right shape).
   await pinAwake(card, "board");
@@ -4321,13 +4321,6 @@ async function main() {
     };
     const warnings = [];
     page.on("console", (m) => { if (m.type() === "warning" && /hop board/.test(m.text())) warnings.push(m.text()); });
-    const flag = (on) => card.evaluate((el, on) => {
-      const config = { ...el._config };
-      if (on) config.experimental_hop = true;
-      else delete config.experimental_hop;
-      el.setConfig(config);
-      el.hass = el._hass;
-    }, on);
     const stub = (reply) => card.evaluate((el, r) => { el.__hopCalls = 0; el._hopFetch = async () => { el.__hopCalls++; return r; }; }, reply);
     const unstub = () => card.evaluate((el) => { delete el._hopFetch; });
     const picker = async () => {
@@ -4358,16 +4351,7 @@ async function main() {
     const targets = () => card.evaluate((el) => el._hopTargets(el._slides[el._index].game));
     const key = (k) => cur().locator(`.hk[data-k="${k}"]`);
 
-    // Off by default: no row, no board; the picker's count is the old three.
-    await flag(false);
-    await stub(replyOf("sample"));
-    await picker();
-    check("flag off: the picker has three games and no Hop row", (await cur().locator(".gpick button").count()) === 3 &&
-      (await cur().locator(".ghop").count()) === 0);
-    await quit();
-
-    // The flag on: the row is a sibling of .gpick, the picker still counts three, no `hop` call yet.
-    await flag(true);
+    // The row is a sibling of .gpick, the picker still counts three, no `hop` call yet.
     await stub(replyOf("sample"));
     await picker();
     const rowAt = await card.evaluate((el) => {
@@ -4376,13 +4360,13 @@ async function main() {
       return { inPick: !!row?.closest(".gpick"), sibling: row?.parentElement === s.gameBox, text: row?.textContent,
         aria: row?.getAttribute("aria-label"), calls: el.__hopCalls };
     });
-    check("flag on: the Hop row sits outside .gpick, the picker still counts three, and Play asked for no board",
+    check("the Hop row sits outside .gpick, the picker still counts three, and Play asked for no board",
       (await cur().locator(".gpick button").count()) === 3 && rowAt.sibling && !rowAt.inPick && rowAt.text === "Hop of the Day" &&
         rowAt.aria === "Play Hop of the Day" && rowAt.calls === 0, JSON.stringify(rowAt));
     await quit();
 
     // At each width (the viewport's, as every section here: a card in it is narrower, 226 px at 300), the Hop row
-    // overlaps nothing and sits no lower than the games do with the flag off; a game that already crowds the close
+    // overlaps nothing and sits no lower than the games do without it; a game that already crowds the close
     // button or the foot at that width with no row is not the row's doing (the baseline), and is reported as such.
     const fitOf = () => card.evaluate((el) => {
       const s = el._slides[el._index];
@@ -4407,25 +4391,25 @@ async function main() {
         rowH: row && Math.round(row.height), cls: s.gameBox.querySelector(".ghop")?.className };
     });
     // 300 px is the 284 px card (LCD 182 x 136) and 340 a 324 px one: there no game may touch the close button, the prompt, the row or the
-    // foot, with the flag on or off and in big text too (s2804); the other widths keep the baseline rule.
+    // foot, with or without the row and in big text too (s2804); the other widths keep the baseline rule.
     const bigText = (on) => card.evaluate((el, on) => { el._card.classList.toggle("bigtext", on); }, on);
     for (const [width, big] of [[300, false], [330, false], [420, false], [340, false], [340, true], [300, true], [330, true], [420, true]]) {
       await page.setViewportSize({ width, height: 860 });
       await page.waitForTimeout(500);
       await bigText(big);
-      await flag(false);
       await picker();
       await page.waitForTimeout(2600); // a long line gives way to "pick a game!" after 2 s
+      // The baseline is the picker with no row (the row taken out and the picker fitted again).
+      await card.evaluate((el) => { const s = el._slides[el._index]; s.gameBox.querySelector(".ghop")?.remove(); el._fitPicker(s); });
       const base = await fitOf();
       await quit();
-      await flag(true);
       await picker();
       await page.waitForTimeout(2600);
       const fit = await fitOf();
       const mine = fit.bad.filter((b) => (!base.bad.includes(b) && b !== "row off the foot") || /^row[+]|[+]row/.test(b));
       const label = `${width} px${big ? " big text" : ""} (a ${fit.cardW} px card)`;
       if (fit.cardW <= 290 || width === 340) {
-        check(`${label}: every game and the Hop row sit inside the LCD and touch nothing, flag off and on`,
+        check(`${label}: every game and the Hop row sit inside the LCD and touch nothing, with the row and without it`,
           fit.bad.length === 0 && base.bad.length === 0 && fit.rowH >= 36, JSON.stringify({ fit, base }));
       } else {
         check(`${label}: the Hop row overlaps no game, the close button or the prompt, and sits no lower than the games did without it`,
@@ -4925,16 +4909,29 @@ async function main() {
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.waitForTimeout(300);
 
-    // Flag off again: nothing of the board or the row is built.
-    await flag(false);
-    await open(replyOf("sample")).catch(() => {});
-    check("flag off again: no row and no board are built", (await cur().locator(".ghop").count()) === 0 && (await cur().locator(".hopb").count()) === 0);
+    // A saved YAML that still sets experimental_hop loads and does nothing (P7); a card with no key has the row.
+    const legacy = await card.evaluate((el) => {
+      const before = { ...el._config };
+      try {
+        el.setConfig({ ...before, experimental_hop: true });
+        el.hass = el._hass;
+        return { threw: false, key: el._config.experimental_hop };
+      } catch (err) {
+        return { threw: true, message: String(err) };
+      } finally {
+        el.setConfig(before);
+        el.hass = el._hass;
+      }
+    });
+    await picker();
+    const rowNoKey = (await cur().locator(".ghop").count()) === 1 && (await cur().locator(".gpick button").count()) === 3;
     await quit();
+    check("experimental_hop: true in a config raises nothing, and a card with no key has the row (P7)",
+      !legacy.threw && rowNoKey, JSON.stringify(legacy));
 
     // The real server's wiring (a real HA): the row's call is the `hop` service with action board,
     // and the reply has the right shape (done and tidy false). Nothing is stubbed here.
     await unstub();
-    await flag(true);
     await picker();
     await cur().locator(".ghop").click();
     await page.waitForTimeout(1500);
@@ -4947,7 +4944,6 @@ async function main() {
       !!real && real.w >= 4 && real.w <= 6 && real.h >= 3 && real.h <= 4, JSON.stringify(real));
     await shot("board-real");
     await quit();
-    await flag(false);
     await page.setViewportSize({ width: 420, height: 860 });
     await page.waitForTimeout(400);
   }

@@ -46,12 +46,12 @@ test("the piece is not a .pet class: no .pet animation rule and no go-left or go
   assert.doesNotMatch(part, /_animate\(/);
 });
 
-test("experimental_hop is read from the YAML config only", () => {
-  assert.strictEqual(card._hopOn.call({ _config: {} }), false);
-  assert.strictEqual(card._hopOn.call({ _config: { experimental_hop: true } }), true);
-  assert.strictEqual(card._hopOn.call({ _config: { experimental_hop: "yes" } }), false);
-  assert.doesNotMatch(read("src/card/editor.js"), /experimental_hop/);
-  assert.doesNotMatch(read("src/card/card-base.js"), /getStubConfig\(\) \{\s*return \{[^}]*experimental_hop/);
+test("experimental_hop is gone: nothing reads it, and setConfig does not validate unknown keys (P7)", () => {
+  assert.strictEqual(card._hopOn, undefined);
+  assert.doesNotMatch(src, /\.experimental_hop|\["experimental_hop"\]|experimental_hop\s*[:=]/); // a comment may name it
+  const setConfig = src.match(/\n  setConfig\(config\) \{[\s\S]*?\n  \}\n/)?.[0] || "";
+  assert.ok(setConfig, "setConfig found");
+  assert.doesNotMatch(setConfig, /Object\.keys|unknown|not allowed|throw new Error\([^)]*key/i);
 });
 
 test("the copy is the plan's drafts, and the keys carry their aria labels", () => {

@@ -99,7 +99,13 @@ download, restart. HACS replaces the folder you copied.
   rounds; 5 berries banked win, and a win pays a little more than higher or lower. ✕ puts
   a dig aside instead of ending it: your next berry dig carries on from the same pile,
   round and bank, however much later. Each person has their own; someone else starts
-  fresh. (The `play` button entity is still plain play, for
+  fresh. **Hop of the Day** (the row under the game picker): one small board a day, the
+  same for every screen of the pet; hop the pet from pad to pad (the pad it leaves sinks)
+  to the nest. Reaching the nest solves it (the first win of the day pays 23 happiness);
+  **try for tidy** starts it again for free, and a tidy board (every pad sunk) adds one
+  find to the world. The row reads "Hop ✓" once solved and "Hop ✓ tidy" once tidy. The
+  moves are kept in this browser until the pet has them, so a sleeping pet gets them again
+  when you reopen the board. (The `play` button entity is still plain play, for
   automations and voice.)
 - **Every day** there's something new when you look in:
   - **A wish of the day**, picked when it wakes up, only from what your house can grant: play

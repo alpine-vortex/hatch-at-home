@@ -67,7 +67,7 @@ Pick a world and its little device. Each starts with its own first pet.
 
 - 🍙 **Care!** Feed, play, clean, tuck in, give a pat
 - 📣 **It calls for YOU!** You get 20 minutes to answer
-- 🎮 **3 mini-games!** *Left or right?*, *Higher or lower?*, *Berry dig*
+- 🎮 **3 mini-games!** *Left or right?*, *Higher or lower?*, *Berry dig*, and a daily puzzle, *Hop of the Day*
 - 🌱 **Grows up!** Egg, baby, child, teen, adult
 - 🧬 **Own personality!** Traits, tricks, a family that goes on
 - 💌 **Wishes, dreams and visitors!** A little news every day
