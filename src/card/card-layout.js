@@ -515,7 +515,9 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     if (s.reloading) {
       s.wasGone = true;
       s.screen.classList.add("faded");
-      for (const b of Object.values(s.buttons)) b.disabled = true;
+      this._modeExit(s, "reload"); // a reload ends a shell mode (owner decision D10): not kept across it
+      const home = s.careHome || this._careRest();
+      this._paintCaps(s, Object.fromEntries(Object.entries(home).map(([k, v]) => [k, { ...v, disabled: true }])));
       s.request.classList.remove("show");
       this._patSync(s);
       if (s.bubble.textContent !== GONE_LINE) this._write(s, GONE_LINE, 60000);
@@ -694,14 +696,15 @@ class HatchPetCardLayout extends HatchPetCardBuild {
       }
     }
 
+    // The eight buttons' care state, painted by _paintCaps (card-mode.js), the one writer: with a shell
+    // mode on it is kept for the mode's exit and the mode's slots stay on show.
+    const care = this._careRest();
     for (const action of ACTIONS) {
-      const b = s.buttons[action.key];
+      const c = care[action.key];
       const ent = this._state(s, `button.${action.key}`);
-      b.disabled = !ent || ent.state === "unavailable" || egg || away;
-      const wanted = !b.disabled && !asleep && !!action.wants && flags.includes(action.wants);
-      b.classList.toggle("wanted", wanted);
-      if (wanted) b.setAttribute("aria-description", "wanted now");
-      else b.removeAttribute("aria-description");
+      c.disabled = !ent || ent.state === "unavailable" || egg || away;
+      c.wanted = !c.disabled && !asleep && !!action.wants && flags.includes(action.wants);
+      c.desc = c.wanted ? "wanted now" : null;
     }
     const wanted = (mood?.attributes.requests || []).find((r) => this._state(s, `button.${r}`));
     // The pet can't lay any more (stage, or the entry reloaded after a world change): no sheet.
@@ -715,20 +718,18 @@ class HatchPetCardLayout extends HatchPetCardBuild {
         : REQUEST_ARIA[wanted] || `Give the pet a ${wanted}`);
     }
 
-    const lights = s.buttons.lights;
+    const lights = care.lights;
     const lightsEnt = this._state(s, "switch.lights_out");
     lights.disabled = !lightsEnt || lightsEnt.state === "unavailable" || away;
     // Asleep counts even when it dozed off by itself (the switch stays off then).
     const sleeping = lightsOut || asleep;
-    lights.classList.toggle("on", sleeping);
-    lights.classList.toggle("wanted", !sleeping && flags.includes("sleepy") && calling);
-    const lightsIcon = sleeping ? "icon_lights_on" : "icon_lights_out";
-    if (lights.dataset.icon !== lightsIcon) {
-      lights.querySelector(".cap").innerHTML = pixelIcon(lightsIcon);
-      lights.dataset.icon = lightsIcon;
-    }
-    lights.querySelector(".lbl").textContent = sleeping ? "wake" : "sleep";
+    lights.on = sleeping;
+    lights.wanted = !sleeping && flags.includes("sleepy") && calling;
+    lights.icon = sleeping ? "icon_lights_on" : "icon_lights_out";
+    lights.cap = sleeping ? "wake" : "sleep";
     lights.title = sleeping ? "Lights on: wake the pet" : "Lights out: put the pet to bed";
+    this._paintCaps(s, care);
+    this._modeGuard(s); // asleep, away, egg (when the mode lists them) and idle, on this push's flags
     this._patSync(s);
 
     if (s.screen.classList.contains("show-status")) this._renderStatus(s, log);
@@ -783,6 +784,8 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     if (open && this._link?.host === s) this._linkEnd(); // the guest never stands over the page (UX8 F1)
     if (open) this._stopTyping(s); // the bubble hides: the line is said whole
     if (open && s.game) this._quitGame(s, null); // the sheet covers it: nobody plays it unseen
+    // A shell mode ends with it too (owner decision D8), unless its entry keeps it (exit.status "keep").
+    if (open && s.mode && s.mode.exit?.status !== "keep") this._modeExit(s, "status");
     s.screen.classList.toggle("show-status", open);
     s.statusOpen = open; // the director's `status` busy owner reads it (device-alive 5.3)
     if (!open) this._restOffer = null; // the sheet closed without a button: not an answer (§6.3)

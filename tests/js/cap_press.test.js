@@ -68,3 +68,17 @@ test("the slice stays CSS on the cap: no director call, no new .pet class", () =
   const actions = src.slice(src.indexOf("class HatchPetCardActions"), src.indexOf("  _press(s, action)"));
   assert.doesNotMatch(actions, /HATCH_DIRECTOR|shellImpulse|canRender/);
 });
+
+test("a shell mode leaves data-action as built, so the rebound stays the care's, and its router plays no rim cue", () => {
+  // shell modes plan 3.3, review P21: card-mode writes the slot's icon, caption and labels, never data-action
+  const mode = src.slice(src.indexOf("class HatchPetCardMode"), src.indexOf("class HatchPetCardCare"));
+  assert.ok(mode.length > 1000, "card-mode is in the card");
+  assert.doesNotMatch(mode, /dataset\.action\s*=|setAttribute\("data-action"|removeAttribute\("data-action"|delete \w+\.dataset\.action/);
+  assert.doesNotMatch(mode, /_rimCue/);
+  // the only data-action writes in the card are the two at build
+  assert.strictEqual((src.match(/dataset\.action = /g) || []).length, 2);
+  // the router hands an accepted press to the slot's act only
+  const click = mode.slice(mode.indexOf("  _modeClick(s, i) {"), mode.indexOf("\n  }\n", mode.indexOf("  _modeClick(s, i) {")));
+  assert.match(click, /slot\.act\(this, s\);/);
+  assert.doesNotMatch(click, /_press|_call\(/);
+});

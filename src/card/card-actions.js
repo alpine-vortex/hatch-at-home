@@ -116,7 +116,7 @@ class HatchPetCardActions extends HatchPetCardJournal {
   // What a scene does is its SCENES entry (card-care.js); this is the frame they share.
   _sceneStart(s, kind) {
     const entry = SCENES[kind];
-    if (!entry || !s.species || s.game || s.screen.classList.contains("show-status")) return;
+    if (!entry || !s.species || this._owned(s) || s.screen.classList.contains("show-status")) return;
     const mood = this._state(s, "sensor.mood");
     const stage = this._state(s, "sensor.life_stage")?.state;
     // Asleep or the lights out stops every scene but the lights' own: a wake is about exactly that.
