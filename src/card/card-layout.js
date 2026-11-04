@@ -680,12 +680,9 @@ class HatchPetCardLayout extends HatchPetCardBuild {
       batch.forEach((m) => this._moment(s, m));
     }
     const egg = stage === "egg";
+    // The picker (no mode) ends here; a server game's idle and these reasons are its shell mode's exit
+    // (_modeGuard below, SHELL_MODES): the server has dropped it already, so no call.
     if (s.game && (asleep || away || egg)) this._endGame(s, null);
-    else if (s.game && SERVER_GAMES.has(s.game.kind) &&
-        !s.game.busy && s.game.lastAt && Date.now() - s.game.lastAt >= GAME_IDLE_MS) {
-      // the server has dropped it already: no call. A dig left idle says so (Q8).
-      this._endGame(s, s.game.kind === "dig" ? GAME_COPY.idle : null);
-    }
     s.hatchesAt = egg ? stageState?.attributes.hatches_at : null;
     if (!s.sayUntil || Date.now() > s.sayUntil) {
       if (s.game?.prompt) this._write(s, s.game.prompt, 60000); // a game waiting on a guess asks again

@@ -242,7 +242,6 @@ class HatchPetCardBoard extends HatchPetCardGames {
       if (dayDone) this._hopNest(g); // a reload on a solved day: the pet in the nest, no path (P9)
     }
     s.pet.classList.remove("go-left", "go-right");
-    s.gameBox.classList.remove("showgo");
     this._hopBuild(s);
     this._gameView(s, "hop");
     if (!s.greeted) this._greetSpent(s); // playing together is the hello (F7), as any game

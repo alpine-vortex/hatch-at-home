@@ -50,7 +50,7 @@ class HatchPetCardMode extends HatchPetCardActions {
     attr("aria-hidden", v.hidden ? "true" : null);
     attr("aria-disabled", v.blocked ? "true" : null);
     attr("aria-pressed", v.pressed == null ? null : String(v.pressed));
-    const caption = b.lastElementChild;
+    const caption = b.children[1]; // not lastElementChild: a tap's .burst ring is appended after it
     if (caption && caption.textContent !== (v.cap || "")) caption.textContent = v.cap || "";
     const key = v.icon || "";
     if (b.dataset.icon !== key) {

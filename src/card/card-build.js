@@ -166,9 +166,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
                 `<button data-game="${g.key}">${g.label}</button>`).join("")}</div>
               <img class="gprop" alt="" hidden>
               <span class="gnum" aria-live="polite" hidden></span>
-              <button class="gl" aria-label="Guess left">${icon("prev", 22)}</button>
               <span class="gscore" aria-live="polite"></span>
-              <button class="gr" aria-label="Guess right">${icon("next", 22)}</button>
               <button class="gx" aria-label="Stop the game">✕</button>
             </div>
             <div class="status" tabindex="-1"></div>
@@ -301,8 +299,6 @@ class HatchPetCardBuild extends HatchPetCardBase {
       this._toggleStatus(s);
       this._card.querySelector(".statusbtn")?.focus({ preventScroll: true });
     });
-    q(".gl").addEventListener("click", () => this._guess(s, "left"));
-    q(".gr").addEventListener("click", () => this._guess(s, "right"));
     q(".gx").addEventListener("click", (e) => {
       this._tapped(e.currentTarget, s);
       this._quitGame(s, this._quitLine(s));

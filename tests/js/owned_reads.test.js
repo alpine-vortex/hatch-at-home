@@ -8,8 +8,10 @@ const fs = require("fs");
 const path = require("path");
 
 const DIR = path.join(__dirname, "..", "..", "src", "card");
-// The game parts read their own state as they like.
-const GAME_PARTS = new Set(["card-games.js", "card-board.js", "card-flair.js"]);
+// The game parts read their own state as they like. So does shell-modes.js, but only its game entries
+// (shellGame, slice 2: a slot function is the game's copy of its own state, plan 3.1); the node test in
+// shell_modes.test.js holds the rest of that part to "no game words".
+const GAME_PARTS = new Set(["card-games.js", "card-board.js", "card-flair.js", "shell-modes.js"]);
 
 // [file, a snippet of the line, why it stays a game read]
 const ALLOWED = [
@@ -22,9 +24,6 @@ const ALLOWED = [
   ["card-build.js", "if (x.game && i !== to) this._quitGame(x, null);", "an exit site: a slide change quits the game (3.5)"],
   ["card-layout.js", "if (s.game?.picking) this._fitPicker(s);", "the picker's own fit (D2)"],
   ["card-layout.js", "if (s.game && (asleep || away || egg)) this._endGame(s, null);", "an exit site: asleep, away, egg end a game (3.5)"],
-  ["card-layout.js", "else if (s.game && SERVER_GAMES.has(s.game.kind) &&", "the server games' idle exit (slice 2 moves it to _modeGuard)"],
-  ["card-layout.js", "!s.game.busy && s.game.lastAt && Date.now() - s.game.lastAt >= GAME_IDLE_MS", "the same idle exit"],
-  ["card-layout.js", "this._endGame(s, s.game.kind === \"dig\"", "the same idle exit's line"],
   ["card-layout.js", "if (s.game?.prompt) this._write(s, s.game.prompt", "the game's prompt: it needs the game object"],
   ["card-layout.js", "if (open && s.game) this._quitGame(s, null);", "an exit site: the status sheet ends a game (D8)"],
   ["card-moment.js", "g.key === m.game", "a moment record's game key, not the slide"],
