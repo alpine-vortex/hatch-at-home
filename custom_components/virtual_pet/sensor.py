@@ -158,6 +158,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "memories",
             "upbringing_score",
             "games",
+            "hop_day",
             "wish",
             "dream",
             "favourites",
@@ -313,6 +314,9 @@ class LifeStageSensor(PetEntity, SensorEntity):
             ),
             "memories": [dict(m) for m in self.pet.memories],
             "games": model.game_counts(self.pet),
+            # Hop of the Day's day {day, stage, done, tidy} ({} before the
+            # first board): the card's Hop row reads it (a stale day is open).
+            "hop_day": dict(self.pet.hop_day),
             # Final once adult; before that, what it's on track for.
             "upbringing": (
                 model.upbringing(self.pet)

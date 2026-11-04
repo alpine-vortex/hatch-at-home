@@ -500,6 +500,33 @@ const STYLE = `
   .game .hc.sunk::after { content: none; }
   .game .hc.legal { box-shadow: inset 0 0 0 2px #3a2a1a; }
   .game .hc.lit { box-shadow: inset 0 0 0 3px #fffdf5, inset 0 0 0 5px #3a2a1a; background: rgba(255, 253, 245, 1); }
+  /* Ship 4a's twist cells (CSS, no art): a stump's rings (the second pair mossy, so two pairs tell apart) and a
+     striped rug. They never sink, and keep their look when lit (the ring of .lit is drawn over it). */
+  .game .hc.stump, .game .hc.stump.lit { border-radius: 50%; border-color: rgba(58, 42, 26, .6);
+    background: radial-gradient(circle, #5a3d22 0 14%, #b07c4c 15% 32%, #6b4a2b 33% 38%, #b07c4c 39% 56%, #5a3d22 57%); }
+  .game .hc.stump.two, .game .hc.stump.two.lit {
+    background: radial-gradient(circle, #3f4a22 0 14%, #9c9a58 15% 32%, #4a5328 33% 38%, #9c9a58 39% 56%, #3f4a22 57%); }
+  .game .hc.rug, .game .hc.rug.lit { border-radius: 12%; border-color: rgba(58, 42, 26, .6);
+    background: repeating-linear-gradient(45deg, #b5523b 0 22%, #e2b04a 22% 30%, #b5523b 30% 50%); }
+  /* Ship 4b's twist cells (CSS, no art; plain class swaps, no animation). A crackle pad's hairline crack, two
+     dark cracks once half-sunk; a tide pool as a stone ringed by water, or water over a sunk stone in its water
+     phase (.wet, the next move's); a ripple pad's rings; a dark cell dim until the lantern is lit (then the
+     plain pad); the lantern's glow. A sunk pad of any kind keeps .sunk's look. */
+  .game .hc.crackle:not(.sunk) { background: linear-gradient(118deg, transparent 47%, rgba(58, 42, 26, .5) 48% 50%,
+    transparent 51%), rgba(255, 253, 245, .86); }
+  .game .hc.crackle.half:not(.sunk) { background: linear-gradient(118deg, transparent 45%, rgba(58, 42, 26, .78) 46% 50%,
+    transparent 51%), linear-gradient(32deg, transparent 54%, rgba(58, 42, 26, .7) 55% 58%, transparent 59%),
+    rgba(232, 220, 196, .92); }
+  .game .hc.pool { border-radius: 30%; border-color: rgba(40, 90, 140, .6);
+    background: radial-gradient(circle, rgba(110, 104, 96, .95) 0 44%, rgba(70, 130, 190, .72) 47%); }
+  .game .hc.pool.wet { background: radial-gradient(circle, rgba(70, 130, 190, .6) 0 22%, rgba(40, 100, 170, .9) 26% 40%,
+    rgba(70, 130, 190, .82) 44%); }
+  .game .hc.ripple:not(.sunk) { background: radial-gradient(circle at 22% 50%, transparent 0 16%,
+    rgba(70, 130, 190, .55) 17% 22%, transparent 23% 38%, rgba(70, 130, 190, .4) 39% 44%, transparent 45%),
+    rgba(255, 253, 245, .86); }
+  .game .hc.dark { background: rgba(34, 30, 64, .86); border-color: rgba(34, 30, 64, .9); }
+  .game .hc.lantern:not(.sunk) { background: radial-gradient(circle, #ffd76a 0 15%, rgba(255, 196, 80, .6) 16% 32%,
+    transparent 36%), rgba(255, 253, 245, .86); }
   .game .hpath { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none;
     z-index: 1; }
   .game .hpath path { fill: none; stroke: #3a2a1a; stroke-width: 2; stroke-dasharray: 2 4; stroke-linecap: round; }

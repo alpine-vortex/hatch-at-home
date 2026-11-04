@@ -108,3 +108,5 @@ async def test_nothing_personal_is_recorded(
     assert stage and all('"egg_roster"' not in shared for shared in stage)
     # Nor the pet's bedtime and wake time (Q-G): on the sensor, off the history.
     assert all('"sleep_times"' not in shared for shared in stage)
+    # Nor Hop of the Day's day: the card's, not the history's (ship 3a).
+    assert all('"hop_day"' not in shared for shared in stage)
