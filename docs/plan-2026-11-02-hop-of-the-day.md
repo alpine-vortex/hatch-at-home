@@ -1,7 +1,7 @@
 # Plan: board mode and Hop of the Day (2026-11-02)
 
-Status: ships 1 and 2a are built (2a: s2779, `73564bfb`, awaiting the batch gate); the rest is
-plan. The build is five numbered ships, seven builds (section
+Status: ships 1, 2a and 3a are built (2a: s2779, `73564bfb`, awaiting the batch gate; **3a: s2857,
+`5c0b2ad8`, awaiting owner merge OK**); the rest is plan. The build is five numbered ships, seven builds (section
 9: 1, 2a, 2b, 3a, 3b, 4, 5). **Ship 3a is tier 2** (it adds a saved field, `PetState.hop_day`);
 the others are tier 1. The owner picked Hop on 2026-11-02 from scout s2713's five concepts.
 The decisions made on 2026-11-02 are recorded at the end ("Decided"); nothing is left open
@@ -24,6 +24,10 @@ empty `hop_day` and never writes it; the day rolls over only forward; `tidy` is 
 the find's outcome; the reply is one table (`ok` with `won`, `tidy`, `paid`, `found`,
 `already`; plus `not_won`); the pay block re-checks after its awaits; `hop_day` is published
 on the life-stage sensor. Ship 3a can be built from this plan alone.
+Reconciled on 2026-11-03 (s2858) after ship 3a as built (s2857, `5c0b2ad8`): Decided 21 records
+the first mate's acceptance of its readings; ship 3a is marked built; ship 3b is rewritten
+against the as-built reply and refusals, and carries the review of 3b itself (P1-P12, Q1-Q4).
+Ship 3b can be built from this plan alone.
 
 Sources: scout s2713's report (Pick, Shared base, section 1, Owner decisions) and its
 `renders/hop-sample-solver.py` (the sample board below is its board, rules adjusted in
@@ -522,11 +526,11 @@ because the row is not inside `.gpick`.
 **Where the row learns its state.** The card does not call `board` on every Play press: that
 call writes the save at a day rollover (section 8) and runs the generator in the executor.
 (As built in 2a, `board` writes nothing; the write at a rollover is 3a's, section 8.)
-Instead ship 3a **publishes `hop_day` as an attribute** next to `games` on the mood sensor
-(`sensor.py:314`, and in the unrecorded list at `~160`): `{day, done, tidy}`, nothing
-personal. The card treats a `day` other than today as "open". Until ship 3a ships the
-attribute is absent and the row always reads "open" (ship 2b is behind a flag). The `board`
-call is made only when the row is pressed.
+Instead ship 3a **publishes `hop_day` as an attribute** next to `games` on the **life-stage
+sensor** (as built in 3a, `LifeStageSensor`, in its unrecorded set; not the mood sensor):
+`{day, stage, done, tidy}`, nothing personal (the stage is not personal). The card treats a
+`day` other than today as "open". The attribute is absent on a pet that never asked for a
+board, and the row reads "open" then. The `board` call is made only when the row is pressed.
 
 **What does not change.** Left or Right stays in the server (`GAMES`, `play_game`, the
 service's `vol.In(list(GAMES))`, old saves and automations) and in the card (`GAMES` in
@@ -577,8 +581,8 @@ earlier text contradicted itself).** The rule, in one place:
   shows the **solved view** (the pet curled in the nest, a "solved" or "tidy" line, draft).
   Its one key is **restart** (draft label "try for tidy"), free, which loads the same board
   from the start. Undo does not reach back across the nest: the solved view has no undo; to
-  undo a long path the player restarts. The parked list is cleared on a settle and restarts
-  from empty.
+  undo a long path the player restarts. The parked list is cleared when the settle answers `ok` (kept for a
+  refused one, which re-sends on reopen: ship 3b) and a restart starts from empty.
 - **Server side, per settle** (a pure function of the replay and the `hop_day` map):
   first settle of the day, plain or tidy: pays the 23 (`done` set). A tidy settle also pays
   the find if `tidy` is not set (and sets it, whatever the find's outcome: Decided 20). A plain
@@ -621,7 +625,7 @@ by this settle), `found` (a find was picked and added by this settle, to the bas
 when the basket was full, straight to the collection; `false` if none was picked or the
 tidy find was already paid), and `already` (`true` when this settle paid nothing at all:
 no 23 and no find). `already` is a boolean beside `result: "ok"`, never a `result` code;
-ship 3b reads it so. The reply always carries all four booleans on `ok`.
+ship 3b reads `tidy`, not `already`, for the day's tidy (Decided 21, D2). The reply always carries all four booleans on `ok`.
 
 Targets, not move kinds: the server derives the move from where the pet was to the stepped-on
 cell (the pet has one family, so a two-cell straight move is unambiguous), and applies the
@@ -1099,7 +1103,13 @@ Acceptance:
   row adds nothing to that. That is the picker's and the dig's own fit at the smallest width,
   not 2b's; it is on the device queue.
 
-### Ship 3a: settle, pay, saved state (server, tier 2, M)
+### Ship 3a: settle, pay, saved state (server, tier 2, M) — BUILT (s2857, `5c0b2ad8`, awaiting owner merge OK)
+
+Built on 2026-11-03 on branch `crew/hatch-at-home-s2857-hop-of-the-day-ship-3a-settle`
+(12 files, +1169 -40; one commit on `e3aadcd3`; full pytest 2331 passed, ruff clean; the
+first mate gates the batch with `scripts/ci-gate`). Readings and deviations the first mate
+accepted are Decided 21. The text below is the plan it was built from; where the build
+differs, Decided 21 and ship 3b's "As built" list win.
 
 `settle` in `virtual_pet.hop`, the replay in `hop.py`, `settle_hop` and the pay (section 7),
 the `hop_day` map, its published attribute and `games["hop"].tidy`, the tidy find, the
@@ -1196,50 +1206,195 @@ Acceptance:
 ### Ship 3b: the row's state, settle wiring, flag removal (card, tier 1, S-M)
 
 The card sends the move list when the pet enters the nest, shows the solved view with its
-restart ("try for tidy"), reads `hop_day` for the row's label, shows the settle replies
-(`ok` with `paid`/`found`/`already`, `illegal`, `not_won`, `board_changed`, `too_long`,
-`egg`/`away`/`asleep`; section 6's table), and removes
-`experimental_hop` (a YAML-only key; with it gone no config key is left to remove, and the
-card-check run "flag off builds nothing" is dropped); `strings`/guide/README/how-to-play
-lines (draft). It reads `done` and `tidy` from `hop_day`, as the sensor attribute, and from
-the `board` reply once 3a fills them (2b ignores both).
+restart ("try for tidy"), reads `hop_day` for the row's label, shows the settle replies, and
+removes `experimental_hop` (a YAML-only key; with it gone no config key is left to remove, and
+the card-check run "flag off builds nothing" is dropped); `strings`/guide/README/how-to-play
+lines (draft). **No server change**: ship 3a is built (s2857, `5c0b2ad8`), and this ship
+reads what it built.
 
-**What 2b left for 3b (reconciled after 2b shipped).**
+**What 3a built, as the card sees it (read before building; Decided 21).**
+- **The `settle` call:** `callService("virtual_pet", "hop", {entity_id, action: "settle", id,
+  moves, ...(sharedScreen() ? {shared: true} : {})}, undefined, false, true)`; `id` is the
+  `board` reply's, `moves` is `HATCH_HOP.encode(g.moves)`. `shared` is accepted and ignored by
+  the server (Decided 21), so the card sends it only for parity with `play_game`; leaving it
+  out would change nothing. The schema caps `moves` at 201 letters and `id` at 32 characters;
+  a card that sends more gets a thrown call, not a code.
+- **The reply on `ok`:** exactly `{result: "ok", won: true, tidy, paid, found, already}`. `tidy`
+  is whether *this list* was tidy, not whether the day is; `paid` is the 23; `found` is a find
+  added by this settle (basket, or straight to the collection when the basket was full);
+  `already` is `not (paid or found)`. A tidy list that finds nothing to pick (or after the
+  day's find) is `tidy: true, found: false`, and `already: true` if no 23 was paid either
+  (D2): so **the card reads `tidy` for "the day is tidy", never `already`**, and shows the
+  tidy view whenever `tidy` is true.
+- **The refusal and error replies:** `{result}` alone, `result` one of `board_changed`
+  (stale or empty `hop_day`, another board's id, a missing `id`, or a day that turned during
+  the build), `too_long`, `illegal` (adds `bad_index`; a missing `moves` is `illegal` at 0),
+  `not_won`, `egg`, `asleep`, `away` (a private pet's `away` arrives as `asleep`). Never
+  `too_tired` (Decided 17). `REFUSALS` in `lines.js` already has `egg`, `away` and `asleep`;
+  it has none for the rest.
+- **The `board` reply** now carries real `done` and `tidy` for the pinned day (booleans), and
+  `day` is the stored day. The card's `valid` check ignores them today; 3b reads them.
+- **The attribute:** `hop_day` on the **life-stage sensor** (`s.ids["sensor.life_stage"]`, where
+  `card-journal.js` reads `games`), `{day, stage, done, tidy}`; absent until the pet's first
+  `board` call, and `{}` after a new egg.
+
+**What 2b left for 3b (reconciled after 2b shipped, and again after 3a).**
 - **Where it plugs in.** `_hopMove` in `card-board.js`: on entering the nest it sets
   `g.done`/`g.tidy` (local `HATCH_HOP.isTidy`), clears the parked list, reacts and says
   "solved"/"tidy". 3b adds the settle call there with the `_hopFetch` pattern (a seam of its
-  own, `_hopSettle`, for card-check). The **parked list must not be cleared at the nest any
-  more**: it is cleared when the settle answers `ok` (any of its flags), and kept for a
-  refused settle (the acceptance row below), so the line in `_hopMove` (`_hopStore(g.key, null)`)
-  moves into the settle's reply handler. The reply's `result` decides: `ok` clears the list
-  and shows the solved view (tidy from the reply's `tidy`, which also ends "try for tidy"
-  for the day, whether `found` is true or false: Decided 20); `board_changed` loads the
-  new board and drops the list; `egg`/`away`/`asleep` keep it; `illegal`, `not_won`,
-  `too_long` keep it too (they are bugs; the board stays as it is and the bubble says so).
-  `settle` never answers `too_tired` (Decided 17), so the card has no line for it there.
+  own, `_hopSettle(id, moves)`, for card-check). The solved view shows **at once** from the
+  local result (no wait on "thinking…"), and the settle runs behind it. The **parked list
+  must not be cleared at the nest any more**: the line in `_hopMove` (`_hopStore(g.key,
+  null)`) moves into the settle's reply handler. The reply's `result` decides:
+  - `ok`: clear the list; `g.tidy = reply.tidy || g.tidy` (see P1: never lowered by a plain
+    list); `g.settled = true`. "Try for tidy" ends for the day whenever `g.tidy` is true,
+    `found` or not (Decided 20).
+  - `board_changed`: drop the list, call `board`, load the new board (the day turned, or
+    another screen's generator moved on).
+  - `egg`/`away`/`asleep`: keep the list; the bubble is `REFUSALS[result]`; `g.settled` stays
+    false (P3 for what the board then offers).
+  - `illegal`, `not_won`, `too_long`: bugs, or an engine drift between hop-engine.js and
+    hop.py. Keep the list, say "hmm, that didn't work", and `console.warn` once per code (as
+    `HOP_WARNED` does for the board), naming the code and, for `illegal`, `bad_index`; never
+    the move list.
+  - a thrown call (network, HA restarting): as a refusal, keep the list, "hmm, that didn't
+    work".
+  - **In every case the handler first checks that `s.game === g`** (the player did not
+    restart, quit or open another board meanwhile; a restart plus a second nest entry sends a
+    second settle while the first is in flight, and the server pays once either way). A stale
+    reply changes nothing on the card. The first reply to the older list still clears or keeps
+    its own key (`g.key`), whoever is on screen.
+- **The reopen path.** `_hopStart` today resumes a parked list only when it is legal and *not*
+  won, and drops one that won. With the list kept at the nest this drops exactly the lists
+  3b means to keep (asleep, a thrown call, a closed tab before the reply). So `_hopStart`
+  changes (P2): a parked list that is legal **and won** opens the solved view (the pet in the
+  nest, `g.done`, the local `tidy`) and **sends the settle again**; its reply is handled as
+  above. A parked list that is illegal on this board is dropped, as now. A `board` reply with
+  `done: true` and `tidy: true` drops any parked list (nothing is left to pay) and opens the
+  tidy solved view.
+- **A reload on the same day** (the `board` reply's `done`/`tidy`, no parked list): the solved
+  view with the pet in the nest and no path. `g.st` is built from a replay of nothing, so 3b
+  needs the nest state without a list: `{pos: <index of "N">, sunk: 0, uses: 0, done: true}`
+  (`HATCH_HOP.fromView` takes the view form), or the solved view draws the pet on the
+  start pad. `g.done = reply.done`, `g.tidy = reply.tidy` from the `board` reply, and "try for
+  tidy" is offered while `!g.tidy`, restarting from the start pad with the board's own `st`.
 - **Already built in 2b, not 3b's:** the solved view's keys (undo off once `g.done`, restart on
   only while `!g.tidy`, aria "try for tidy"), `_hopRestart`, the bubble lines. 3b changes the
-  *source* of `tidy` (the settle reply, then `hop_day`) and the bubble's text per settle code.
+  *source* of `tidy` (the settle reply, the `board` reply and `hop_day`) and the bubble's text
+  per settle code.
 - **The row's label is one constant** (`HOP_COPY.row`; `_hopRow` in `card-board.js`); 3b adds
-  open / solved / tidy to it and the row's `aria-label`, and a reload on the same day must start
-  on the solved view: today `_hopStart` resumes a parked list only when it is legal and *not*
-  won, so a won board on reload would open fresh unless 3b passes `done` in.
-- **The flag.** Removing `experimental_hop` takes out `_hopOn()` (one line), the flag-off
-  checks in card-check's `board` section ("flag off: the picker has three games and no Hop row"
-  and "flag off again"), and the bench's `hop: true`/`experimental_hop` lines in `page.js`.
-  The card-check `board` baseline in the picker-fit check (flag off first) goes with them.
+  open / solved / tidy to it and the row's `aria-label` (all draft). The state is read from
+  `hop_day` on the life-stage sensor: `open` when the attribute is absent, or its `day` is not
+  today, or `done` is false; `solved` when `done`; `tidy` when `tidy`. "Today" is the server's
+  day, the HA local date (Q1). The row is rebuilt when the picker opens, and also when the
+  sensor's attribute changes while the picker is open (another screen settled): the local
+  game's own settle updates it from the reply.
+- **The flag.** Removing `experimental_hop` takes out `_hopOn()` (one line) and its guards in
+  `_hopRow`, the flag-off checks in card-check's `board` section ("flag off: the picker has
+  three games and no Hop row" and "flag off again"), and the bench's `hop: true` /
+  `experimental_hop` lines in `page.js`, `scripts/bench.js`, `dev/bench/README.md`,
+  `docs/features.md` (the grep above lists the files). The card-check `board` baseline in the
+  picker-fit check (flag off first) goes with them. **A saved YAML with `experimental_hop:
+  true` must still load** (P7): `setConfig` does not validate unknown keys today; a check
+  asserts it.
 - **Cell size.** The tap-then-confirm path is the common case (cells 19-28 px), so 3b's
   settle must not assume a one-tap commit anywhere.
+- **Docs.** `docs/guide.md` (the life-stage attribute list near line 519 gains `hop_day`; 3a
+  left it for this ship), the games text, README, how-to-play, `docs/features.md` and
+  `dev/bench/README.md` (draft copy; section 10).
 
-Acceptance:
-- card-check on stubbed replies: the settle contract above; a plain win then a restart then a
-  tidy settle (stubbed `ok` with `already: true`, then `ok` with `found: true`, then one with
-  `found: false` that still ends "try for tidy"); the solved view has no undo and a restart
-  only while tidy is not set; `board_changed` loads the new board and drops the parked
-  moves; a refused settle (asleep) keeps the moves; the row reads open / solved / tidy from
-  the attribute and from a stale `day` (open); a reload on the same day shows the solved
-  view.
-- bench: the row in each of its three states at 300, 330 and 420; the solved view.
+Acceptance (P-numbers are the review's, below):
+- card-check on stubbed replies, each stub carrying the full as-built shape (`result`, `won`,
+  `tidy`, `paid`, `found`, `already` on `ok`; `{result}` on a refusal):
+  - a plain win: the solved view at once, the settle sent once with the board's `id`, the encoded `moves`
+    string, no `shared` on a private screen, the list cleared on the `ok` (`paid: true,
+    tidy: false, found: false, already: false`), "try for tidy" on;
+  - then a restart and a tidy list: settle sent again, stub `ok` with `tidy: true, paid: false,
+    found: true, already: false`: the tidy view, restart off; and the same with
+    `found: false, already: true`: tidy view, restart off (D2: `already` is not read);
+  - a plain list after a tidy day (stub `ok, tidy: false, already: true` with the `board`
+    reply's `tidy: true`): the view stays tidy and restart stays off (P1);
+  - `board_changed` loads the new board (a stubbed `board`) and drops the parked moves; `egg`,
+    `away` and `asleep` each keep the moves and say their `REFUSALS` line; `illegal`,
+    `not_won`, `too_long` and a thrown call keep the moves, say "hmm, that didn't work" and warn
+    once each; none of them shows "paid";
+  - the reopen after a refused settle: the parked won list opens the solved view and the
+    settle goes out again, answered `ok` this time (P2);
+  - a reply that arrives after a restart or a quit changes nothing on screen (P4);
+  - the solved view has no undo; restart only while tidy is not set (the 2b check stands);
+  - the row reads open / solved / tidy from the attribute, from a stale `day` (open), from an
+    absent attribute (open), and from the local settle's reply;
+  - a reload on the same day (the stubbed `board` with `done: true`): the solved view, pet in
+    the nest, "try for tidy" offered when `tidy: false`, and a restart then plays from the
+    start pad; with `tidy: true` no restart;
+  - `experimental_hop: true` in a config does nothing and raises nothing; a card with no key
+    has the row (P7).
+- JS (`tests/js`): the reply handler as a pure function of (reply, game), if it is split out:
+  the table above, one row each (P8).
+- bench: the row in each of its three states at 300, 330 and 420; the solved view of a won
+  board, of a tidy one, and of a reload (the nest state without a path).
+- **Not verifiable without a device (device queue):** the real round trip from the card (the
+  3a pytest covers server through the service with `hop_solve.py`, the card-check stubs cover
+  the card; nothing runs the two together outside the batch gate's HA); how the settle reads
+  on a real phone at 19-28 px cells; the "found" moment against a real find event (P6); a
+  settle racing a bedtime on a real pet.
+
+**Review of ship 3b itself (s2858, adversarial; against 3a as built).** What was wrong or
+missing in the draft, and what was done:
+- **P1 (wrong; fixed above).** The draft said the card takes `tidy` from the reply. The reply's
+  `tidy` is *this list's*: a plain list on a day that is already tidy (a second screen, a
+  second pass after a tidy settle that the card dropped, another person) answers `tidy:
+  false, already: true`. Setting `g.tidy` from it would offer "try for tidy" again on a tidy
+  day. The card keeps `g.tidy` as an OR of the `board` reply's `tidy`, the attribute, and every
+  reply's `tidy`; nothing lowers it. Fixed: the `ok` handler and an acceptance row.
+- **P2 (missing; fixed above).** The draft kept the list for a refused settle and then
+  reopened through a `_hopStart` that drops any parked list that is won, so "the player can
+  retry once the pet wakes" was not true in code: the first reopen threw the list away. Fixed:
+  the reopen path, and its acceptance row.
+- **P3 (missing; question Q2).** A refused settle leaves a solved board on screen that is not
+  paid. The solved view then offers "try for tidy" (restart) whose handler clears the parked
+  list: the player loses an unsettled win. See Q2.
+- **P4 (missing; fixed above).** Nothing said what a reply for a board that is no longer on
+  screen does; with restart plus a second nest entry two settles are in flight. Fixed: the
+  `s.game === g` check, and an acceptance row.
+- **P5 (wrong; fixed above).** The draft's acceptance stubbed `ok` with `already: true` and
+  then `found: true`, with no value for the other fields, so a card that read `already` for
+  tidy would have passed. Each stub now carries the full shape, and one row asserts D2.
+- **P6 (unverifiable; device queue).** The draft said nothing of what the card says for
+  `found: true` or for `paid`. The basket find already has its own moment through the
+  `found` event, and a full-basket find has none (Decided 20: `found: true`, no event). This
+  ship adds no new copy beyond the draft lines for the row and the solved view; for
+  `found: true` with no event, Q3.
+- **P7 (missing; fixed above).** Removing the flag with a YAML that still has it, and the
+  card-check/bench/docs files that mention it (the grep), were not listed.
+- **P8 (missing; fixed above).** No JS-level test: the reply table is a small pure function
+  and cheap to cover without HA.
+- **P9 (missing; fixed above).** The reload on the same day needs a nest state without a path;
+  `HATCH_HOP.start` puts the pet on the start pad.
+- **P10 (stale; fixed above).** The draft said the card reads `done`/`tidy` "once 3a fills
+  them" and that 2b ignores both: 3a is built, and the `board` reply has them.
+- **P11 (wrong in section 6; fixed there).** "The parked list is cleared on a settle" and
+  "ship 3b reads [`already`] so" are edited: cleared on `ok` only; `tidy` for the day.
+- **P12 (judgement; Q4).** Removing the flag exposes the row to every household with tier 1
+  and no device pass.
+
+Questions (answer before or during the build; each has a recommendation):
+- **Q1. What is "today" for the row's label?** The server's day is the HA local date
+  (`_today`); the card has no HA-timezone day (nothing reads `hass.config.time_zone`), and a
+  browser in another timezone or a day-turn mismatch would show "solved" or "open" wrongly
+  for hours. *Recommend:* compute the date with `Intl.DateTimeFormat("en-CA", {timeZone:
+  hass.config.time_zone})`, fall back to the device's local date, and let the `board` reply's
+  `done`/`tidy` correct the row when it opens. A wrong label costs a tap, not a pay.
+- **Q2. A refused settle and the restart key.** *Recommend:* while `g.settled` is false the
+  solved view's restart is disabled, and the list is kept; the player leaves and returns, and
+  the reopen re-sends it (P2). The alternative (a "send again" key) is a new key and new copy.
+- **Q3. `found: true` with a full basket gives no event.** *Recommend:* the card says one
+  draft line ("found something!") from the reply's `found`, not from the event, and the
+  basket's own `found` moment is not duplicated when the event also arrives (the `found` line
+  wins within a short window). If the owner wants no new line, say nothing for a full basket.
+- **Q4. Flag removal in the same ship as the settle.** *Recommend:* keep it in 3b as planned,
+  but land the flag removal as the last commit, so the owner can merge 3b without it and
+  after a device pass.
 
 ### Ship 4: world twists (engine and generator, tier 1, M)
 
@@ -1435,3 +1590,34 @@ The first mate answered review s2855's Q1-Q4 on 2026-11-03 (they are folded into
     backwards (timezone, clock, restore) is the same day. One test.
 20. **`tidy` is set on the first tidy settle even if the find cannot be added** (first mate,
     Q4). The reply carries `found: true/false`; the card stops offering "try for tidy".
+
+## Decided (2026-11-03, ship 3a as built)
+
+The first mate accepted ship 3a's readings D1-D3 and its other deviations (report of s2857,
+"Deviations and readings"), recorded by s2858.
+
+21. **Ship 3a as built, accepted** (first mate):
+    - **D1, the find-only settle.** A tidy settle after a plain win pays only the find (and the
+      `found` event if the find went into the basket). It has no play costs, no care-log entry,
+      no `game_finished` event and no bond. That day's log shows `win`; the later tidy shows
+      only in `games.hop.tidy` and `hop_day.tidy`. Section 6's "one care entry on a paid settle"
+      is the 23's.
+    - **D2, `already` is `not (paid or found)`.** A tidy settle after a plain win with no find to
+      pick answers `ok, tidy: true, paid: false, found: false, already: true`, and `hop_day.tidy`
+      and the tidy count are still set (Decided 20). **The card reads `tidy` from the reply, never
+      `already`**, to decide that the day is tidy.
+    - **D3, "writes nothing"** means nothing beyond what `_advance` saves on every call (as in
+      2a's `board`); the tests count saves outside `_advance` and compare `to_dict()`.
+    - **Egg is refused in `hop_day`.** The load validation drops a map with `stage: "egg"` (an egg
+      has no board; `params_for` would raise). Otherwise as section 8.
+    - **The sensor attribute is `{day, stage, done, tidy}`** (sections 5 and 8; the stage is not
+      personal).
+    - **`shared` is accepted and ignored** by `settle`: nothing of Hop is kept per person, and the
+      bond goes to the signed-in person, only when the 23 was paid (as `play_game`).
+    - **The checks after the build run in this order:** board id mismatch (`board_changed`), then
+      `too_long`, `illegal` (with `bad_index`), `not_won`. So another board's list answers
+      `board_changed`, not `illegal`. A `settle` with no `id` answers `board_changed`; with no
+      `moves`, `illegal` at index 0 (answered, not raised by the schema).
+    - **The `ok` reply** is `{result, won, tidy, paid, found, already}` and nothing else (no `day`,
+      no `done`): `tidy` is whether *this list* was tidy, not whether the day is. A refusal or
+      `board_changed`/`too_long`/`not_won` is `{result}` alone; `illegal` adds `bad_index`.
