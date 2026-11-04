@@ -249,7 +249,13 @@ class HatchPetCardBase extends HTMLElement {
     if (!s.subscribed && !s.subscribeFailed && !s.waitTimer) {
       s.waitTimer = setTimeout(() => {
         s.waitTimer = null;
-        if (!s.subscribed) s.subscribeFailed = true;
+        if (s.subscribed) return;
+        s.subscribeFailed = true;
+        // Silence is not an error: a send lost on a socket that was closing
+        // gets no reply and no catch. Ask once more, if the slide is still
+        // on this subscription (not gone, not already waiting on the error
+        // retry). subscribeFailed is set, so no second wait timer starts.
+        if (s.subKey && !s.gone && !s.retryTimer && this._slides?.includes(s)) this._subscribe(s, true);
       }, SUBSCRIBE_WAIT_MS);
     }
     Promise.resolve(conn.subscribeMessage((msg) => {
