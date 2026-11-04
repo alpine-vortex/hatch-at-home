@@ -1460,6 +1460,11 @@ Only a phone shows these. Each ship above stands without them; they tune numbers
 - The piece's 140 ms glide, the dotted path and the arc (hop, glide) on a real LCD: too
   quick, too slow, or invisible at 19 px?
 - Glide's diagonal special has no key; it is tapped only. Is that found without a hint?
+- **Ship 3b on a real phone and pet.** The real round trip from the card to the server and
+  back (the stubs and `hop_solve.py` cover the halves); the settle at 19 / 22 / 28 px cells
+  (tap, confirm, nest, solved view, no one-tap assumption); the "found" moment and its line
+  against a real find event and a full basket; a settle racing a bedtime (the pet falls asleep
+  with the win on screen, the list stays parked, the reopen sends it again).
 - The picker at the smallest width (a 284 px card, LCD 180×135): the three games already run
   6 px past the LCD's foot and the second touches the close button (found by 2b's baseline, not
   caused by the row). Is that visible on a phone, and does the picker need its own 300 px fix?
@@ -1621,3 +1626,18 @@ The first mate accepted ship 3a's readings D1-D3 and its other deviations (repor
     - **The `ok` reply** is `{result, won, tidy, paid, found, already}` and nothing else (no `day`,
       no `done`): `tidy` is whether *this list* was tidy, not whether the day is. A refusal or
       `board_changed`/`too_long`/`not_won` is `{result}` alone; `illegal` adds `bad_index`.
+
+## Decided (2026-11-03, ship 3b questions)
+
+The first mate answered ship 3b's Q1-Q4 on 2026-11-03 (brief of s2859).
+
+22. **Q1: the row's "today" comes from `Intl` with `hass.config.time_zone`** (first mate). The
+    `board` reply's `done`/`tidy` corrects the row when it opens. Fall back to the device's
+    local date when the zone is missing or unknown.
+23. **Q2: restart is disabled while a won board is unsettled** (first mate), whether the settle
+    was refused or is still in flight. The list is kept; the reopen re-sends it (P2).
+24. **Q3: one short line for a find from `found: true`** (first mate), in the house voice of
+    the existing find lines. It is the only new player copy in 3b; any other missing line is a
+    question for the first mate, not a guess.
+25. **Q4: flag removal (`experimental_hop`) is the last commit of 3b, on its own** (first
+    mate), so it can be dropped. Old YAML that still sets the flag must load (P7).
