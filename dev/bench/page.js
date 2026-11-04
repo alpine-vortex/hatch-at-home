@@ -150,7 +150,9 @@
       connection: { subscribeEvents: noop, subscribeMessage: noop },
       // `digReplies`: play_game answers, in order, for a `game: "dig"` shot (the server's dig is random).
       // `hopReply`: the `hop` service's `board` answer (a canned reply from hop.py, see hopBoard).
-      callService: async (domain, service) => ({ response: service === "visit" ? (shot.visit || { counted: true })
+      callService: async (domain, service, data) => ({ response: service === "visit" ? (shot.visit || { counted: true })
+        : service === "hop" && data?.action === "settle" ? (shot.settleReply ||
+          { result: "ok", won: true, tidy: false, paid: true, found: false, already: false })
         : service === "hop" ? (shot.hopReply || {})
         : service === "play_game" && shot.digReplies?.length ? shot.digReplies.shift() : {} }),
       callWS: async (msg) => {

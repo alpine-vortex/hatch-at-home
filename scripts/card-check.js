@@ -4618,6 +4618,255 @@ async function main() {
     await open({ result: "too_tired" });
     check("a refusal reuses the refusal line", (await cur().locator(".bubble").innerText()) === "too tired to play" && !(await game()));
 
+    // Ship 3b (plan 2026-11-02-hop-of-the-day): a nest entry settles. `_hopSettle` is stubbed with the
+    // as-built reply shapes (ok: result, won, tidy, paid, found, already; a refusal is {result}); the first
+    // win goes through the hass.callService seam instead, to see the service call itself. The boards are the
+    // bench's (dev/bench/hop-boards.json, from hop.py): `hop-child`, a win and a tidy list.
+    {
+      const fx = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "dev", "bench", "hop-boards.json"), "utf8")).boards["hop-child"];
+      const today = () => card.evaluate((el) => hopToday(el._hass.config?.time_zone));
+      const boardOf = async (id, over = {}) => ({ ...fx.reply, day: await today(), id, done: false, tidy: false, ...over });
+      const okR = (over) => ({ result: "ok", won: true, tidy: false, paid: true, found: false, already: false, ...over });
+      const settleWarns = [];
+      page.on("console", (m) => { if (m.type() === "warning" && /hop settle/.test(m.text())) settleWarns.push(m.text()); });
+      // The settle stub: `replies` in order (the last repeats); "throw" throws; `hold` waits for __release().
+      const settleStub = (replies, hold = false) => card.evaluate((el, [rs, hold]) => {
+        el.__settles = [];
+        el.__fetches = 0;
+        el._hopSettle = (entity, id, moves) => {
+          el.__settles.push({ entity, id, moves });
+          const r = rs.length > 1 ? rs.shift() : rs[0];
+          if (r === "throw") return Promise.reject(new Error("offline"));
+          return hold ? new Promise((done) => { el.__release = () => done(r); }) : Promise.resolve(r);
+        };
+      }, [replies, hold]);
+      const openBoard = async (reply, then) => {
+        await card.evaluate((el, [r, then]) => {
+          el.__fetches = 0;
+          el._hopFetch = async () => { el.__fetches++; return el.__fetches > 1 && then ? then : r; };
+        }, [reply, then || null]);
+        await picker();
+        await cur().locator(".ghop").click();
+        await page.waitForTimeout(500);
+      };
+      const play = (letters) => card.evaluate((el, l) => {
+        const s = el._slides[el._index];
+        for (const ch of l) el._hopMove(s, HATCH_HOP.LETTERS.indexOf(ch));
+        const g = s.game;
+        return { done: g.done, settled: g.settled, tidy: g.tidy, sent: (el.__settles || []).length, bubble: s.bubble.textContent };
+      }, letters);
+      const view = () => card.evaluate((el) => {
+        const s = el._slides[el._index];
+        const g = s.game;
+        const k = (n) => g?.el?.keys.querySelector(`[data-k="${n}"]`);
+        return g && { id: g.id, done: g.done, settled: g.settled, tidy: g.tidy, moves: g.moves.length, pos: g.st.pos,
+          nest: g.board.grid.join("").indexOf("N"), start: g.board.grid.join("").indexOf("P"), bubble: s.bubble.textContent,
+          restart: k("restart").getAttribute("aria-disabled"), restartAria: k("restart").getAttribute("aria-label"),
+          undo: k("undo").getAttribute("aria-disabled"), sent: (el.__settles || []).length, fetches: el.__fetches };
+      });
+      const settles = () => card.evaluate((el) => el.__settles);
+      await card.evaluate((el) => { el._lines = (s, key, normal) => ({ text: normal }); }); // no persona or baby voice in a text check
+      await card.evaluate((el) => { el._slides[el._index].hopSeen = null; });
+
+      // A plain win, through the service call: the solved view at once, one settle with the board's id and the encoded
+      // list, no `shared` on a private screen, the list cleared on the ok, "try for tidy" on, no undo.
+      await page.evaluate(() => { window.__hopCalls = []; });
+      await card.evaluate((el) => {
+        const real = el._hass.callService;
+        el.__realCall = real;
+        el._hass.callService = async (d, svc, data, ...r) => {
+          if (d === "virtual_pet" && svc === "hop" && data.action === "settle") {
+            (window.__hopCalls ??= []).push(data);
+            return { response: { result: "ok", won: true, tidy: false, paid: true, found: false, already: false } };
+          }
+          return real.call(el._hass, d, svc, data, ...r);
+        };
+        delete el._hopSettle;
+      });
+      await openBoard(await boardOf("settle-1"));
+      const w1 = await play(fx.win);
+      const mid = await stored();
+      await page.waitForTimeout(200);
+      const v1 = await view();
+      const sent1 = await page.evaluate(() => window.__hopCalls);
+      await card.evaluate((el) => { el._hass.callService = el.__realCall; });
+      check("a plain win: the solved view at once, the list parked until the reply, the settle sent once",
+        w1.done && !w1.settled && w1.bubble === "solved" && w1.tidy === false && Object.values(mid)[0] === fx.win && sent1.length === 1,
+        JSON.stringify({ w1, mid, sent1 }));
+      check("... the settle carries the board's id and the encoded list, and no `shared` on a private screen",
+        sent1[0]?.action === "settle" && sent1[0].id === "settle-1" && sent1[0].moves === fx.win && !("shared" in sent1[0]) &&
+          typeof sent1[0].entity_id === "string", JSON.stringify(sent1));
+      check("... on `ok` the list is cleared, \"try for tidy\" is on and the solved view has no undo",
+        Object.keys(await stored()).length === 0 && v1.settled && !v1.tidy && v1.restart === "false" && v1.restartAria === "try for tidy" &&
+          v1.undo === "true" && v1.bubble === "solved", JSON.stringify(v1));
+
+      // Then a restart and a tidy list: the tidy view, restart off. (`found: true`: the one new line.)
+      await settleStub([okR({ tidy: true, paid: false, found: true, already: false })]);
+      await key("restart").click();
+      const r1 = await view();
+      const w2 = await play(fx.tidy);
+      await page.waitForTimeout(200);
+      const v2 = await view();
+      const s2 = await settles();
+      check("restart after a plain win plays from the start pad, then a tidy list settles again: tidy, restart off, the find line",
+        r1.moves === 0 && r1.pos === r1.start && !r1.done && w2.bubble === "tidy" && s2.length === 1 && s2[0].moves === fx.tidy &&
+          v2.tidy && v2.settled && v2.restart === "true" && v2.bubble === "ooh, I found something ♪", JSON.stringify({ r1, w2, v2, s2 }));
+      await quit();
+
+      // A tidy list that finds nothing to pick: `already` is not read.
+      await settleStub([okR({ tidy: true, paid: false, found: false, already: true })]);
+      await openBoard(await boardOf("settle-2"));
+      await play(fx.tidy);
+      await page.waitForTimeout(200);
+      const v3 = await view();
+      check("tidy with found: false and already: true is the tidy view, restart off, no find line (D2)",
+        v3.tidy && v3.settled && v3.restart === "true" && v3.bubble === "tidy", JSON.stringify(v3));
+      await quit();
+
+      // A plain list on a day another screen made tidy: the reply says tidy: false, already: true. The view stays tidy (P1).
+      await settleStub([okR({ tidy: false, paid: false, already: true })]);
+      await openBoard(await boardOf("settle-3"));
+      await card.evaluate((el) => { el._slides[el._index].game.tidy = true; }); // what the board reply or the attribute said
+      await play(fx.win);
+      await page.waitForTimeout(200);
+      const v4 = await view();
+      check("a plain list after a tidy day: the view stays tidy and restart stays off (P1)",
+        v4.tidy && v4.settled && v4.restart === "true" && v4.bubble === "tidy", JSON.stringify(v4));
+      await quit();
+
+      // board_changed: the parked list goes and the new board loads (the stubbed board call is asked again).
+      await settleStub([{ result: "board_changed" }]);
+      await openBoard(await boardOf("settle-4"), await boardOf("settle-5"));
+      await play(fx.win);
+      await page.waitForTimeout(700);
+      const v5 = await view();
+      check("board_changed drops the parked moves and loads the new board",
+        v5?.id === "settle-5" && v5.moves === 0 && !v5.done && v5.fetches === 2 && Object.keys(await stored()).every((k) => !k.includes("settle-4")),
+        JSON.stringify({ v5, stored: await stored() }));
+      await quit();
+
+      // egg, away, asleep: the list is kept, the REFUSALS line is said, restart is off while unsettled (Q2).
+      for (const [result, line] of [["egg", "..."], ["away", "i'm at the sitter's!"], ["asleep", "shh... sleeping"]]) {
+        const id = `settle-${result}`;
+        await settleStub([{ result }]);
+        await openBoard(await boardOf(id));
+        await play(fx.win);
+        await page.waitForTimeout(200);
+        const v = await view();
+        const kept = await stored();
+        check(`${result}: the moves are kept, the bubble says its refusal line, restart is off, nothing is shown as paid`,
+          v.done && !v.settled && v.bubble === line && v.restart === "true" && Object.values(kept).includes(fx.win),
+          JSON.stringify({ v, kept }));
+        await quit();
+        if (result === "asleep") {
+          // The reopen after a refused settle: the parked won list opens the solved view and sends again (P2).
+          await settleStub([okR()]);
+          await openBoard(await boardOf(id));
+          await page.waitForTimeout(200);
+          const back = await view();
+          const again = await settles();
+          check("the reopen after a refused settle opens the solved view, sends the list again, and `ok` clears it (P2)",
+            back.done && back.pos === back.nest && back.moves === fx.win.length && again.length === 1 && again[0].moves === fx.win &&
+              back.settled && Object.keys(await stored()).length === 0 && back.restart === "false", JSON.stringify({ back, again }));
+          await quit();
+        }
+      }
+
+      // illegal, not_won, too_long and a thrown call: the moves are kept, "hmm, that didn't work", one warning per code.
+      const codes = [["illegal", { result: "illegal", bad_index: 2 }], ["not_won", { result: "not_won" }],
+        ["too_long", { result: "too_long" }], ["thrown", "throw"]];
+      const before = settleWarns.length;
+      for (const [code, reply] of codes) {
+        for (const again of [0, 1]) {
+          await settleStub([reply]);
+          await openBoard(await boardOf(`settle-${code}`));
+          await play(fx.win);
+          await page.waitForTimeout(200);
+          const v = await view();
+          if (!again) {
+            check(`${code}: the moves are kept and the bubble says "hmm, that didn't work"`,
+              v.done && !v.settled && v.bubble === "hmm, that didn't work" && v.restart === "true" &&
+                Object.values(await stored()).includes(fx.win), JSON.stringify(v));
+          }
+          await quit();
+        }
+      }
+      const warned = settleWarns.slice(before);
+      check("... and each logs once, naming the code (bad_index for illegal) and never the move list",
+        warned.length === 4 && codes.every(([code], i) => warned[i].includes(`(${code}`)) && /illegal, bad_index 2/.test(warned[0]) &&
+          warned.every((w) => !w.includes(fx.win)), JSON.stringify(warned));
+      await card.evaluate(() => { for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-hop|")) localStorage.removeItem(k); });
+
+      // A reply that arrives after a quit changes nothing on screen (P4); the older list still clears its own key.
+      await settleStub([okR({ tidy: true, found: true })], true);
+      await openBoard(await boardOf("settle-late"));
+      await play(fx.win);
+      await quit();
+      await settleStub([okR()]);
+      await openBoard(await boardOf("settle-other"));
+      const bubbleBefore = await cur().locator(".bubble").innerText();
+      await card.evaluate((el) => { el.__release?.(); });
+      await page.waitForTimeout(200);
+      const other = await view();
+      check("a settle reply for a board that is no longer on screen changes nothing there, and clears its own parked list",
+        other.id === "settle-other" && other.moves === 0 && !other.done && !other.tidy && (await cur().locator(".bubble").innerText()) === bubbleBefore &&
+          Object.keys(await stored()).every((k) => !k.includes("settle-late")), JSON.stringify({ other, bubbleBefore, stored: await stored() }));
+      await quit();
+      await card.evaluate((el) => { delete el._hopSettle; });
+
+      // A reload on the same day (the board reply says done): the solved view, the pet in the nest, no path, no settle.
+      await settleStub([okR()]);
+      await openBoard(await boardOf("reload-1", { done: true, tidy: false }));
+      const rl = await view();
+      check("a reload on a solved day: the pet is in the nest with no path, \"try for tidy\" is offered, nothing is sent",
+        rl.done && rl.settled && rl.pos === rl.nest && rl.moves === 0 && rl.restart === "false" && rl.restartAria === "try for tidy" &&
+          rl.bubble === "solved" && rl.sent === 0, JSON.stringify(rl));
+      await key("restart").click();
+      const rl2 = await view();
+      check("... and a restart there plays from the start pad", !rl2.done && rl2.pos === rl2.start && rl2.moves === 0, JSON.stringify(rl2));
+      await quit();
+      await openBoard(await boardOf("reload-2", { done: true, tidy: true }));
+      const rl3 = await view();
+      check("a reload on a tidy day: the tidy view with no restart",
+        rl3.done && rl3.tidy && rl3.pos === rl3.nest && rl3.restart === "true" && rl3.bubble === "tidy", JSON.stringify(rl3));
+      await quit();
+
+      // The row: open / solved / tidy from the sensor's attribute, a stale day, no attribute, and the local settle.
+      const rowText = () => card.evaluate((el) => {
+        const row = el._slides[el._index].gameBox.querySelector(".ghop");
+        return row && { text: row.textContent, aria: row.getAttribute("aria-label") };
+      });
+      const attr = async (hop_day) => { await inject(pet["sensor.life_stage"], { attributes: { hop_day } }); await page.waitForTimeout(500); };
+      const day = await today();
+      await card.evaluate((el) => { el._slides[el._index].hopSeen = null; });
+      await attr(undefined);
+      await picker();
+      const absent = await rowText();
+      await attr({ day, stage: "child", done: true, tidy: false });
+      const solved = await rowText(); // the picker is open: the row follows the attribute
+      await attr({ day, stage: "child", done: true, tidy: true });
+      const tidy = await rowText();
+      await attr({ day: "2000-01-01", stage: "child", done: true, tidy: true });
+      const stale = await rowText();
+      await attr({ day, stage: "child", done: false, tidy: false });
+      const notDone = await rowText();
+      await quit();
+      check("the row reads open / solved / tidy from hop_day: absent, solved, tidy, a stale day, not done, while the picker is open",
+        absent.text === "Hop of the Day" && absent.aria === "Play Hop of the Day" && solved.text === "Hop ✓" && tidy.text === "Hop ✓ tidy" &&
+          stale.text === "Hop of the Day" && notDone.text === "Hop of the Day", JSON.stringify({ absent, solved, tidy, stale, notDone }));
+      await settleStub([okR()]);
+      await openBoard(await boardOf("row-1"));
+      await play(fx.win);
+      await page.waitForTimeout(200);
+      await quit();
+      await picker();
+      const local = await rowText();
+      await quit();
+      check("the local settle's reply updates the row (no attribute needed)", local.text === "Hop ✓", JSON.stringify(local));
+      await card.evaluate((el) => { el._slides[el._index].hopSeen = null; delete el._hopSettle; delete el._lines; delete el._hopFetch; });
+      await attr({});
+    }
+
     // The scene engine: a feed scene live when the row is pressed leaves nothing in the LCD; a scene
     // offered late during a board is not played over it.
     await card.evaluate((el) => {

@@ -13,6 +13,63 @@ const HOP_COPY = {
   tryTidy: "try for tidy",
   solved: "solved",
   tidy: "tidy",
+  // The row says where today stands (plan section 5: open, solved, tidy).
+  rowState: { open: "Hop of the Day", solved: "Hop ✓", tidy: "Hop ✓ tidy" },
+  rowStateAria: { open: "Play Hop of the Day", solved: "Hop of the Day, solved. Try for tidy",
+    tidy: "Hop of the Day, tidy" },
+  failed: "hmm, that didn't work", // a settle that came to nothing (also the board call's)
+  found: "ooh, I found something ♪", // a find from the settle's `found: true` (Q3, draft)
+};
+// Ship 3b: the pure parts, no `this` and no DOM (tests/js/hop_settle.test.js reads them).
+// The server's day is the HA local date: Intl with hass.config.time_zone (Q1), else this device's.
+const hopToday = (tz, now = new Date()) => {
+  const ymd = (opts) => {
+    const parts = new Intl.DateTimeFormat("en-CA", { ...opts, year: "numeric", month: "2-digit", day: "2-digit" })
+      .formatToParts(now);
+    const at = (t) => parts.find((p) => p.type === t)?.value;
+    return `${at("year")}-${at("month")}-${at("day")}`;
+  };
+  try {
+    return ymd(tz ? { timeZone: tz } : {});
+  } catch (err) {
+    return ymd({}); // an unknown zone: this device's date; the board reply corrects the row
+  }
+};
+// The row's state from the records that know today ({day, done, tidy}: the sensor's attribute and
+// the board reply this card saw): open | solved | tidy. A record of another day says nothing.
+const hopRowState = (records, today) => {
+  let done = false;
+  let tidy = false;
+  for (const r of records) {
+    if (!r || typeof r !== "object" || r.day !== today) continue;
+    done = done || r.done === true;
+    tidy = tidy || r.tidy === true;
+  }
+  return tidy ? "tidy" : done ? "solved" : "open";
+};
+// What the card does with a `settle` reply (null or {result: "thrown"} for a call that threw), as
+// a pure function of (reply, game): `clear` the parked list; `reload` the board (it changed);
+// `refusal` the REFUSALS key to say; `warn` {code, bad_index?} for a bug; `tidy` the day's tidy
+// (never lowered, P1: the reply's `tidy` is this list's); `settled` the server has it; `found`.
+// `already` is not read (D2).
+const HOP_NOTHING = { kind: "failed", clear: false, reload: false, settled: false, found: false, refusal: null,
+  warn: null };
+const hopSettleOutcome = (reply, game) => {
+  const tidy = game?.tidy === true;
+  const result = reply && typeof reply === "object" ? reply.result : undefined;
+  if (result === "ok") {
+    return { ...HOP_NOTHING, kind: "ok", clear: true, settled: true, tidy: tidy || reply.tidy === true,
+      found: reply.found === true };
+  }
+  if (result === "board_changed") return { ...HOP_NOTHING, kind: "reload", clear: true, reload: true, tidy };
+  if (result === "egg" || result === "away" || result === "asleep") {
+    return { ...HOP_NOTHING, kind: "refused", refusal: result, tidy };
+  }
+  const known = ["illegal", "not_won", "too_long", "thrown"].includes(result) ? result
+    : result === undefined ? "no_reply" : "unknown";
+  const warn = { code: known };
+  if (known === "illegal" && Number.isInteger(reply.bad_index)) warn.bad_index = reply.bad_index;
+  return { ...HOP_NOTHING, tidy, warn };
 };
 // ◀ ▲ ▼ ▶ as hop-engine's STEPS: [name, row step, column step, glyph].
 const HOP_DIRS = [["left", 0, -1, "◀"], ["up", -1, 0, "▲"], ["down", 1, 0, "▼"], ["right", 0, 1, "▶"]];
@@ -31,8 +88,9 @@ class HatchPetCardBoard extends HatchPetCardGames {
   // quit path that already tests `s.game` ends it: _endGame clears it (_hopEnd), and the server
   // never hears of it (hop is not in SERVER_GAMES). The keys are in the game overlay, as the
   // dig's are; the care pad is not touched. The rules are HATCH_HOP's (hop-engine.js); the
-  // card plays every move locally and writes the move list to localStorage on every move.
-  // Nothing is paid or settled in this ship.
+  // card plays every move locally and writes the move list to localStorage on every move. A
+  // nest entry shows the solved view at once and sends the list (`settle`, ship 3b): the server
+  // replays it and pays; the list stays parked until the server has answered `ok`.
 
   _hopOn() {
     return this._config?.experimental_hop === true;
@@ -50,23 +108,43 @@ class HatchPetCardBoard extends HatchPetCardGames {
       row = document.createElement("button");
       row.className = "ghop";
       row.type = "button";
-      row.textContent = HOP_COPY.row;
-      row.setAttribute("aria-label", HOP_COPY.rowAria);
       row.addEventListener("click", () => {
         this._tapped(row, s);
         this._hopOpen(s);
       });
       s.gameBox.append(row);
     }
+    this._hopRowSet(s, row);
     row.hidden = false;
+  }
+
+  // The row's day: the life-stage sensor's `hop_day` and the last board reply this card saw, read
+  // against today in HA's time zone. Returns whether the label changed (the picker refits then).
+  _hopRowSet(s, row) {
+    const state = hopRowState([this._state(s, "sensor.life_stage")?.attributes?.hop_day, s.hopSeen],
+      hopToday(this._hass?.config?.time_zone));
+    const changed = row.dataset.state !== state;
+    row.dataset.state = state;
+    row.textContent = HOP_COPY.rowState[state];
+    row.setAttribute("aria-label", HOP_COPY.rowStateAria[state]);
+    return changed;
+  }
+
+  // Another screen settled while the picker is open (the sensor's attribute changed): the row
+  // follows. Called from _update.
+  _hopRowRefresh(s) {
+    const row = s.gameBox?.querySelector(".ghop");
+    if (row && !row.hidden && s.game?.picking && this._hopRowSet(s, row)) this._fitPicker(s);
   }
 
   // Ask for today's board and open it. Until the reply the picker stays up (and a second press
   // is ignored). A refusal is the ordinary refusal line; a reply the rules cannot play shows
   // nothing and logs once.
-  async _hopOpen(s) {
-    const picking = s.game;
-    if (!picking?.picking || picking.hopLoading) return;
+  async _hopOpen(s, from = null) {
+    // `from` is a board whose settle answered board_changed: the new board replaces it.
+    const picking = from || s.game;
+    if (from ? s.game !== from : !picking?.picking) return;
+    if (picking.hopLoading) return;
     const id = s.ids?.["sensor.mood"];
     if (!id) return;
     picking.hopLoading = true;
@@ -75,7 +153,7 @@ class HatchPetCardBoard extends HatchPetCardGames {
     try {
       reply = await this._hopFetch(id);
     } catch (err) {
-      if (s.game === picking) this._endGame(s, "hmm, that didn't work");
+      if (s.game === picking) this._endGame(s, HOP_COPY.failed);
       return;
     }
     if (s.game !== picking) return; // stopped while waiting
@@ -91,6 +169,7 @@ class HatchPetCardBoard extends HatchPetCardGames {
       this._endGame(s, null);
       return;
     }
+    if (from) this._hopTeardown(s); // the old board's observers go before the new one is built
     this._hopStart(s, reply);
   }
 
@@ -106,28 +185,63 @@ class HatchPetCardBoard extends HatchPetCardGames {
   _hopStart(s, reply) {
     const board = { w: reply.w, h: reply.h, grid: reply.grid, family: reply.family, specials: reply.specials };
     const key = `${HOP_KEY}|${s.ids?.device}|${reply.day}|${reply.id}`;
-    const g = s.game = { kind: "hop", board, key, moves: [], st: HATCH_HOP.start(board), lit: null,
-      special: false, done: false, tidy: false, cell: 0 };
+    const g = s.game = { kind: "hop", board, key, id: reply.id, day: reply.day, moves: [],
+      st: HATCH_HOP.start(board), lit: null, special: false, done: false, tidy: false, settled: true, cell: 0 };
     this._hopForgetOld(s, key);
+    // What the server says of today (the board reply, and the sensor's attribute for this very
+    // day); the tidy never goes down (P1). The row reads it as well.
+    const attr = this._state(s, "sensor.life_stage")?.attributes?.hop_day;
+    const same = attr && attr.day === reply.day ? attr : null;
+    const seen = s.hopSeen?.day === reply.day ? s.hopSeen : null;
+    const dayDone = reply.done === true || same?.done === true || seen?.done === true;
+    const dayTidy = reply.tidy === true || same?.tidy === true || seen?.tidy === true;
+    s.hopSeen = { day: reply.day, done: dayDone || dayTidy, tidy: dayTidy };
     const parked = this._hopParked(key);
     const run = parked && HATCH_HOP.replay(board, parked);
-    if (run?.legal && !run.won) {
+    if (dayTidy) {
+      // Nothing is left to pay: a parked list goes, and the tidy view opens without a path.
+      if (parked) this._hopStore(key, null);
+      this._hopNest(g);
+      g.tidy = true;
+    } else if (run?.legal && run.won) {
+      // A won list that was never answered (asleep, a closed tab): the solved view, and the settle again (P2).
       g.moves = HATCH_HOP.decode(parked);
       g.st = HATCH_HOP.fromView(run.final);
-    } else if (parked) {
-      this._hopStore(key, null);
+      g.done = true;
+      g.tidy = run.tidy;
+      g.settled = false;
+    } else if (run?.legal) {
+      g.moves = HATCH_HOP.decode(parked); // a try for tidy that was left half way
+      g.st = HATCH_HOP.fromView(run.final);
+    } else {
+      if (parked) this._hopStore(key, null);
+      if (dayDone) this._hopNest(g); // a reload on a solved day: the pet in the nest, no path (P9)
     }
     s.pet.classList.remove("go-left", "go-right");
     s.gameBox.classList.remove("showgo");
     this._hopBuild(s);
     this._gameView(s, "hop");
     if (!s.greeted) this._greetSpent(s); // playing together is the hello (F7), as any game
-    this._reactFrames(s, "ready", { inGame: true });
+    this._reactFrames(s, g.done ? "praised" : "ready", { inGame: true });
     this._hopLayout(s);
     this._hopDraw(s, false);
-    s.sayUntil = 0;
-    g.prompt = null;
+    if (g.done) {
+      g.prompt = g.tidy ? HOP_COPY.tidy : HOP_COPY.solved;
+      this._write(s, g.prompt, 60000);
+      s.sayUntil = Date.now() + 60000;
+    } else {
+      s.sayUntil = 0;
+      g.prompt = null;
+    }
     this._hopFocus(s);
+    if (g.done && !g.settled) this._hopSend(s);
+  }
+
+  // The nest state without a path: a solved day the server knows, opened on a reload.
+  _hopNest(g) {
+    g.st = HATCH_HOP.fromView({ pos: g.board.grid.join("").indexOf("N"), sunk: [], uses: 0, done: true });
+    g.done = true;
+    g.settled = true;
   }
 
   _hopParked(key) {
@@ -303,7 +417,7 @@ class HatchPetCardBoard extends HatchPetCardGames {
     const targets = g.done ? { plain: [], special: [] } : this._hopTargets(g);
     const legal = new Set([...targets.plain, ...targets.special]);
     const finds = [...g.board.grid.join("")].map((ch, i) => (ch === "f" ? i : -1)).filter((i) => i >= 0);
-    const open = finds.every((i) => (g.st.sunk >> i) & 1 || i === g.st.pos);
+    const open = g.done || finds.every((i) => (g.st.sunk >> i) & 1 || i === g.st.pos);
     cells.forEach((el, i) => {
       const ch = g.board.grid.join("")[i];
       el.classList.toggle("sunk", ((g.st.sunk >> i) & 1) === 1);
@@ -338,7 +452,8 @@ class HatchPetCardBoard extends HatchPetCardGames {
     sp.textContent = `✦${left}`;
     sp.classList.toggle("on", g.special);
     set("undo", !g.done && g.moves.length > 0);
-    set("restart", g.done ? !g.tidy : g.moves.length > 0, g.done && !g.tidy ? HOP_COPY.tryTidy : HOP_COPY.restart);
+    // A won board the server has not answered keeps its list: no restart until it has (Q2, Decided 23).
+    set("restart", g.done ? !g.tidy && g.settled : g.moves.length > 0, g.done && !g.tidy ? HOP_COPY.tryTidy : HOP_COPY.restart);
     s.gameBox.classList.toggle("end", g.done);
     this._hopPlace(s, move);
   }
@@ -413,8 +528,9 @@ class HatchPetCardBoard extends HatchPetCardGames {
     g.special = false;
     if (next.done) {
       g.done = true;
-      g.tidy = HATCH_HOP.isTidy(g.board, next);
-      this._hopStore(g.key, null); // a board that ended parks nothing
+      g.tidy = g.tidy || HATCH_HOP.isTidy(g.board, next); // never lowered (P1)
+      g.settled = false;
+      this._hopStore(g.key, HATCH_HOP.encode(g.moves)); // kept until the server has answered `ok`
       this._reactFrames(s, "praised", { inGame: true });
       this._chirp(s, "win");
       g.prompt = g.tidy ? HOP_COPY.tidy : HOP_COPY.solved;
@@ -427,6 +543,61 @@ class HatchPetCardBoard extends HatchPetCardGames {
     }
     this._hopDraw(s, true);
     if (!g.done) this._hopRefocus(s);
+    else this._hopSend(s);
+  }
+
+  // The `hop` service's `settle` answer for this list (the seam a check stubs; like _hopFetch).
+  async _hopSettle(entity, boardId, moves) {
+    const res = await this._hass.callService("virtual_pet", "hop", { entity_id: entity, action: "settle",
+      id: boardId, moves, ...(sharedScreen() ? { shared: true } : {}) }, undefined, false, true);
+    return res?.response;
+  }
+
+  // The won list goes to the server, behind the solved view that is already up. The reply is
+  // handled against the board it was for, whoever is on screen by then.
+  async _hopSend(s) {
+    const g = s.game;
+    const entity = s.ids?.["sensor.mood"];
+    if (!entity || g?.kind !== "hop") return;
+    const moves = HATCH_HOP.encode(g.moves);
+    let reply;
+    try {
+      reply = await this._hopSettle(entity, g.id, moves);
+    } catch (err) {
+      reply = { result: "thrown" };
+    }
+    this._hopSettled(s, g, moves, reply);
+  }
+
+  // A settle reply (hopSettleOutcome says what it means). The parked list is dropped on `ok` and
+  // `board_changed` only, and only if it is still the list that was sent; a stale reply (the
+  // player restarted, quit or opened another board) changes nothing on screen.
+  _hopSettled(s, g, sent, reply) {
+    const attr = this._state(s, "sensor.life_stage")?.attributes?.hop_day;
+    if (attr?.day === g.day && attr.tidy === true) g.tidy = true; // another screen made the day tidy meanwhile (P1)
+    const out = hopSettleOutcome(reply, g);
+    if (out.warn && !HOP_WARNED.has(`settle:${out.warn.code}`)) {
+      HOP_WARNED.add(`settle:${out.warn.code}`);
+      console.warn(`hatch-pet-card: the hop settle came to nothing (${out.warn.code}` +
+        `${out.warn.bad_index !== undefined ? `, bad_index ${out.warn.bad_index}` : ""})`);
+    }
+    if (out.clear && this._hopParked(g.key) === sent) this._hopStore(g.key, null);
+    if (out.settled) s.hopSeen = { day: g.day, done: true, tidy: out.tidy }; // the row follows the reply
+    if (s.game !== g || !g.done) return;
+    if (out.reload) {
+      this._hopOpen(s, g);
+      return;
+    }
+    g.tidy = out.tidy;
+    g.settled = out.settled;
+    if (out.settled) {
+      g.prompt = out.found ? this._lines(s, "find", HOP_COPY.found).text : g.tidy ? HOP_COPY.tidy : HOP_COPY.solved;
+    } else {
+      g.prompt = out.refusal ? REFUSALS[out.refusal] : HOP_COPY.failed;
+    }
+    this._write(s, g.prompt, 60000);
+    s.sayUntil = Date.now() + 60000;
+    this._hopDraw(s, false);
   }
 
   // A key that went dark takes the focus with it: it moves to one that works.
@@ -452,7 +623,6 @@ class HatchPetCardBoard extends HatchPetCardGames {
   _hopRestart(s) {
     const g = s.game;
     g.done = false;
-    g.tidy = false;
     g.prompt = null;
     s.sayUntil = 0;
     this._hopReplay(s, []);
