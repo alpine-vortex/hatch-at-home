@@ -61,7 +61,7 @@ function world(over = {}) {
   };
   w.dir = D.create({
     now: () => w.t, deviceNow: () => w.t, trusted: () => w.trust, canRender: () => w.render,
-    schedule: w.schedule, recipes: F.RECIPES,
+    schedule: w.schedule, recipes: F.RECIPES, scopeOf: w.pet ? () => w.pet : undefined,
   });
   w.env = { lcdOn: true, calm: false, clockKnown: true };
   w.slide = (o = {}) => ({ glass: glassOf(), ...o });
@@ -485,4 +485,83 @@ test("12: the glass's motion is its own dir- classes, still under reduced motion
   for (const [sel, body] of rules(css)) if (/animation(-duration)?\s*:/.test(body)) assert.match(sel, /dir-/, sel);
   assert.match(css, /@keyframes dir-run/);
   assert.match(css, /@keyframes dir-dry/);
+});
+
+// ---- s2848 B4: a seen echo outlives the card element (a module-level store keyed by pet) ----
+
+test("B4: a second instance with the same pet and ring does not replay a seen echo", () => {
+  const first = world({ pet: "sensor.b4_a_life_stage" }), a = first.slide();
+  F.sync(first.dir, a, house(true), first.env);
+  assert.ok(F.enter(first.dir, a, [entry("rain_started")], first.env).accepted); // seen in instance #1
+  // HA replaces the element: a new director, a new slide, the same pet, the same ring, still inside 90 s
+  const second = world({ pet: "sensor.b4_a_life_stage", t: T0 + 45000 }), b = second.slide();
+  F.sync(second.dir, b, house(true), second.env);
+  const r = F.enter(second.dir, b, [entry("rain_started")], second.env);
+  assert.deepStrictEqual([r.accepted, r.reason], [false, "nothing-to-echo"]);
+  assert.deepStrictEqual(b.glass.names(), ["dir-wet"]); // ambience only
+});
+
+test("B4: an entry first seen in the new instance still echoes once", () => {
+  const first = world({ pet: "sensor.b4_b_life_stage" }), a = first.slide();
+  F.sync(first.dir, a, house(true), first.env);
+  F.enter(first.dir, a, [], first.env); // instance #1 viewed with an empty ring
+  const second = world({ pet: "sensor.b4_b_life_stage", t: T0 + 45000 }), b = second.slide();
+  F.sync(second.dir, b, house(true), second.env);
+  assert.ok(F.enter(second.dir, b, [entry("rain_started")], second.env).accepted);
+  const third = world({ pet: "sensor.b4_b_life_stage", t: T0 + 50000 }), c = third.slide();
+  F.sync(third.dir, c, house(true), third.env);
+  assert.strictEqual(F.enter(third.dir, c, [entry("rain_started")], third.env).accepted, false); // now it is seen
+});
+
+test("B4: an entry the old instance could not decide (nothing may render) is not marked seen", () => {
+  const first = world({ pet: "sensor.b4_c_life_stage", render: false }), a = first.slide();
+  F.sync(first.dir, a, house(true), first.env);
+  assert.strictEqual(F.enter(first.dir, a, [entry("rain_started")], first.env).accepted, false);
+  const second = world({ pet: "sensor.b4_c_life_stage", t: T0 + 45000 }), b = second.slide();
+  F.sync(second.dir, b, house(true), second.env);
+  assert.ok(F.enter(second.dir, b, [entry("rain_started")], second.env).accepted);
+});
+
+test("B4: a live onset seen in the old instance does not echo in the new one", () => {
+  const first = world({ pet: "sensor.b4_d_life_stage" }), a = first.slide();
+  F.sync(first.dir, a, house(true), first.env);
+  F.enter(first.dir, a, [], first.env);
+  assert.ok(F.live(first.dir, a, entry("rain_started"), first.env).accepted);
+  const second = world({ pet: "sensor.b4_d_life_stage", t: T0 + 45000 }), b = second.slide();
+  F.sync(second.dir, b, house(true), second.env);
+  assert.strictEqual(F.enter(second.dir, b, [entry("rain_started")], second.env).accepted, false);
+});
+
+test("B4: different pets do not share marks", () => {
+  const first = world({ pet: "sensor.b4_e_life_stage" }), a = first.slide();
+  F.sync(first.dir, a, house(true), first.env);
+  assert.ok(F.enter(first.dir, a, [entry("rain_started")], first.env).accepted);
+  const other = world({ pet: "sensor.b4_f_life_stage", t: T0 + 45000 }), b = other.slide();
+  F.sync(other.dir, b, house(true), other.env);
+  assert.ok(F.enter(other.dir, b, [entry("rain_started")], other.env).accepted); // same ring id, another pet
+});
+
+test("B4: the store is pruned once the echo window is over, and a slide with no pet remembers nothing past itself", () => {
+  const ctx = { Date, Object, Array, Number, Math, JSON };
+  vm.runInNewContext(`${director}\n${part}\nthis.D = HATCH_DIRECTOR; this.F = HATCH_DEVICE_FX;`, ctx);
+  const mk = (t, pet) => {
+    const w = world({ t, pet });
+    w.dir = ctx.D.create({ now: () => w.t, deviceNow: () => w.t, trusted: () => true, canRender: () => true,
+      schedule: w.schedule, recipes: ctx.F.RECIPES, scopeOf: pet ? () => pet : undefined });
+    return w;
+  };
+  const first = mk(T0 + 20000, "sensor.b4_g_life_stage"), a = first.slide();
+  ctx.F.sync(first.dir, a, house(true), first.env);
+  assert.ok(ctx.F.enter(first.dir, a, [entry("rain_started")], first.env).accepted);
+  // 2 min on the entry is out of its window, so a second ring entry decided now prunes the first
+  const later = mk(T0 + 120000, "sensor.b4_g_life_stage"), b = later.slide();
+  ctx.F.sync(later.dir, b, house(true), later.env);
+  const fresh = entry("rain_started", { id: "n1-2", occurred_at: new Date(T0 + 110000).toISOString(), expires_at: new Date(T0 + 200000).toISOString() });
+  assert.strictEqual(first.dir.keptCount(a), 1);
+  assert.ok(ctx.F.enter(later.dir, b, [entry("rain_started"), fresh], later.env).accepted);
+  assert.strictEqual(later.dir.keptCount(b), 1); // the old one is pruned, only the fresh one stays
+  // a director with no scope (no pet yet) does not share marks
+  const bare = mk(T0 + 125000, ""), c = bare.slide();
+  ctx.F.sync(bare.dir, c, house(true), bare.env);
+  assert.ok(ctx.F.enter(bare.dir, c, [fresh], bare.env).accepted);
 });

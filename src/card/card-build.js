@@ -32,6 +32,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     this._director = HATCH_DIRECTOR.create({
       now: serverNow, deviceNow: Date.now, trusted: serverClockKnown,
       canRender: (s) => lcdOn() && this._dirShown(s),
+      scopeOf: (s) => s.ids?.["sensor.life_stage"] || "", // the pet: a seen echo is remembered past this element (s2848 B4)
       schedule: (ms, fn) => {
         const timer = setTimeout(fn, ms);
         return () => clearTimeout(timer);

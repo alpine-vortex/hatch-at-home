@@ -37,6 +37,16 @@ const HATCH_DIRECTOR = Object.freeze(
     const WATCHDOG_MS = 250; // past an effect's duration; the bounded backstop for a missed animationend
     const SEEN_MAX = 128; // cue ids remembered per slide (section 5.3)
 
+    // Seen echoes that outlive the card element (s2848 B4). Home Assistant can replace the card
+    // element on a return to the app, and the new instance's slides start with an empty `seen`; the ring
+    // still holds an echo the player already saw, so it would replay (6.7, M7: an already-seen echo never
+    // replays). This is one Map for the script, not per director: scope (the card's pet key) -> Map(
+    // "kind|cueId" -> the server time its echo window ends). An entry is dropped once its window is over,
+    // since enterView ignores a cue that old anyway. Memory only; no storage, nothing leaves the page. The
+    // script (not just the element) staying loaded across such a return is the assumption.
+    const KEPT = new Map();
+    const keptKey = (cue) => `${cue.kind}|${cue.id}`;
+
     // The busy list, section 5.3: one frozen table, read at the moment of asking. The card's
     // adapters set nothing. Each `busy` is a pure read over plain slide fields, with `s` the
     // slide; the completeness test scans these functions for the fields they name.
@@ -93,7 +103,7 @@ const HATCH_DIRECTOR = Object.freeze(
       return "";
     };
 
-    const create = ({ now, deviceNow, trusted, canRender, schedule, recipes } = {}) => {
+    const create = ({ now, deviceNow, trusted, canRender, schedule, recipes, scopeOf } = {}) => {
       if (typeof now !== "function") throw new TypeError("director: now() is required");
       if (typeof schedule !== "function") throw new TypeError("director: schedule(ms, fn) is required");
       // The slide's own timers (poseUntil) are on the device clock, `now` is the server's: the
@@ -128,10 +138,41 @@ const HATCH_DIRECTOR = Object.freeze(
         return st;
       };
 
-      const see = (st, id) => {
+      // The pet this slide shows, from the card's scopeOf(slide); "" when there is none (a test, or
+      // a slide not yet given its pet): then only the slide's own `seen` remembers.
+      const scopeFor = (slide) => {
+        if (typeof scopeOf !== "function") return "";
+        try {
+          const k = scopeOf(slide);
+          return typeof k === "string" ? k : "";
+        } catch {
+          return "";
+        }
+      };
+      const prune = (t) => {
+        for (const [scope, memo] of KEPT) {
+          for (const [k, until] of memo) if (until <= t) memo.delete(k);
+          if (!memo.size) KEPT.delete(scope);
+        }
+      };
+      const keptSeen = (slide, cue) => {
+        const memo = KEPT.get(scopeFor(slide));
+        return !!memo && memo.has(keptKey(cue));
+      };
+
+      const see = (st, id, slide, cue) => {
         st.seen.delete(id);
         st.seen.add(id);
         if (st.seen.size > SEEN_MAX) st.seen.delete(st.seen.values().next().value);
+        const scope = slide && cue ? scopeFor(slide) : "";
+        if (!scope || cue.occurredAt === undefined) return;
+        const t = now();
+        prune(t);
+        const until = cue.occurredAt + ECHO_WINDOW_MS;
+        if (until <= t) return; // past its window: nothing could echo it again
+        let memo = KEPT.get(scope);
+        if (!memo) KEPT.set(scope, (memo = new Map()));
+        memo.set(keptKey(cue), until);
       };
 
       const isTrusted = (arg) => {
@@ -171,7 +212,7 @@ const HATCH_DIRECTOR = Object.freeze(
       // Starts the effect on its track, after the checks. `echo` plays the shortened form.
       const admit = (slide, st, cue, recipe, t, echo) => {
         const track = recipe.track;
-        see(st, cue.id);
+        see(st, cue.id, slide, cue);
         if (NEEDS_FREE.includes(track) && isBusy(slide, dnow())) return no("busy");
 
         // Opposite transitions collapse: a "start" whose "end" arrives while its pulse still
@@ -256,7 +297,7 @@ const HATCH_DIRECTOR = Object.freeze(
           const t = now();
           const at = cue.occurredAt === undefined ? t : cue.occurredAt;
           if (cue.ttlMs !== undefined && t > at + cue.ttlMs) {
-            see(st, cue.id);
+            see(st, cue.id, slide, { ...cue, occurredAt: at });
             return no("expired");
           }
           if (!render(slide)) {
@@ -283,7 +324,7 @@ const HATCH_DIRECTOR = Object.freeze(
           const byId = new Map();
           const consider = (cue) => {
             if (cueProblem(cue) || cue.occurredAt === undefined || !recipeOf(cue.kind)) return;
-            if (st.seen.has(cue.id) || byId.has(cue.id)) return;
+            if (st.seen.has(cue.id) || byId.has(cue.id) || keptSeen(slide, cue)) return;
             const age = t - cue.occurredAt;
             if (age < -CLOCK_SKEW_MS || age > ECHO_WINDOW_MS) return;
             if (cue.ttlMs !== undefined && age > cue.ttlMs) return;
@@ -310,7 +351,7 @@ const HATCH_DIRECTOR = Object.freeze(
             const key = recipeOf(cue.kind).collapseKey;
             return key === undefined || stacks.get(key).includes(cue);
           });
-          for (const cue of ordered) see(st, cue.id); // decided from here on, whatever happens
+          for (const cue of ordered) see(st, cue.id, slide, cue); // decided from here on, whatever happens
 
           const fits = survivors.filter((cue) => stillTrue(st, cue, recipeOf(cue.kind)));
           if (!fits.length) return no("nothing-to-echo");
@@ -369,6 +410,9 @@ const HATCH_DIRECTOR = Object.freeze(
           live.clear();
           states = new WeakMap();
         },
+
+        // How many seen echoes the script remembers for this slide's pet (tests, the bench).
+        keptCount: (slide) => (KEPT.get(scopeFor(slide)) || new Map()).size,
 
         isBusy: (slide) => isBusy(slide, dnow()),
         busyOwners: (slide) => busyOwners(slide, dnow()),
