@@ -411,32 +411,41 @@ def test_10_lights_out_and_the_morning_work_while_resting():
     assert pet.energy == 100.0
 
 
-# --- 11. Away wins -----------------------------------------------------------
+# --- 11. Resting beats the sitter (plan sitter §3.1) ---------------------------
 
 
-def test_11_away_wins_and_resting_resumes_on_coming_home():
+def test_11_resting_beats_the_sitter_and_care_goes_on():
     t = at(10)
-    pet = rested(t)
+    pet = rested(t, hunger=60.0)
     pet.away = True
-    assert model.apply_action(pet, "feed", t, NoLuck())[0] == "away"
-    run(pet, t + 3 * HOUR)
+    assert model.apply_action(pet, "feed", t, NoLuck())[0] == "ok"
+    fed = pet.hunger
+    events = run(pet, t + 3 * HOUR)
+    # Held: no aging, no decay, and no round (nothing to top up).
     assert pet.resting and pet.last_updated == t + 3 * HOUR
+    assert pet.age_hours == 30.0 and pet.hunger == fed
+    assert "sitter_round" not in types(events)
+    assert not any(r["action"].startswith("sitter_") for r in pet.care_log)
     pet.away = False
     run(pet, t + 5 * HOUR)
-    assert pet.age_hours == 30.0 and pet.hunger == 90.0
+    assert pet.age_hours == 30.0 and pet.hunger == fed
 
 
-def test_11_set_and_cleared_while_away():
+def test_11_set_and_cleared_while_away_the_sitter_takes_over():
     t = at(10)
     pet = hatched(t, hunger=20.0)
     pet.away = True
+    pet.sitter_served = at(8)  # the 08:00 round was served
     model.set_resting(pet, True, t)
     assert pet.resting and pet.hunger == R.REST_FLOOR
     model.set_resting(pet, False, t + HOUR)
     assert not pet.resting
-    run(pet, t + 2 * HOUR)
-    assert pet.hunger == R.REST_FLOOR  # still away: frozen
-    assert "resting" not in model.mood(pet, t + 2 * HOUR, SETTINGS)[1]
+    run(pet, at(11, 55))
+    assert pet.hunger < R.REST_FLOOR  # lives on with the sitter: it decays
+    run(pet, at(12, 5))  # the 12:00 round feeds it
+    assert pet.hunger > R.REST_FLOOR
+    assert pet.care_log[0]["action"].startswith("sitter_")
+    assert "resting" not in model.mood(pet, at(12, 5), SETTINGS)[1]
 
 
 # --- 12. Time: restarts, gaps, pending poops --------------------------------

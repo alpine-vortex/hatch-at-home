@@ -93,12 +93,14 @@ _FLOATS = {
     "cool_until": 0.0,
     "last_excite": 0.0,
     "last_recall_at": 0.0,
+    "sitter_served": 0.0,
     "discipline_sum": 0.0,
     "wellbeing_sum": 0.0,
     **{key: 0.0 for key in UPBRINGING_TIMES},
 }
 _RANGES = {
     "age_hours": (0.0, math.inf),
+    "sitter_served": (0.0, math.inf),  # a stamp ahead of now is clamped at use
     **{s: (0.0, 100.0) for s in STATS},
     "discipline_sum": (0.0, math.inf),
     "wellbeing_sum": (0.0, math.inf),
@@ -545,7 +547,9 @@ class PetState:
     asleep: bool = False
     napping: bool = False  # asleep outside sleep hours
     lights_out: bool = False
-    lights_before_away: bool | None = None  # flipped while away: applied on return
+    # Lights flipped while away before the sitter came to the house: an old
+    # save's, applied once at load (settle_legacy_lights). Always None now.
+    lights_before_away: bool | None = None
     stayed_up_since: float | None = None  # awake inside sleep hours since
     wake_at: float | None = None  # when the night's sleep ends (fixed at bedtime)
     kept_up_until: float = 0.0  # woken by hand: the house can't put it back to bed yet
@@ -582,7 +586,12 @@ class PetState:
     praise_day_at: float = 0.0  # the first praise of the day it's counting
     praise_day_count: int = 0  # presses that gave happiness that day
     last_excite: float = 0.0
+    # Nobody home for away_after: the sitter is here (plan 2026-11-04-sitter-
+    # visits §3). The pet lives on; the sitter's rounds top it up.
     away: bool = False
+    # The round slot (a wall-clock timestamp) the sitter last served. Not moved
+    # by shift_times; sitter_due clamps one in the future to now.
+    sitter_served: float = 0.0
     # The household's resting switch (plan favourite-resting §3): needs, aging,
     # new calls, misses and new sickness hold; care, games, visitors and finds
     # go on. Never an egg. rest_since: when it began (the birthday's shift).
@@ -615,7 +624,7 @@ class PetState:
     # Berry digs closed with ✕ after they had shown something, one per person
     # (HA user id, or PARK_HOUSEHOLD for calls with no person): that person's
     # next dig carries on from theirs. Never in `game`, so no drop (idle,
-    # asleep, away) sees them, and they have no time limit.
+    # asleep) sees them, and they have no time limit.
     parked: dict[str, Game] = field(default_factory=dict)
     games: dict[str, dict[str, int]] = field(default_factory=dict)  # kind -> counts
     # Hop of the Day's day (plan 2026-11-02-hop-of-the-day §8): {"day": local
@@ -915,7 +924,7 @@ Event = dict[str, Any]
 
 
 def life_stage(state: PetState) -> str:
-    """Life stage from age; aging pauses while away."""
+    """Life stage from age; aging pauses while resting."""
     stage = LIFE_STAGES[0]
     for name, start in R.STAGE_STARTS:
         if state.age_hours >= start:
@@ -973,7 +982,7 @@ def minutes_to_bedtime(ts: float, settings: Settings) -> int:
 def shift_times(state: PetState, delta: float) -> None:
     """Move every pending timestamp forward by delta seconds.
 
-    Used to freeze the pet: while away, or across HA downtime, the world
+    Used to freeze the pet across HA downtime (and a clock jump): the world
     stops for the pet, so deadlines and schedules slide along with the clock.
     wake_at stays: it's the morning's wake time on the wall clock, so a pet
     asleep across the freeze still wakes in the morning (or at once if the
@@ -1010,8 +1019,9 @@ def shift_times(state: PetState, delta: float) -> None:
 def catch_up(state: PetState, now: float) -> None:
     """Account for time HA was not running.
 
-    Downtime uses the away (frozen) rates: nothing decays, ages or expires, so
-    a restart can never make the pet sick or cost a care miss.
+    Downtime is frozen: nothing decays, ages or expires, so a restart can never
+    make the pet sick or cost a care miss. (A visit by the sitter is lived
+    through, in advance; downtime is not.)
     """
     elapsed = now - state.last_updated
     if elapsed <= 0:
@@ -1046,14 +1056,13 @@ def advance(
     t = state.last_updated
     while t < now:
         t_next = min(now, t + R.MAX_STEP_SECONDS)
-        if state.away:
-            shift_times(state, t_next - t)  # also moves last_updated
-        elif state.resting:
+        # Resting beats the sitter: its needs are held, so there is nothing
+        # for a round to top up. A visit is lived through in _step.
+        if state.resting:
             _rest_step(state, t, t_next, settings, events)
-            state.last_updated = t_next
         else:
             _step(state, t, t_next, settings, rng, events)
-            state.last_updated = t_next
+        state.last_updated = t_next
         t = t_next
     return events
 
@@ -1146,7 +1155,7 @@ def react(state: PetState, now: float, settings: Settings) -> list[Event]:
     The caller advances the pet to now first, under the old house state.
     """
     events: list[Event] = []
-    if not state.away and life_stage(state) != "egg":
+    if life_stage(state) != "egg":
         _sleep(state, now, settings, events)
     return events
 
@@ -1190,6 +1199,8 @@ def _step(
     _learn(state, hours, t1, settings, events)
     _decay(state, hours, t1, settings)
     _digest(state, t1, events)
+    if state.away and sitter_due(state, t1, settings) is not None:
+        events += sitter_round(state, t1, settings)
     _sickness(state, hours, t1, rng, events)
     _calls(state, t1, hours, rng, events, settings.tz)
     if stage != "adult":
@@ -1233,8 +1244,13 @@ def fast_forward(
     more away), unless it is only napping."""
     seconds = hours * 3600
     was_egg = life_stage(state) == "egg"
+    served = state.sitter_served
     events = advance(state, now + seconds, settings, rng, max_gap=None)
     shift_times(state, -seconds)
+    if state.sitter_served != served:
+        # A round in the simulated future stamped its slot there; shift_times
+        # leaves the stamp (a wall-clock slot), so it is rebased here.
+        state.sitter_served = max(0.0, state.sitter_served - seconds)
     if was_egg and state.hatched_on is not None:
         # hatched_on is a date, so shift_times can't move it: redo it from
         # the rebased hatch time, in the configured time zone.
@@ -1341,7 +1357,8 @@ def _wake(
         events.append({"type": "call_answered", "reason": "energy"})
         return
     call.deadline = max(call.deadline, t + R.RESUME_MIN_MINUTES * 60)
-    if how == "morning":
+    if how == "morning" and not state.away:
+        # Not for an empty house (plan sitter §3.4): no push while away.
         # The phones were cleared when it fell asleep: ask again, quietly.
         event: Event = {
             "type": "call_started",
@@ -1424,6 +1441,13 @@ def _digest(state: PetState, t: float, events: list[Event]) -> None:
     if not due:
         return
     state.digesting = [d for d in state.digesting if d > t]
+    if state.away:
+        # The sitter tidies it the moment it appears (plan sitter §3.3, Q-A).
+        _log_sitter(
+            state, {"at": t, "action": "sitter_clean", "by": None, "result": OK}
+        )
+        events.append({"type": "sitter_round", "did": ["clean"], "at": t})
+        return
     for when in due:
         if len(state.poops) < R.MAX_POOPS:
             state.poops.append(when)
@@ -1516,6 +1540,15 @@ def _calls(
     for reason in list(state.latched):
         if _rearmed(state, reason):
             _unlatch(state, reason)
+
+    if state.away:
+        # The sitter's here (plan sitter §3.4): no new call, miss, whine or
+        # lonely call. An open one pauses (its deadline slides, as asleep), and
+        # one whose need is met ends, every step.
+        if state.call is not None:
+            state.call.deadline += hours * 3600
+            _sitter_settle_call(state, t, events)
+        return
 
     if state.asleep:
         call = state.call
@@ -1795,6 +1828,144 @@ def sitter_settles(state: PetState) -> bool:
     return False
 
 
+# --- The sitter (plan 2026-11-04-sitter-visits §3) ----------------------------
+# Nobody home: the sitter looks after the pet in the house. Its needs decay as
+# normal; at set times (SITTER_ROUNDS_HOURS after wake) a round gives medicine,
+# cleans, feeds and plays, each only if needed. Pure: no clock, no random draw.
+# The round is not a person's care: no apply_action, no `by`, no bond, streak,
+# praise window, wish or discipline.
+
+
+def _sitter_slots(day: date, settings: Settings) -> list[tuple[float, bool]]:
+    """The day's round slots as (timestamp, is the last of the day). Wall-clock
+    arithmetic (DST-safe): wake on `day` plus the hours. The last is never later
+    than an hour before bedtime (the next day's, for a bedtime at or before the
+    wake time)."""
+    tz = settings.tz
+    wake = datetime.combine(day, settings.wake_time, tzinfo=tz)
+    bed = datetime.combine(day, settings.bedtime, tzinfo=tz)
+    if settings.bedtime <= settings.wake_time:
+        bed += timedelta(days=1)
+    latest = (bed - timedelta(hours=R.SITTER_SUPPER_BEFORE_BED_HOURS)).timestamp()
+    slots = []
+    last = len(R.SITTER_ROUNDS_HOURS) - 1
+    for i, hours in enumerate(R.SITTER_ROUNDS_HOURS):
+        at = (wake + timedelta(hours=hours)).timestamp()
+        slots.append((min(at, latest) if i == last else at, i == last))
+    return slots
+
+
+def _sitter_slot(now: float, settings: Settings) -> tuple[float, bool]:
+    """The latest slot at or before now (today's and yesterday's are looked
+    at: there is always one) and whether it is the day's last."""
+    today = datetime.fromtimestamp(now, settings.tz).date()
+    slots = [
+        slot
+        for day in (today - timedelta(days=1), today)
+        for slot in _sitter_slots(day, settings)
+        if slot[0] <= now
+    ]
+    return max(slots)
+
+
+def _sitter_can(state: PetState) -> bool:
+    """A round can run: an awake, hatched pet that isn't resting."""
+    return not state.asleep and not state.resting and life_stage(state) != "egg"
+
+
+def sitter_due(state: PetState, now: float, settings: Settings) -> float | None:
+    """The slot a round is due for now, or None. Due when the latest slot at
+    or before now is later than the one last served and the pet is up: several
+    missed slots make one round, and a slot slept through is served at wake. A
+    stamp in the future (a damaged save, a clock set back) is clamped to now,
+    at use and kept, as set_resting does with last_rest_refill_at: the next
+    slot is then due as usual."""
+    if not state.away or not _sitter_can(state):
+        return None
+    served = state.sitter_served = min(state.sitter_served, now)
+    slot, _ = _sitter_slot(now, settings)
+    return slot if slot > served else None
+
+
+def sitter_round(state: PetState, now: float, settings: Settings) -> list[Event]:
+    """The sitter's round now, with the latest slot's threshold (the day's
+    last uses SITTER_SUPPER_BELOW): medicine, clean, feed, play, each only if
+    needed. Stamps the slot; logs each thing done (by None) and returns one
+    sitter_round event if it did anything. Nothing for an egg, a resting or
+    sleeping pet (and no stamp: the slot waits for it to wake)."""
+    events: list[Event] = []
+    if not _sitter_can(state):
+        return events
+    slot, supper = _sitter_slot(now, settings)
+    state.sitter_served = slot
+    before = state.happiness
+    did: list[str] = []
+    if state.sick:
+        state.sick = False
+        state.health = _clamp(state.health + R.MEDICINE_HEALTH)
+        state.happiness = _clamp(state.happiness + R.MEDICINE_HAPPINESS)
+        state.recent_misses = []
+        events.append({"type": "recovered"})
+        did.append("medicine")
+    if state.poops:
+        state.poops = []
+        did.append("clean")
+    if state.hunger < (R.SITTER_SUPPER_BELOW if supper else R.SITTER_FEED_BELOW):
+        state.hunger = _clamp(state.hunger + R.FEED_HUNGER)
+        state.weight = _clamp(state.weight + R.WEIGHT_FEED)
+        state.digesting.append(now + R.DIGEST_MINUTES * 60)  # no jitter
+        did.append("feed")
+    if state.happiness < R.SITTER_PLAY_BELOW and state.energy >= R.PLAY_MIN_ENERGY:
+        # A gentle play: nobody is there to see it, so no excitement.
+        state.happiness = _clamp(state.happiness + R.PLAY_HAPPINESS)
+        state.energy = _clamp(state.energy + R.SITTER_PLAY_ENERGY)
+        state.hunger = _clamp(state.hunger + R.SITTER_PLAY_HUNGER)
+        state.weight = _clamp(state.weight + R.SITTER_PLAY_WEIGHT)
+        did.append("play")
+    for item in did:
+        _log_sitter(
+            state, {"at": now, "action": f"sitter_{item}", "by": None, "result": OK}
+        )
+    if did:
+        events.append({"type": "sitter_round", "did": did, "at": now})
+    _resolve_call(state, now, events, state.happiness > before)
+    return events
+
+
+def sitter_arrives(
+    state: PetState, now: float, settings: Settings, settles: bool
+) -> list[Event]:
+    """The sitter comes (away just turned on, or a save loaded with it on).
+    settles: the option "the sitter calms a fussy pet" (a whine is settled
+    with call_settled; off, it stays open and paused). An awake pet gets a
+    round at once, whatever the clock says; a sleeping one is served when it
+    wakes. An open call whose need is met ends."""
+    events: list[Event] = []
+    if settles and sitter_settles(state):
+        events.append({"type": "call_settled"})
+    events += sitter_round(state, now, settings)
+    _sitter_settle_call(state, now, events)
+    return events
+
+
+def _sitter_settle_call(state: PetState, t: float, events: list[Event]) -> None:
+    """An open call whose need is met ends (the awake test; an energy call by
+    rest, as asleep). A happiness call waits for the sitter's play (its
+    _resolve_call), a whine for the option or a person."""
+    call = state.call
+    if call is None:
+        return
+    if call.reason == "energy":
+        answered = state.energy > R.CALL_THRESHOLDS["energy"][1]
+    elif call.reason in ("happiness", "fake"):
+        answered = False
+    else:
+        answered = not _call_condition(state, call.reason, t)
+    if answered:
+        state.call = None
+        events.append({"type": "call_answered", "reason": call.reason})
+
+
 def _start_call(
     state: PetState, reason: str, t: float, events: list[Event], recall: bool = False
 ) -> None:
@@ -1817,7 +1988,7 @@ def requests(state: PetState, now: float, settings: Settings) -> list[str]:
     """What the pet is asking for (the house's requests, minus what it got),
     then "lay_egg" once it's ready to start the next generation."""
     satisfied = {"blanket": now < state.cozy_until, "fan": now < state.cool_until}
-    if state.asleep or state.away or state.resting or life_stage(state) == "egg":
+    if state.asleep or state.resting or life_stage(state) == "egg":
         return []  # a resting pet asks for nothing
     wanted = [r for r in settings.home.requests if not satisfied.get(r)]
     if can_lay_egg(state):
@@ -2038,11 +2209,10 @@ def personality_for(state: PetState) -> str:
 
 def can_lay_egg(state: PetState) -> bool:
     """A week into adulthood the owner may start the next generation, unless the
-    pet is sick, away or resting."""
+    pet is sick or resting."""
     adult = dict(R.STAGE_STARTS)["adult"]
     return (
-        not state.away
-        and not state.resting  # wake it first (decided 2026-11-02)
+        not state.resting  # wake it first (decided 2026-11-02)
         and not state.sick
         and state.age_hours >= adult + R.LAY_EGG_AFTER_ADULT_HOURS
     )
@@ -2176,12 +2346,11 @@ def _meets_need(state: PetState, action: str) -> bool:
 def house_answer(state: PetState, request: str, now: float) -> list[Event]:
     """The house answers the pet's request itself (the heating or the fan came
     on): the same comfort and happiness as a player's blanket or fan, but no
-    care-log entry, since no person did it. Nothing if the pet is asleep, away,
-    an egg, or already comfortable."""
+    care-log entry, since no person did it. Nothing if the pet is asleep, an
+    egg, or already comfortable."""
     events: list[Event] = []
     if (
         state.asleep
-        or state.away
         or life_stage(state) == "egg"
         or now < (state.cozy_until if request == "blanket" else state.cool_until)
     ):
@@ -2224,8 +2393,6 @@ def _do_action(
     events: list[Event],
     tz: tzinfo = UTC,
 ) -> str:
-    if state.away:
-        return "away"
     if life_stage(state) == "egg":
         return "egg"
     if state.asleep:
@@ -2354,6 +2521,21 @@ def _log(state: PetState, entry: dict[str, Any]) -> None:
     del state.care_log[R.CARE_LOG_SIZE :]
 
 
+SITTER_ACTIONS = ("sitter_feed", "sitter_play", "sitter_clean", "sitter_medicine")
+
+
+def _log_sitter(state: PetState, entry: dict[str, Any]) -> None:
+    """A sitter's row: at the head like any, but past SITTER_LOG_ROWS of them
+    the oldest sitter row goes (not the oldest row), so a visit can't push the
+    people's rows out of the log (plan sitter §3.6)."""
+    log = state.care_log
+    log.insert(0, entry)
+    mine = [i for i, row in enumerate(log) if row.get("action") in SITTER_ACTIONS]
+    if len(mine) > R.SITTER_LOG_ROWS:
+        del log[mine[-1]]
+    del log[R.CARE_LOG_SIZE :]
+
+
 # --- Games (the card's play button) -------------------------------------------
 
 SIDES = ("left", "right")
@@ -2469,12 +2651,12 @@ def _game_score(game: Game) -> str:
 def drop_game(
     state: PetState, now: float, by: str | None = None, switched: bool = False
 ) -> list[Event]:
-    """Drop the game in progress (switched away from, idle, asleep, away). One
+    """Drop the game in progress (switched away from, idle, asleep). One
     with a guess counts as a loss: played, its energy, the losing happiness, and
     a game_finished marked dropped (no wish, record or bond). A Higher or Lower
     opening with no guess costs nothing, but is kept so a restart can't reroll it.
     Only a person switching games (switched) makes it care: its happiness may
-    answer a call and it is logged. A drop nobody caused (idle, asleep, away)
+    answer a call and it is logged. A drop nobody caused (idle, asleep)
     answers nothing, so it can't test whether a call is real, and isn't logged."""
     game, state.game = state.game, None
     if game is None:
@@ -2569,8 +2751,8 @@ def play_game(
         refusal == "too_tired" and game is not None and game.kind == kind
     ):
         _spoil_whine(state, events)  # any game call that isn't refused
-    if game is not None and (game.kind != kind or state.away or state.asleep):
-        # Switched games, or left unfinished when it went away or to sleep.
+    if game is not None and (game.kind != kind or state.asleep):
+        # Switched games, or left unfinished when it went to sleep.
         events += drop_game(state, now, by, switched=game.kind != kind)
         game = None
     if game is None:
@@ -2856,8 +3038,6 @@ def _round_info(game: Game) -> dict[str, Any]:
 
 
 def _refuse_play(state: PetState) -> str | None:
-    if state.away:
-        return "away"
     if life_stage(state) == "egg":
         return "egg"
     if state.asleep:
@@ -3121,7 +3301,7 @@ def find_weight(find: dict[str, Any], flags: dict[str, bool | None]) -> float:
 def can_find(state: PetState, world: str) -> bool:
     """A roll can happen: awake and home, not an egg; only Night Sky's pet
     also finds things asleep (R2). Otherwise the find clock is paused."""
-    if state.away or life_stage(state) == "egg":
+    if life_stage(state) == "egg":
         return False
     return not state.asleep or world in FINDS_ASLEEP
 
@@ -3752,11 +3932,11 @@ def chores_done(state: PetState, count: int, now: float) -> int:
 
 
 def give_treats(state: PetState, now: float) -> list[Event]:
-    """Hand over waiting chore treats now, if the pet can take them (awake,
-    home and not resting)."""
+    """Hand over waiting chore treats now, if the pet can take them (awake
+    and not resting; with the sitter too, plan sitter §3.4)."""
     events: list[Event] = []
     # Resting banks them: they arrive after it wakes (plan §3.2, S5).
-    if not state.away and not state.resting and life_stage(state) != "egg":
+    if not state.resting and life_stage(state) != "egg":
         _give_treats(state, now, events)
     return events
 
@@ -3809,12 +3989,7 @@ def set_lights_out(
     events: list[Event] = []
     if on == state.lights_out and on == state.asleep:
         return events
-    if state.away:
-        if state.lights_before_away is None:
-            state.lights_before_away = state.lights_out
-        state.lights_out = on  # applied when it comes home
-        return events
-    state.lights_out = on
+    state.lights_out = on  # with the sitter too: applied at once
     result = _apply_lights(state, now, settings, events)
     if result != OK:
         _log(state, {"at": now, "action": LIGHTS_OUT, "by": None, "result": result})
@@ -3823,11 +3998,24 @@ def set_lights_out(
 
 
 def come_home(state: PetState, now: float, settings: Settings) -> list[Event]:
-    """Back from the sitter's: apply a lights-out flip made while it was away."""
+    """An old save's lights-out flip made while it was away (before the sitter
+    came to the house): apply it now, once."""
     events: list[Event] = []
     before, state.lights_before_away = state.lights_before_away, None
     if before is not None and before != state.lights_out:
         _apply_lights(state, now, settings, events)  # a refusal is dropped
+    return events
+
+
+def settle_legacy_lights(
+    state: PetState, now: float, settings: Settings, settles: bool
+) -> list[Event]:
+    """At load: an old save's lights flip made while away is applied once
+    (come_home), and a save that is away counts as the sitter arriving (plan
+    sitter §3.10): the whine by the option, a round if awake, calls settled."""
+    events = come_home(state, now, settings)
+    if state.away:
+        events += sitter_arrives(state, now, settings, settles)
     return events
 
 
@@ -3870,8 +4058,17 @@ def mood(state: PetState, now: float, settings: Settings) -> tuple[str, list[str
     return current, flags, reason
 
 
-def mood_keyed(
+def real_mood(
     state: PetState, now: float, settings: Settings
+) -> tuple[str, list[str], str, str]:
+    """mood_keyed() as the card draws a visit: the away flag, never the away
+    mood, so the sitter's pet is happy, hungry or sleepy like any (plan sitter
+    §5.3). Unmasked: the caller decides who sees it."""
+    return mood_keyed(state, now, settings, away_mood=False)
+
+
+def mood_keyed(
+    state: PetState, now: float, settings: Settings, away_mood: bool = True
 ) -> tuple[str, list[str], str, str]:
     """mood(), plus a key for the reason: which sentence it is, so the card
     can say it in its own words (baby talk) without matching on English.
@@ -3920,7 +4117,9 @@ def mood_keyed(
     if COZY_FLAGS & set(flags):
         flags.append("cozy")
 
-    current = next((m for m in MOODS if m in flags), "content")
+    current = next(
+        (m for m in MOODS if m in flags and (away_mood or m != "away")), "content"
+    )
     reason, key = _reason(state, current, drowsy)
     if current in ("content", "cozy", "excited", "sleepy", "bored") and not (
         now - state.last_excite < R.EXCITED_MINUTES * 60
@@ -3950,7 +4149,7 @@ _CALL_REASONS = {
 }
 
 _MOOD_REASONS = {
-    "away": "at the sitter's",
+    "away": "the sitter's here",
     "egg": "*wiggle wiggle*",
     "sick": "feeling sick",
     "asleep": "zzz",

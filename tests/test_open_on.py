@@ -336,9 +336,7 @@ async def test_the_chosen_pet_speaks_only_where_it_may(
     )
     people = hass.data[DOMAIN]["people"]
     sendoff = {"eligible": lambda p: p.bond_for(me)[0] >= model.R.SENDOFF_LEVEL}
-    birthday = {
-        "among": lambda p: not p.state.away and model.life_stage(p.state) != "egg"
-    }
+    birthday = {"among": lambda p: model.life_stage(p.state) != "egg"}
     # None set: today's selection, the closest.
     assert pip._voice_pet(me) is bo and bo._voice_pet(me, **sendoff) is bo
     assert pip._voice_pet(me, **birthday) is bo
@@ -350,10 +348,11 @@ async def test_the_chosen_pet_speaks_only_where_it_may(
     assert pip._voice_pet(me, **sendoff) is bo
     pip.state.bonds[me]["points"] = LEVELS[model.R.SENDOFF_LEVEL - 1]
     assert pip._voice_pet(me, **sendoff) is pip
-    # Away, or an egg: skipped for both messages.
+    # With the sitter it still speaks (plan sitter §3.7); an egg is skipped
+    # for both messages.
     pip.state.away = True
-    assert pip._voice_pet(me, **birthday) is bo
-    assert pip._voice_pet(me, **sendoff) is bo
+    assert pip._voice_pet(me, **birthday) is pip
+    assert pip._voice_pet(me, **sendoff) is pip
     pip.state.away = False
     hatched = pip.state.age_hours
     pip.state.age_hours = 0.0
@@ -363,13 +362,13 @@ async def test_the_chosen_pet_speaks_only_where_it_may(
     # A chosen pet that doesn't notify them is ignored.
     pip.state.notify_users.remove(me)
     assert bo._voice_pet(me, **birthday) is bo
-    # With none set again, today's filter and all: Bo away leaves the birthday
+    # With none set again, today's filter and all: Bo an egg leaves the birthday
     # to Pip only if Pip notifies them; otherwise the pet itself (as before).
     people.set_open_on(me, None)
     pip.state.notify_users.append(me)
-    bo.state.away = True
+    bo.state.age_hours = 0.0
     assert pip._voice_pet(me, **birthday) is pip
-    assert pip._voice_pet(me) is bo  # the send-off's: no away filter, as before
+    assert pip._voice_pet(me) is bo  # the send-off's: no egg filter, as before
 
 
 async def test_the_birthday_comes_from_the_chosen_pet(

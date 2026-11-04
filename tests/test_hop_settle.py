@@ -507,7 +507,6 @@ async def test_a_save_from_before_ship_4b_loads_and_its_id_is_board_changed(
     [
         ({"age_hours": 0.0}, "egg"),
         ({"asleep": True}, "asleep"),
-        ({"away": True}, "away"),
     ],
 )
 async def test_settle_refuses_and_writes_nothing(hass, now, hass_storage, stats, code):
@@ -522,11 +521,12 @@ async def test_settle_refuses_and_writes_nothing(hass, now, hass_storage, stats,
     assert fired == []
 
 
-async def test_a_private_pet_away_settles_asleep(hass, now, hass_storage):
+async def test_a_private_pet_with_the_sitter_settles(hass, now, hass_storage):
+    # Plan sitter §3.7, owner D1: the card plays during a visit, privacy on too.
     pet, reply = await today(hass, now, hass_storage)  # privacy defaults on
     pet.state.away = True
-    assert await settle(hass, reply["id"], plain_list(reply)) == {"result": "asleep"}
-    assert not pet.state.hop_day["done"]
+    info = await settle(hass, reply["id"], plain_list(reply))
+    assert info["result"] == "ok" and pet.state.hop_day["done"]
 
 
 # --- The day: only board pins it --------------------------------------------------

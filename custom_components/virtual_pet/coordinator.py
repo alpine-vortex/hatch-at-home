@@ -170,6 +170,9 @@ MOMENTS = {
     "rest_started",  # the resting switch (plan favourite-resting §4.5): no user
     "rest_ended",
 }
+# Care-log rows no person writes (by None by design): the wish credit for a
+# game skips them (plan sitter §3.5).
+NOBODY_ROWS = {*model.SITTER_ACTIONS, "chore_treat"}
 # A public moment of these types keeps only {type, at}: the bus and the phones
 # still get the cause.
 MOMENT_BARE = {"became_sick"}
@@ -302,6 +305,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # Set once per HA start, when a save loaded normally (memory only).
         self._powered_on: str | None = None
         self._sent: dict[object, tuple[dict[str, Any] | None, dict[str, Any]]] = {}
+        # The sitter's last round this visit ({at, did}), for the channel's
+        # house.sitter.last (plan sitter §3.6, §5.3). In memory; never on the bus.
+        self._sitter_last: dict[str, Any] | None = None
         # A call notification is on the phones (cleared when the call is over).
         self._call_notified = False
         # This sickness is on the phones already (became_sick, until it
@@ -329,7 +335,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # The person behind the care being applied (bonds), and when each person
         # last looked in (virtual_pet.visit; in memory).
         self._actor: str | None = None
-        # Games dropped unfinished (idle, away, asleep, switched from): the
+        # Games dropped unfinished (idle, asleep, switched from): the
         # next guess of that kind starts a new game, and its reply says so.
         self._dropped_games: set[str] = set()
         # Hop of the Day's boards, today's only, in memory: one shared build per
@@ -436,6 +442,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     def privacy(self) -> bool:
         """Keep presence out of what the pet shows (default on)."""
         return self.config_entry.options.get(CONF_PRIVACY, True)
+
+    @property
+    def _sitter_settles(self) -> bool:
+        """The option "the sitter calms a fussy pet" (default on)."""
+        return bool(self.config_entry.options.get(CONF_SITTER_SETTLES, True))
 
     @property
     def house_words_private(self) -> bool:
@@ -600,6 +611,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self.state.hatched_on = (
                 dt_util.as_local(dt_util.utc_from_timestamp(hatch)).date().isoformat()
             )
+        # An old save's lights flip made while away, and a save that is away:
+        # the sitter arrives (plan sitter §3.10).
+        self._fire(
+            model.settle_legacy_lights(
+                self.state, now, self.settings, self._sitter_settles
+            )
+        )
         self._check_visits()
         model.trim_basket(self.state, self.known_finds)  # review V-B #9
         self._pick_favourite()
@@ -949,18 +967,18 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
         away = self.presence.update(self.watcher.people_home(now), now, self.state.away)
         if away != self.state.away:
+            # Nobody home: the sitter comes to the house (plan sitter §3). A
+            # game runs on, the lights apply at once; the visit's rounds are
+            # in model.advance.
             self.state.away = away
+            self._sitter_last = None
             if away:
-                self._fire(model.drop_game(self.state, now))
-            if (
-                away
-                and self.config_entry.options.get(CONF_SITTER_SETTLES, True)
-                and model.sitter_settles(self.state)
-            ):
-                self._fire([{"type": "call_settled"}])
+                self._fire(
+                    model.sitter_arrives(
+                        self.state, now, settings, self._sitter_settles
+                    )
+                )
             self._fire([{"type": "went_away" if away else "came_home"}])
-            if not away:
-                self._fire(model.come_home(self.state, now, settings))
         # After the update: an arrival just now starts the greeting.
         if self.presence.greeting(now):
             effect.flags.insert(0, "greeting")
@@ -1015,7 +1033,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         assert self.state is not None
         state = self.state
         settings = self.settings
-        awake = not state.away and not state.asleep and model.life_stage(state) != "egg"
+        awake = not state.asleep and model.life_stage(state) != "egg"
         local = dt_util.as_local(dt_util.utc_from_timestamp(now))
         minute = local.hour * 60 + local.minute
         wake = settings.wake_time.hour * 60 + settings.wake_time.minute
@@ -1192,6 +1210,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             model.pick_favourite(state, self.likes.get(state.species, []), self.rng)
 
     def _fire(self, events: list[model.Event], simulated: bool = False) -> None:
+        if rounds := [e for e in events if e["type"] == "sitter_round"]:
+            # The sitter's rounds never reach the bus or the moments (plan sitter
+            # §5.4): the last one goes to the cards' house.sitter only.
+            if not simulated:
+                self._sitter_last = {"at": rounds[-1]["at"], "did": rounds[-1]["did"]}
+            events = [e for e in events if e["type"] != "sitter_round"]
         for event in events:
             if event["type"] == "game_finished" and event.get("dropped"):
                 self._dropped_games.add(event["game"])
@@ -1269,8 +1293,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         state = self.state
         return (
             state is not None
-            and not state.away
-            and not state.asleep
+            and not state.asleep  # with the sitter too: it is up and living
             and model.life_stage(state) != "egg"
         )
 
@@ -1489,7 +1512,17 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         assert state is not None
         now = self._now()
         granted: list[model.Event] = []
-        by = state.care_log[0].get("by") if state.care_log else None
+        # The newest row a person could have written: the sitter's and a chore
+        # treat's are nobody's, so a game won after them is still its player's
+        # (plan sitter §3.5).
+        by = next(
+            (
+                row.get("by")
+                for row in state.care_log
+                if row.get("action") not in NOBODY_ROWS
+            ),
+            None,
+        )
         care = {"play": "play", "snack": "snack", "clean": "bath", "praise": "praise"}
         for e in events:
             kind = e["type"]
@@ -1629,8 +1662,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         """The pet that speaks for this person on their phone (the birthday and
         the send-off; plan favourite-resting §5.3). Their card's pet (`open_on`)
         is a preference among the pets that pass the message's gate, never a
-        replacement for it: it speaks if it is loaded, notifies them, is home,
-        hatched and `eligible`. Otherwise, exactly as before: of the loaded pets
+        replacement for it: it speaks if it is loaded, notifies them, is
+        hatched and `eligible` (with the sitter too, plan sitter §3.7). Otherwise, exactly as before: of the loaded pets
         that notify them (and pass `among`), the one they're closest to."""
         pets: dict[str, PetCoordinator] = self.hass.data[DOMAIN]["pets"]
         mine = [
@@ -1642,7 +1675,6 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if (
             chosen in mine
             and chosen.state is not None
-            and not chosen.state.away
             and model.life_stage(chosen.state) != "egg"
             and eligible(chosen)
         ):
@@ -1657,7 +1689,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         """Someone with "my day" on heads out on a notable morning: one line on
         their phone ("rain later today, take an umbrella ☂"), a few times a week
         at most, from the pet they're closest to (or their card's pet, if it may
-        send one: its bond is close enough, and it's home and hatched)."""
+        send one: its bond is close enough, and it's hatched)."""
         voice = self._voice_pet(
             user, eligible=lambda p: p.bond_for(user)[0] >= R.SENDOFF_LEVEL
         )
@@ -1735,7 +1767,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             }
         self._advance(now)
         if not self._awake():
-            # Asleep (or away): only the sleepy hello. The visit isn't counted,
+            # Asleep: only the sleepy hello. The visit isn't counted,
             # so the lines it has wait for the next look once it's up.
             notes = self._up_early(user, now)
             self._publish()
@@ -1827,8 +1859,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         today, hour = self._today(now)
         sun = self.hass.states.get("sun.sun")
         if (
-            state.away
-            or not state.asleep
+            not state.asleep
             or model.life_stage(state) == "egg"
             or not R.UP_EARLY_FROM <= hour < 12
             or sun is None
@@ -2519,7 +2550,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         on my phone" on (off by default: the message is in HA's history, which
         admins can read)."""
         state = self.state
-        if state is None or state.away or model.life_stage(state) == "egg":
+        if state is None or model.life_stage(state) == "egg":
             return
         local = dt_util.now().date()
         today, year = local.isoformat(), str(local.year)
@@ -2536,9 +2567,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             closest = self._voice_pet(
                 user,
                 among=lambda p: (
-                    p.state is not None
-                    and not p.state.away
-                    and model.life_stage(p.state) != "egg"
+                    p.state is not None and model.life_stage(p.state) != "egg"
                 ),
             )
             assert closest.state is not None
@@ -2929,7 +2958,30 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # between pushes and would make a spurious house diff.
         if self._fx_mapped():
             view["device_fx"] = self.device_fx.view()
+        # Always present (None: nobody's away), so a card can tell no visit from
+        # an older server that sends none.
+        view["sitter"] = self._sitter_view()
         return view
+
+    def _sitter_view(self) -> dict[str, Any] | None:
+        """The sitter's visit, for every card (shared screens too, owner D1):
+        the real mood without the privacy mask, the away flag but not the away
+        mood (plan sitter §5.3). No name, no `by`, no free text; the call's
+        deadline stays hidden (it slides)."""
+        state = self.state
+        if state is None or not state.away:
+            return None
+        mood, flags, reason, key = model.real_mood(state, self._now(), self.settings)
+        return {
+            "mood": mood,
+            "key": mood,
+            "reason": reason,
+            "reason_key": key,
+            "flags": flags,
+            "asleep": state.asleep,
+            "lights_out": state.lights_out,
+            "last": self._sitter_last,
+        }
 
     def channel_snapshot(
         self, token: object, user: str, shared: bool, admin: bool = False
@@ -3093,13 +3145,6 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         result, events = model.apply_action(
             self.state, action, now, self.rng, by, self.settings
         )
-        if result == "away" and self.privacy:
-            # Privacy: an empty house looks like a nap, so the refusal does too.
-            result = "asleep"
-            self.state.care_log[0]["result"] = result
-            for event in events:
-                if event["type"] == "care":
-                    event["result"] = result
         if result == model.OK:
             events += self._bond(person, "care")
         self._actor = person
@@ -3180,13 +3225,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 self.state, guess, now, self.rng, by, kind=kind, player=player
             )
             if dropped and info["result"] == model.OK and info["round"] == 1:
-                # The game the guess was for was dropped (idle, away): this
+                # The game the guess was for was dropped (idle, asleep): this
                 # one is new, so the card adopts it instead of blaming a player.
                 info["restarted"] = True
-        if info["result"] == "away" and self.privacy:
-            info["result"] = self.state.care_log[0]["result"] = "asleep"
-            for event in events:
-                event["result"] = "asleep"
         for event in list(events):
             if (
                 event["type"] == "game_finished"
@@ -3219,7 +3260,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         assert self.state is not None
         now = self._now()
         self._advance(now)
-        refusal = self._hop_refusal(model._refuse_play(self.state))
+        refusal = model._refuse_play(self.state)
         if refusal is not None:
             return {"result": refusal}
         if model.pin_hop_day(self.state, self._today(now)[0]):
@@ -3243,12 +3284,6 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "tidy": same and paid["tidy"],
         }
 
-    def _hop_refusal(self, refusal: str | None) -> str | None:
-        """A private pet's `away` is told as `asleep`, as a game's is."""
-        if refusal == "away" and self.privacy:
-            return "asleep"
-        return refusal
-
     async def async_hop_settle(
         self,
         board_id: str,
@@ -3271,7 +3306,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         assert state is not None
         now = self._now()
         self._advance(now)
-        refusal = self._hop_refusal(model.refuse_hop_settle(state))
+        refusal = model.refuse_hop_settle(state)
         if refusal is not None:
             return {"result": refusal}
         pinned = dict(state.hop_day)
@@ -3300,7 +3335,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         assert state is not None
         now = self._now()
         self._advance(now)
-        refusal = self._hop_refusal(model.refuse_hop_settle(state))
+        refusal = model.refuse_hop_settle(state)
         if refusal is not None:
             return {"result": refusal}
         current = state.hop_day

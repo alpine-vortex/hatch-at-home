@@ -656,11 +656,10 @@ async def test_empty_house_goes_to_the_sitter_privately(
         await settle(hass, freezer, 5 * 60)
     # Privacy on: dashboards see a nap, not an empty house.
     assert hass.states.get("sensor.pip_mood").state == "asleep"
-    hunger = hass.states.get("sensor.pip_hunger").state
     for _ in range(12):
         await settle(hass, freezer, 5 * 60)
-    assert hass.states.get("sensor.pip_hunger").state == hunger  # frozen
-    # Nothing ticks along while away (a frozen deadline moved every tick).
+    # The sitter is here: the pet lives on (plan sitter §3), and a call's
+    # deadline stays hidden (it slides every tick, the keep list §3.7).
     assert hass.states.get("sensor.pip_mood").attributes["call_deadline"] is None
     calling = hass.states.get("binary_sensor.pip_calling")
     assert "deadline" not in calling.attributes
@@ -909,24 +908,31 @@ async def test_attributes_are_copies_of_the_pets_lists(
 async def test_privacy_hides_away_behind_a_nap(
     hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
 ) -> None:
-    hass_storage[STORE_KEY] = hatched_pet(now, away=True)
+    # Loaded away: the sitter arrives and feeds it (plan sitter §3.10).
+    hass_storage[STORE_KEY] = hatched_pet(now, away=True, hunger=20.0)
     await setup(hass)
     assert hass.states.get("sensor.pip_mood").state == "asleep"
     assert hass.states.get("binary_sensor.pip_asleep").state == STATE_ON
+    # The button still cares for it (owner D1, Q-B): no more "asleep" refusal.
     await press(hass, "button.pip_feed")
     log = hass.states.get("sensor.pip_last_care").attributes["log"]
-    assert log[0]["result"] == "asleep"  # not "away"
+    assert log[0]["result"] == "ok"
+    # The sitter's row reads as the plain care, by nobody (plan sitter §5.1).
+    assert log[1]["action"] == "feed" and log[1]["by"] is None
 
 
 async def test_without_privacy_away_is_away(
     hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
 ) -> None:
-    hass_storage[STORE_KEY] = hatched_pet(now, away=True)
+    hass_storage[STORE_KEY] = hatched_pet(now, away=True, hunger=20.0)
     await setup_with_house(hass, privacy=False)
     assert hass.states.get("binary_sensor.pip_asleep").state == STATE_OFF
+    mood = hass.states.get("sensor.pip_mood")
+    assert mood.state == "away" and mood.attributes["reason"] == "the sitter's here"
     await press(hass, "button.pip_feed")
     log = hass.states.get("sensor.pip_last_care").attributes["log"]
-    assert log[0]["result"] == "away"
+    assert log[0]["result"] == "ok"
+    assert log[1]["action"] == "sitter_feed" and log[1]["by"] is None
 
 
 async def test_notifications_follow_a_rename(
@@ -3924,24 +3930,22 @@ async def test_a_switch_drop_grants_no_wish_bond_record_or_favourite(
     assert state.care_log[0]["by"] == "Me" and state.care_log[0]["result"] == "lost"
 
 
-async def test_going_away_mid_game_drops_it_as_a_loss(
+async def test_going_away_mid_game_keeps_it(
     hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
 ) -> None:
-    hass_storage[STORE_KEY] = hatched_pet(now, happiness=50.0)
+    # Plan sitter §3.7: the sitter comes, and a game started on the card runs on.
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=80.0)
     await setup(hass)
     coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
-    coordinator.state.wish = {"kind": "play", "granted": False}
     await game(hass, guess="left")
     finished = async_capture_events(hass, f"{DOMAIN}_game_finished")
     coordinator.presence.update = lambda *args, **kwargs: True  # everyone left
     coordinator._sense_home(coordinator._now())
     await hass.async_block_till_done()
     state = coordinator.state
-    assert state.away and state.game is None
-    assert [e.data.get("dropped") for e in finished] == [True]
-    assert state.games["left_right"]["played"] == 1
-    assert state.wish["granted"] is False and not state.favourites
-    assert not state.care_log  # nobody caused the drop, so nothing to react to
+    assert state.away and state.game is not None
+    assert finished == []
+    assert (await game(hass, guess="left"))["result"] == "ok"
 
 
 async def test_a_guess_after_an_idle_drop_says_the_game_restarted(

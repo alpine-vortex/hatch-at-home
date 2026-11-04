@@ -125,7 +125,8 @@ async def test_each_person_hears_only_their_own_bond(
     }
     visit = mine["house"].pop("visit")  # today's visit (or none): no person in it
     assert visit is None or set(visit) == {"day", "id", "hours", "from", "until"}
-    assert mine["house"] == {"media": None, "dream": None, "basket": 0}  # no ids
+    # No ids; sitter None: somebody's home (plan sitter §5.3).
+    assert mine["house"] == {"media": None, "dream": None, "basket": 0, "sitter": None}
     assert mine["moments"] == []
     assert dt_util.parse_datetime(mine["now"]) == dt_util.utcnow()
     # A non-admin, and a read-only user: their own, or none, and nothing of mine.
@@ -166,7 +167,15 @@ async def test_a_shared_screen_hears_the_house_only(
     events[1]["house"].pop("visit")
     # A shared screen's house view also says whether it opens on this pet (§5.3).
     assert events[1:] == [
-        {"house": {"media": media, "dream": None, "basket": 0, "house_open_on": False}}
+        {
+            "house": {
+                "media": media,
+                "dream": None,
+                "basket": 0,
+                "sitter": None,
+                "house_open_on": False,
+            }
+        }
     ]
     assert "sunbeam" not in json.dumps(events) and me not in json.dumps(events)
     # Subscribing again replays the same media moment (the card dedupes by at).

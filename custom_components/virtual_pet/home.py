@@ -332,7 +332,7 @@ def evaluate(
 
 
 class Presence:
-    """People coming and going: greetings, and away mode ("at the sitter's").
+    """People coming and going: greetings, and away mode (the sitter comes).
 
     Fed the home zone's person count. Keeps only what it needs in memory; a
     restart starts the empty timer over, which only delays away mode.
@@ -361,7 +361,7 @@ class Presence:
                 self.last_greeting = now
                 self.greeting_until = now + R.HOME_GREETING_MINUTES * 60
             elif was == 0 and away:
-                # Back from the sitter's: always a greeting.
+                # Back to an empty house's pet: always a greeting.
                 self.last_greeting = now
                 self.greeting_until = now + R.HOME_GREETING_MINUTES * 60
             return False
@@ -505,7 +505,7 @@ class HouseMoments:
 
     def doorbell(self, now: float, awake: bool) -> list[dict[str, Any]]:
         """A doorbell press (the coordinator's own listener calls this; a press
-        is never in Readings). Dropped while the pet is asleep, away or an egg,
+        is never in Readings). Dropped while the pet is asleep or an egg,
         and for the cooldown after one that was heard: a dropped press
         starts no wait. One wait per pet, across all its doorbells."""
         if not awake or now < self.next_doorbell:
@@ -515,8 +515,8 @@ class HouseMoments:
 
     def _robot(self, r: Readings, awake: bool, today: str) -> list[dict[str, Any]]:
         """A vacuum starting to clean (robot_out), and heading home after a run
-        the pet saw (robot_home, once per run). Dropped while the pet is asleep,
-        away or an egg; a run already going at the first reading says nothing;
+        the pet saw (robot_home, once per run). Dropped while the pet is asleep
+        or an egg; a run already going at the first reading says nothing;
         at most ROBOT_MOMENTS_PER_DAY starts a local day."""
         was = self.robot_cleaning
         self.robot_cleaning = r.robot_cleaning
@@ -536,8 +536,8 @@ class HouseMoments:
     def _appliances(self, r: Readings, awake: bool) -> list[dict[str, Any]]:
         """A washer, dryer or dishwasher finishing (appliance_done {kind}): the
         watcher keeps each machine's cycle and cooldown and passes only the
-        kinds. Said once, never repeated; dropped while the pet is asleep, away
-        or an egg."""
+        kinds. Said once, never repeated; dropped while the pet is asleep or an
+        egg."""
         if not awake:
             return []
         return [{"type": "appliance_done", "kind": kind} for kind in r.appliances_done]
