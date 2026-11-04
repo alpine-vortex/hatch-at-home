@@ -335,6 +335,9 @@ up to four parts, in this order:
   - **shared screen**, at the foot: its switch, a note ("a family tablet? give it its
     own login, and we'll make friends ♥"), and for an admin (not on a shared screen) a
     line, "sensor privacy is in the pet's options".
+- **The version line.** Below those parts the sheet ends with one small line, "Hatch
+  <version> · <id>": the card's version and a short code made from the card's own
+  text, so a card that is out of date shows a different code from a fresh one.
 - **Holiday names.** "holiday names" in the sheet's "this screen" part is on to begin
   with. Turned off, the pet on this screen never names a festival: no Christmas,
   Hanukkah or New Year's Eve lines in December, no "happy Halloween!" or "happy
@@ -366,6 +369,31 @@ up to four parts, in this order:
   and phones give a tiny vibration. Then the real reaction follows (a food bowl, a
   sparkle, or a refusal like "i'm full!"). If HA rejects the press, the button goes dull for a moment
   and the pet says so.
+- **Care scenes.** Every care gets a reaction from the pet, not only a prop. Five play
+  as a short scene that starts at your tap: *medicine* (it sniffs the pill, or doesn't,
+  takes it and hops happily), *clean* (a broom crosses the floor, or a net on the water
+  worlds; the pet hops over it and shakes off), *feed* (the bowl arrives, the pet eats
+  in bites and the bowl goes; now and then it licks its lips, pats its tummy or burps),
+  *snack* (tossed and caught, or a pounce that misses; its favourite snack earns a bigger
+  hop and a sparkle) and the *lights* button, which tucks the pet in (it yawns, lies
+  down, a blanket falls over it and the screen dims in steps) or, when it's asleep,
+  wakes it (the screen brightens, the blanket comes off and it stretches). The scene
+  waits for Home Assistant's answer; if the pet refuses ("i'm full!") it pushes the
+  bowl or blanket away, and if the call fails the scene just ends. A tap on the screen
+  skips a medicine or clean scene. The blanket stays on a pet that is asleep with the
+  lights out, even when the card is opened. The other buttons are shorter: scold (a flinch and
+  a sulk), fan (it leans into it), praise (a twirl) and play (a quick pose before the
+  games). With reduced motion there are no scenes; the pet shows a pose instead.
+- **Patting.** Tap the pet. Where you tap counts: the top of it is the head, the rest
+  the body, and it leans a little toward the side you touched. Pats within a few seconds
+  of each other build up: the first ones lean and wiggle, the third is a heart on the head or
+  a giggle ("that tickles", ticklish) on the body, the fourth to sixth are its cheer pose,
+  the seventh to ninth a purr (eyes closed, slow breathing), and the tenth a contented
+  flop. For about eight seconds after that, pats are soft and don't count; then the
+  ladder starts again. It is never annoyed. An asleep pet stirs on the third pat and
+  stays asleep; an egg rocks; a sick pet leans slower and says "thanks... ♥". Nothing is
+  sent to Home Assistant. With reduced motion you get the pose and the line, without the
+  lean.
 - The toy buttons press the pet's button entities, so anything you do here works
   from automations and voice too. A button glows when the pet needs it, for example
   Feed when it's hungry. Medicine is greyed out unless it's sick.
@@ -404,6 +432,40 @@ pet; it's only how the screen looks.
   little (each care has its own bounce), dims while the press is on its way to Home
   Assistant, and returns dull if the press is rejected. With reduced motion on, it
   only dims and sinks, without the spring.
+- **The weather on the glass.** The shell has a layer of glass in front of the screen,
+  and the house's weather shows on it for as long as it lasts: *rain* (beads, a drop
+  runs down, the last bead clears), *snow* (frost forms in the corners and thaws),
+  *fog* (it gathers at the rim), a *storm* (a dim shiver, never a flash) and *wind*
+  (flecks lean across). It needs a weather entity in "Weather and air" (rain also
+  works from a rain sensor); a storm shows as a storm, not as rain. If the weather is unknown,
+  for instance after a restart, nothing is painted and nothing is made up. When you
+  see it start or end, it arrives with a short onset; open the card within 90 seconds
+  of a change and a shortened echo plays once. Nothing is stored, and nothing goes on
+  a sensor or into the history.
+- **The room on the shell.** The room shows in the shell's plastic and glass too,
+  while it lasts (set up under "The pet's room" and "The house helps"): *lights* (the
+  rim is lit or dimmed, never over the backlight), the *fireplace* (embers along the
+  bottom), *heating* and *cooling* (a warm or cool tint, nothing more), the *TV* (a
+  reflected rectangle at the screen's edge) and *music* (a few bars that rise and
+  fall).
+- **Cues on the bezel.** A short light on the bezel answers your press: *feed* (the
+  delivery path glows in turn), *play* (two points pulse), *clean* (a sweep along the
+  top) and a confirmed *tuck-in* (the lamps dim in sequence). Moments of the house have
+  one too: a doorbell chime along the top edge, a machine's finishing tick (left for the
+  washer, middle for the dryer, right for the dishwasher), the vacuum's rotor turning
+  out and slowing home, and a warm or cool wash when the heating or cooling answers the
+  pet. No sound and no buzz; a care scene already running wins, and the buttons never
+  light.
+- **The moon.** On the days of the full moon and the new moon a halo shows on the glass.
+  The card works it out from the date, so it needs no sensor and no setting.
+- **Marks on the glass.** About once in 20 minutes of watching the pet, a faint paw,
+  smudge or edge shadow shows in the screen's margin for 20 seconds, then fades. It
+  never lands over the pet, the bubble or the buttons, never on your first look, and
+  is only kept in the browser's memory.
+- **Switching them off.** All of the glass, room, bezel, moon and mark effects follow
+  the "screen effects here" switch (in the settings' "this screen" part, under "look").
+  With reduced motion the weather and the room stay as a still picture, with no onset,
+  echo or bezel cue, and a mark waits.
 - **The backlight.** Every device has a little button on its shell: a nub on the
   egg's shoulder, the tank lid's right grip, a lamp on the house's chimney, the
   porthole's top-right rivet, a dewdrop on the lily pad's rim and a star on the
@@ -860,6 +922,19 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   favourite snack in its type's own words (on a shared screen, hellos without a
   name; a few more once it knows you well). Its idle chatter and mood line keep the
   usual words for now.
+- **Species nature:** each creature has four fixed facts about how it is built: when
+  it is liveliest (the day, dusk or the night), the sky it takes to (sun, rain, snow,
+  fog, wind, fire or the moon), whether it is solitary or sociable, and a habit
+  (watcher, basker, groomer, performer, hoarder, builder or explorer). It is flavour
+  only, like personality: it never changes a stat, a call or a care result. The status
+  screen shows a one-line field note for the pet's own kind ("livelier at dusk · frisky
+  in snow · pokes about"), at every stage except the egg. A teen or adult moves about
+  in its habit's way and says an action line of its habit now and then (a solitary pet
+  "peeks first" at a visitor), and its sunset and good-morning lines suit its time of
+  day. When its sky is up in the house, a teen or adult that isn't resting reacts once
+  a day with a short action line ("*listens to the pitter patter*") and a perk, or a
+  settle for a slow one. Assist's status answer passes the same note along as
+  a hint for the pet's voice.
 - **Traits:** the pet picks up habits from your house and keeps them for life, up
   to **four** (an inherited one counts; once it has four it learns no more). Only
   time it spends awake counts, and traits only ever add a little happiness (all

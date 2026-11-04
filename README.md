@@ -65,7 +65,7 @@ Pick a world and its little device. Each starts with its own first pet.
   <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/grow.png" alt="A kitten grows through five stages: egg, baby, child, teen, and adult" width="100%">
 </p>
 
-- 🍙 **Care!** Feed, play, clean, tuck in
+- 🍙 **Care!** Feed, play, clean, tuck in, give a pat
 - 📣 **It calls for YOU!** You get 20 minutes to answer
 - 🎮 **3 mini-games!** *Left or right?*, *Higher or lower?*, *Berry dig*
 - 🌱 **Grows up!** Egg, baby, child, teen, adult
