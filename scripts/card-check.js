@@ -11276,9 +11276,15 @@ async function main() {
     await redraw();
     out.beforeCall = s.attention.classList.contains("arrive");
     force["binary_sensor.calling"] = "on";
-    await redraw();
+    el._redraw(s);
+    // The pop is a .3 s animation, so it is read as soon as the class is on (two frames in), not
+    // after the redraw's 300 ms settle: a timer a few ms late found only the pulse left (the
+    // check failed with popAnim "pulse" on a slow runner). The assertion is unchanged.
+    for (let i = 0; i < 100 && !s.attention.classList.contains("arrive"); i++) await wait(10);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     out.popped = s.attention.classList.contains("arrive");
     out.popAnim = s.attention.getAnimations().map((a) => a.animationName).join();
+    await wait(300);
     s.attention.classList.remove("arrive"); // a redraw of the same call is not an arrival: no new pop
     await redraw();
     out.popOnce = !s.attention.classList.contains("arrive");
