@@ -1,3 +1,27 @@
+// Hop of the Day's cell art (ui/hop_<world>_<tile>.png, 16 x 16 art px): a world listed here draws its cells
+// from these tiles instead of the CSS stand-ins below (a world not listed keeps them). Each tile is one
+// cell's state; the selectors keep the cells' class names, and .legal/.lit stay rings drawn over the art (.legal
+// cream here: the dark ring is lost on a dark tile).
+// Later wins on a tie, so a twist's tile follows the plain pad's.
+const HOP_TILES = {
+  pad: ".hc.pad:not(.sunk)", find: ".hc.pad.find:not(.sunk)", start: ".hc.pad.start:not(.sunk)", sunk: ".hc.sunk",
+  stone: ".hc.stone", water: ".hc.water", wall: ".hc.wall", nest: ".hc.nest", nest_open: ".hc.nest.open",
+  stump1: ".hc.stump", stump2: ".hc.stump.two", rug: ".hc.rug",
+  crackle: ".hc.crackle:not(.sunk)", crackle_half: ".hc.crackle.half:not(.sunk)",
+  pool_stone: ".hc.pool", pool_water: ".hc.pool.wet", ripple: ".hc.ripple:not(.sunk)",
+  dark: ".hc.pad.dark:not(.sunk)", lantern: ".hc.lantern:not(.sunk)",
+};
+const HOP_PLAIN = ["pad", "find", "start", "sunk", "stone", "water", "wall", "nest", "nest_open"];
+const HOP_ART = { woodland: [...HOP_PLAIN, "stump1", "stump2"] };
+const hopArtStyle = () => Object.entries(HOP_ART).map(([world, tiles]) => {
+  const at = `.game .hopb[data-world="${world}"]`;
+  return `${at} .hc { border: 1px solid rgba(20, 14, 8, .4); border-radius: 0; image-rendering: pixelated; }
+  ${at} .hc.pad.find::after { content: none; }
+  ${at} .hc.legal { box-shadow: inset 0 0 0 2px #fffdf5; }
+  ${at} .hc.lit { box-shadow: inset 0 0 0 3px #fffdf5, inset 0 0 0 5px #3a2a1a; }\n` + tiles.map((t) => `  ${at} ${HOP_TILES[t]} { background: ` +
+    `url(${BASE}/ui/hop_${world}_${t}.png?v=${VERSION}) 0 0 / 100% 100% no-repeat border-box; }`).join("\n");
+}).join("\n");
+
 const STYLE = `
   :host { display: block; --hp-backdrop: var(--card-background-color, #2f4a3a);
     --hp-ground: transparent; --hp-ink: var(--primary-text-color, #222);
@@ -527,6 +551,7 @@ const STYLE = `
   .game .hc.dark { background: rgba(34, 30, 64, .86); border-color: rgba(34, 30, 64, .9); }
   .game .hc.lantern:not(.sunk) { background: radial-gradient(circle, #ffd76a 0 15%, rgba(255, 196, 80, .6) 16% 32%,
     transparent 36%), rgba(255, 253, 245, .86); }
+  ${hopArtStyle()}
   .game .hpath { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none;
     z-index: 1; }
   .game .hpath path { fill: none; stroke: #3a2a1a; stroke-width: 2; stroke-dasharray: 2 4; stroke-linecap: round; }

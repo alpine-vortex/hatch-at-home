@@ -303,6 +303,7 @@ class HatchPetCardBoard extends HatchPetCardGames {
     this._hopTeardown(s);
     const wrap = document.createElement("div");
     wrap.className = "hopb";
+    wrap.dataset.world = s.worldKey || ""; // the cells' art (style.js's HOP_ART)
     const keys = HOP_KEYS.map(([k, glyph, aria]) =>
       `<button class="hk" data-k="${k}" aria-label="${aria}">${glyph}</button>`).join("");
     wrap.innerHTML = `<div class="hgrid" tabindex="-1"><svg class="hpath" aria-hidden="true"><path/></svg>` +
