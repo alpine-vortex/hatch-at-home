@@ -18,7 +18,7 @@ const konst = (name) => src.match(new RegExp(`\\nconst ${name} = [\\s\\S]*?\\n\\
 // The data part and the engine part, run with the few card names they use.
 function load({ calm = false } = {}) {
   const ctx = { console, calm: () => calm, Date, setTimeout: () => 0, clearTimeout: () => {} };
-  const prefs = ["ICON_PATHS", "ACTION_ICONS"].map(konst).join("") + src.match(/\nconst ACTIONS = \[[\s\S]*?\n\];\n/)[0];
+  const prefs = ["ICON_PATHS", "ACTION_ICONS", "GAME_COPY"].map(konst).join("") + src.match(/\nconst GAME_IDLE_MS = .*\n/)[0] + src.match(/\nconst ACTIONS = \[[\s\S]*?\n\];\n/)[0];
   const helpers = ["pixelIcon", "icon"].map((n) => src.match(new RegExp(`\\nfunction ${n}\\([\\s\\S]*?\\n\\}\\n`))[0]).join("");
   const owned = src.match(/\n {2}_owned\(s\) \{[\s\S]*?\n {2}\}\n/)[0];
   vm.runInNewContext(`const BASE = "/b"; const VERSION = "t";${prefs}${helpers}${dataPart}
@@ -31,7 +31,7 @@ function load({ calm = false } = {}) {
     }
     ${enginePart}
     this.out = { SHELL_MODES, SHELL_TINTS, SHELL_SLOTS, SHELL_EXIT_ON, shellCheck, shellFreeze, shellIcon, shellText,
-      ACTIONS, Card: HatchPetCardMode };`, ctx);
+      ACTIONS, GAME_COPY, Card: HatchPetCardMode };`, ctx);
   return ctx.out;
 }
 const M = load();
@@ -51,7 +51,7 @@ function fakeButton(action, root) {
     },
     setAttribute: (k, v) => attrs.set(k, String(v)), removeAttribute: (k) => attrs.delete(k),
     getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
-    lastElementChild: caption, querySelector: () => cap,
+    children: [cap, caption], querySelector: () => cap,
     focus() { root.activeElement = this; },
   };
 }
@@ -132,8 +132,8 @@ test("every SHELL_MODES entry: 8 slots, captions and labels, functions, exit fie
     assert.ok(Object.isFrozen(m) && Object.isFrozen(m.slots) && m.slots.every((x) => x === null || Object.isFrozen(x)), `${id} frozen`);
     if (m.exit) assert.ok(Object.isFrozen(m.exit) && (!m.exit.on || Object.isFrozen(m.exit.on)), `${id} exit frozen`);
   }
-  // slice 1 ships the engine only: the game entries are slices 2 and 3
-  assert.deepStrictEqual(Object.keys(M.SHELL_MODES), []);
+  // slice 2: the three server games (slice 3 adds hop)
+  assert.deepStrictEqual(Object.keys(M.SHELL_MODES), ["left_right", "higher_lower", "dig"]);
   assert.deepStrictEqual(Object.keys(M.SHELL_TINTS), ["game"]);
   assert.match(M.SHELL_TINTS.game, /^#[0-9a-f]{6}$/);
 });
@@ -171,7 +171,12 @@ test("the schema names what is wrong", () => {
 
 test("acceptance 2: the engine part has no game words; the data part is pure", () => {
   for (const word of ["s.game", "_endGame", "GAMES"]) assert.ok(!enginePart.includes(word), `card-mode names ${word}`);
-  for (const word of ["s.game", "_endGame", "GAMES"]) assert.ok(!dataPart.includes(word), `shell-modes names ${word}`);
+  // The data part's schema and helpers name no game; its game entries (shellGame and the table below it, slice 2)
+  // read `s.game` and call the game's own methods, as plan 3.1 says a slot function may.
+  const at = dataPart.indexOf("// The three server games");
+  const rest = dataPart.slice(0, at) + dataPart.slice(dataPart.indexOf("// A cap's icon:"));
+  assert.ok(at > 0 && rest.length < dataPart.length, "the comment above shellGame marks where the game entries are");
+  for (const word of ["s.game", "_endGame", "GAMES"]) assert.ok(!rest.includes(word), `shell-modes names ${word} outside its game entries`);
   const code = dataPart.replace(/^\s*\/\/.*$/gm, "");
   for (const word of ["this", "document", "window", "querySelector"]) assert.ok(!new RegExp(`\\b${word}\\b`).test(code), `shell-modes names ${word}`);
   // the parts are in the manifest, data after ui-copy, the engine between card-actions and card-care
@@ -451,4 +456,89 @@ test("the swap is translate only, and the engine skips it under reduced motion",
   const moving = shell();
   moving.card._modeSwap(moving.s);
   assert.ok(Object.values(moving.s.buttons).every((b) => b.classes.has("swap")));
+});
+
+// ---- slice 2 acceptance 6: the three server games' entries ----
+
+test("slice 2: the three games' entries: slots 1, 4 and 8 only, the study's captions, exits, Tab order", () => {
+  const want = {
+    left_right: ["left", "right"], higher_lower: ["lo", "hi"], dig: ["keep", "dig"],
+  };
+  for (const [id, [one, four]] of Object.entries(want)) {
+    const m = M.SHELL_MODES[id];
+    assert.deepStrictEqual([...m.slots].map((x) => (x ? x.cap : null)), [one, null, null, four, null, null, null, "quit"], id);
+    assert.strictEqual(new Set(m.slots.filter(Boolean).map((x) => x.cap)).size, 3, `${id} captions are unique`);
+    assert.strictEqual(m.tint, "game");
+    assert.strictEqual(m.announce, "game buttons on");
+    assert.strictEqual(m.exit.slot, 8);
+    assert.strictEqual(m.exit.escape, true);
+    assert.strictEqual(m.exit.status, "end");
+    assert.deepStrictEqual([...m.exit.on], ["asleep", "away", "egg"]);
+    assert.strictEqual(m.exit.idleMs, 3 * 60 * 1000);
+    // the Tab order: live and blocked slots are focusable, off slots are native disabled
+    const { card, s } = shell();
+    s.game = { kind: id, busy: false, basket: 1 };
+    card._modeEnter(s, m);
+    const tab = [...card._modeButtons(s)].map((b, i) => (b.disabled ? null : i + 1)).filter(Boolean);
+    assert.deepStrictEqual(tab, [1, 4, 8], id);
+    assert.strictEqual(s.modeLive.textContent, `game buttons on: ${one}, ${four}, quit`);
+    // while a request is out, every slot but quit is blocked (aria-disabled, still focusable)
+    s.game.busy = true;
+    card._modeSync(s);
+    const [b1, b4, b8] = [0, 3, 7].map((i) => card._modeButtons(s)[i]);
+    assert.deepStrictEqual([b1, b4, b8].map((b) => b.getAttribute("aria-disabled")), ["true", "true", null], id);
+    assert.ok(!b1.disabled && !b4.disabled);
+  }
+});
+
+test("slice 2: the dig's keep is blocked on an empty basket, and the idle and outside exits end the game with no server call", () => {
+  const { card, s } = shell();
+  const ended = [];
+  card._endGame = (sl, line) => { ended.push(line); sl.game = null; card._modeExit(sl, "game"); };
+  card._quitGame = () => ended.push("quit call");
+  card._quitLine = () => "maybe later!";
+  const dig = M.SHELL_MODES.dig;
+  s.game = { kind: "dig", busy: false, basket: 0, lastAt: 1000 };
+  card._modeEnter(s, dig);
+  assert.strictEqual(card._modeButtons(s)[0].getAttribute("aria-disabled"), "true", "keep blocked on an empty basket");
+  assert.ok(!card._modeButtons(s)[0].disabled);
+  s.game.basket = 2;
+  card._modeSync(s);
+  assert.strictEqual(card._modeButtons(s)[0].getAttribute("aria-disabled"), null);
+  // idle: held while a request is out, then the dig's idle line; the other games say nothing
+  s.game.busy = true;
+  card._modeGuard(s, 1000 + 3 * 60 * 1000 + 1);
+  assert.ok(s.mode, "idleHold while busy");
+  s.game.busy = false;
+  card._modeGuard(s, 1000 + 3 * 60 * 1000 - 1);
+  assert.ok(s.mode, "not idle yet");
+  card._modeGuard(s, 1000 + 3 * 60 * 1000);
+  assert.deepStrictEqual([s.mode, ended], [null, [M.GAME_COPY.idle]]);
+  // a game that never answered (no lastAt) never idles, as before
+  const lr = shell();
+  lr.s.game = { kind: "left_right", busy: false };
+  lr.card._modeEnter(lr.s, M.SHELL_MODES.left_right);
+  lr.card._modeGuard(lr.s, 9e12);
+  assert.ok(lr.s.mode);
+  // another reason ends the game with null; "game" and "replace" never end it
+  lr.card._endGame = (sl, line) => { ended.push(line); };
+  lr.card._modeExit(lr.s, "reload");
+  assert.strictEqual(ended.at(-1), null);
+  const again = shell();
+  again.s.game = { kind: "left_right", busy: false };
+  again.card._endGame = () => ended.push("wrong");
+  again.card._modeEnter(again.s, M.SHELL_MODES.left_right);
+  again.card._modeEnter(again.s, M.SHELL_MODES.dig);
+  again.card._modeExit(again.s, "game");
+  assert.ok(!ended.includes("wrong"));
+  // the quit slot and Escape run the game's own quit path
+  const q = shell();
+  q.s.game = { kind: "dig", busy: true };
+  q.card._quitGame = (sl, line) => ended.push(["quit", line]);
+  q.card._quitLine = () => "maybe later!";
+  q.card._modeEnter(q.s, M.SHELL_MODES.dig);
+  q.card._modeClick(q.s, 7);
+  assert.deepStrictEqual(ended.at(-1), ["quit", "maybe later!"], "quit is live while busy");
+  q.card._modeEscape(q.s);
+  assert.deepStrictEqual(ended.at(-1), ["quit", "maybe later!"]);
 });

@@ -26,9 +26,48 @@ const SHELL_EXIT_STATUS = Object.freeze(["end", "keep"]);
 // its own key.
 const SHELL_TINTS = Object.freeze({ game: "#c4e2f2" });
 
-// The shipped modes, by id. None in slice 1: slices 2 and 3 add left_right, higher_lower, dig and hop.
-// A probe (the bench's, card-check's, the node test's) is an object passed to _modeEnter, not an entry.
-const SHELL_MODES = Object.freeze({});
+// The three server games (slice 2): two inputs on the outer slots 1 and 4 (owner decision D3), quit on 8,
+// the rest off. Every slot but quit is blocked while a request is out (`g.busy`); the dig's keep also
+// while the basket is empty. A game's slot functions read `s.game` (its own state); the engine does not.
+// The glyphs are the stopgaps of decision D5 (the pixel icons are slice 4). Escape and the quit slot run
+// the game's own quit path (the server's "end" call, then _endGame, which exits the mode); an exit from
+// outside the game (idle, asleep, away, egg, a reload) ends the game with no server call, as the
+// card-layout idle block did: the server has dropped it already. The dig's idle line is its bubble.
+function shellGame(id, left, right, idleLine) {
+  const open = (s) => !s.game?.busy;
+  const side = (o, to) => ({ ...o, act: (card, s) => card._guess(s, to), enabled: o.enabled || open });
+  return {
+    id,
+    slots: [
+      side(left, "left"), null, null, side(right, "right"), null, null, null,
+      { icon: "✕", cap: "quit", aria: "Stop the game", act: (card, s) => card._quitGame(s, card._quitLine(s)) },
+    ],
+    tint: "game",
+    announce: "game buttons on",
+    exit: {
+      slot: 8, escape: true, status: "end", on: ["asleep", "away", "egg"],
+      idleMs: GAME_IDLE_MS, idleAt: (s) => s.game?.lastAt, idleHold: (s) => !!s.game?.busy,
+    },
+    onExit: (card, s, reason) => {
+      if (reason === "game" || reason === "replace" || !s.game) return;
+      card._endGame(s, reason === "idle" ? idleLine : null);
+    },
+  };
+}
+
+// The shipped modes, by id. Slice 3 adds hop. A probe (the bench's, card-check's, the node test's) is an
+// object passed to _modeEnter, not an entry.
+const SHELL_MODES = Object.freeze({
+  left_right: shellFreeze(shellGame("left_right",
+    { icon: "prev", cap: "left", aria: "Guess left" },
+    { icon: "next", cap: "right", aria: "Guess right" }, null)),
+  higher_lower: shellFreeze(shellGame("higher_lower",
+    { icon: "▼", cap: "lo", aria: "Guess lower" },
+    { icon: "▲", cap: "hi", aria: "Guess higher" }, null)),
+  dig: shellFreeze(shellGame("dig",
+    { icon: "✓", cap: "keep", aria: "Keep the basket", enabled: (s) => !s.game?.busy && !!s.game?.basket },
+    { icon: "✱", cap: "dig", aria: "Dig a leaf" }, GAME_COPY.idle)),
+});
 
 // A cap's icon: a frontend/ui pixel icon ("icon_..."), one of the shelf's outline icons (ICON_PATHS:
 // "prev", "next"), or a short glyph ("✦"). Empty for an off slot.

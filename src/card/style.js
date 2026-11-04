@@ -427,16 +427,12 @@ const STYLE = `
     background: #fffdf5; color: #3a2a1a; box-shadow: 2px 2px 0 #3a2a1a; cursor: pointer; padding: 0;
     font: inherit; } /* the card's own font, not the browser's button font (F3) */
   .game button[aria-disabled="true"] { opacity: .5; cursor: default; }
-  /* F4: while the pet shows where it went, the guess buttons fade out of its way. */
-  .game.showgo .gl, .game.showgo .gr { opacity: .15; }
   .game button:focus-visible { outline: 3px solid #fffdf5; outline-offset: 2px;
     box-shadow: 0 0 0 6px #1d2a22; }
-  .game .gl { left: 4%; bottom: 8%; }
-  .game .gr { right: 4%; bottom: 8%; }
   .game .gx { right: 4%; top: 6%; min-width: 44px; min-height: 44px; font: inherit; font-size: 14px; }
   .game .gpick { position: absolute; inset: 22% 0 0; display: flex; flex-direction: column; gap: 8px;
     align-items: center; justify-content: center; }
-  .game .gpick[hidden], .game .gnum[hidden], .game .gl[hidden], .game .gr[hidden] { display: none; }
+  .game .gpick[hidden], .game .gnum[hidden] { display: none; }
   /* The picker: chunky toy buttons like the device's own (cream, inked, pressing down). */
   .game .gpick button { position: static; display: flex; align-items: center; gap: 8px;
     border-radius: 14px; padding: 4px 14px 4px 10px; font: inherit; font-size: 14px; min-height: 44px;
@@ -698,15 +694,12 @@ const STYLE = `
   .game .gprop { position: absolute; bottom: 10%; width: 16%; image-rendering: pixelated;
     pointer-events: none; will-change: left, transform; }
   .game .gprop[hidden] { display: none; }
-  .game .hl { font: inherit; font-size: 14px; }
   .game .gscore { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%);
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
   .game .gscore.two { white-space: pre; text-align: center; line-height: 1.25; } /* the dig: round, then bank and basket */
-  /* The dig at 300 px: the two-line score between keep and dig, clear of both. */
+  /* The dig at 300 px: the two-line score, clear of the pet and the bubble. */
   .compact .game .gscore.two { font-size: 10px; padding: 1px 3px; bottom: 3%; letter-spacing: -.3px; }
-  .compact .game.dig .gl { left: 1.5%; }
-  .compact .game.dig .gr { right: 1.5%; }
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
   .screen.show-status .flash, .screen.show-status .speck, .screen.show-status .lcd, .screen.show-status .glow,
   .screen.show-status .bondhearts, .screen.show-status .linkhearts, .screen.show-status .carehearts,
@@ -1688,7 +1681,6 @@ const STYLE = `
   /* Big text reaches the game (UX fix 6, F10): the score, the guess labels and the picker. */
   ha-card.bigtext .game .gscore { font-size: 14px; }
   ha-card.bigtext.compact .game .gscore.two { font-size: 12px; }
-  ha-card.bigtext .game .hl { font-size: 16px; }
   ha-card.bigtext .game .gpick.wrap button { font-size: 14px; }
   ha-card.bigtext .game .gpick.wrap.tight button { font-size: 13px; }
   ha-card.bigtext .game .gpick.wrap.snug button { font-size: 12px; }
@@ -1730,7 +1722,7 @@ const STYLE = `
   /* A swapped caption stays one line of the cap font: a wrap, or a glyph from a fallback font ("✦2") with a
      taller line, would make the row taller and move the shell (_mould reads the .toy rects). A caption
      too long for its column shows as a clip on the bench (--mode probe). */
-  .toy.tinted > :last-child { white-space: nowrap; height: 1lh; }
+  .toy.tinted > :nth-child(2) { white-space: nowrap; height: 1lh; }
   .compact .toy { font-size: 12px; }
   .compact .egg .body { padding: 28px 14px 32px; }
   .warn { padding: 16px; color: var(--error-color, #c00); background: var(--card-background-color); }
