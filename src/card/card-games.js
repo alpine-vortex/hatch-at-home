@@ -99,10 +99,13 @@ class HatchPetCardGames extends HatchPetCardCare {
   // True when the games sit clear of the prompt and the close button (F6).
   _fitPicker(s) {
     const pick = s.gameBox.querySelector(".gpick");
-    const gx = s.gameBox.querySelector(".gx");
-    if (!pick || !gx || pick.hidden) return true;
+    if (!pick || pick.hidden) return true;
     const box = s.gameBox.getBoundingClientRect();
     if (!box.height) return true;
+    // The corner where the close button was (shell modes slice 3 removed it; Escape closes the picker). The
+    // picker keeps its layout (owner decision D2), so the corner is still kept clear: 44 px, at 4% and 6%.
+    const [cx, cy] = [box.right - box.width * 0.04, box.top + box.height * 0.06];
+    const gx = { getBoundingClientRect: () => ({ left: cx - 44, right: cx, top: cy, bottom: cy + 44, width: 44, height: 44 }) };
     pick.classList.remove("wrap", "tight", "snug");
     // The Hop row (flag on) sits at the foot, outside .gpick: it is measured too, so no game
     // button covers it, and the picker's room is the box less its strip.
@@ -225,7 +228,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     const box = s.gameBox;
     box.hidden = false;
     box.classList.toggle("dig", view === "dig");
-    box.classList.toggle("hop", view === "hop"); // the board's keys are the overlay's own (card-board.js)
+    box.classList.toggle("hop", view === "hop");
     box.querySelector(".gpick").hidden = view !== "pick";
     const row = box.querySelector(".ghop");
     if (row) row.hidden = view !== "pick";

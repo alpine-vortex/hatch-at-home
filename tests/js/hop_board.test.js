@@ -18,7 +18,7 @@ const { boards } = JSON.parse(read("tests/fixtures/hop_cases.json"));
 // The class on its own, over an empty base: its methods that touch no DOM.
 const ctx = {};
 vm.runInNewContext(`${engine}\nclass HatchPetCardGames {}\n${part}\nthis.Board = HatchPetCardBoard; this.COPY = HOP_COPY;\n` +
-  "this.KEYS = HOP_KEYS; this.DIRS = HOP_DIRS; this.H = HATCH_HOP;", ctx);
+  "this.CELL = hopCell; this.DIRS = HOP_DIRS; this.H = HATCH_HOP;", ctx);
 const card = new ctx.Board();
 const H = ctx.H;
 const plain = (x) => JSON.parse(JSON.stringify(x)); // across the vm's realm
@@ -61,8 +61,31 @@ test("the copy is the plan's drafts, and the keys carry their aria labels", () =
     { left: "Step left", up: "Step up", down: "Step down", right: "Step right" });
   assert.strictEqual(ctx.COPY.special(2), "Special move, 2 left");
   assert.strictEqual(ctx.COPY.restart, "Start the board again");
-  assert.deepStrictEqual(plain(ctx.KEYS.map((k) => k[2])), ["Step left", "Step up", "Step down", "Step right",
-    "Special move, 0 left", "Take back the last move", "Start the board again"]);
+  assert.strictEqual(ctx.COPY.undo, "Take back the last move");
+});
+
+// Shell modes slice 3, acceptance 1: the board takes the whole overlay (the keys are the shell's eight).
+test("the cell: at least 31 / 36 / 44 px for the 300 / 330 / 420 overlays, 43 one pixel narrower, never under 12", () => {
+  const cell = (W, H, w = 6, h = 4) => ctx.CELL(W, H, w, h);
+  assert.ok(cell(198, 148) >= 31);
+  assert.ok(cell(228, 171) >= 36);
+  assert.strictEqual(cell(272, 204), 44);
+  assert.strictEqual(cell(271, 204), 43);
+  assert.strictEqual(cell(10, 10), 12);
+  assert.strictEqual(cell(0, 0), 12);
+  // a smaller board (the six families, none bigger than 6 x 4) gets a cell no smaller than the 6 x 4 one
+  for (const [W, H] of [[198, 148], [228, 171], [272, 204], [150, 120]]) {
+    for (const b of Object.values(boards)) {
+      assert.ok(b.w <= 6 && b.h <= 4, "the server allows at most 6 x 4");
+      assert.ok(cell(W, H, b.w, b.h) >= cell(W, H), `${b.family} at ${W}x${H}`);
+    }
+  }
+});
+
+test("slice 3 acceptance 7: .gx, .hk and .hkeys (and --hk --hr --hb) are gone from the card", () => {
+  for (const gone of [/\.gx\b/, /\bclass="gx"/, /\.hkeys\b/, /\bclass="hk"/, /\.hk\b/, /--hk\b/, /--hr\b/, /--hb\b/, /HOP_KEYS/]) {
+    assert.doesNotMatch(src, gone, String(gone));
+  }
 });
 
 test("the directions are the engine's STEPS: left, up, down, right", () => {
