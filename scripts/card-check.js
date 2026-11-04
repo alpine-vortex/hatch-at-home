@@ -11505,7 +11505,9 @@ async function main() {
     const hit = (a, b) => a && b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
     const marks = () => [...s.mark.classList].filter((c) => c.startsWith("dir-mark-")).join();
     // show what the screen can show, at its own size: a long line, the wish, the pat box, the basket, the request
-    const kept = [s.attention, s.bubble, s.pat, s.basket, s.request].map((e) => [e, e.hidden, e.style.cssText, e.className, e.textContent]);
+    const kept = [s.attention, s.bubble, s.pat, s.basket, s.request].map((e) => [e, e.hidden, e.style.cssText, e.className, e.children.length ? null : e.textContent]);
+    // (text is put back only on a node with no children: textContent = "" on the basket would wipe its <img>,
+    // and the put-back _channel -> _basketSync then threw on the missing firstElementChild: the shard 3 flake.)
     s.attention.style.display = "block"; if (!s.attention.getAttribute("src")) s.attention.alt = "wants attention";
     s.bubble.textContent = "a long line the pet is saying, long enough to fill the bubble to its widest, so it reaches as far as it ever does";
     s.pat.hidden = false; s.pat.style.display = "block";
@@ -11541,7 +11543,7 @@ async function main() {
         out.dirEffect = s.dirEffect || 0; out.glass = cls();
       }
     }
-    for (const [e, h, css, cn, text] of kept) { e.hidden = h; e.style.cssText = css; e.className = cn; e.textContent = text; }
+    for (const [e, h, css, cn, text] of kept) { e.hidden = h; e.style.cssText = css; e.className = cn; if (text !== null) e.textContent = text; }
     // the real gate, no forcing: nothing on the first view, one mark when due
     el._markEnd(s, true);
     const t1 = Date.now();
@@ -12567,6 +12569,9 @@ async function main() {
     return out;
   }, calmRun);
   await page.emulateMedia({ reducedMotion: null }); // m1calm left it on
+  // The idle stays quiet for both runs: its own wander left turns the pet (rotate "y 180deg", a legit
+  // facing) in the window the turn check reads `rotate` in (the shard flake). The check still asserts it.
+  await quietIdle(card);
   const m2 = await motion2(false);
   check("motion 2: a stage that changes live turns (turn), and leaves no class and no rotate behind",
     m2.egg || (m2.turning && /turn-swap/.test(m2.turnAnim) && !/turn/.test(m2.turnLeft[0]) && (m2.turnLeft[1] === "none" || m2.turnLeft[1] === "0deg")), JSON.stringify(m2));
@@ -12580,6 +12585,7 @@ async function main() {
   check("motion 2: under reduced motion none of turn, wipe-up, flip, lands appears, and the numbers and sheet still change",
     !m2calm.seen.length && m2calm.closedAtOnce && !m2calm.wiping && m2calm.num[0] === "3" && m2calm.num[1] === "3" && m2calm.basketN === 1, JSON.stringify(m2calm));
   await page.emulateMedia({ reducedMotion: null });
+  await quietIdle(card, false);
   await patReset();
   await unpinAwake(card);
   }
@@ -14342,8 +14348,11 @@ async function main() {
       };
     });
     const now = () => new Date().toISOString();
+    // injectUntil, not a bare inject: the check goes on once the card's own hass shows the state, so a
+    // slow runner can't tap clean before the card knows there is a mess (then no scene starts and both
+    // taps go out as calls: the shard 4 flake).
     const put = async (p, key, patch) => {
-      if (p[key]) await inject(p[key], patch);
+      if (p[key]) await injectUntil(p[key], patch);
     };
     // A pet awake and calm that needs this care (or doesn't).
     const sceneState = async (p, kind, due = true) => {
