@@ -2,6 +2,9 @@
 
 **Date:** 2026-11-04
 **Status:** Plan only. No code in this document's commit. Four slices, none started.
+**Revised 2026-11-04** after the adversarial review (worker s2883, findings A1-A9, B1-B7,
+C1-C3): section 12 maps each finding to where it is fixed. The tuning in 3.2 and 3.2a is now
+measured (`dev/sitter_sim.py`), not drafted.
 **Basis:** `b5cf3b28`. Every "built" claim carries a file and line from that tree; recheck when a
 slice starts (the card parts move often).
 **Source:** the s2881 scout report (design, slices, art, Q1-Q6), re-checked against the code here
@@ -80,7 +83,8 @@ Cite them as "owner decision D1-D6" (Q1-Q6 of the scout; the slices are S1-S4, s
   sitter's". Also: the game ends (`:681`), the care buttons and lights are disabled (`:700`,
   `:720`), the request chip is hidden (`:709`), `_say` returns "" (`:737-738`).
 - Other card gates: `card-actions.js:123` (`_sceneStart` returns on away), `card-board.js:71`
-  (a Hop refusal), `card-looks.js:7` (the first look), `card-games.js:22` (the ball prop).
+  (a Hop refusal), `card-looks.js:7` (the first look), `card-games.js:22` (the ball prop). This
+  list is not complete; S2's file list has the grep and the rest (B1).
 - **The card reads the masked sensors.** It takes `mood`, `binary_sensor.asleep` and
   `binary_sensor.calling` from `hass.states` (`card-layout.js:534-537`). With privacy on, those
   say asleep for an empty house, so the card has **no way to see the sitter or the real mood
@@ -133,49 +137,109 @@ All of it is in the model, a pure function of `(state, now, settings)` with **no
 (the sitter does not call `apply_action`, so it never uses the feed jitter), so a test pins it.
 
 **When.** Four set times a day, as offsets from the pet's wake time (`settings.wake_time`, local
-zone, DST-safe like `next_wake`, `model.py:1248`):
+zone):
 
 | round | offset | default clock (wake 07:00) |
 |---|---|---|
 | breakfast | wake + 1 h | 08:00 |
 | lunch | wake + 5 h | 12:00 |
 | tea | wake + 9 h | 16:00 |
-| supper | wake + 13 h | 20:00 |
+| supper | wake + 13 h, **never later than bedtime - 1 h** | 20:00 |
 
-`rates.py`: `SITTER_ROUNDS_HOURS = (1, 5, 9, 13)`. The "house day" starts at the latest wake time
-at or before now, so after midnight it is still last evening's day. A round is **due** when its
-slot time has passed, it is later than `state.sitter_served`, and Pip is awake. Several missed
-slots (a long nap, a restart) make one round, stamped with the latest slot, never a burst.
-A pet asleep at its slot is served on waking.
+`rates.py`: `SITTER_ROUNDS_HOURS = (1, 5, 9, 13)`, `SITTER_SUPPER_BEFORE_BED_HOURS = 1`. The
+bedtime clamp is there because `Settings.bedtime` is configurable: with the clock at 19:00 the
+20:00 slot falls on a sleeping pet and Pip woke hungry (hunger 22, 218 "hungry" steps in 30
+days; with the clamp, hunger never under 50, section 3.2a).
 
-**On arrival.** The round also runs once at the moment the sitter arrives (`away` flips to true),
-whatever the clock says, and stamps the latest slot. So a pet that left hungry is fed at arrival,
-and the stale-slot case (arriving at 23:00, the 20:00 slot unserved) cannot feed a sleeper at
-dawn.
+**Slot arithmetic is wall clock** (A7, DST): a slot is
+`datetime.combine(day, wake_time, tz) + timedelta(hours=h)`, then `.timestamp()`, so "wake + 9 h"
+is 16:00 on the clock on the day the clocks change too (zoneinfo adds to the wall clock). The
+last slot is `min(that, combine(day, bedtime, tz) - 1 h)`, with `day + 1` for a bedtime at or
+before the wake time (00:30). The DST rows stay in the test table (3.8).
+
+**Due.** `sitter_due(state, now, settings)` takes the **latest slot at or before `now`**, looking
+at today's and yesterday's slots (there is no "house day" window), and it is due when that slot
+is later than `min(state.sitter_served, now)` and Pip is awake. Several missed slots (a long
+nap, a restart) make one round, stamped with the latest slot, never a burst. A pet asleep at its
+slot (a nap, or a supper slept through) is served the moment it wakes: the missed slot is still
+the latest one, so the round runs at wake with that slot's threshold.
+
+**On arrival.** If Pip is **awake** (and not an egg or resting), the round also runs once at the
+moment the sitter arrives (`away` flips to true), whatever the clock says, and stamps the latest
+slot at or before now (always one: yesterday's supper at worst). So a pet that left hungry is
+fed at arrival. If Pip is **asleep** on arrival there is no arrival round and no stamp
+(`_do_action` refuses a sleeper, and the sitter does not feed one); the due rule serves the
+missed slot when it wakes. A save loaded with `away: true` counts as an arrival (3.10).
 
 **What, in this order,** each only if needed (so a pet that is fine is never over-fed):
 
 1. **Medicine** if `sick`: `health += MEDICINE_HEALTH`, `happiness += MEDICINE_HAPPINESS`, clears
    `sick` and `recent_misses`, event `recovered` (the same effect as `_do_action`, `model.py:2287-2296`).
 2. **Clean** if `poops` is not empty (`poops = []`).
-3. **Feed** if `hunger < SITTER_FEED_BELOW` (60; the supper round uses `SITTER_SUPPER_BELOW`,
+3. **Feed** if `hunger < SITTER_FEED_BELOW` (**65**; the supper round uses `SITTER_SUPPER_BELOW`,
    80, so Pip is not hungry at wake): `hunger += FEED_HUNGER` (35), `weight += WEIGHT_FEED`, and
    one `digesting` entry at exactly `now + DIGEST_MINUTES` (120 min, no jitter).
-4. **Play** if `happiness < SITTER_PLAY_BELOW` (55) and `energy >= PLAY_MIN_ENERGY +
-   SITTER_PLAY_ENERGY_MARGIN` (15 + 20 = 35): `PLAY_HAPPINESS` (+20), `PLAY_ENERGY` (-10),
-   `PLAY_HUNGER` (-5), `WEIGHT_PLAY` (-3). It does not set `last_excite` (nobody is there to
-   see it) and does not touch discipline.
+4. **Play**, a gentle one with **its own constants**, not `PLAY_*` (A1), if `happiness <
+   SITTER_PLAY_BELOW` (**65**) and `energy >= PLAY_MIN_ENERGY` (15, the same gate a person's
+   play has): `happiness += PLAY_HAPPINESS` (+20), `energy += SITTER_PLAY_ENERGY` (**-5**),
+   `hunger += SITTER_PLAY_HUNGER` (**-2.5**), `weight += SITTER_PLAY_WEIGHT` (**-1.5**). It does not
+   set `last_excite` (nobody is there to see it) and does not touch discipline.
 
-The numbers are draft tuning, in `rates.py`, and the simulation (3.8) is what pins them. They are
-chosen so that the worst case never reaches a "hungry" or "bored" flag (both below 35,
-`rates.py:179, :181`): between rounds hunger falls at most 20 in four awake hours; across the
-night from the supper round at 80 it falls about 36 (3 h awake, 8 h asleep at 40% speed, 1 h
-awake), so Pip wakes at about 44 or more and is still at about 39 an hour later, just before
-breakfast. Happiness falls at most 16 between rounds.
+`rates.py`: `SITTER_FEED_BELOW = 65`, `SITTER_SUPPER_BELOW = 80`, `SITTER_PLAY_BELOW = 65`,
+`SITTER_PLAY_ENERGY = -5.0`, `SITTER_PLAY_HUNGER = -2.5`, `SITTER_PLAY_WEIGHT = -1.5`. There is no
+energy margin on top of `PLAY_MIN_ENERGY` (the draft's `SITTER_PLAY_ENERGY_MARGIN` is gone).
+
+**The numbers are measured** (3.2a), and one claim of the first draft is retired: "happiness falls
+at most 16 between rounds" was wrong, because a play that is gated on energy is skipped exactly
+when it is needed, and each full-cost play took 10 more energy. What the constants guarantee is
+the table in 3.2a, which the bot (3.8) and `dev/sitter_sim.py` both check.
 
 **Energy is not topped up.** It is the only need the sitter cannot restore, and sleep does. An
 awake pet still reaches the `COLLAPSE_ENERGY` rule or the "dozes off past bedtime" rule
-(`_sleep`, `model.py:1259`) as it does at home; no call is made for it (3.4).
+(`_sleep`, `model.py:1259`) as it does at home; no call is made for it (3.4). In the sim Pip is
+under the "sleepy" line (30) for about a fifth of the day, in the evening: a normal mood, not a
+harm. After a short night (the spring DST night is an hour short) it can collapse at about 18:30,
+before supper; the supper is then served the moment it wakes (the due rule above).
+
+### 3.2a The tuning record (A1)
+
+`dev/sitter_sim.py` (new, a dev tool, not shipped) runs this section's round on the **real**
+`model.advance` (an adult bird, `away` off so it steps; the sitter applied after each 5-minute
+step; poop tidied at once; the open call dropped each step, as 3.4 does; default 07:00 wake and
+23:00 bed, UTC, the pet left at 80 hunger, 80 happiness, 90 energy). Reproduce:
+`python dev/sitter_sim.py --days 30`; flags set the zone, bedtime, wake time, start date and
+each constant.
+
+| run | hunger min (at wake) | happiness min | weight range (end) | "bored" steps | sick |
+|---|---|---|---|---|---|
+| **the first draft** (play at happiness < 55 and energy >= 35, full `PLAY_*` costs, feed < 60), 14 days | 36.4 (56.0) | **0.0** by day 4 | 43.2-52.5 (51.6) | **3590 of 4032** | 0 |
+| **the tuned round**, 14 days | 44.4 (56.0) | 45.3 | 46.8-56.8 (56.0) | 0 | 0 |
+| **the tuned round**, 30 days | 44.4 (56.0) | 45.3 | 46.8-56.9 (56.0, healthy) | 0 | 0 |
+
+Over the 30-day run: 120 rounds, 90 feeds, 93 plays, health 100 throughout, no care miss,
+no "hungry" step. A matrix of 15 further 30-day runs (kept in the ship's report) held
+**hunger >= 41.9, happiness >= 44.7, weight 46.2-60.3** in every one: Los Angeles from 5 March
+(the spring DST night) and 30 October (the autumn one), London, Sydney, cat, bedtime 22:00,
+21:00, 20:30 and 19:00, wake 05:00 / 21:00, 09:30 / 23:30, 06:00 / 00:30, and starts at two
+other hours. Without the bedtime clamp, the same 19:00 bedtime run goes to hunger 22.4.
+
+What each constant fixes, found by running it:
+
+- **Happiness**: the draft's trigger (55) and its energy gate (35) skipped the play at 16:00 and
+  20:00 when energy had fallen, so happiness drained to 0. Gate at `PLAY_MIN_ENERGY`, trigger 65.
+- **Weight and energy**: with the gate at 15 but the draft's trigger (55), full-cost plays and
+  feed < 60, 14 days: happiness 23.7, hunger 27.7, 479 "bored" steps and weight down to 27.8 (end
+  32.7). With trigger 65 and full costs the flags clear but weight still falls to 25.7 (end
+  30.9) and with half the energy cost and the full weight cost it reaches 20.6 (end 24.8,
+  `light`, < 25, `weight_band`, `model.py:1409`, which gives Pip the "could use a proper meal"
+  reason while the sitter feeds it). So the weight cost is halved (-1.5), the energy cost is
+  halved (-5) and the hunger cost is -2.5. The draft's weight sentence left out `WEIGHT_PLAY`
+  altogether.
+- **Hunger**: a feed threshold of 60 let a pet that skipped one round fall to about 34 just before
+  breakfast on one morning after a short DST night. At 65 the floor is 41.9.
+- **Limit** (R5): the slots assume an awake day of about 16 hours or less. A wake time of 02:00
+  with a bedtime of 23:00 (21 awake hours) goes to hunger 28.9 and 126 "bored" steps; no such
+  setting is expected, and the guide says nothing about it.
 
 ### 3.3 Poop: tidied as it happens
 
@@ -184,29 +248,48 @@ the next round: old poop costs health (`HEALTH_PER_OLD_POOP`, `rates.py:38`) and
 (`POOP_SICK_HAZARD`, `:137`). So while `away`, `_digest` (`model.py:1422`) **tidies a poop the
 moment it would appear**: it is not added to `poops`; a `sitter_clean` log entry is written (3.6)
 and a `sitter_round` event with `did: ["clean"]` is returned (3.6). The sitter is in the house all day, so
-this reads true. The meals and games stay at set times; only the cleaning is on demand. (Open
+this reads true. The tidy's log row counts against the sitter's row cap (3.6), so tidying
+about three times a day cannot push a person's rows out of the log (A4). The meals and games stay at set times; only the cleaning is on demand. (Open
 question Q-A, section 10, offers the alternative: clean only at rounds, with sitting poops.)
 
 ### 3.4 Calls, misses, sickness, aging
 
-- **Calls are not made while the sitter is here.** `_calls` takes the sleeping branch for an away
-  pet: no new call, no miss, no whine, no lonely call, the deadline of an open call slides
-  (`call.deadline += hours * 3600`, as `model.py:1523` does for sleep). So a household
-  away never gets a "Pip is hungry" push, and no `care_miss` can lead to `neglect` sickness.
-  A real call open on arrival is settled by the arrival round: if its need is met after the
-  round, it ends with `call_answered`; anything left (a whine the option keeps, 3.9) stays
-  paused until someone is home.
+- **Calls are not made while the sitter is here, and an open one is settled, not left on
+  screen** (A2). `_calls` gets an `away` branch **before** the sleeping branch (which returns
+  before `_call_condition` is ever checked, `model.py:1520`): no new call, no miss, no whine,
+  no lonely call; the deadline of an open call slides (`call.deadline += hours * 3600`, as the
+  sleeping branch does); and, on **every step, not only on arrival**, an open call whose
+  condition is now false ends with `call_answered` (the awake branch's test, `model.py:1534`;
+  the energy call as the sleeping branch settles it). A `happiness` call is answered by the
+  sitter's play: `sitter_round` ends with `_resolve_call(state, now, events, raised=True)`, as
+  `apply_action` does after a play. A real call open on arrival is therefore settled by the
+  arrival round and, if the round could not fix it (a sleeper, no energy to play), by the next
+  one. What stays open is a whine the option keeps (3.9) and a happiness call the sitter could
+  not play for: paused with a sliding deadline, `calling` on, deadline hidden (the keep list,
+  3.7), until someone is home.
+- **No push for an empty house** (A2). `_wake(... "morning")` (`model.py:1336-1357`) fires
+  `call_started {resumed: True}` for any call still open; while `away` it skips that event (the
+  deadline is still pushed out to `RESUME_MIN_MINUTES`). So a household away gets no "Pip is
+  hungry" push, at wake or otherwise, and no `care_miss` can lead to `neglect` sickness. A test
+  runs a night and a morning with a call open on arrival and asserts zero `call_started`
+  events of any kind.
 - **Sickness stays live** as a safety net (`_sickness` runs). The paths the sitter closes are
   `neglect` (no misses), `poop` (tidied), `low_health` (no starving, no old poop). `weight`
-  stays reachable only if Pip arrives already heavy, and the sitter's diet is the maintenance
-  diet (about 2.75 meals a day, about 13 weight against a burn of about 8 at weight 50, so it
-  settles near 56, far under `WEIGHT_HEAVY_ABOVE = 75`). If a sickness still happens, the next
-  round gives medicine, and `became_sick` pushes as it does at home (honest: something went
-  wrong).
+  stays reachable only if Pip arrives already heavy: the sitter's diet and gentle play settle
+  Pip's weight in the 47-57 range over 30 days in the sim (3.2a), far from `WEIGHT_HEAVY_ABOVE =
+  75` and `WEIGHT_LIGHT_BELOW = 25`. If a sickness still happens, the next round gives medicine,
+  and `became_sick` pushes as it does at home (honest: something went wrong).
 - **Aging and growth go on**, including stage changes, an egg hatching (the `hatched` event, the
   first look stays pending for whoever opens the card first) and the next birthday. This is the
   cost of "needs decay as normal": the old "frozen, no aging" guarantee goes (docs, section 8).
-  `_learn` and `_sample` also keep running; S1 checks neither assumes a person is home.
+- **`_give_treats`, `_learn`, `_sample`: decided** (A3). All three run during a visit.
+  `_step` calls `_give_treats` itself (`model.py:1190`) with no away test inside (the test was in
+  the `give_treats` wrapper, `:3759`), so once `away` reaches `_step` chore treats land during a
+  visit; the wrapper loses its `away` term to match. A treat is a household chore ticked off by a
+  person, `by: None` as ever, and Pip is awake and living. `_learn` counts awake hours and the
+  flags in `settings.home`, which says nobody is home (no `company` hours), so nothing in it
+  assumes a person. `_sample` counts a growing pet's discipline and wellbeing, which the sitter
+  keeps well. A test pins each.
 
 ### 3.5 What the sitter's care is not
 
@@ -217,13 +300,31 @@ window, earns no bond, no streak, no per-person count, no wish, no memory, no dr
 counters do not move for it either. A person's care, from the card or an automation or voice,
 does everything it does at home (3.7).
 
+**Wish credit must skip the sitter's rows** (A5). `_check_ins` (`coordinator.py:1492`) takes `by`
+from `care_log[0]` for a `game_finished` event (a game win logs nothing on success, only refusals
+do, `model.py:2402`). After a sitter row `care_log[0]["by"]` is `None`, so a person's game win
+during a visit would grant the wish to nobody (`_grant("play", None, ...)`) instead of them: D3
+("care counts as at home") makes this live where it was a rare quirk with `chore_treat` rows.
+S1 reads `by` from the **newest row that has a `by`**, skipping every `by: None` row (sitter and
+chore treat alike). A test: a sitter round, then a person's game win, grants the wish to that
+person.
+
 ### 3.6 The log and the report
 
 Four care-log actions, `by: None`, `result: "ok"`, written into `care_log` (`model.py:2352`) so
 the card's away note and the `last_care` sensor see them: `sitter_feed`, `sitter_play`,
-`sitter_clean`, `sitter_medicine`. A round that does nothing writes nothing. The log holds 20
-entries, so a quiet visit won't overflow it (about 4 entries a round at the very most, normally
-1 or 2).
+`sitter_clean`, `sitter_medicine`. A round that does nothing writes nothing.
+
+**The sitter cannot fill the log** (A4). The log holds `CARE_LOG_SIZE = 20` rows (`rates.py:240`)
+and a visit writes up to four rows a round plus a row per tidy (about 3 a day), i.e. up to ~9
+a day: the first draft's "a quiet visit won't overflow it" counted only the rounds, and after
+two days away the log would hold nothing but the sitter's rows, so the away note, `last_care.log`
+and `_awayNote` would lose every person's row. So a sitter row goes in through
+`_log_sitter(state, entry)`: it is inserted at the head like any row, and if the log then holds
+more than `SITTER_LOG_ROWS` (8, `rates.py`) rows whose action starts with `sitter_`, the
+**oldest sitter row** is removed (not the oldest row). At least 12 rows are always left for
+people. The away note therefore knows about the last day or so of the sitter's care, which is
+what it says. A test runs the 14-day bot after 12 people's rows and asserts all 12 survive.
 
 A round (and a tidy) returns one event, `{"type": "sitter_round", "did": ["feed", "play"],
 "at": ts}`, in the list `advance` already returns. **It must never reach the bus**: `_fire` fires
@@ -250,24 +351,57 @@ takes `sitter_round` out of the list first, keeps the last one for the channel's
 
 Each one is a one-line change plus a test; the table of gates is in the S1 acceptance.
 
+**The keep list** (A3). The same grep that finds the gates, `grep -n away
+custom_components/virtual_pet/*.py`, finds terms that **must stay**. A worker who removes "every
+away term" breaks them:
+
+- `sensor.py:135` (`call_deadline` hidden while away) and `binary_sensor.py:80` (the `deadline`
+  attribute hidden while away). Both comments say it would move on every tick. Under this design
+  an open call's deadline slides each step (3.4), so the attribute would change every 5 minutes
+  and the recorder would log a new state each time. They stay; their comments are updated
+  ("slides while the sitter is here").
+- The news and react **services** (`coordinator.py:3384, :3441`), as above.
+- Comments and docstrings that go stale and are only reworded: `sensor.py:332`, `model.py:918,
+  :976, :1013`, `rates.py:128`.
+
+S1 ends with that grep, and each hit is on one of three lists in the PR description: dropped
+(3.7), kept (this list), or reworded. The gates table test (R1) has a row per dropped gate.
+
 ### 3.8 Determinism and tests (pytest, no Home Assistant)
 
 The round is `model.sitter_round(state, now, settings) -> list[Event]` and
 `model.sitter_due(state, now, settings) -> float | None` (the slot time). Neither reads a clock
 or a random generator. Tests, in a new `tests/test_sitter.py`:
 
-- `sitter_due`: a table of (wake time, now, `sitter_served`) to slot; a DST day; after midnight;
-  asleep; several missed slots give one.
+- `sitter_due`: a table of (wake time, now, `sitter_served`) to slot; a DST day (LA 2026-03-08
+  and 2026-11-01, and a wake time before 03:00, where wall clock and elapsed time differ); after
+  midnight; asleep; several missed slots give one; a slept-through supper is due at wake; a
+  `sitter_served` in the future is clamped to now (3.10); arrival at 07:30 (before the 08:00
+  slot) stamps yesterday's supper; arrival while asleep runs and stamps nothing.
 - `sitter_round`: each need alone and together; thresholds on both sides; the supper
   threshold; a pet that is fine does nothing and writes no log; play refused for low energy;
   egg and resting do nothing; the same input twice gives the same output.
-- `advance` with `away` true over 7 days (a "sitter bot": no care at all): **zero** `care_miss`,
-  **zero** `call_started`, never `sick`, health 100, no old poop, weight band healthy, hunger
-  and happiness never under 35 at any slot or at wake, aging goes on, an egg hatches.
+- `advance` with `away` true over **14 days** (a "sitter bot": no care at all; R4 says a fortnight
+  away is expected and Q-C lets aging go on for any absence): **zero** `care_miss`, **zero**
+  `call_started` (including `resumed`), never `sick`, health 100, no old poop, **hunger >= 36**
+  and **happiness >= 35** at every step (the sim holds 44.4 and 45.3; no "hungry" or "bored"
+  flag), **weight between 40 and 65 and `weight_band` healthy at every step** (the sim holds
+  46.8-56.8), aging goes on, an egg hatches, and the log keeps the people's rows (3.6). Run for
+  each row of (bedtime, wake, zone): 23:00 / 07:00 UTC, 22:00, 21:00, 20:30, 19:00 (the
+  clamp), 00:30 / 06:00, 21:00 / 05:00, and LA across 2026-03-08 and 2026-11-01. The numbers
+  come from `dev/sitter_sim.py` (3.2a); the test re-derives them, it does not copy them.
   `scripts/balance_sim.py` has bots of this kind (`responder`, `neglect`, ...); add a `sitter`
   bot so the invariant also runs in the balance sim.
+- Calls: a hunger call open on arrival is fed and ends `call_answered` at the arrival round; a
+  call whose need a person meets during a visit ends on the next step; a night and a morning
+  with a call kept open (the whine option off) fires no `call_started`.
+- `sitter_round` never reaches the bus; a person's game win during a visit grants the wish to
+  that person, not nobody (3.5).
 - Upgrade: a save with `away: true`, a shifted `last_updated` and no `sitter_served` loads, and
-  the first `advance` after load does not replay anything (3.10).
+  the first `advance` after load does not replay anything (3.10); a save with `away: true` and an
+  open whine is settled at load (3.10).
+- `fast_forward` (3.10): after fast-forwarding a visiting pet by N hours, `sitter_served` is not
+  in the future.
 - Care by a person during `away` is logged with `by`, earns bond, and starts a game that runs;
   the sitter's entries have `by: None`; a sitter feed does not set `last_care_at`.
 
@@ -283,15 +417,26 @@ or a random generator. Tests, in a new `tests/test_sitter.py`:
 ### 3.10 Save impact
 
 - **One new field:** `PetState.sitter_served: float = 0.0` (the slot time last served, a wall-clock
-  timestamp, so it is not shifted by `shift_times`; `_FLOATS` in `model.py:83` with a range and a
-  future-stamp clamp like `last_rest_refill_at`, `:1121-1125`). A stamp in the future (a clock set
-  back, a damaged save) is clamped to now.
+  timestamp, so `shift_times` does not move it; `_FLOATS` in `model.py:83`, range 0 to a far
+  limit). **The future-stamp clamp is in `sitter_due`** (`served = min(sitter_served, now)`), not
+  on load: `last_rest_refill_at` is not in `_FLOATS` (it is Optional, `model.py:708-712`) and its
+  clamp is at use, in `set_resting`. Clamping at use covers a damaged save and also a clock set
+  back at runtime (the `now <= last_updated` branch of `advance`, `model.py:1034-1037`).
+- **`fast_forward`** (`model.py:1227`, the dev-only service) advances to now + N h, which stamps
+  `sitter_served` N hours ahead, then `shift_times(-seconds)` does not move it. So `fast_forward`
+  subtracts `seconds` from `sitter_served` itself, with the other times it rebases (A6).
+- **Saving.** The stamp is saved with the pet's 60 s debounce (`SAVE_DELAY`); a crash in that
+  window replays one round on restart: harmless, the thresholds make it a no-op for a fed pet.
+- `PetState.salvage` (`model.py:860`) starts a fresh egg: `sitter_served` 0.0 is right.
 - **No migration:** `from_dict` defaults it, `STORE_VERSION` stays 1.
 - **Existing `away: true` saves** load as "the sitter is here". Their `last_updated` was kept
   current by the freeze, so nothing is replayed; the first `advance` runs live. A
   `lights_before_away` left in an old save is applied once on load
   (`settle_legacy_lights`, a call to the `come_home` body) and cleared; the field itself stays
-  (always `None` from now), no save change.
+  (always `None` from now), no save change. The same function treats `away: true` at load as an
+  arrival (A8): it runs `sitter_arrives` once, so a fussy whine the pet left with is settled by
+  the option (3.9) or paused, and an open call is settled like any (3.4), instead of staying open
+  with no arrival ever having flipped it.
 - **Downgrade:** an older version keeps `sitter_served` as an unknown key and treats `away: true`
   as frozen and refusing care again. Harmless, and Pip simply loses the sitter for the time.
 - **No** change to the people store, the channel store, options or `config_flow` options (the
@@ -324,15 +469,25 @@ With **Keep presence private ON** (the default) and **OFF**, for a visit in prog
 | `binary_sensor.asleep` | on (as built, `binary_sensor.py:63-71`) | the real value |
 | numeric sensors (hunger, happiness, ...), `calling`, `poop` | the real values (as built; they now move, as Pip is living) | same |
 | `sensor.last_care` `log` | the sitter's rows shown as the plain actions `feed`, `play`, `clean`, `medicine`, `by: null` (not `sitter_*`) | the rows as logged, `sitter_*` |
+| `sensor.last_care` state (`care_log[0].at`, `sensor.py:353`) | moves at each round, either way (see below) | same |
 | debug sensor flags | masked (as built, `sensor.py:391`) | real |
 | events `virtual_pet_went_away` / `came_home` | fired as built (never gated by privacy, `coordinator.py:961`) | same |
 | any new bus event for the sitter's rounds | **none** (the rounds go to cards by the channel only) | none |
 | notifications | the same as at home; calls don't fire (3.4); `became_sick`, `hatched` and stage changes do | same |
 | Assist, "how is Pip" | "asleep" (as built, `intent.py:261`) | "with the sitter" (draft, 9) |
-| Assist, a care command | refused "asleep" (the intent checks `away and privacy` itself, 5.2) | works |
+| Assist, a care command | refused "asleep" (**new in S1**: the intent checks `away and privacy` itself, 5.2; today the refusal comes from `coordinator.py:3096`, which S1 deletes) | works |
 | `virtual_pet.news` / `react` services | refused `asleep` (as built, `:3384, :3441`) | refused `away` |
 | the card (every card, shared screens too) | **the sitter, the real mood, care and play on** | same |
 | the private channel | the `house.sitter` view (5.3), sent to every watcher, shared screens too | same |
+
+**What the privacy-ON row set means** (A9). With privacy ON the mood sensor says `asleep` and
+`binary_sensor.asleep` is on while the numeric sensors move and `last_care` jumps at set times:
+an observer of the recorder can see a pet that is "asleep" being fed at 08:00, 12:00, 16:00 and
+20:00. That is decided (D1, Q-B) and inside the AGENTS.md privacy bar (nothing leaves the
+household; the free-text rule is untouched), so there is nothing to change; the guide says it
+once. One consequence worth a line there: `sensor.last_care`'s state is the newest row's time, so
+the sitter's rows reset an automation's "nobody has fed Pip for N hours" timer. An automation
+that wants people only reads `last_care.log` and `by`.
 
 ### 5.2 The care front doors
 
@@ -340,9 +495,11 @@ With **Keep presence private ON** (the default) and **OFF**, for a visit in prog
 (`coordinator.py:3096, :3186, :3248` become dead code; S1 removes them). The card, a button
 entity, an automation and a service call all reach the same `async_action`, so **they all work
 during a visit, privacy on or off**: the server cannot tell the card from an automation, and S1
-does not try. The one door that is not the card is Assist: `intent.py:327` refuses
-`asleep` when `away and privacy`, so a voice command cannot be used to find out the house is
-empty, and the answer sounds the same as for a sleeping pet. (If the owner wants buttons and
+does not try. The one door that is not the card is Assist: S1 adds the check to
+`intent.py` (the care-command path, `intent.py:327`; **today the intent has no such check**, the
+refusal comes from `coordinator.py:3096`, which S1 deletes). It refuses `asleep` when `away and
+privacy`, so a voice command cannot be used to find out the house is empty, and the answer sounds
+the same as for a sleeping pet. (If the owner wants buttons and
 services held back too, that is Q-B, section 10.)
 
 ### 5.3 The new channel field
@@ -350,13 +507,18 @@ services held back too, that is Q-B, section 10.)
 `_house_view` gains `sitter`: `None` when nobody is away, otherwise
 
 ```
-{"mood": "hungry", "key": "hungry", "flags": ["away", ...], "asleep": false,
- "lights_out": false, "last": {"at": 1730700000.0, "did": ["feed"]}}
+{"mood": "hungry", "key": "hungry", "reason": "...", "reason_key": "hungry",
+ "flags": ["away", ...], "asleep": false, "lights_out": false,
+ "last": {"at": 1730700000.0, "did": ["feed"]}}
 ```
 
-`mood`, `key` and `flags` come from `model.mood_keyed` **without the privacy mask and with the
-away flag but not the away mood** (a new `model.real_mood` that skips `"away"` in `MOODS`); the
-card draws that mood, so the sitter's Pip is happy, hungry or sleepy like any Pip. `last` is the
+`mood`, `key`, `reason`, `reason_key` and `flags` come from `model.mood_keyed` **without the
+privacy mask and with the away flag but not the away mood** (a new `model.real_mood` that skips
+`"away"` in `MOODS`); the card draws that mood, so the sitter's Pip is happy, hungry or sleepy
+like any Pip. `reason` and `reason_key` are in the view because the card reads them from the mood
+sensor's attributes (the speech bubble in `card-tick`, the status page in `card-status`), and
+with privacy ON the sensor says `reason: "zzz"`, `reason_key: "asleep"` (`coordinator.py:464-469`)
+(B2). `requests` is already unmasked on the sensor, and `call_deadline` stays hidden (3.7). `last` is the
 last round, for the card's cue. The view carries no name, no `by`, no free text. It goes to every
 watcher of the pet, because every card shows the sitter (D1); the watchers are authenticated
 Home Assistant sessions already. `_shared_house` adds to it as before.
@@ -375,16 +537,35 @@ what the option promises not to do. So the rounds live in the log (with the priv
 
 ### 6.1 What it reads
 
-`_update` (`card-layout.js:530+`) takes the sitter from the channel's `house.sitter`, not from
-`sensor.mood`. When `sitter` is set: `away = false` for the old purposes (so the pet is drawn,
-the buttons enabled, the game kept, `_say` speaks), `s.sitter = view`, and `mood` / `asleep` /
-`flags` come from the view, not the sensors. When the channel has not yet answered (the first
-render), the card draws as at home from the sensors and corrects at the first snapshot (no
-flash of the sign).
+**One override, in the accessor** (B2). The card reads `sensor.mood` and `binary_sensor.asleep`
+through `this._state(s, key)` in at least nine places (`card-actions.js:120`, `card-care.js:622`,
+`card-layout.js:529`, `card-looks.js:7, :477`, `card-moment.js:417, :499`, `card-status.js:100`,
+`card-tick.js:58`). A swap only in `_update` would leave the rest reading the masked sensors:
+with privacy ON the medicine scene's "sick" flag (`card-moment.js:417`), `_sceneKey`'s weather
+flags (`card-care.js:622`) and the status page would be wrong during a visit, which contradicts D1
+("every card shows the sitter and allows care, privacy on or off"). So S2 changes **`_state`**
+(`card-build.js:925`, which already has a `held` override for scenes): when `s.house.sitter` is
+set it answers `sensor.mood` (state, `flags`, `reason`, `reason_key`) and `binary_sensor.asleep`
+from the view, and every read site follows without being touched. `_update` then uses
+`s.sitter = view`, `away = false` for the old purposes (the pet is drawn, the buttons enabled,
+the game kept, `_say` speaks), and `mood` / `asleep` / `flags` from the view.
 
-If the card has no channel (it is not subscribed), it falls back to the sensors as built: with
-privacy off it sees `mood.state === "away"`, with privacy on it sees a napping Pip. S2 tests the
-fallback; it is the only case where privacy on hides the sitter from a card.
+**The channel handler redraws** (B3). `_channel` (`card-base.js:317-340`) handles `house` by
+calling `_powerNews`, `_basketSync` and `_dirSync` and does **not** call `_update`. The sensors
+and the channel push at the same coordinator update but reach the browser as two messages; if the
+sensors come first the card would draw once without `sitter` and nothing would redraw it. So S2
+adds: when `house.sitter` changes (compared as JSON, old against new), the channel handler calls
+`_update`. A missing `sitter` key means an older server and is read as `None`, as the code treats
+`visit` ("Always present (None...)"). When the channel has not yet answered (the first render),
+the card draws as at home from the sensors and corrects at the first snapshot, which now does
+redraw (no flash of the sign).
+
+**The fallback draws no sign** (B4). If the card has no channel (it is not subscribed) it reads
+the sensors as built. After S2, with privacy off `mood.state === "away"` is read as "the sitter is
+here, the real mood is not available": the card draws the **sitter beside Pip in the generic
+`content` mood, no sign** (D5 retires it; S4 deletes `props.away`), the buttons on. With privacy
+on it sees a napping Pip and no sitter: the only case where privacy on hides the sitter from a
+card. S2 draws and tests both.
 
 ### 6.2 What it draws
 
@@ -422,7 +603,11 @@ with an `animation` goes on `tests/js/motion_rule.test.js`'s list.
 `sitter_medicine`. With the privacy mapping of 5.1 the plain actions are already covered for
 privacy-on sensors, but the card reads `sensor.last_care.log` too, so it sees `feed` rows with
 `by: null` and says "had a meal" as it would for a chore treat. With privacy off it can name the
-sitter (9). The note is the card's own, on a card inside the household, so the "echoes" of the
+sitter (9). **With privacy ON the card cannot name the sitter in the note** (B6): the
+rows are mapped to plain `feed` / `play` (5.1), so the note says "had a meal" while the card on
+screen shows the sitter. Whether to carry the visit's tallies on the channel so the note can say
+"the sitter fed me" with privacy ON is Q-E, section 10; until it is answered S3 builds the plain
+wording. The note is the card's own, on a card inside the household, so the "echoes" of the
 visit are fair game.
 
 ## 7. The slices
@@ -444,63 +629,119 @@ the merge.
 
 Changes the away behaviour and saved state.
 
-- `rates.py`: `SITTER_ROUNDS_HOURS`, `SITTER_FEED_BELOW`, `SITTER_SUPPER_BELOW`,
-  `SITTER_PLAY_BELOW`, `SITTER_PLAY_ENERGY_MARGIN`.
-- `model.py`: `sitter_served`; `sitter_due`, `sitter_round`, `sitter_arrives`
-  (settle the whine by the option, run the round, settle calls); `advance` away branch to `_step`
-  (resting tested first); `_step` calls the sitter after the egg return, between `_digest` and `_sickness`; `_digest` tidies when
-  away; `_calls` pauses when away; the `_do_action` / `_refuse_play` / `drop_game` away terms
-  removed; the other gates (3.7); `set_lights_out` loses the away branch; `real_mood`;
-  `settle_legacy_lights`; `MOOD_REASONS["away"]` = "the sitter's here"; the four log actions.
-- `coordinator.py`: `_sense_home` stops dropping the game, calls `sitter_arrives` on the flip, takes
-  `sitter_round` out of the event list before `_fire` (3.6),
-  `settle_legacy_lights` at load; the gates in 3.7; the dead privacy mappings removed; the channel
-  `house.sitter` (5.3) and its diff; the `last_care` log mapping (5.1, in `sensor.py`).
-- `intent.py`: the Assist gate (5.2) and the words (9).
-- `strings.json` / `translations/en.json`: the people-page text (9).
-- Docs: `docs/guide.md:615-622` (the options table), `:586` and `:807` (the lights and resting
-  lines that name the sitter), `docs/features.md:41-42`, README line 97.
+- `rates.py`: `SITTER_ROUNDS_HOURS`, `SITTER_SUPPER_BEFORE_BED_HOURS`, `SITTER_FEED_BELOW`,
+  `SITTER_SUPPER_BELOW`, `SITTER_PLAY_BELOW`, `SITTER_PLAY_ENERGY`, `SITTER_PLAY_HUNGER`,
+  `SITTER_PLAY_WEIGHT`, `SITTER_LOG_ROWS` (values: 3.2, 3.6).
+- `model.py`: `sitter_served`; `sitter_due` (the clamp is here), `sitter_round`, `sitter_arrives`
+  (settle the whine by the option, run the round if awake, settle calls); `advance` away branch to
+  `_step` (resting tested first); `_step` calls the sitter after the egg return, between `_digest`
+  and `_sickness`; `_digest` tidies when away; `_calls` gets its away branch before the sleeping
+  one (3.4); `_wake` skips the resumed `call_started` while away; `_log_sitter` (3.6); the
+  `_do_action` / `_refuse_play` / `drop_game` away terms removed; the other gates (3.7, with the
+  keep list); `give_treats` loses its away term; `set_lights_out` loses the away branch;
+  `real_mood`; `settle_legacy_lights` (also runs `sitter_arrives` once for `away: true`, 3.10);
+  `fast_forward` rebases `sitter_served`; `MOOD_REASONS["away"]` = "the sitter's here"; the four
+  log actions.
+- `coordinator.py`: `_sense_home` stops dropping the game, calls `sitter_arrives` on the flip,
+  takes `sitter_round` out of the event list before `_fire` (3.6), `settle_legacy_lights` at load;
+  the gates in 3.7; the dead privacy mappings removed; `_check_ins` reads `by` from the newest
+  row that has one (3.5); the channel `house.sitter` (5.3) and its diff; the `last_care` log
+  mapping (5.1, in `sensor.py`).
+- `sensor.py:135` and `binary_sensor.py:80` **stay** (3.7); their comments change.
+- `intent.py`: the Assist gate (5.2, new) and the words (9).
+- `strings.json` / `translations/en.json`: the people-page text (9); the strings that name the
+  sitter: `strings.json:91, :100, :101, :273` (the last is the `away` mood label); `:62` is
+  still true.
+- Docs (C3): `docs/guide.md:615-622` (the options table), `:586` and `:807` (the lights and
+  resting lines that name the sitter; `:807` says "the sitter's freeze wins while it lasts; resting
+  carries on", and this plan flips the order, so the sentence is wrong), the privacy line of 5.1's
+  last-care note, `docs/features.md:41-42` and `:228` (the options list "off to the sitter's"),
+  `docs/HANDOFF.md:446`, README line 97. (`guide.md:1232`, the events list, is unchanged.)
 - Tests: section 3.8, plus `test_home` (presence flip, the whine option), `test_channel`
-  (snapshot, diff, shared screen), `test_assist` (privacy on and off), `test_init` (the strings),
-  `test_resting` (resting beats the sitter), the gates table, `balance_sim` bot.
+  (snapshot, diff, shared screen), `test_assist` (privacy on and off), `test_init` (the strings,
+  21 hits), `test_resting` (resting beats the sitter), the gates table, `balance_sim` bot. **The
+  tests that pin the old behaviour change too** (B5): `tests/test_model.py:105, :216, :377, :917,
+  :1436, :1448, :2059, :3085`, `test_resting.py:420-438, :632`, `test_finds.py:415-463`,
+  `test_gifts.py:179`, `test_doorbell.py:307`, `test_open_on.py:340-372`, `test_react.py:247,
+  :264`. S1 greps `away` in `tests/` and lists every hit it changes.
+- `dev/sitter_sim.py` (from this plan's revision) stays as the tuning tool; the bot test and the
+  sim must agree when a constant changes.
 
 **The card in S1** is unchanged and still reads the sensors. S1 keeps the `away` mood value on
 the sensor (privacy off), so the old card keeps drawing the sign and the hidden pet with the
-buttons off; with privacy on it sees a napping Pip. Neither is wrong, only stale: the server
-looks after Pip either way. The new view reaches the card in S2.
+buttons off; with privacy on it sees a napping Pip with `binary_sensor.asleep` on **and the care
+buttons enabled**: pressing Feed now succeeds (before, S1's mapping refused it as "asleep"), and
+the old card's reaction to an ok on a pet it thinks is asleep is untested (B7), so card-check
+gets one line for it (device queue). Neither is wrong, only stale: the server looks after Pip
+either way. The new view reaches the card in S2.
 
-**Acceptance:** section 3.8's tests green; `pytest` in full; `ruff`; the 7-day sitter bot shows
-the invariants; a save with `away: true` from the main branch loads and runs; the privacy table
-(5.1) is a test (one parametrised test, ON and OFF, per row that a test can reach).
+**Acceptance:** section 3.8's tests green; `pytest` in full; `ruff`; the **14-day** sitter bot
+shows the invariants, weight band included, for each (bedtime, wake, zone) row; `dev/sitter_sim.py
+--days 30` still prints the numbers in 3.2a; a save with `away: true` from the main branch loads
+and runs; the privacy table (5.1) is a test (one parametrised test, ON and OFF, per row that a
+test can reach); and one **end-to-end test** drives the real path: a zone with nobody in it for
+`away_after` -> `_sense_home` -> `sitter_arrives` -> the channel's `house.sitter` -> the zone
+refilled -> the sitter gone (C2). `test_home` ("presence flip") with a patched zone is where it
+lives.
 
 **Device queue (S1):** none for a phone; this is server-only. The full gate runs (`scripts/ci-gate`),
-since server code is in the diff and `pick-sections` would pick `all`. In a throwaway HA via
-`scripts/gate`: with the real stack, leave the dev house's person entity not home for the
-away window (set `away_after` to the minimum in the dev options), see the sitter round fire
-(`last_care` log), then bring the person home. Card-check sections `away` and `restart`
-must pass unchanged.
+since server code is in the diff and `pick-sections` would pick `all`. The real-stack check
+(C2): `dev/config/configuration.yaml` has no person and no zone, and the zone count comes from
+`watcher.people_home` (`watcher.py:408`), so in a throwaway HA via `scripts/gate` set the
+zone's count with `hass.states.set` on the zone entity (or add a template sensor to the scratch
+config), set `away_after` to the minimum in the dev options, see the sitter round fire
+(`last_care` log), then put the count back. If that proves fiddly, the real-stack line is
+`test_home` with a patched zone and the throwaway HA is not needed for it. Card-check:
+the sections that exist (`node scripts/card-check.js --list`) and that hold the old `away`
+checks are `care`, `react`, `pat`, `channel` and `restart` (the old `away` section was never a
+name; **C1**): they must pass unchanged, or `scripts/gate --auto` picks them. One added line (B7):
+privacy ON, the old card on a visiting pet, a Feed press ends ok and the card does not break.
 
 ### S2. The card (placeholder). Tier 1.
 
-- The card reads `house.sitter` (6.1); draws Pip, the real mood, the buttons on; a **placeholder
-  sitter** (a CSS/inline shape or the existing `sitter_sign` frame at pet scale, so the layout
-  and the label are right before the art lands); the label "sitter's here"; the sign is not
-  drawn.
-- `card-layout.js` away terms (`:537-738`) become sitter terms; `card-actions.js:123`,
-  `card-board.js:71`, `card-looks.js:7`, `card-games.js:22`.
+- The card reads `house.sitter` (6.1): `_state` (`card-build.js:925`) answers the mood and asleep
+  keys from the view, the `_channel` handler calls `_update` when `house.sitter` changes
+  (`card-base.js:317-340`); draws Pip, the real mood, the buttons on; a **placeholder sitter** (a
+  CSS/inline shape or the existing `sitter_sign` frame at pet scale, so the layout and the label
+  are right before the art lands); the label "sitter's here"; the sign is not drawn, also in the
+  no-channel fallback (6.1).
+- The `away` terms in the card (B1; the grep is `grep -n away src/card/*.js`):
+  - `card-layout.js:537-738` (`away` and the sign, the game end `:681`, the buttons `:700, :720`,
+    the request chip `:709`, `_say` `:737-738`) become sitter terms;
+  - `card-actions.js:123`, `card-board.js:71`, `card-games.js:22`;
+  - `card-looks.js:7-8` (the first look) **and `:477-478`** (`_giftReturn`, the gift-after-return
+    gate);
+  - `card-status.js:105` (`moodNow?.state === "away"`, "would like most") **and `:119`**
+    (`restNow`);
+  - `card-tick.js:61` (`this._say(s, mood, mood?.state === "away")`);
+  - readers of `s.away` that need only the `_update` change: `card-tick.js:436, :658, :801`,
+    `card-visitors.js:62, :100, :110, :357`.
+  - Strings that become false: `lines.js:15` (REFUSALS `away`: unreachable after S1, delete it, no
+    new line), `ui-copy.js:549-551` (`restLabel`: drop its `away` terms, so a resting pet under the
+    sitter shows the resting label as 3.1 says; the comment above it about "the sitter's sign"
+    goes), `ui-copy.js:623` (a comment, "ageing pauses while it's away": reword the comment).
+    None needs a new line of copy.
 - Bench: a `sitter` state in `scripts/bench.js` (and the `ui` preset), pinned by flags
   (`--sitter day|night`).
-- JS tests: `card-source` regex tests that pin the away terms (`care_reactions.test.js:83, :110,
-  :186, :475, :1208`, `motion_ship1.test.js:46-48`, `hop_settle.test.js:51`) change with them.
+- JS tests: `card-source` regex tests that pin the away terms change with them
+  (`care_reactions.test.js:83, :110, :186, :475, :1208`, `motion_ship1.test.js:46-48`,
+  `hop_settle.test.js:51`) **and `tests/js/resting_lines.test.js:52-66`**, which greps `_update` for
+  the `if (away) {...} else {...}` branch and `awaysign, sp.props?.away`, both of which S2
+  rewrites. `scripts/card-check.js` has `away` flags and the `["away", "i'm at the sitter's!"]`
+  refusal line at `:5014, :11585, :11985, :12067, :12396, :12429`; they change with S2.
 - Docs: how-to-play page and the guide's card section.
 
 **Acceptance:** bench shots of day, night, calling-not-possible, a game running, a shared
 screen, privacy ON and OFF (identical on the card), three species and an egg; `motion_rule` green;
-the degraded case (6.1) drawn.
+the degraded case (6.1) drawn: no channel with privacy off (sitter in the generic mood, no sign)
+and with privacy on (napping Pip); a card whose sensors arrive before the channel redraws when the
+channel arrives.
 
 **Device queue (S2):** the bench presets `ui` and `shells` plus the sitter shots above. Real HA
-only for the behaviour: card-check `away` and `restart` via `scripts/gate --auto`, and one check
-that a shared-screen card (`shared: true`) shows the sitter with privacy ON. No full gate.
+only for the behaviour: card-check via `scripts/gate --auto`, which picks from the diff;
+the sections to add by hand with `--only` are `care,react,pat,channel,restart` (C1: there is no
+`away` section; `node scripts/card-check.js --list` prints the names), and one check that a
+shared-screen card (`shared: true`) shows the sitter with privacy ON. No full gate.
 
 ### S3. The sitter's life. Tier 1. Needs A1.
 
@@ -610,8 +851,11 @@ Nothing here ships until the first mate approves it. Lines for Pip follow the ca
   card without the channel degrades (6.1).
 - R4. **Aging goes on** (3.4): "frozen" in the old guide is gone. A pet that is away for a
   fortnight grows two weeks. Q-C below.
-- R5. **Tuning.** The thresholds are draft; the simulation is what fixes them. A wrong number
-  shows up as a "hungry" flag at breakfast, not as harm.
+- R5. **Tuning is measured, with one limit.** The constants are the first set that held every
+  line of 3.2a on the real model, and `dev/sitter_sim.py` re-runs it when one changes. The
+  slots assume an awake day of about 16 hours or less (3.2a, "Limit"); a wrong number shows up
+  as a "hungry" or "bored" flag, not as harm. Pip is also "sleepy" in the evening (energy is not
+  topped up), which is a normal mood.
 - R6. **A reload during a visit** (`s.reloading`): the sitter view is in the snapshot, so a
   reloaded card draws it at once.
 
@@ -635,12 +879,22 @@ its behaviour, so they are asked before it starts)
   those automations.
 
 
+- **Q-E. The away note with privacy ON (new, from the review, B6).** With privacy ON the
+  log rows reach the card as plain `feed` / `play` (5.1), so the "while you were out" note says
+  "had a meal" while the card on screen shows the sitter. Recommended: **accept the plain
+  wording** (no new surface; the sitter is on screen anyway). Alternative: carry the visit's
+  tallies on `house.sitter` (for example `did` counts since the last person was home) so the
+  note can use the approved "the sitter fed me" lines with privacy ON too. It does not block S1
+  or S2; S3 builds the plain wording until it is answered.
+
 **Answered 2026-11-04** (owner Q-A, Q-C; first mate Q-B, Q-D as recommended, low risk):
 - Q-A: poop is **tidied the moment it happens** during a visit (owner).
 - Q-B: buttons and services **work during a visit** under privacy on; only Assist refuses (FM).
 - Q-C: aging **goes on** during any absence; the guide drops "frozen" (owner).
 - Q-D: the `mood` sensor **keeps the value `away`** with privacy off (FM).
 - Section 9 copy: **approved by the first mate** as drafted (D6). Workers ship those lines verbatim.
+- The review's fixes (section 12) change numbers, rules and file lists only. They add **no copy**;
+  Q-E above is the one open item.
 
 ## 11. What the scout got wrong (checked against the code)
 
@@ -650,9 +904,12 @@ the `coordinator.py` lines (`:464, :911-962, :1018, :1272, :1645, :3096, :3186, 
 :3441`), `home.py:334-374`, `rates.py:335`, `watcher.py:408`, `intent.py:36, :83`, and the doc lines
 (features `:41-42`, guide `:615-622, :807`). Wrong or incomplete:
 
-- **`card-status.js:105`** and **`card-looks.js:478`**: neither has an `away` term (a grep of
-  `src/card/*.js` finds `away` in `card-actions`, `card-board`, `card-games`, `card-layout` and
-  `card-looks:7` only). The real gate list is in section 2.
+- **`card-status.js:105`** and **`card-looks.js:478`**: the first version of this section said
+  neither has an `away` term and that the gate list was section 2's. **That was wrong** (review
+  B1). Both have one: `card-looks.js:477-478` (`_giftReturn`) and `:7-8`, `card-status.js:105`
+  (`moodNow?.state === "away"`) and `:119` (`restNow`), and so do `card-tick.js:61` (`_say`) and
+  the `s.away` readers in `card-tick`, `card-visitors` and `card-games`. The complete list is
+  S2's file list (section 7).
 - **Missed:** `card-games.js:22` (the ball prop), `binary_sensor.py:63-71` (the masked asleep),
   `model.py:1149` (`react`), `model.py:2044` (`can_lay_egg`), `coordinator.py:2522, :2540`.
 - **The design itself:** the scout's "Resting step, frozen" is replaced by owner decision D2.
@@ -662,3 +919,34 @@ the `coordinator.py` lines (`:464, :911-962, :1018, :1272, :1645, :3096, :3186, 
 - **Its slice order** (S1+S2 together) is no longer needed: S1 here keeps the sensor value `away`
   for privacy OFF, so the old card is merely stale, not broken, until S2.
 - **The scout's save claim** ("no new key") changes to one additive float, `sitter_served`.
+
+## 12. Review fixes (adversarial review of 2026-11-04, worker s2883)
+
+Every finding in `hatch-at-home-s2883/report.md`, and where this revision addresses it. The
+owner decisions D1-D6 and the answers Q-A to Q-D are unchanged, as is the approved copy.
+
+| finding | what | where fixed |
+|---|---|---|
+| A1 | The tuning failed on the real model; the play rule starved happiness | 3.2 (own constants, gate at `PLAY_MIN_ENERGY`, trigger 65, feed 65, bedtime clamp); 3.2a (the record: numbers and runs); 3.4 (weight sentence); 3.8 (14-day bot with a weight band); `dev/sitter_sim.py`; R5 |
+| A2 | A stale call stays on screen; a push at wake | 3.4 (the away branch of `_calls` settles every step; `_wake` skips the resumed push); 3.8 (call tests) |
+| A3 | Terms to keep; `_give_treats`, `_learn`, `_sample` undecided; `intent.py:327` | 3.7 (the keep list: `sensor.py:135`, `binary_sensor.py:80`); 3.4 (the three decided); 5.1, 5.2 ("new in S1"); S1 list |
+| A4 | The care log fills with the sitter's rows | 3.6 (`_log_sitter`, `SITTER_LOG_ROWS`); 3.3; 3.8 (the 12 people's rows survive) |
+| A5 | Wish credit after a sitter row | 3.5 (read `by` from the newest row that has one); 3.8 |
+| A6 | `sitter_served` details | 3.10 (the clamp in `sitter_due`, `fast_forward` rebases, the save debounce, `salvage`) |
+| A7 | Spec gaps in 3.2 | 3.2 (asleep on arrival; "latest slot at or before now"; wall-clock slot arithmetic; the bedtime clamp); 3.8 (DST and bedtime rows) |
+| A8 | A fresh `away: true` save gets no arrival | 3.10 (`settle_legacy_lights` runs `sitter_arrives`) |
+| A9 | Privacy-ON sensors | 5.1 (a row and the paragraph under the table); the guide line is in the S1 docs |
+| B1 | Section 11's card correction was wrong | Section 11; S2 file list |
+| B2 | One override, not many | 6.1 (`_state` in `card-build.js:925`); 5.3 (`reason`, `reason_key`) |
+| B3 | No redraw on a channel-only change | 6.1 (the `_channel` handler calls `_update`; a missing key is `None`); S2 acceptance |
+| B4 | The fallback drew the retired sign | 6.1 (sitter in the generic mood, no sign); S2 acceptance |
+| B5 | Test lists incomplete | S1 list (Python tests), S2 list (`resting_lines.test.js`, `card-check.js` lines) |
+| B6 | Away note vs D1 | 6.5; Q-E (a question, no new copy) |
+| B7 | Old card with privacy ON during S1 | S1 "The card in S1"; S1 device queue (one added line) |
+| C1 | "Card-check section `away`" does not exist | S1 and S2 device queues (`care,react,pat,channel,restart`, or `gate --auto`) |
+| C2 | The device queue's person entity; no end-to-end test | S1 acceptance (end-to-end test in `test_home`); S1 device queue |
+| C3 | Docs list misses | S1 docs list (`guide.md:807`, `features.md:228`, `HANDOFF.md:446`, `strings.json:91, :100, :101, :273`) |
+
+Also: the review's open question 1 (a gentle sitter play, or a lower happiness floor) is
+answered in the plan as a gentle play with its own constants, since the brief for this revision
+asked for it; no owner decision is changed by it. Question 2 is Q-E.
