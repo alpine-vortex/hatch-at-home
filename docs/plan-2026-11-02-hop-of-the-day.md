@@ -1762,6 +1762,19 @@ are kept by the same rule, today's only, with a cap on the keys per day), and th
 practice board is **free and unpaid** (answers `practice`), which has no cheat surface
 because it pays nothing. They fill the row's idle time after the day's board is done.
 
+**Reconciled after 4a and 4b** (s2869): the hint replays the move list (as `settle` does) and
+runs `solve(board, state)` from that state, which already starts anywhere and carries 4b's
+`parity` and `half`, so no new saved field. The hint is `solve(...).win[0]`, the **named**
+cell (a move letter): on a stump or rug board the pet lands elsewhere, so the card lights the
+named cell (what the player taps), not the landing, and the pet's glance looks at that cell
+too. The cost is the generator's own solve (worst 2.3 s on a terrarium hop adult board;
+the most states 99,229, under the cap of 100,000), so the executor and the per-minute limit stand as planned.
+Practice boards carry their world's twist like the day's board (the same `hop_board` with `n`
+in the seed and `GEN_VERSION` 4); a practice settle that answers `practice` needs no
+`board_changed` path. The hint key is a ninth key: the board's key column is two keys by four
+(the arrows, the special key, undo, restart, close) at every width, so it needs a fifth row
+or a new layout, read on the bench at 300 / 330 / 420.
+
 Acceptance: pytest — a hint from any reachable position is the first move of some
 winning list (checked on the fixtures and on generated boards), a hint from a dead end
 says so, hints cost nothing and save nothing, the per-minute limit answers and recovers;
