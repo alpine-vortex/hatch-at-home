@@ -43,7 +43,18 @@ const worldOf = (species) => Object.keys(WORLDS).find((w) => WORLDS[w].roster.in
 
 // Hop of the Day's canned boards (scripts/hop_bench_boards.py) and the twist worlds the built ships cover (ship 4a).
 const HOP_BENCH = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "dev", "bench", "hop-boards.json"), "utf8"));
-const HOP_TWIST_WORLDS = [["woodland", "hop-adult"], ["hearth", "hearth-hop-adult"]];
+// Each twist world's bench board and its shots past the start: [suffix, label, board pins] (ship 4a: the landing;
+// 4b: a crackle half-sunk, a pool in both phases, a ripple's chain, the lantern unlit and lit).
+const HOP_TWIST_WORLDS = [
+  ["woodland", "hop-adult", [["landed", "after the landing", { moves: "landing" }]]],
+  ["hearth", "hearth-hop-adult", [["landed", "after the landing", { moves: "landing" }]]],
+  ["terrarium", "terrarium-hop-adult", [["half", "a crackle half-sunk", { moves: "acted" }]]],
+  ["tidepool", "tidepool-swim-adult", [["stone", "the pools a stone on the next move", { parity: 0 }],
+    ["water", "the pools water on the next move", { parity: 1 }]]],
+  ["pond", "pond-hop-adult", [["chain", "after a ripple's chain", { moves: "acted" }]]],
+  ["nightsky", "nightsky-glide-adult", [["unlit", "the lantern unlit", { lantern: "unlit" }],
+    ["lit", "the lantern lit", { lantern: "lit" }]]],
+];
 // The world visitors: worlds.json's roster (the play data is the card's).
 const VISITORS = Object.fromEntries(Object.entries(WORLDS).map(([w, world]) => [w, world.visitors || []]));
 const CROSSERS = new Set(["shootingstar"]); // the card's VISITOR_PLAY with cross: true
@@ -376,15 +387,19 @@ const PRESETS = {
         view: "board", board: { fixture: "hop-baby" } });
       out.push({ ...base, group: `hop-${width}-calm`, name: `hop/${width}-calm`, label: "reduced motion",
         view: "board", motion: "reduce", board: { fixture: "swim-adult", moves: "win", take: 3 } });
-      // Ship 4a's twist worlds: each one's board at the start and just after its first jump or slide (the
-      // fixture's `landing`: the shortest list whose last move lands off its named cell).
-      for (const [world, fixture] of HOP_TWIST_WORLDS) {
+      // Ship 4's twist worlds: each one's board at the start and in its twist's states (the fixture's `landing`:
+      // the shortest list whose last move lands off its named cell; `acted`: the shortest that shows the twist
+      // acting; `parity` and `lantern` pin a pool's phase and the lantern).
+      for (const [world, fixture, states] of HOP_TWIST_WORLDS) {
         const fx = HOP_BENCH.boards[fixture];
         const at = { width, world, group: `hop-${width}-worlds` };
         out.push({ ...at, name: `hop/${width}-${world}`, label: `${world} (${fx.reply.twist}): the board`, view: "board",
           board: { fixture } });
-        out.push({ ...at, name: `hop/${width}-${world}-landed`, label: `${world}: after ${fx.landing}`, view: "board",
-          board: { fixture, moves: fx.landing } });
+        for (const [suffix, label, pins] of states) {
+          const moves = pins.moves && fx[pins.moves];
+          out.push({ ...at, name: `hop/${width}-${world}-${suffix}`, label: `${world}: ${label}${moves ? ` (${moves})` : ""}`,
+            view: "board", board: { fixture, ...pins, ...(pins.moves ? { moves } : {}) } });
+        }
       }
     }
     return out;

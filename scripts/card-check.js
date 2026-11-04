@@ -4344,13 +4344,15 @@ async function main() {
   await pinAwake(card, "board");
   {
     const cases = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "tests", "fixtures", "hop_cases.json"), "utf8")).boards;
-    // The twist as hop.py's twist_of names it from the glyphs (ship 4a: stumps, rug); copy only, no rule reads it.
-    const twistOf = (grid) => (/[12]/.test(grid.join("")) ? "stumps" : grid.join("").includes("=") ? "rug" : null);
+    // The twist as hop.py's twist_of names it from the glyphs (ship 4: one per world); copy only, no rule reads it.
+    const TWISTS = [["stumps", "12", "woodland"], ["rug", "=", "hearth"], ["crackle", "c", "terrarium"],
+      ["pool", "%", "tidepool"], ["ripple", "r", "pond"], ["lantern", "?*", "nightsky"]];
+    const twistRow = (grid) => TWISTS.find(([, glyphs]) => [...glyphs].some((ch) => grid.join("").includes(ch)));
+    const twistOf = (grid) => twistRow(grid)?.[0] ?? null;
     const replyOf = (name, id = name) => {
       const { w, h, grid, family, specials } = cases[name];
-      const twist = twistOf(grid);
-      return { result: "ok", day: "2026-11-03", id, w, h, grid, family, specials, world: twist === "rug" ? "hearth" : "woodland",
-        twist, done: false, tidy: false };
+      return { result: "ok", day: "2026-11-03", id, w, h, grid, family, specials, world: twistRow(grid)?.[2] ?? "woodland",
+        twist: twistOf(grid), done: false, tidy: false };
     };
     const warnings = [];
     page.on("console", (m) => { if (m.type() === "warning" && /hop board/.test(m.text())) warnings.push(m.text()); });
@@ -4632,6 +4634,100 @@ async function main() {
       onM.plain.includes(13) && slid.pos === 14 && JSON.stringify(slid.list) === "[11,12,13]" && slideLook.pieceOnPos &&
         backOnM.pos === 12 && backOnM.moves === 2, JSON.stringify({ onM, slid, slideLook, backOnM }));
     await shot("board-300-rug");
+    await quit();
+
+    // Ship 4b: the state on the cells (a crackle's half, a pool's phase on the next move, the ripple's chain, the
+    // lantern's dark cells), the aria labels of plan 2c "Player copy" as the state changes, and the keys' labels
+    // ("sunk" for a pad of any kind that has sunk, a crackle only fully; "blocked" for a pool in its water phase
+    // and an unlit dark cell).
+    const look4b = () => card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const cells = [...s.gameBox.querySelectorAll(".hc")];
+      return { labelled: cells.filter((c) => c.getAttribute("role") === "img").map((c) => [Number(c.dataset.i), c.getAttribute("aria-label")]),
+        unlabelled: cells.filter((c) => c.getAttribute("role") !== "img").every((c) => !c.hasAttribute("aria-label")),
+        cls: Object.fromEntries(cells.map((c) => [c.dataset.i, c.className])) };
+    });
+    const keyLabel = (k) => key(k).getAttribute("aria-label");
+    const has = (look, i, cls) => look.cls[i].split(" ").includes(cls);
+    const same4b = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const C = { crackle: "crackle pad, holds two visits", half: "crackle pad, cracked, one visit left",
+      stone: "tide pool, a stone on the next move", water: "tide pool, water on the next move",
+      ripple: "ripple pad, sinks the pads to its right", dark: "dark cell, not lit yet",
+      lantern: "lantern, step here to light the dark cells" };
+
+    await open(replyOf("crackle_hop")); // N.f. / .c.. / P... : P at i (8), the crackle at f (5)
+    const crack0 = await look4b();
+    await key("up").click(); // i to e
+    await key("right").click(); // e onto the crackle f
+    await key("right").click(); // f to g: f half-sunk
+    const crack1 = await look4b();
+    const backLabel = await keyLabel("left");
+    const backOn = (await targets()).plain.includes(5);
+    await key("left").click(); // g onto the half-sunk f, its second visit
+    await key("down").click(); // f to j: f sinks fully
+    const crack2 = await look4b();
+    const sunkLabel = await keyLabel("up");
+    check("crackle: whole, then half-sunk and still walkable (its key enabled), then fully sunk; the labels follow",
+      same4b(crack0.labelled, [[5, C.crackle]]) && crack0.unlabelled && same4b(crack1.labelled, [[5, C.half]]) &&
+        has(crack1, 5, "half") && !has(crack1, 5, "sunk") && backOn && backLabel === "Step left" &&
+        same4b(crack2.labelled, []) && crack2.unlabelled && has(crack2, 5, "sunk") && sunkLabel === "Step up, sunk",
+      JSON.stringify({ crack0: crack0.labelled, crack1, backLabel, crack2: crack2.labelled, sunkLabel }));
+    await shot("board-300-crackle");
+    await quit();
+
+    await open(replyOf("pool_hop")); // N.f. / ..%. / P... : P at i (8), the pool at g (6); hop, 2 uses
+    const pool0 = await look4b();
+    await key("special").click();
+    await key("right").click(); // the hop i to k: one move made, so the next makes the count even: water
+    await settleFx();
+    const pool1 = await look4b();
+    const wetLabel = await keyLabel("up");
+    const wetState = await card.evaluate((el) => el._slides[el._index].game.st.parity);
+    await shot("board-300-pool-water");
+    await key("undo").click();
+    await settleFx();
+    const pool2 = await look4b();
+    check("pool: a stone on the next move at the start; after one move water (drawn wet, its key 'blocked'); undo puts the stone back",
+      same4b(pool0.labelled, [[6, C.stone]]) && !has(pool0, 6, "wet") && pool0.unlabelled && wetState === 1 &&
+        same4b(pool1.labelled, [[6, C.water]]) && has(pool1, 6, "wet") && wetLabel === "Step up, blocked" &&
+        same4b(pool2.labelled, [[6, C.stone]]) && !has(pool2, 6, "wet"),
+      JSON.stringify({ pool0: pool0.labelled, pool1: pool1.labelled, wetLabel, wetState, pool2: pool2.labelled }));
+    await quit();
+
+    await open(replyOf("ripple_hop")); // N.rf. / .rr.. / P..rr : P at k (10); ripples c g h n o, the find d
+    const rip0 = await look4b();
+    await key("right").click(); // k to l
+    await key("up").click(); // l onto the ripple g
+    await key("up").click(); // g to b: g sinks, the ripple h and the pad i with it
+    await settleFx();
+    const rip1 = await look4b();
+    const ripLabel = await keyLabel("down");
+    check("ripple: each ripple labelled; leaving g sinks g, the ripple h and the pad i (sunk ripples lose the label); its key says sunk",
+      same4b(rip0.labelled, [[2, C.ripple], [6, C.ripple], [7, C.ripple], [13, C.ripple], [14, C.ripple]]) && rip0.unlabelled &&
+        [6, 7, 8].every((i) => has(rip1, i, "sunk")) && !has(rip1, 9, "sunk") && !has(rip1, 3, "sunk") &&
+        same4b(rip1.labelled, [[2, C.ripple], [13, C.ripple], [14, C.ripple]]) && ripLabel === "Step down, sunk",
+      JSON.stringify({ rip0: rip0.labelled, rip1, ripLabel }));
+    await shot("board-300-ripple");
+    await quit();
+
+    await open(replyOf("lantern_hop")); // N?f. / .#*. / P... : P at i (8), the dark cell b (1), the lantern g (6)
+    const lan0 = await look4b();
+    for (const k of ["right", "right", "right", "up", "up", "left"]) await key(k).click(); // i j k l h d c, the lantern unlit
+    const darkLabel = await keyLabel("left");
+    const darkShut = !(await targets()).plain.includes(1);
+    await shot("board-300-lantern-unlit");
+    await key("restart").click();
+    for (const k of ["right", "right", "up"]) await key(k).click(); // i j k, onto the lantern g
+    const lan1 = await look4b();
+    await key("up").click(); // g to c: the lantern sinks, lit
+    const lan2 = await look4b();
+    const litLabel = await keyLabel("left");
+    await shot("board-300-lantern-lit");
+    check("lantern: the dark cell dim and labelled, its key 'blocked'; on the lantern the dark cell is a plain pad with no label",
+      same4b(lan0.labelled, [[1, C.dark], [6, C.lantern]]) && has(lan0, 1, "dark") && lan0.unlabelled && darkShut &&
+        darkLabel === "Step left, blocked" && same4b(lan1.labelled, [[6, C.lantern]]) && !has(lan1, 1, "dark") &&
+        same4b(lan2.labelled, []) && lan2.unlabelled && litLabel === "Step left",
+      JSON.stringify({ lan0: lan0.labelled, darkLabel, darkShut, lan1: lan1.labelled, lan2: lan2.labelled, litLabel }));
     await quit();
 
     // Park and resume: every move is written, and every way out leaves the same moves for the way back.

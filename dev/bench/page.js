@@ -754,7 +754,9 @@
   // (dev/bench/hop-boards.json, built by scripts/hop_bench_boards.py from hop.py) names a canned
   // `board` reply; `moves` is "win", "tidy" or move letters, played through the card's own
   // _hopMove (`take`: only the first n); `lit` a cell lit (the first tap of a two-tap commit);
-  // `special` the special key armed; `reply` replaces the fixture's (a malformed one).
+  // `special` the special key armed; `reply` replaces the fixture's (a malformed one); ship 4b: `parity` (0 or 1)
+  // pins the move count's parity (a pool's phase on the next move), `lantern: "lit"` sinks the lantern (lit is
+  // derived: sunk or under the pet; "unlit" leaves it).
   let HOP_FIXTURES;
   async function hopBoard(shot) {
     HOP_FIXTURES ||= await (await realFetch("/dev/bench/hop-boards.json")).json();
@@ -786,6 +788,10 @@
       info.uses = s.game.st.uses;
       info.done = s.game.done;
       info.tidy = s.game.tidy;
+      // Ship 4: the twist cells' labels and state (a pool's phase, a half-sunk crackle, the dark cells).
+      info.labels = [...s.gameBox.querySelectorAll('.hc[role="img"]')].map((c) => [Number(c.dataset.i), c.getAttribute("aria-label")]);
+      if (s.game.st.parity !== undefined) info.parity = s.game.st.parity;
+      if (s.game.st.half !== undefined) info.half = s.game.st.half;
       info.keyState = Object.fromEntries([...s.gameBox.querySelectorAll(".hk")].map((k) => [k.dataset.k,
         `${k.getAttribute("aria-disabled") === "true" ? "off" : "on"}: ${k.getAttribute("aria-label")}`]));
     } else {
@@ -1049,7 +1055,13 @@
         const t = card._hopTargets(cur.game);
         cur.game.lit = [...t.plain, ...t.special][0];
       } else if (b.lit !== undefined) cur.game.lit = b.lit;
-      if (b.special || b.lit !== undefined) card._hopDraw(cur, false);
+      if (b.parity !== undefined) cur.game.st.parity = b.parity;
+      if (b.lantern === "lit") {
+        const at = cur.game.board.grid.join("").indexOf("*");
+        if (at < 0) throw new Error(`no lantern on ${b.fixture}`);
+        cur.game.st.sunk |= 1 << at;
+      }
+      if (b.special || b.lit !== undefined || b.parity !== undefined || b.lantern) card._hopDraw(cur, false);
       card._hopPlace(cur, false); // the piece is on its cell, not on its way
     }
     // `game: "dig"`: a Berry dig started through the card's own picker, then `digTaps`

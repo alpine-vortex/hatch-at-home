@@ -19,8 +19,12 @@ const HOP_COPY = {
     tidy: "Hop of the Day, tidy" },
   failed: "hmm, that didn't work", // a settle that came to nothing (also the board call's)
   found: "ooh, I found something ♪", // a find from the settle's `found: true` (Q3, draft)
-  // A twist cell's aria label (plan 2c "Player copy", draft for the first mate; the plain cells keep none).
-  cell: { stump: "stump hole, leads to its twin", rug: "rug, slides you one more" },
+  // A twist cell's aria label (plan 2c "Player copy"; the plain cells keep none, a lit dark cell neither).
+  cell: { stump: "stump hole, leads to its twin", rug: "rug, slides you one more",
+    crackle: "crackle pad, holds two visits", crackleHalf: "crackle pad, cracked, one visit left",
+    poolStone: "tide pool, a stone on the next move", poolWater: "tide pool, water on the next move",
+    ripple: "ripple pad, sinks the pads to its right", dark: "dark cell, not lit yet",
+    lantern: "lantern, step here to light the dark cells" },
 };
 // Ship 3b: the pure parts, no `this` and no DOM (tests/js/hop_settle.test.js reads them).
 // The server's day is the HA local date: Intl with hass.config.time_zone (Q1), else this device's.
@@ -83,9 +87,24 @@ const HOP_KEYS = [
   ["restart", "↻", HOP_COPY.restart],
 ];
 const HOP_CELLS = { ".": "pad", f: "pad find", o: "stone", "~": "water", "#": "wall", P: "pad start", N: "nest",
-  1: "stump", 2: "stump two", "=": "rug" };
-// The twist cells that carry role="img" and a label (ship 4a): the class's first word names the copy.
-const HOP_LABELLED = { 1: "stump", 2: "stump", "=": "rug" };
+  1: "stump", 2: "stump two", "=": "rug", c: "pad crackle", "%": "pool", r: "pad ripple", "?": "pad dark",
+  "*": "pad lantern" };
+// A twist cell's label in a state (role="img" with it; null: no label). Ship 4b's follow the state: a
+// crackle's half, a pool's phase on the next move, a dark cell's lantern. A sunk pad of any kind reads as
+// a sunk pad (no label), as a lit dark cell does.
+const hopCellLabel = (board, st, i) => {
+  const cells = board.grid.join("");
+  const ch = cells[i];
+  const c = HOP_COPY.cell;
+  if (ch === "1" || ch === "2") return c.stump;
+  if (ch === "=") return c.rug;
+  if (ch === "%") return (st.parity || 0) === 1 ? c.poolWater : c.poolStone;
+  if (!"cr*?".includes(ch) || (st.sunk >> i) & 1) return null;
+  if (ch === "c") return ((st.half || 0) >> i) & 1 ? c.crackleHalf : c.crackle;
+  if (ch === "r") return c.ripple;
+  if (ch === "*") return c.lantern;
+  return HATCH_HOP.lit(cells, st.sunk, st.pos) ? null : c.dark;
+};
 
 class HatchPetCardBoard extends HatchPetCardGames {
   // --- Board mode: Hop of the Day (plan 2026-11-02-hop-of-the-day, ship 2b) ---------------------
@@ -288,10 +307,6 @@ class HatchPetCardBoard extends HatchPetCardGames {
       const el = document.createElement("i");
       el.className = `hc ${HOP_CELLS[ch]}`;
       el.dataset.i = String(i);
-      if (HOP_LABELLED[ch]) {
-        el.setAttribute("role", "img");
-        el.setAttribute("aria-label", HOP_COPY.cell[HOP_LABELLED[ch]]);
-      }
       return el;
     }));
     g.el = { wrap, grid, piece: grid.querySelector(".hpiece"), path: grid.querySelector(".hpath path"),
@@ -418,14 +433,30 @@ class HatchPetCardBoard extends HatchPetCardGames {
     const { w } = g.board;
     const targets = g.done ? { plain: [], special: [] } : this._hopTargets(g);
     const legal = new Set([...targets.plain, ...targets.special]);
-    const finds = [...g.board.grid.join("")].map((ch, i) => (ch === "f" ? i : -1)).filter((i) => i >= 0);
+    const grid = g.board.grid.join("");
+    const finds = [...grid].map((ch, i) => (ch === "f" ? i : -1)).filter((i) => i >= 0);
     const open = g.done || finds.every((i) => (g.st.sunk >> i) & 1 || i === g.st.pos);
+    // Ship 4b's state on the cells: a pool in the next move's phase, a half-sunk crackle, the dark cells
+    // until the lantern is lit (then they are pads to look at).
+    const wet = (g.st.parity || 0) === 1;
+    const shine = HATCH_HOP.lit(grid, g.st.sunk, g.st.pos);
     cells.forEach((el, i) => {
-      const ch = g.board.grid.join("")[i];
+      const ch = grid[i];
       el.classList.toggle("sunk", ((g.st.sunk >> i) & 1) === 1);
       el.classList.toggle("legal", legal.has(i) && (!g.special || targets.special.includes(i)));
       el.classList.toggle("lit", g.lit === i);
       el.classList.toggle("open", ch === "N" && open);
+      if (ch === "%") el.classList.toggle("wet", wet);
+      if (ch === "c") el.classList.toggle("half", (((g.st.half || 0) >> i) & 1) === 1);
+      if (ch === "?") el.classList.toggle("dark", !shine);
+      const label = hopCellLabel(g.board, g.st, i);
+      if (label) {
+        el.setAttribute("role", "img");
+        el.setAttribute("aria-label", label);
+      } else {
+        el.removeAttribute("role");
+        el.removeAttribute("aria-label");
+      }
     });
     const byKey = (k) => keys.querySelector(`[data-k="${k}"]`);
     const set = (k, enabled, label) => {
@@ -442,8 +473,10 @@ class HatchPetCardBoard extends HatchPetCardGames {
           ? targets.special.some((t) => this._hopSpecialDir(g, t) === name)
           : targets.plain.includes(adj);
       }
-      const cell = adj >= 0 ? g.board.grid.join("")[adj] : "";
-      const sunk = adj >= 0 && ((g.st.sunk >> adj) & 1) === 1 && ".fP".includes(cell);
+      const cell = adj >= 0 ? grid[adj] : "";
+      // "sunk" for a pad of any kind that has sunk (a crackle only fully); else "blocked" (water, a wall, a
+      // pool in its water phase, an unlit dark cell).
+      const sunk = adj >= 0 && ((g.st.sunk >> adj) & 1) === 1 && HATCH_HOP.PADS.includes(cell);
       const base = HOP_COPY.step[name];
       set(name, enabled, enabled || g.done ? base : `${base}, ${sunk ? HOP_COPY.sunk : HOP_COPY.blocked}`);
       byKey(name).textContent = glyph;
