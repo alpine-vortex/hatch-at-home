@@ -41,7 +41,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     // Built each time: the card's options decide which games are offered.
     s.gameBox.querySelector(".gpick").innerHTML = games.map((g) =>
       `<button data-game="${g.key}">${g.label}</button>`).join("");
-    this._hopRow(s); // the Hop of the Day row, outside .gpick (plan section 5)
+    this._hopRow(s); // behind experimental_hop: the Hop of the Day row, outside .gpick (plan section 5)
     this._gameView(s, "pick");
     // A narrow card has room for one short line beside the close button.
     this._pickerSay(s, s.game, s.game.prompt);
@@ -104,7 +104,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     const box = s.gameBox.getBoundingClientRect();
     if (!box.height) return true;
     pick.classList.remove("wrap", "tight", "snug");
-    // The Hop row sits at the foot, outside .gpick: it is measured too, so no game
+    // The Hop row (flag on) sits at the foot, outside .gpick: it is measured too, so no game
     // button covers it, and the picker's room is the box less its strip.
     const row = s.gameBox.querySelector(".ghop");
     const rowOn = !!row && !row.hidden;

@@ -47,7 +47,7 @@ Where things live:
 | card-actions | actions, the care scenes' shared frame (`_sceneStart`, `_sceneRender`, `_sceneEnd`, the answer) |
 | card-care | `SCENES` (one entry per care scene: medicine, clean, feed), the bowl clip (`bowlCuts`), `_sceneFrames`, `_sceneArt` |
 | card-games | games, dig |
-| card-board | Hop of the Day's board mode (`HatchPetCardBoard`): the picker row (the day's state), the board and its keys in the `gameBox` overlay, park/resume, undo, the settle and its reply handler (`hopSettleOutcome`) |
+| card-board | Hop of the Day's board mode (`HatchPetCardBoard`; behind `experimental_hop`): the picker row, the board and its keys in the `gameBox` overlay, park/resume, undo |
 | card-season | seasons, party, costume |
 | card-visitors | world visitors, basket, reveal |
 | card-link | infrared link |

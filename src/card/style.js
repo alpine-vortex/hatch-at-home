@@ -472,7 +472,7 @@ const STYLE = `
   /* D-a: today's visitor watching a dig, still, behind the buttons (fresh-expand E5). */
   .game .gwatch { position: absolute; right: 4%; bottom: 26%; height: 18%; image-rendering: pixelated;
     pointer-events: none; transform: scaleX(-1); }
-  /* Hop of the Day (plan ship 2b). The row under the picker: the picker's own
+  /* Hop of the Day (experimental_hop; plan ship 2b). The row under the picker: the picker's own
      chunky button, a strip at the foot; _fitPicker moves it into the last line of the games where
      the strip leaves them no room (.slot) and shrinks it to its label (.tight). */
   .game .ghop { left: 3%; right: 3%; bottom: 2%; min-height: 44px; width: auto; border-radius: 14px;

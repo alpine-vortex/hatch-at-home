@@ -108,7 +108,7 @@ const hopCellLabel = (board, st, i) => {
 
 class HatchPetCardBoard extends HatchPetCardGames {
   // --- Board mode: Hop of the Day (plan 2026-11-02-hop-of-the-day, ship 2b) ---------------------
-  // The board is `s.game` ({kind: "hop"}), so every
+  // Behind the YAML-only `experimental_hop` key. The board is `s.game` ({kind: "hop"}), so every
   // quit path that already tests `s.game` ends it: _endGame clears it (_hopEnd), and the server
   // never hears of it (hop is not in SERVER_GAMES). The keys are in the game overlay, as the
   // dig's are; the care pad is not touched. The rules are HATCH_HOP's (hop-engine.js); the
@@ -116,11 +116,18 @@ class HatchPetCardBoard extends HatchPetCardGames {
   // nest entry shows the solved view at once and sends the list (`settle`, ship 3b): the server
   // replays it and pays; the list stays parked until the server has answered `ok`.
 
-  // The row beside the picker (plan section 5): built when the picker opens, its label the day's
-  // state. Pressing it asks `hop` for the board. (A saved YAML that still has `experimental_hop`
-  // loads as before; setConfig ignores keys it does not know and nothing reads this one.)
+  _hopOn() {
+    return this._config?.experimental_hop === true;
+  }
+
+  // The row beside the picker (plan section 5): built when the picker opens and the flag is on,
+  // removed when it is off, so a flag-off card has none. Pressing it asks `hop` for the board.
   _hopRow(s) {
     let row = s.gameBox.querySelector(".ghop");
+    if (!this._hopOn()) {
+      row?.remove();
+      return;
+    }
     if (!row) {
       row = document.createElement("button");
       row.className = "ghop";
