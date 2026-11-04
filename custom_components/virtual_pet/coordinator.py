@@ -1767,7 +1767,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             }
         self._advance(now)
         if not self._awake():
-            # Asleep (or away): only the sleepy hello. The visit isn't counted,
+            # Asleep: only the sleepy hello. The visit isn't counted,
             # so the lines it has wait for the next look once it's up.
             notes = self._up_early(user, now)
             self._publish()
