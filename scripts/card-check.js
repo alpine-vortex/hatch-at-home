@@ -19,7 +19,7 @@
 // dev's seeded bond and wish back). Sections lean on the state their
 // predecessors leave (the open sheet, the bond, the slide on show), so a lone
 // one may need its neighbour: add it to --only. oldcard pulls in restart.
-// --shard k/4 runs the k-th of four contiguous runs (see SHARD_STARTS).
+// --shard k/5 runs the k-th of five contiguous runs (see SHARD_STARTS).
 
 const { chromium } = require("playwright");
 const fs = require("fs");
@@ -52,11 +52,12 @@ if (argv.includes("--list")) {
   console.log(SECTIONS.join("\n"));
   process.exit(0);
 }
-// --shard k/4 runs one of four contiguous runs of sections, split where these
+// --shard k/5 runs one of five contiguous runs of sections, split where these
 // start (CI runs them side by side). A new section lands in whichever run it
-// falls in, so none is skipped. Balanced by CI's seconds per section (2026-11-01:
-// about 225, 225, 200 and 175 s each, plus the prelude).
-const SHARD_STARTS = ["shelf", "moments", "backlight", "infrared"];
+// falls in, so none is skipped. Balanced by CI's seconds per section (2026-11-04:
+// about 230 to 275 s each, plus the prelude). restart and the
+// sections that NEED it all sit in the last run.
+const SHARD_STARTS = ["shelf", "board", "photos", "pat", "infrared"];
 let ONLY = null;
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === "--shard") {
@@ -74,7 +75,7 @@ for (let i = 0; i < argv.length; i++) {
     continue;
   }
   if (argv[i] !== "--only") {
-    console.error(`card-check: unknown argument ${argv[i]} (--list, --only <name>[,<name>...], --shard k/4)`);
+    console.error(`card-check: unknown argument ${argv[i]} (--list, --only <name>[,<name>...], --shard k/5)`);
     process.exit(2);
   }
   ONLY ||= new Set();
@@ -5151,7 +5152,8 @@ async function main() {
   }
   if (enter("moments")) {
   await pinAwake(card, "moments");
-  // A shard opens here (SHARD_STARTS) straight after the prelude's 1 h fast-forward, with
+  // A shard opened here (it did until SHARD_STARTS went five-way, and `--only moments` still
+  // does) straight after the prelude's 1 h fast-forward, with
   // no play or resume section to calm the pet first: a hatchling's whine then held
   // "play with me?" over every flavour line (CI, 2026-11-01).
   await calm();
