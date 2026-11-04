@@ -45,6 +45,8 @@ What changed in this document:
 
 **Open for the FM (neither is the owner's unless the FM says so):**
 
+**Answered 2026-11-04 (FM, as recommended):** Q-A: **accept** 39.5/43 px at 284/300; no layout change. Q-B: captions **"left"** and **"right"**, approved copy.
+
 - **Q-A, touch at 284 and 300.** Accept 39.5/43 px (drop the 44 px claim; the shell's round
   buttons are the same targets players use for care today) or have slice 2 (or a slice 1b) widen
   the grid at narrow widths (a layout and golden change, R3)? Recommendation: accept; Hop's
