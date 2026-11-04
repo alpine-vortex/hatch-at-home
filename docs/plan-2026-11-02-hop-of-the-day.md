@@ -1632,8 +1632,57 @@ draws pools in the next move's phase and a half-sunk crackle; the key labels' pa
 `twist_of` the rest of its values; `GEN_VERSION` 4; the `"P.o?"` `bad_boards` case changes in
 the same commit.
 
+**What 4a built that 4b extends** (reconciled after ship 4a, s2866):
+- **Tables, not branches.** `hop.py` holds `TWIST_GLYPHS` (twist to glyphs), `WORLD_TWIST`
+  (world to twist; 4a: woodland `stumps`, hearth `rug`) and `NEVER_SINKING = "o12="`, which
+  `entry`, the walk mask and `touching_never_sinking` read; `hop-engine.js` mirrors
+  `CELLS`, `NEVER_SINKING` and `TWIST_GLYPHS`. 4b adds its four rows to `TWIST_GLYPHS` and
+  `WORLD_TWIST` and `%` to `NEVER_SINKING` in both engines. `Board` already refuses more than
+  one twist kind and a twist on a baby's board (`specials == 0`); 4b adds the `?`/`*` counts.
+- **The landing.** `_Rules.land(pos, t, special, sunk)` gives the cell after entering `t`
+  (JS: `land(board, cells, pos, t, special, sunk)`, direction from `t - pos`); `step`, the
+  solver's `rec` and `walk` (nest test and memo key on the landing) and the JS `apply` use it.
+  A ripple's chain goes in `step` next to it, not in `land` (it sinks cells, it does not move
+  the pet). `reach` seeds the twin of a pos on a stump and pushes a stump's twin; the rug needs
+  nothing there (the cell past it is a neighbour).
+- **The bots.** `_plan` returns `(named, landing)` pairs over landing nodes; `_greedy` steps
+  the named cell, returns its moves when a planned step is `None`, and re-plans when the
+  landing is not the planned one. 4b's `(cell, spent, parity)` nodes extend that node. The
+  re-plan fires on the landing only, so a ripple's or a crackle's change of `sunk` must be in
+  the plan's own step (or trigger a re-plan too), or the next planned step returns `None` and
+  the bot gives up.
+- **The generator.** `_place_twist(rng, cells, order, twist, specials, w, h, clear)` places a
+  twist on a candidate (stumps in whole pairs, a rug only where a row or a column gives it a
+  pad-or-stone neighbour on both sides, so it can slide); `clear(i)` is `_candidate`'s near
+  test over `NEVER_SINKING`. A twist-free world draws exactly as before. 4b adds one branch
+  per twist, with the same care that each cell can act (a ripple with a pad to its right, a
+  lantern not walled off from its dark cells), and `hop_board` already skips a candidate whose
+  `twist_of` is not its world's.
+- **Squeeze "refused".** A squeeze naming a cell that is not a sunk pad is never an illegal
+  letter: the plain step onto the cell is legal, so the move is taken as a plain step and no
+  use is spent. 4a's fixture for a stump and a rug asserts that (`uses` unchanged); 4b's
+  "squeeze back onto a half-sunk crackle" asserts the same (one visit spent, `uses`
+  unchanged), and the squeeze onto a fully sunk one spends the use.
+- **Tests.** `cell_boards` takes the world and `PAIRS` derives the 21 pairs. With
+  `PER_CELL = 5` the bot ranges are too noisy per cell (hearth dig cells scored 12/15 and
+  13/15 at 5, and at least 0.96 at 200), so the default suite asserts them per (world, family) over its stages and per
+  (world, family, stage) only under `HOP_FULL`; 4b keeps that split. The old-save test
+  (`test_hop_settle.py`) builds the old board by monkeypatching `GEN_VERSION` and
+  `WORLD_TWIST`; 4b's version sets 3 and drops its four worlds.
+- **Bench and card-check.** `scripts/hop_bench_boards.py` lists `(world, family, stage)`;
+  a board outside woodland is named `<world>-<family>-<stage>`, and each fixture's
+  `landing` holds the shortest list whose last move lands off its named cell. `--preset hop`
+  shoots `HOP_TWIST_WORLDS` (scripts/bench.js) at each width, at start and `-landed`; 4b adds
+  its worlds there and its pins (`parity`, `lantern`) to the `board:` shot. card-check's stub
+  reply derives `twist` from the grid (`twistOf`) and sets `world`.
+- **Card.** `legalTargets` already names stepped-on cells and `_hopPlace` draws the landing;
+  `_hopNest` needed no change. `HOP_LABELLED` maps a glyph to its `HOP_COPY.cell` label
+  (`role="img"`); 4b's labels depend on state (crackle half, pool phase, dark lit), so it
+  becomes a function of the cell and the state.
+
 Acceptance (4b): fixture cases both engines pass: a crackle pad's two visits (and tidy needing
-both), a squeeze back onto a half-sunk crackle (refused) and onto a fully sunk one; a pool
+both), a squeeze back onto a half-sunk crackle (taken as a plain step, no use spent) and onto a
+fully sunk one; a pool
 across the move parity with an undo, a swim onto a pool in its water phase (a water entry),
 a hop and a glide onto a pool in its water phase (blocked) and in its stone phase, an undo
 across a parity change; a ripple chain (a run of `r`, then a plain pad that sinks with it, then
