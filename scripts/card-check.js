@@ -40,7 +40,7 @@ const OUT = path.join(__dirname, "..", "dev", "card-check");
 const results = [];
 
 // The gated sections of main(), in file order.
-const SECTIONS = ["shelf", "shell", "play", "resume", "board", "moments", "photos", "personality", "types",
+const SECTIONS = ["shelf", "shell", "play", "resume", "board", "shellmode", "moments", "photos", "personality", "types",
   "egg", "sharedscreen", "memorytags", "forget", "prefs", "channel", "devicefx", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "winter", "care",
   "editor", "boot", "infrared", "lowbattery", "restart", "gifts", "finds", "collection", "oldcard"];
 // oldcard asserts restart's seeded bond; finds taps the basket restart seeds; collection
@@ -5218,6 +5218,361 @@ async function main() {
     await flag(false);
     await page.setViewportSize({ width: 420, height: 860 });
     await page.waitForTimeout(400);
+  }
+  await unpinAwake(card);
+  }
+  if (enter("shellmode")) {
+  // Shell modes, slice 1 (docs/plan-2026-11-04-shell-modes.md, acceptance 5-9): the mode engine
+  // driven through card.evaluate with a probe mode, an object passed to _modeEnter (SHELL_MODES names
+  // only shipped modes, and slice 1 ships none). No game is touched. Each exit compares the eight
+  // buttons' stable fields with a snapshot taken just before the enter (review P12).
+  await pinAwake(card, "shellmode");
+  await page.setViewportSize({ width: 420, height: 860 });
+  await page.waitForTimeout(300);
+  {
+    await card.evaluate((el) => {
+      const sm = (el.__sm = { log: [], acts: [], calls: [], over: {} });
+      // State overrides for this section only, on top of pinAwake's (so an override wins).
+      const realState = el._state;
+      el._state = function (slide, key) {
+        const st = realState.call(this, slide, key);
+        const o = sm.over[key];
+        return o && st ? { ...st, ...o, attributes: { ...st.attributes, ...(o.attributes || {}) } } : st;
+      };
+      const hass = el._hass;
+      const realCall = hass.callService;
+      hass.callService = function (d, svc, ...rest) {
+        sm.calls.push(`${d}.${svc}`);
+        return realCall.call(this, d, svc, ...rest);
+      };
+      sm.unwrap = () => {
+        el._state = realState;
+        hass.callService = realCall;
+        delete el.__sm;
+      };
+      sm.s = () => el._slides[el._index];
+      sm.eight = (s = sm.s()) => el._modeButtons(s);
+      sm.focus = (s = sm.s()) => sm.eight(s).indexOf(el.shadowRoot.activeElement);
+      sm.rim = (s = sm.s()) => [...s.rim.classList].filter((c) => c.startsWith("dir-"));
+      // The stable fields (review P12); the transient classes and the .burst spans are left out by name.
+      const STABLE = ["wanted", "on", "armed", "tinted"];
+      sm.snap = (s = sm.s()) => sm.eight(s).map((b) => ({
+        icon: b.dataset.icon ?? null, cap: b.lastElementChild?.textContent ?? "", aria: b.getAttribute("aria-label"),
+        title: b.getAttribute("title"), disabled: b.disabled, desc: b.getAttribute("aria-description"),
+        pressed: b.getAttribute("aria-pressed"), hidden: b.getAttribute("aria-hidden"),
+        classes: STABLE.filter((c) => b.classList.contains(c)),
+      }));
+      sm.diff = (a, b) => a.flatMap((x, i) => Object.keys(x).filter((k) => JSON.stringify(x[k]) !== JSON.stringify(b[i][k]))
+        .map((k) => `${i + 1}.${k}: ${JSON.stringify(x[k])} -> ${JSON.stringify(b[i][k])}`));
+      // The probe: slots 1, 2, 4, 6, 7 live, 3 blocked, 5 off, 8 the quit (the exit slot, Escape too).
+      const ICONS = ["prev", "▲", "▼", "next", "", "↶", "↻", "✕"];
+      sm.probe = (over = {}) => {
+        const slot = (i, extra = {}) => ({ icon: ICONS[i - 1], cap: `p${i}`, aria: `probe slot ${i}`, act: () => sm.acts.push(i), ...extra });
+        const m = {
+          id: "probe", tint: "game", announce: "probe on",
+          slots: [slot(1), slot(2), slot(3, { enabled: () => false }), slot(4), null, slot(6, { on: (s) => !!s.__probeOn }), slot(7),
+            slot(8, { cap: "quit", aria: "quit the probe", act: (card, s) => { sm.acts.push(8); card._modeExit(s, "quit"); } })],
+          onExit: (card, s, reason) => sm.log.push(`${m.id}:${reason}`),
+          ...over,
+          exit: { slot: 8, escape: true, status: "end", on: ["asleep", "away", "egg"], ...(over.exit || {}) },
+        };
+        return m;
+      };
+      // An enter as a press brings it on: the focus on the Play cap, `from` the Play cap.
+      sm.enter = (over = {}, s = sm.s()) => {
+        s.buttons.play.focus({ preventScroll: true });
+        sm.before = sm.snap(s);
+        sm.log.length = sm.acts.length = sm.calls.length = 0;
+        return el._modeEnter(s, sm.probe(over), { from: s.buttons.play });
+      };
+      // After an exit: off, one onExit with the reason, the eight as before, the tint and the live node gone,
+      // and a second _modeExit a no-op.
+      sm.row = (reason, s = sm.s(), expect = `probe:${reason}`) => {
+        const out = { mode: !!s.mode, log: [...sm.log], diff: sm.diff(sm.before, sm.snap(s)), moded: s.device.classList.contains("moded"),
+          live: s.modeLive.textContent, focus: sm.focus(s) };
+        out.again = el._modeExit(s, "again");
+        out.ok = !out.mode && out.log.join() === expect && !out.diff.length && !out.moded && out.live === "" && out.again === false;
+        return out;
+      };
+    });
+    const row = (label, r, extra = true) => check(`shell mode: ${label} ends the probe and the eight are as before`, r.ok && extra, JSON.stringify(r));
+
+    // 5. The enter: the eight show the probe, off slots are dead and unlabelled, the focus moves on.
+    const on = await card.evaluate((el) => {
+      const sm = el.__sm;
+      const s = sm.s();
+      const entered = sm.enter();
+      const eight = sm.eight(s).map((b) => ({
+        icon: b.dataset.icon, cap: b.lastElementChild.textContent, aria: b.getAttribute("aria-label"), title: b.getAttribute("title"),
+        tinted: b.classList.contains("tinted"), disabled: b.disabled, hidden: b.getAttribute("aria-hidden"),
+        blocked: b.getAttribute("aria-disabled"), pressed: b.getAttribute("aria-pressed"), glyph: !!b.querySelector(".cap .glyph, .cap svg"),
+      }));
+      const live = s.modeLive.textContent;
+      el._write(s, "a prompt follows at once", 4000);
+      return { entered, eight, live, liveAfter: s.modeLive.textContent, role: s.modeLive.getAttribute("role"), focus: sm.focus(s),
+        moded: s.device.classList.contains("moded") };
+    });
+    // the cap's background has a transition: the tint is read once it has run
+    await page.waitForTimeout(400);
+    on.tint = await card.evaluate((el) => [...new Set(el.__sm.eight().map((b) => getComputedStyle(b.querySelector(".cap")).backgroundColor))]);
+    const want = ["prev", "▲", "▼", "next", null, "↶", "↻", "✕"];
+    const slotsOk = on.eight.every((b, i) => (want[i] === null
+      ? b.disabled && b.hidden === "true" && b.aria === "" && b.cap === "" && !b.glyph
+      : b.icon === want[i] && b.cap === (i === 7 ? "quit" : `p${i + 1}`) && b.aria === (i === 7 ? "quit the probe" : `probe slot ${i + 1}`)
+        && b.title === b.aria && !b.disabled && b.hidden === null && b.glyph) && b.tinted);
+    check("shell mode: the enter shows each slot's icon, caption, aria-label, title and the tint; an off slot is disabled, aria-hidden and unlabelled",
+      on.entered && on.moded && slotsOk && on.eight[2].blocked === "true" && on.eight[5].pressed === "false" && on.tint.join() === "rgb(196, 226, 242)",
+      JSON.stringify(on));
+    check("shell mode: one announcement of the live slots in the mode's own live node, still there after a prompt",
+      on.role === "status" && on.live === "probe on: p1, p2, p4, p6, p7, quit" && on.liveAfter === on.live, JSON.stringify({ live: on.live, after: on.liveAfter }));
+    check("shell mode: the focus moves from the pressed Play cap to the first live slot", on.focus === 0, `focus ${on.focus}`);
+    // The Tab order walks the slots that are not off (a blocked one is aria-disabled and stays focusable).
+    const tabs = [];
+    for (let i = 0; i < 7; i++) {
+      await page.keyboard.press("Tab");
+      tabs.push(await card.evaluate((el) => el.__sm.focus()));
+    }
+    check("shell mode: Tab walks slots 1, 2, 3, 4, 6, 7, 8 (not the off slot 5), then leaves the eight",
+      JSON.stringify(tabs) === JSON.stringify([1, 2, 3, 5, 6, 7, -1]), JSON.stringify(tabs));
+    // Presses: a live slot runs its act and sends nothing (it is a care slot's button: no button.press);
+    // a blocked or an off slot does nothing and starts no rim cue.
+    await button(0).click();
+    await page.waitForTimeout(150);
+    const pressed = await card.evaluate((el) => {
+      const sm = el.__sm;
+      const s = sm.s();
+      const live = { acts: [...sm.acts], calls: [...sm.calls], rim: sm.rim(s) };
+      sm.eight(s)[2].click();
+      sm.eight(s)[4].click(); // natively disabled: no click event
+      el._modeClick(s, 4); // and the router itself refuses it
+      el._modeClick(s, 2);
+      return { live, dead: { acts: [...sm.acts], calls: sm.calls.filter((c) => c.endsWith(".press")), rim: sm.rim(s) }, mode: !!s.mode };
+    });
+    check("shell mode: a press on a live slot runs its act and sends no button.press",
+      pressed.live.acts.join() === "1" && !pressed.live.calls.some((c) => c === "button.press") && !pressed.live.rim.length, JSON.stringify(pressed.live));
+    check("shell mode: a press on a blocked or an off slot does nothing and adds no rim class",
+      pressed.mode && pressed.dead.acts.join() === "1" && !pressed.dead.calls.length && !pressed.dead.rim.length, JSON.stringify(pressed.dead));
+
+    // 6. _paintCaps (review P1): a push under the mode paints nothing on the eight; the exit shows the new care.
+    await button(0).focus();
+    const push = await card.evaluate((el) => {
+      const sm = el.__sm;
+      const s = sm.s();
+      sm.over["button.feed"] = { state: "unavailable" };
+      sm.over["switch.lights_out"] = { state: "unavailable" };
+      sm.over["sensor.mood"] = { attributes: { flags: ["bored"] } }; // Play's wanted ring
+      el._renderSlide(s);
+      const b = sm.eight(s);
+      const during = { one: b[0].disabled, eight: b[7].disabled, focus: sm.focus(s), wanted: b.filter((x) => x.classList.contains("wanted")).length,
+        desc: b.filter((x) => x.hasAttribute("aria-description")).length };
+      el._modeExit(s, "direct");
+      const after = { feed: s.buttons.feed.disabled, lights: s.buttons.lights.disabled, play: s.buttons.play.classList.contains("wanted"),
+        playDesc: s.buttons.play.getAttribute("aria-description") };
+      sm.over = {};
+      el._renderSlide(s);
+      return { during, after, back: sm.diff(sm.before, sm.snap(s)) };
+    });
+    check("shell mode: a push with feed and the lights unavailable leaves slots 1 and 8 live, the focus kept, no wanted ring on a swapped cap",
+      !push.during.one && !push.during.eight && push.during.focus === 0 && !push.during.wanted && !push.during.desc, JSON.stringify(push.during));
+    check("shell mode: after the exit, feed is disabled, the lights show the new state and the wanted ring is back (R2)",
+      push.after.feed && push.after.lights && push.after.play && push.after.playDesc === "wanted now" && !push.back.length, JSON.stringify(push));
+
+    // 7. Every exit row of 3.5 that applies to a mode with no game, one probe run each.
+    let r = await card.evaluate((el) => { el.__sm.enter(); el._modeExit(el.__sm.s(), "direct"); return el.__sm.row("direct"); });
+    row("_modeExit", r);
+    await card.evaluate((el) => el.__sm.enter());
+    await button(7).click();
+    r = await card.evaluate((el) => el.__sm.row("quit"));
+    row("the quit slot", r, r.focus === 2);
+    await card.evaluate((el) => el.__sm.enter());
+    await page.keyboard.press("Escape");
+    r = await card.evaluate((el) => el.__sm.row("quit"));
+    row("Escape with the focus on a swapped cap", r, r.focus === 2);
+    r = await card.evaluate((el) => {
+      const sm = el.__sm;
+      const s = sm.s();
+      sm.enter();
+      const inside = s.device.contains(s.gameBox);
+      s.gameBox.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true }));
+      return { ...sm.row("quit"), inside };
+    });
+    row("Escape from inside .game", r, r.inside);
+    r = await card.evaluate((el) => {
+      const sm = el.__sm;
+      const s = sm.s();
+      sm.enter({ exit: { status: "keep" } });
+      el._toggleStatus(s);
+      const open = s.screen.classList.contains("show-status") && !!s.mode;
+      s.status.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true, cancelable: true }));
+      const escaped = { closed: !s.screen.classList.contains("show-status"), mode: !!s.mode, log: [...sm.log] };
+      el._toggleStatus(s);
+      el._modeClick(s, 1); // a press under the open sheet closes it first, then runs
+      const press = { closed: !s.screen.classList.contains("show-status"), acts: [...sm.acts], mode: !!s.mode };
+      el._modeExit(s, "direct");
+      return { ...sm.row("direct"), open, escaped, press };
+    });
+    row("status \"keep\": Escape with the sheet open closes only the sheet, a press under it closes it and runs; then _modeExit", r,
+      r.open && r.escaped.closed && r.escaped.mode && !r.escaped.log.length && r.press.closed && r.press.acts.join() === "2" && r.press.mode);
+    r = await card.evaluate((el) => {
+      const sm = el.__sm;
+      const s = sm.s();
+      sm.enter();
+      el._toggleStatus(s);
+      const off = !s.mode;
+      el._toggleStatus(s);
+      return { ...sm.row("status"), off };
+    });
+    row("status \"end\": the status sheet opening", r, r.off);
+    // idle: _modeGuard from _tick (700 ms), with the clock set back; idleHold true first holds it.
+    await card.evaluate((el) => {
+      const sm = el.__sm;
+      const s = sm.s();
+      s.__hold = true;
+      sm.enter({ exit: { idleMs: 1000, idleHold: (x) => !!x.__hold } });
+      s.modeAt = Date.now() - 5000;
+    });
+    await page.waitForTimeout(1600);
+    const held = await card.evaluate((el) => !!el.__sm.s().mode);
+    await card.evaluate((el) => { el.__sm.s().__hold = false; });
+    await page.waitForTimeout(1600);
+    r = await card.evaluate((el) => { delete el.__sm.s().__hold; return el.__sm.row("idle"); });
+    row("idle (exit.idleMs from _tick; idleHold true held it first)", r, held);
+    r = await card.evaluate((el) => {
+      const sm = el.__sm;
+      const s = sm.s();
+      sm.enter();
+      sm.over["binary_sensor.asleep"] = { state: "on" }; // the card's own push with the asleep sensor on
+      el._renderSlide(s);
+      sm.over = {};
+      el._renderSlide(s);
+      return sm.row("asleep");
+    });
+    row("asleep (a push)", r);
+    for (const reason of ["away", "egg"]) {
+      r = await card.evaluate((el, reason) => {
+        const sm = el.__sm;
+        const s = sm.s();
+        sm.enter({ exit: { on: [] } });
+        s[reason] = true; // the flag as _renderSlide sets it: a mode that does not list it stays
+        el._modeGuard(s);
+        const stays = !!s.mode;
+        el._modeExit(s, "direct");
+        sm.enter();
+        el._modeGuard(s);
+        s[reason] = false;
+        return { ...sm.row(reason), stays };
+      }, reason);
+      row(`${reason} (listed in exit.on; unlisted, the mode stays)`, r, r.stays);
+    }
+    r = await card.evaluate((el) => {
+      const sm = el.__sm;
+      const s = sm.s();
+      const at = el._index;
+      const other = el._slides.findIndex((x, i) => i !== at && x.ids);
+      sm.enter();
+      const keep = other >= 0 ? sm.snap(el._slides[other]) : null;
+      const neighbour = other >= 0 && !sm.diff(keep, sm.snap(el._slides[other])).length && !el._slides[other].device.classList.contains("moded");
+      if (other < 0) return { ok: false, why: "one slide" };
+      el._go(other);
+      el._go(at);
+      return { ...sm.row("slide", s), neighbour };
+    });
+    row("_go to another slide", r);
+    // 8. The other slide kept its care caps while this one was in the mode.
+    check("shell mode: a second slide keeps its care caps while the first is in a mode", !!r.neighbour, JSON.stringify(r));
+    await page.waitForTimeout(600);
+    r = await card.evaluate((el) => {
+      const sm = el.__sm;
+      const s = sm.s();
+      sm.enter();
+      el._forget(s);
+      el._redraw(s);
+      return sm.row("forget");
+    });
+    row("_forget (the slide shows another pet)", r);
+    r = await card.evaluate(async (el) => {
+      const sm = el.__sm;
+      const s = sm.s();
+      const settle = () => new Promise((done) => setTimeout(done, 400)); // _update is async (worlds.json)
+      sm.enter();
+      sm.over["sensor.life_stage"] = { state: "unavailable" }; // the integration reloading (D10)
+      el._redraw(s);
+      await settle();
+      const reloading = s.reloading && s.screen.classList.contains("faded") && sm.eight(s).every((b) => b.disabled);
+      sm.over = {};
+      el._redraw(s);
+      await settle();
+      return { ...sm.row("reload"), reloading };
+    });
+    row("an integration reload (owner decision D10)", r, r.reloading);
+    r = await card.evaluate(async (el) => {
+      const sm = el.__sm;
+      const s = sm.s();
+      sm.enter();
+      el._modeEnter(s, sm.probe({ id: "probe2", announce: "probe two" })); // another id replaces it
+      const replaced = { log: [...sm.log], live: s.modeLive.textContent, id: s.mode?.id };
+      let said = 0;
+      const watch = new MutationObserver((m) => { said += m.length; });
+      watch.observe(s.modeLive, { childList: true, characterData: true, subtree: true });
+      el._modeEnter(s, sm.probe({ id: "probe2", announce: "probe two" })); // the same id: a repaint only
+      await new Promise((done) => setTimeout(done, 50));
+      watch.disconnect();
+      const same = { log: [...sm.log], said, id: s.mode?.id };
+      el._modeExit(s, "direct");
+      return { ...sm.row("direct", s, "probe:replace,probe2:direct"), replaced, same };
+    });
+    row("a replace by another mode (then _modeExit)", r, r.replaced.log.join() === "probe:replace" && r.replaced.id === "probe2"
+      && r.replaced.live === "probe two: p1, p2, p4, p6, p7, quit" && r.same.log.join() === "probe:replace" && r.same.said === 0
+      && r.same.id === "probe2" && r.focus === 2);
+    // teardown: a second card on the page (its server calls stubbed), removed with the probe on.
+    r = await card.evaluate(async (el) => {
+      const sm = el.__sm;
+      const one = document.createElement("hatch-pet-card");
+      one.style.cssText = "position:fixed;left:0;top:0;width:400px;z-index:-1";
+      one.setConfig({ ...el._config });
+      document.body.append(one);
+      one.hass = { ...el._hass, callService: async () => ({ response: {} }) };
+      for (let i = 0; i < 60 && !one._slides?.[0]?.buttons; i++) await new Promise((done) => setTimeout(done, 50));
+      const s = one._slides?.[0];
+      if (!s?.buttons) {
+        one.remove();
+        return { ok: false, why: "the second card drew no slide" };
+      }
+      sm.log.length = 0;
+      const entered = one._modeEnter(s, sm.probe());
+      const moded = s.device.classList.contains("moded");
+      one.remove();
+      return { ok: entered && moded && !s.mode && sm.log.join() === "probe:teardown", log: [...sm.log] };
+    });
+    check("shell mode: card teardown (disconnect) ends the probe", r.ok, JSON.stringify(r));
+
+    // 9. Reduced motion: no rebound class on the enter or the exit (and without it, all eight get one).
+    const swaps = () => card.evaluate((el) => {
+      const sm = el.__sm;
+      const s = sm.s();
+      const count = () => sm.eight(s).filter((b) => b.classList.contains("swap")).length;
+      const pre = count();
+      sm.enter();
+      const enter = count();
+      el._modeExit(s, "direct");
+      return { pre, media: matchMedia("(prefers-reduced-motion: reduce)").matches, enter, exit: count() };
+    });
+    await page.waitForTimeout(300); // the last row's rebound (90 ms) is over
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const still = await swaps();
+    await page.emulateMedia({ reducedMotion: null });
+    await page.waitForTimeout(300);
+    const moving = await swaps();
+    check("shell mode: under reduced motion no rebound class is set on the enter or the exit",
+      still.media && still.pre === 0 && still.enter === 0 && still.exit === 0 && !moving.media && moving.enter === 8 && moving.exit === 8, JSON.stringify({ still, moving }));
+
+    await page.waitForTimeout(200);
+    await card.evaluate((el) => {
+      for (const s of el._slides) if (s.mode) el._modeExit(s, "cleanup");
+      el.__sm?.unwrap();
+      el._redraw();
+    });
+    await page.waitForTimeout(300);
   }
   await unpinAwake(card);
   }
@@ -11642,6 +11997,9 @@ async function main() {
     if (window.__patRandom) Math.random = window.__patRandom;
   });
   // Care reactions C, touch (plan 5.4): where the tap lands, the lean, the ladder, saturation.
+  // The idle stays quiet for the block: an idle look or wander-l between the taps puts `look` on, and a
+  // lean never starts over a look (CI shard 4 caught one in the 1.3 s wait).
+  await quietIdle(card);
   await patReset();
   const touch = async (fx, fy) => {
     const r = await cur().locator(".pat").boundingBox();
@@ -11718,6 +12076,7 @@ async function main() {
   check("touch: an asleep pet stirs on the third pat (the sleepy face, still asleep); an egg's third pat is a double rock",
     asleepEgg.stir.src.includes("sleepy") && asleepEgg.stir.asleep && asleepEgg.stir.until > 0 && asleepEgg.egg.join() === "rock,rock,rock2",
     JSON.stringify(asleepEgg));
+  await quietIdle(card, false); // the touch checks are done: idle runs again
   await patReset();
   // Motion ship 1 (CSS-first wins), on the awake pet. A wander left turns first: `look` goes on
   // with `wander-l` and both go off on the one timer; a wander right never turns. The call icon
@@ -12673,6 +13032,9 @@ async function main() {
   }, (V0.in || 1400) + 1300);
   check("visitors: a game starting mid-visit ends it, the picture removed, no line", !abort.on && !abort.inDom && !abort.said, JSON.stringify(abort));
   // Reduced motion: one still first frame at the edge, on screen, then the greet frame and line, no hop.
+  // The idle stays quiet from the prep to the tick: an idle move in the 150 ms wait (movingUntil, a pose,
+  // a line) left the pet not free, and no visitor came (CI shard 4).
+  await quietIdle(card);
   await vprep(V0);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.waitForTimeout(150);
@@ -12694,6 +13056,7 @@ async function main() {
     (still.drawn === "child" || /_(cheer|excited|wave)_1/.test(still.src)) && lines.some((l) => still.text.includes(l)), JSON.stringify(still));
   await page.emulateMedia({ reducedMotion: null });
   await page.waitForTimeout(150);
+  await quietIdle(card, false);
   // A baby (baby talk on for this viewer) says the BABY.visit babble.
   await vprep(V0);
   const babyKey = `hatch-baby-talk-${me}`;

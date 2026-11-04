@@ -382,8 +382,9 @@ function momentCard() {
     HOUSE_REQUEST: { blanket: "heating", fan: "cooling" }, HOUSE_LINES: new Proxy({}, { get: () => ["a line"] }),
     REACT_POSE: { startle: { move: "startle", ms: 400 } },
   };
-  vm.runInNewContext(`const o = {${method("_moment")}}; this.moment = o._moment;`, mctx);
+  vm.runInNewContext(`const o = {${method("_moment")}, ${method("_owned")}}; this.moment = o._moment; this.owned = o._owned;`, mctx);
   const self = {
+    _owned: mctx.owned, // the card's own "who owns the screen" (shell modes 3.7)
     // a line runs its fx at once (the real one waits for the bubble)
     _line: (s, cls, text, ms, opts) => { log.order.push("line"); if (opts.then) opts.then(); },
     _animate: () => {},
