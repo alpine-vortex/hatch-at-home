@@ -500,6 +500,14 @@ const STYLE = `
   .game .hc.sunk::after { content: none; }
   .game .hc.legal { box-shadow: inset 0 0 0 2px #3a2a1a; }
   .game .hc.lit { box-shadow: inset 0 0 0 3px #fffdf5, inset 0 0 0 5px #3a2a1a; background: rgba(255, 253, 245, 1); }
+  /* Ship 4a's twist cells (CSS, no art): a stump's rings (the second pair mossy, so two pairs tell apart) and a
+     striped rug. They never sink, and keep their look when lit (the ring of .lit is drawn over it). */
+  .game .hc.stump, .game .hc.stump.lit { border-radius: 50%; border-color: rgba(58, 42, 26, .6);
+    background: radial-gradient(circle, #5a3d22 0 14%, #b07c4c 15% 32%, #6b4a2b 33% 38%, #b07c4c 39% 56%, #5a3d22 57%); }
+  .game .hc.stump.two, .game .hc.stump.two.lit {
+    background: radial-gradient(circle, #3f4a22 0 14%, #9c9a58 15% 32%, #4a5328 33% 38%, #9c9a58 39% 56%, #3f4a22 57%); }
+  .game .hc.rug, .game .hc.rug.lit { border-radius: 12%; border-color: rgba(58, 42, 26, .6);
+    background: repeating-linear-gradient(45deg, #b5523b 0 22%, #e2b04a 22% 30%, #b5523b 30% 50%); }
   .game .hpath { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none;
     z-index: 1; }
   .game .hpath path { fill: none; stroke: #3a2a1a; stroke-width: 2; stroke-dasharray: 2 4; stroke-linecap: round; }

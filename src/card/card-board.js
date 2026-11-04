@@ -19,6 +19,8 @@ const HOP_COPY = {
     tidy: "Hop of the Day, tidy" },
   failed: "hmm, that didn't work", // a settle that came to nothing (also the board call's)
   found: "ooh, I found something ♪", // a find from the settle's `found: true` (Q3, draft)
+  // A twist cell's aria label (plan 2c "Player copy", draft for the first mate; the plain cells keep none).
+  cell: { stump: "stump hole, leads to its twin", rug: "rug, slides you one more" },
 };
 // Ship 3b: the pure parts, no `this` and no DOM (tests/js/hop_settle.test.js reads them).
 // The server's day is the HA local date: Intl with hass.config.time_zone (Q1), else this device's.
@@ -80,7 +82,10 @@ const HOP_KEYS = [
   ["special", "✦", HOP_COPY.special(0)], ["undo", "↶", "Take back the last move"],
   ["restart", "↻", HOP_COPY.restart],
 ];
-const HOP_CELLS = { ".": "pad", f: "pad find", o: "stone", "~": "water", "#": "wall", P: "pad start", N: "nest" };
+const HOP_CELLS = { ".": "pad", f: "pad find", o: "stone", "~": "water", "#": "wall", P: "pad start", N: "nest",
+  1: "stump", 2: "stump two", "=": "rug" };
+// The twist cells that carry role="img" and a label (ship 4a): the class's first word names the copy.
+const HOP_LABELLED = { 1: "stump", 2: "stump", "=": "rug" };
 
 class HatchPetCardBoard extends HatchPetCardGames {
   // --- Board mode: Hop of the Day (plan 2026-11-02-hop-of-the-day, ship 2b) ---------------------
@@ -283,6 +288,10 @@ class HatchPetCardBoard extends HatchPetCardGames {
       const el = document.createElement("i");
       el.className = `hc ${HOP_CELLS[ch]}`;
       el.dataset.i = String(i);
+      if (HOP_LABELLED[ch]) {
+        el.setAttribute("role", "img");
+        el.setAttribute("aria-label", HOP_COPY.cell[HOP_LABELLED[ch]]);
+      }
       return el;
     }));
     g.el = { wrap, grid, piece: grid.querySelector(".hpiece"), path: grid.querySelector(".hpath path"),

@@ -4314,10 +4314,13 @@ async function main() {
   await pinAwake(card, "board");
   {
     const cases = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "tests", "fixtures", "hop_cases.json"), "utf8")).boards;
+    // The twist as hop.py's twist_of names it from the glyphs (ship 4a: stumps, rug); copy only, no rule reads it.
+    const twistOf = (grid) => (/[12]/.test(grid.join("")) ? "stumps" : grid.join("").includes("=") ? "rug" : null);
     const replyOf = (name, id = name) => {
       const { w, h, grid, family, specials } = cases[name];
-      return { result: "ok", day: "2026-11-03", id, w, h, grid, family, specials, world: "woodland", twist: null,
-        done: false, tidy: false };
+      const twist = twistOf(grid);
+      return { result: "ok", day: "2026-11-03", id, w, h, grid, family, specials, world: twist === "rug" ? "hearth" : "woodland",
+        twist, done: false, tidy: false };
     };
     const warnings = [];
     page.on("console", (m) => { if (m.type() === "warning" && /hop board/.test(m.text())) warnings.push(m.text()); });
@@ -4538,6 +4541,61 @@ async function main() {
     check("undo restores a sunk pad and a spent use",
       !!jump && jumped.moves === 1 && jumped.uses === start.uses - 1 && jumped.sunk !== 0 && undone.moves === 0 && undone.uses === start.uses &&
         undone.sunk === 0 && undone.pos === start.pos, JSON.stringify({ start, sp: sp.special, jump, jumped, undone }));
+    await quit();
+
+    // Ship 4a: a stump's jump and a rug's slide land off the named cell; the key names the stepped-on cell, the
+    // card draws the landing, undo puts the pet back. Only the twist cells carry role="img" and the plan's label.
+    const twistLook = () => card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const g = s.game;
+      const cells = [...s.gameBox.querySelectorAll(".hc")];
+      const box = (e) => { const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+      const [px, py] = box(g.el.piece);
+      const [cx, cy] = box(cells[g.st.pos]);
+      return { labelled: cells.filter((c) => c.getAttribute("role") === "img").map((c) => [Number(c.dataset.i), c.getAttribute("aria-label")]),
+        unlabelled: cells.filter((c) => c.getAttribute("role") !== "img").every((c) => !c.hasAttribute("aria-label")),
+        pieceOnPos: Math.abs(px - cx) < 2 && Math.abs(py - cy) < 2 };
+    });
+    const settleFx = async () => { await page.waitForTimeout(400); };
+    await open(replyOf("stumps_hop")); // N.f.1 / .#.~. / P.1.. : P at k (10), the pair at e (4) and m (12)
+    const stumpCells = await twistLook();
+    check("stumps: each stump cell is role=img with the plan's label, and no other cell has a label",
+      JSON.stringify(stumpCells.labelled) === JSON.stringify([[4, "stump hole, leads to its twin"], [12, "stump hole, leads to its twin"]]) &&
+        stumpCells.unlabelled, JSON.stringify(stumpCells));
+    await key("right").click(); // k to l
+    const onL = await targets();
+    await key("right").click(); // l onto the stump m: out of its twin e
+    await settleFx();
+    const jumpedTo = await game();
+    const jumpLook = await twistLook();
+    await key("undo").click();
+    await settleFx();
+    const backOnL = await game();
+    check("stumps: the step onto a stump names it (a legal target), lands the pet on its twin, the piece drawn there; undo puts it back",
+      onL.plain.includes(12) && jumpedTo.pos === 4 && JSON.stringify(jumpedTo.list) === "[11,12]" && jumpedTo.uses === 1 &&
+        jumpLook.pieceOnPos && backOnL.pos === 11 && backOnL.moves === 1,
+      JSON.stringify({ onL, jumpedTo, jumpLook, backOnL }));
+    await shot("board-300-stump");
+    await quit();
+    await open(replyOf("rug_hop")); // ...=N / f#... / P..=. : P at k (10), rugs at d (3) and n (13)
+    const rugCells = await twistLook();
+    check("rug: each rug cell is role=img with the plan's label, and no other cell has a label",
+      JSON.stringify(rugCells.labelled) === JSON.stringify([[3, "rug, slides you one more"], [13, "rug, slides you one more"]]) &&
+        rugCells.unlabelled, JSON.stringify(rugCells));
+    await key("right").click(); // k to l
+    await key("right").click(); // l to m
+    const onM = await targets();
+    await key("right").click(); // m onto the rug n: one more, onto o
+    await settleFx();
+    const slid = await game();
+    const slideLook = await twistLook();
+    await key("undo").click();
+    await settleFx();
+    const backOnM = await game();
+    check("rug: the step onto a rug names it, slides the pet one more (onto o), the piece drawn there; undo puts it back on m",
+      onM.plain.includes(13) && slid.pos === 14 && JSON.stringify(slid.list) === "[11,12,13]" && slideLook.pieceOnPos &&
+        backOnM.pos === 12 && backOnM.moves === 2, JSON.stringify({ onM, slid, slideLook, backOnM }));
+    await shot("board-300-rug");
     await quit();
 
     // Park and resume: every move is written, and every way out leaves the same moves for the way back.
