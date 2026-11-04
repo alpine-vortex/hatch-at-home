@@ -4624,7 +4624,9 @@ async function main() {
     // bench's (dev/bench/hop-boards.json, from hop.py): `hop-child`, a win and a tidy list.
     {
       const fx = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "dev", "bench", "hop-boards.json"), "utf8")).boards["hop-child"];
-      const today = () => card.evaluate((el) => hopToday(el._hass.config?.time_zone));
+      // The card's constants are not globals under HA, so today is worked out here, as the card does (Intl, HA's zone).
+      const today = () => card.evaluate((el) => new Intl.DateTimeFormat("en-CA", { timeZone: el._hass.config?.time_zone || undefined,
+        year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()));
       const boardOf = async (id, over = {}) => ({ ...fx.reply, day: await today(), id, done: false, tidy: false, ...over });
       const okR = (over) => ({ result: "ok", won: true, tidy: false, paid: true, found: false, already: false, ...over });
       const settleWarns = [];
@@ -4642,6 +4644,7 @@ async function main() {
       }, [replies, hold]);
       const openBoard = async (reply, then) => {
         await card.evaluate((el, [r, then]) => {
+          el._slides[el._index].hopSeen = null; // each board here starts from an unsolved day, whatever the last one did
           el.__fetches = 0;
           el._hopFetch = async () => { el.__fetches++; return el.__fetches > 1 && then ? then : r; };
         }, [reply, then || null]);
@@ -4651,9 +4654,10 @@ async function main() {
       };
       const play = (letters) => card.evaluate((el, l) => {
         const s = el._slides[el._index];
-        for (const ch of l) el._hopMove(s, HATCH_HOP.LETTERS.indexOf(ch));
+        for (const ch of l) el._hopMove(s, "abcdefghijklmnopqrstuvwx".indexOf(ch));
         const g = s.game;
-        return { done: g.done, settled: g.settled, tidy: g.tidy, sent: (el.__settles || []).length, bubble: s.bubble.textContent };
+        return { done: g.done, settled: g.settled, tidy: g.tidy, sent: (el.__settles || []).length, bubble: s.bubble.textContent,
+          parked: Object.keys(localStorage).filter((k) => k.startsWith("hatch-hop|")).map((k) => localStorage.getItem(k)) };
       }, letters);
       const view = () => card.evaluate((el) => {
         const s = el._slides[el._index];
@@ -4685,14 +4689,13 @@ async function main() {
       });
       await openBoard(await boardOf("settle-1"));
       const w1 = await play(fx.win);
-      const mid = await stored();
       await page.waitForTimeout(200);
       const v1 = await view();
       const sent1 = await page.evaluate(() => window.__hopCalls);
       await card.evaluate((el) => { el._hass.callService = el.__realCall; });
       check("a plain win: the solved view at once, the list parked until the reply, the settle sent once",
-        w1.done && !w1.settled && w1.bubble === "solved" && w1.tidy === false && Object.values(mid)[0] === fx.win && sent1.length === 1,
-        JSON.stringify({ w1, mid, sent1 }));
+        w1.done && !w1.settled && w1.bubble === "solved" && w1.tidy === false && w1.parked[0] === fx.win && sent1.length === 1,
+        JSON.stringify({ w1, sent1 }));
       check("... the settle carries the board's id and the encoded list, and no `shared` on a private screen",
         sent1[0]?.action === "settle" && sent1[0].id === "settle-1" && sent1[0].moves === fx.win && !("shared" in sent1[0]) &&
           typeof sent1[0].entity_id === "string", JSON.stringify(sent1));
