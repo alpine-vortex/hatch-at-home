@@ -813,8 +813,13 @@ Owner 2026-11-04: a different sitter for each of the 24 shell finishes
 skin tone, outfit, colours, one shell-themed accessory) swaps over the same poses; 24 look
 sheets, one per finish, each a distinct person.
 
+Owner 2026-11-04: an old granny sitter, as the gingham shell's look (cosy fit): grey hair in a
+bun, round glasses, a cardigan, a warm smile; a slightly shorter, rounder silhouette if the look
+layer allows, on the same poses. She goes first in the look queue and is flagged in the review.
+
 Owner 2026-11-04 (later, not A1): five fully redrawn sitters, one per world shell
-(woodland, aqua, grove, celestial, dune).
+(woodland, aqua, grove, celestial, dune), and the granny fully redrawn too, with her own poses
+(a slower walk, knitting in the chair, and so on): six sitters in that batch.
 
 ## 9. Copy (draft, FM approves — owner decision D6)
 

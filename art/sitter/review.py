@@ -5,7 +5,7 @@ fr = pathlib.Path(sys.argv[1]); out = pathlib.Path(sys.argv[2])
 poses = {}
 for p in sorted(fr.glob("*.png")):
     m = re.match(r"(.+?)(?:_(\d))?\.png", p.name); poses.setdefault(m.group(1), []).append(p.name)
-ORDER="stand walk wave read doze chair feed play clean medicine tuck pat cheer shoo".split()
+ORDER="stand walk wave read doze chair feed play clean medicine tuck pat cheer shoo stretch tea laugh water window tidy".split()
 poses = dict(sorted(poses.items(), key=lambda kv: (ORDER.index(kv[0]) if kv[0] in ORDER else 99, kv[0])))
 SP = ["hamster", "corgi", "deer"]; SPR = "../../custom_components/virtual_pet/frontend/sprites"
 h = ["""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Sitter sprites review</title>
@@ -32,5 +32,17 @@ for pose, files in poses.items():
             h.append(f"<img class='sit f{i+1}' src='{fr.name}/{f}'>")
         h.append("</div>")
     h.append("</div>")
+LK = pathlib.Path("looks")
+if LK.is_dir():
+    FIN = "woodland aqua grove celestial dune clear glitter glow speckle stripes hearts stars gingham dots camo waves scales leaves paws constellation rainbow twotone sunset smoke".split()
+    h.append("<h1>Looks: one sitter per shell finish</h1><p>Each look is the stand pose (2 frames), the wave (1 frame) and its accessory. Shown beside a hamster, a corgi and a deer. The body is the same in every look.</p>")
+    for fin in FIN:
+        d = LK / fin
+        if not d.is_dir(): continue
+        flag = " <b style='color:#b03;'>(granny: owner's request, own redraw later; shorter and rounder)</b>" if fin == "gingham" else ""
+        h.append(f"<h2>{fin}{flag}</h2><div class=row>")
+        for sp in SP:
+            h.append(f"<div class=cell><span class=cap>{sp}</span><img class=pet src='{SPR}/{sp}/adult_content_1.png'><img class='sit f1' src='looks/{fin}/stand_1.png'><img class='sit f2' src='looks/{fin}/stand_2.png'></div>")
+        h.append(f"<div class=sheet><img src='looks/{fin}/wave_1.png' title=wave><img src='looks/{fin}/accessory.png' title=accessory></div></div>")
 h.append("</html>")
 out.write_text("\n".join(h))
