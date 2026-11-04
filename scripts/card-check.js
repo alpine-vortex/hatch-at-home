@@ -594,8 +594,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   // ...and survives a hass update: a mood tick, then the sun going down and up.
   const preTick = await look(); // the list's scroll now (the taps above moved it)
   const sun = await evaluate(() => { const st = document.querySelector("home-assistant").hass.states["sun.sun"]; return { state: st.state, attributes: st.attributes }; });
-  await inject(a.entity.replace("life_stage", "mood"), { attributes: { cc_tick: Date.now() } });
-  await page.waitForTimeout(500);
+  await injectUntil(a.entity.replace("life_stage", "mood"), { attributes: { cc_tick: Date.now() } }, null, { settle: 500 });
   const ticked = await look();
   await inject("sun.sun", { state: sun.state === "below_horizon" ? "above_horizon" : "below_horizon" });
   await page.waitForTimeout(500);
@@ -823,8 +822,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   }
   await card.evaluate((el) => { el._hass.callWS = el.__realWS; delete el.__realWS; });
   // ...and the real server's refusal: a show-off offered by a stale list.
-  await inject(a.entity, { attributes: { shell_finish_options: [...a.options, ...lockedKeys] } });
-  await page.waitForTimeout(400);
+  await injectUntil(a.entity, { attributes: { shell_finish_options: [...a.options, ...lockedKeys] } }, null, { settle: 400 });
   await openPicker();
   if (lockedKeys.length) {
     await cur().locator(`.status .tile[data-finish="${lockedKeys[0]}"]`).scrollIntoViewIfNeeded();
@@ -1169,6 +1167,23 @@ async function main() {
       // no storage
     }
   }, bootVersion);
+  // holdHass(el), in the page as window.__holdHass: Home Assistant's frontend pushes its own hass to
+  // the card on any state change, and a push inside a block that has swapped `el._hass` for a stub
+  // (a copy with its own states, callService or callWS) swaps the stub for the real one mid-block.
+  // The hold makes `el.hass = ...` a no-op; the stub is still read through `el._hass`. It returns the
+  // release: the card's own setter again, then HA's hass as it is now (the block ran for a while, so
+  // the copy it took at the start is stale). Call it in the block, release in its `finally`, after
+  // the block has put its own `el._hass` back. A block with no `await` between its stub and its
+  // restore needs none: nothing can push in between.
+  await context.addInitScript(() => {
+    window.__holdHass = (el) => {
+      Object.defineProperty(el, "hass", { configurable: true, get: () => el._hass, set: () => {} });
+      return () => {
+        delete el.hass;
+        el.hass = document.querySelector("home-assistant").hass;
+      };
+    };
+  });
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -1261,6 +1276,46 @@ async function main() {
     });
   }, { entity, patch });
 
+  // injectUntil(entity, patch, predicate, { tries, ms, settle }): inject() and verify the setup. The
+  // server overwrites an injected state on its next write for that entity (every action's publish,
+  // every house event), so a bare inject + a fixed sleep races it. This injects, waits (up to `ms`)
+  // until the card's own hass shows the patch (state equal, each patched attribute deeply equal) and
+  // `predicate(el, { entity, patch })` (optional, runs in the page, for what the card should show
+  // besides), then waits the check's old `settle` ms for the card to react and looks once more (an
+  // overwrite inside the settle sends it round again). At most `tries` rounds. It returns true when
+  // the card showed the state, else it logs a NOTE and returns false: only the setup is verified,
+  // the assertions after it stand as they were.
+  const injectUntil = async (entity, patch, predicate = null, { tries = 4, ms = 2500, settle = 0 } = {}) => {
+    const src = predicate ? predicate.toString() : null;
+    const shows = () => page.locator("hatch-pet-card").first().evaluate((el, { entity, patch, src }) => {
+      const same = (a, b) => {
+        if (a === b) return true;
+        if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+        const ka = Object.keys(a), kb = Object.keys(b);
+        return ka.length === kb.length && ka.every((k) => same(a[k], b[k]));
+      };
+      const st = el._hass?.states?.[entity];
+      if (!st) return false;
+      if (patch.state !== undefined && st.state !== patch.state) return false;
+      for (const [k, v] of Object.entries(patch.attributes || {})) if (!same(st.attributes?.[k], v)) return false;
+      return src ? !!new Function("el", "arg", `return (${src})(el, arg);`)(el, { entity, patch }) : true;
+    }, { entity, patch, src });
+    const until = async () => {
+      for (const end = Date.now() + ms; ; await page.waitForTimeout(100)) {
+        if (await shows()) return true;
+        if (Date.now() >= end) return false;
+      }
+    };
+    for (let i = 0; i < tries; i++) {
+      await inject(entity, patch);
+      if (!(await until())) continue;
+      if (settle) await page.waitForTimeout(settle);
+      if (await shows()) return true;
+    }
+    console.log(`NOTE: injectUntil: the card never showed ${entity} ${JSON.stringify(patch).slice(0, 120)} in ${tries} tries (${timings.at(-1)?.name ?? "prelude"})`);
+    return false;
+  };
+
   // The sections below are gated with `if (enter(...)) {` lines, left unindented on
   // purpose: re-indenting ~5000 lines would conflict with every branch that edits a check.
   // What a section hands to a later one is declared here or in the ungated lines between.
@@ -1324,6 +1379,7 @@ async function main() {
     const s = el._slides[el._index];
     const real = el._hass;
     const out = { world: s.worldKey, shape: s.device.className };
+    const release = window.__holdHass(el); // awaits below: a real push would put the live states back
     try {
       const now = new Date().toISOString();
       const states = { ...real.states };
@@ -1340,6 +1396,7 @@ async function main() {
       out.patOn = el._patOn(s);
     } finally {
       el._hass = real;
+      release();
       el._sig = null;
       await el._update();
     }
@@ -2081,10 +2138,9 @@ async function main() {
   });
   const publicMoments = await evaluate((e) =>
     document.querySelector("home-assistant").hass.states[e].attributes.moments || [], pet["sensor.last_care"]);
-  await inject(pet["sensor.last_care"], { attributes: { moments: [
+  await injectUntil(pet["sensor.last_care"], { attributes: { moments: [
     { type: "bond_up", user: "someone-else", level: 4, nickname: "pumpkin", at: new Date().toISOString() },
-    ...publicMoments] } });
-  await page.waitForTimeout(800);
+    ...publicMoments] } }, null, { settle: 800 });
   const theirs = await page.locator("hatch-pet-card").evaluate((el) => {
     const s = el._slides[el._index];
     return [...(s.queue || []).map((q) => q.text), s.bubble.textContent].filter((t) => /pumpkin|call you/.test(t));
@@ -2878,6 +2934,13 @@ async function main() {
       await wait(30);
       return await until(isOpen, 500);
     };
+    // A setup open: when the sheet does not open, say so (the checks after it would only read as
+    // "chip", "swipe" and "sharedExit" failing, which is not what went wrong).
+    const opened = async (where) => {
+      const ok = await open();
+      if (!ok) out[`sheet did not open (${where})`] = false;
+      return ok;
+    };
     // _goShared / _goPersonal start an async _update (it awaits worlds.json, and the channel answers later)
     // that redraws the slide and clears its status. Let it finish before tapping, or it lands on the open sheet.
     const settled = async () => { await el._update(); await wait(100); };
@@ -2885,6 +2948,9 @@ async function main() {
     const shut = () => { if (s.laySheet) el._closeLay(s); };
     el._press = (slide, key) => pressed.push(key);
     const a = roster[0], b = roster[1], c = roster[2];
+    // HA's pushes held off while the stub is on (as the name sheet below): a real push between two
+    // puts closes the sheet (no lay_egg request in the real mood) and the taps open the status instead.
+    const release = window.__holdHass(el);
     try {
       // The offer: raised creatures of the egg's world, in egg_roster order; another world's id is dropped.
       put({ raised: [c.id, a.id, "not-in-this-roster"] });
@@ -2925,7 +2991,7 @@ async function main() {
       // "‹ not yet" lays nothing and closes; the guard keeps a fast second tap from laying.
       s.status.querySelector(".layback").click();
       out.back = closed() && pressed.length === 0;
-      await open();
+      await opened("back");
       s.status.querySelector(".laygo").click(); // inside the guard window: the tap that opened it
       out.fast = pressed.length === 0 && s.laySheet;
       await wait(700);
@@ -2934,18 +3000,18 @@ async function main() {
       pressed.length = 0;
       // Every other exit: the status chip, the pet leaving (a swipe), the shared-screen switch, a pet that
       // can no longer lay, a world change that leaves one raised creature, the lay itself (above).
-      await open();
+      await opened("chip");
       el._toggleStatus(s);
       out.chip = closed();
       const n = el._slides.length;
       if (n > 1) {
-        await open();
+        await opened("swipe");
         el._go((el._index + 1) % n);
         const gone = closed();
         el._go(el._slides.indexOf(s));
         out.swipe = gone;
       } else out.swipe = true;
-      await open();
+      await opened("sharedExit");
       localStorage.setItem("hatch-shared-screen", "on");
       el._goShared();
       out.sharedExit = closed();
@@ -2961,13 +3027,13 @@ async function main() {
       el._goPersonal();
       await settled();
       put({ raised: [a.id, c.id] });
-      await open();
+      await opened("cannotLay");
       put({ raised: [a.id, c.id], requests: [] });
       el._redraw(s);
       await wait(300); // _update is async
       out.cannotLay = closed();
       put({ raised: [a.id, c.id] });
-      await open();
+      await opened("oneLeft");
       put({ raised: [a.id] });
       el._redraw(s);
       await wait(300); // _update is async
@@ -3018,6 +3084,7 @@ async function main() {
     } finally {
       el._press = realPress;
       el._hass = realHass;
+      release();
       localStorage.setItem("hatch-shared-screen", "off");
       shut();
       if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
@@ -3046,6 +3113,15 @@ async function main() {
       if (mode === "notasked") throw { code: "not_asked" };
       return null;
     };
+    // HA's own pushes held off: one inside a window below swaps the patched callWS for the real one and
+    // runs _resendAnswers (a third try on "tries", a stash sent for real). The pushes the checks make on
+    // purpose go through the card's own setter, found on its prototype (the hold shadows it on the element).
+    const release = window.__holdHass(el);
+    const push = () => {
+      let proto = Object.getPrototypeOf(el);
+      while (proto && !Object.getOwnPropertyDescriptor(proto, "hass")) proto = Object.getPrototypeOf(proto);
+      Object.getOwnPropertyDescriptor(proto, "hass").set.call(el, el._hass);
+    };
     const answerAs = async (kind, button) => {
       localStorage.removeItem(key);
       sent.length = 0;
@@ -3063,7 +3139,7 @@ async function main() {
       mode = "ok";
       sent.length = 0;
       el._resendAfter = 0;
-      el.hass = el._hass;
+      push();
       await wait(200);
       out.resent = sent.join();
       out.cleared = localStorage.getItem(key);
@@ -3071,14 +3147,14 @@ async function main() {
       mode = "notasked";
       localStorage.setItem(key, JSON.stringify([{ question: "fav_season", answer: "winter", at: Date.now(), entity: s.ids["sensor.life_stage"] }]));
       el._resendAfter = 0;
-      el.hass = el._hass;
+      push();
       await wait(200);
       out.dropped = localStorage.getItem(key);
       // A transport error keeps it.
       mode = "fail";
       localStorage.setItem(key, JSON.stringify([{ question: "fav_season", answer: "winter", at: Date.now(), entity: s.ids["sensor.life_stage"] }]));
       el._resendAfter = 0;
-      el.hass = el._hass;
+      push();
       await wait(200);
       out.kept = !!localStorage.getItem(key);
       // Dream, birthday: never stashed.
@@ -3125,6 +3201,7 @@ async function main() {
       out.late = s.bubble.textContent;
     } finally {
       el._hass.callWS = realWS;
+      release();
       localStorage.setItem("hatch-shared-screen", "off");
       localStorage.removeItem(key);
     }
@@ -3590,8 +3667,7 @@ async function main() {
   // harmlessly. It stays on for the sections below, which must not notice.
   await skip(page, 3500);
   await page.locator("hatch-pet-card").evaluate((el) => el.setConfig({ ...el._config, experimental_catch: true }));
-  await inject(pet["sensor.energy"], { state: "80" }); // the card turns play down when tired
-  await page.waitForTimeout(800);
+  await injectUntil(pet["sensor.energy"], { state: "80" }, null, { settle: 800 }); // the card turns play down when tired
   await button(2).click();
   await page.waitForTimeout(600);
   check("experimental_catch: true is ignored: the picker keeps its three games, no catch",
@@ -3603,8 +3679,7 @@ async function main() {
   {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await skip(page, 4500); // the last result line clears
-    await inject(pet["sensor.energy"], { state: "80" });
-    await page.waitForTimeout(500);
+    await injectUntil(pet["sensor.energy"], { state: "80" }, null, { settle: 500 });
     await button(2).click();
     await page.waitForTimeout(500);
     await cur().locator('.gpick [data-game="left_right"]').click();
@@ -3625,13 +3700,11 @@ async function main() {
     const still = await ticks(5);
     check("3a: with reduced motion the pet's src is the same over 5 ticks",
       new Set(still).size === 1 && /_1\.png/.test(still[0]), JSON.stringify(still));
-    await inject(pet["sensor.mood"], { state: "hungry", attributes: { flags: ["hungry"], requests: [] } });
-    await page.waitForTimeout(1200);
+    await injectUntil(pet["sensor.mood"], { state: "hungry", attributes: { flags: ["hungry"], requests: [] } }, null, { settle: 1200 });
     const moved = await ticks(5);
     check("3a: a mood change swaps the still frame once, and it ends in _1",
       new Set(moved).size === 1 && moved[0] !== still[0] && /_1\.png/.test(moved[0]), JSON.stringify({ still: still[0], moved }));
-    await inject(pet["sensor.mood"], { state: "content", attributes: { flags: [], requests: [] } });
-    await page.waitForTimeout(1200);
+    await injectUntil(pet["sensor.mood"], { state: "content", attributes: { flags: [], requests: [] } }, null, { settle: 1200 });
     const calmAfter = await card.evaluate((el) => {
       const s = el._slides[el._index];
       return { frames: el._frames(s).length };
@@ -3654,8 +3727,7 @@ async function main() {
   {
     const score = () => cur().locator(".gscore").innerText();
     const open = async (kind) => {
-      await inject(pet["sensor.energy"], { state: "80" });
-      await page.waitForTimeout(500);
+      await injectUntil(pet["sensor.energy"], { state: "80" }, null, { settle: 500 });
       await button(2).click();
       await page.waitForTimeout(500);
       await cur().locator(`.gpick [data-game="${kind}"]`).click();
@@ -4361,8 +4433,7 @@ async function main() {
     const stub = (reply) => card.evaluate((el, r) => { el.__hopCalls = 0; el._hopFetch = async () => { el.__hopCalls++; return r; }; }, reply);
     const unstub = () => card.evaluate((el) => { delete el._hopFetch; });
     const picker = async () => {
-      await inject(pet["sensor.energy"], { state: "80" });
-      await page.waitForTimeout(400);
+      await injectUntil(pet["sensor.energy"], { state: "80" }, null, { settle: 400 });
       await button(2).click();
       await page.waitForTimeout(500);
     };
@@ -4832,10 +4903,9 @@ async function main() {
   {
     await card.evaluate((el) => Object.assign(el._slides[el._index], { sayUntil: 0, sayClass: 0, sayEntry: null, queue: [] }));
     const before = await bubble();
-    await inject(pet["sensor.last_care"], {
+    await injectUntil(pet["sensor.last_care"], {
       attributes: { moments: [{ type: "care_miss", reason: "hunger", at: new Date().toISOString() }] },
-    });
-    await page.waitForTimeout(500);
+    }, null, { settle: 500 });
     const live = await card.evaluate((el) => {
       const s = el._slides[el._index];
       return { said: s.bubble.textContent, queue: s.queue.map((q) => q.text),
@@ -5076,12 +5146,11 @@ async function main() {
     `turkey ${feast.turkey} (${feast.gobble}), ${feast.geese} geese`);
   check("snacks are pie at thanksgiving", /season_thanksgiving_pie/.test(feast.prop), feast.prop.split("/").pop());
   await shot("05-thanksgiving-extras");
-  await inject(pet["sensor.last_care"], { attributes: { log: [
+  await injectUntil(pet["sensor.last_care"], { attributes: { log: [
     { action: "feed", by: "Dev Person", at: new Date().toISOString() },
     { action: "play", by: "Sam", at: new Date().toISOString() },
     { action: "clean", by: "Dev Person", at: new Date().toISOString() },
-  ] } });
-  await page.waitForTimeout(600);
+  ] } }, null, { settle: 600 });
   const thanks = await card.evaluate(async (el) => {
     const s = el._slides[el._index];
     const season = el.constructor.seasons.find((x) => x.key === "thanksgiving");
@@ -5294,11 +5363,10 @@ async function main() {
   await inject(pet["sensor.life_stage"], { attributes: { wish: { kind: "sunset", granted: true } } });
   // The usual grant line, not E6 W-b's "what it got" (half the time; checked in E6's own).
   await card.evaluate(() => { window.__grantRandom = Math.random; Math.random = () => 0.9; });
-  await inject(pet["sensor.last_care"], {
+  await injectUntil(pet["sensor.last_care"], {
     attributes: { moments: [{ type: "wish_granted", kind: "sunset", at: new Date().toISOString() },
       { type: "sunset", at: new Date().toISOString() }] },
-  });
-  await page.waitForTimeout(600);
+  }, null, { settle: 600 });
   const granted = await card.evaluate(async (el) => {
     Math.random = window.__grantRandom;
     const s = el._slides[el._index];
@@ -5314,10 +5382,8 @@ async function main() {
   // Excitement bounces once (one greethop, care reactions ship A; it was a 10 s hop loop), not
   // for the whole 15 minutes it lasts. The bounce starts on becoming excited, and the games
   // above may have excited the pet already, so calm it first.
-  await inject(pet["sensor.mood"], { state: "content", attributes: { flags: [] } });
-  await page.waitForTimeout(600);
-  await inject(pet["sensor.mood"], { state: "excited", attributes: { flags: ["excited"] } });
-  await page.waitForTimeout(800);
+  await injectUntil(pet["sensor.mood"], { state: "content", attributes: { flags: [] } }, null, { settle: 600 });
+  await injectUntil(pet["sensor.mood"], { state: "excited", attributes: { flags: ["excited"] } }, null, { settle: 800 });
   const hopsAtFirst = await cur().locator(".pet.greethop").count();
   const loops = await cur().locator(".pet.hop").count(); // the old 10 s loop is gone (idle may hop on its own)
   await skip(page, 11000);
@@ -5335,8 +5401,7 @@ async function main() {
   // A pet update can replace the injected mood, so inject until it shows.
   let screen = "";
   for (let i = 0; i < 3 && !(/stormy/.test(screen) && /windy/.test(screen)); i++) {
-    await inject(pet["sensor.mood"], { state: "content", attributes: { flags: ["storm", "windy"] } });
-    await page.waitForTimeout(800);
+    await injectUntil(pet["sensor.mood"], { state: "content", attributes: { flags: ["storm", "windy"] } }, null, { settle: 800 });
     screen = (await cur().locator(".screen").getAttribute("class")) || "";
   }
   check("thunder and wind show on screen", /stormy/.test(screen) && /windy/.test(screen), screen);
@@ -5350,11 +5415,10 @@ async function main() {
   await cur().locator(".jlink").click();
   let memory = false;
   for (let i = 0; i < 3 && !memory; i++) {
-    await inject(pet["sensor.life_stage"], {
+    await injectUntil(pet["sensor.life_stage"], {
       attributes: { memories: [{ kind: "first_snow", at: Date.now() / 1000 },
         { kind: "season_spring", at: Date.now() / 1000 }] },
-    });
-    await page.waitForTimeout(1000);
+    }, null, { settle: 1000 });
     const text = await cur().locator(".status").innerText();
     memory = /first snow/.test(text) && /first day of spring/.test(text);
   }
@@ -5537,8 +5601,7 @@ async function main() {
   const catchMoments = [{ type: "stage_changed", stage: "teen", from: "child", at: stageAt },
     { type: "weather", change: "rain_started", at: new Date(Date.now() - 3600 * 1000).toISOString() }];
   await inject(pet["sensor.life_stage"], { attributes: { wish: { kind: "sunset", granted: false } } });
-  await inject(pet["sensor.last_care"], { attributes: { moments: catchMoments } });
-  await page.waitForTimeout(600);
+  await injectUntil(pet["sensor.last_care"], { attributes: { moments: catchMoments } }, null, { settle: 600 });
   const look = await card.evaluate(async (el) => {
     const s = el._slides[el._index];
     const device = s.ids.device;
@@ -5621,8 +5684,7 @@ async function main() {
     await page.locator("hatch-pet-card .nav.next").click();
     await page.waitForTimeout(700);
   }
-  await inject(pet["sensor.last_care"], { attributes: { moments: catchMoments } });
-  await page.waitForTimeout(3000);
+  await injectUntil(pet["sensor.last_care"], { attributes: { moments: catchMoments } }, null, { settle: 3000 });
   const reloaded = await card.evaluate((el) => {
     const s = el._slides[el._index];
     const mark = el._seenRead(s.ids.device);
@@ -6583,10 +6645,9 @@ async function main() {
       JSON.stringify([o.live, o.washerWords, o.unknown, o.inGame]));
     // The sensor's route, as the server publishes it: a dishwasher, its line in the bubble.
     await card.evaluate((el) => Object.assign(el._slides[el._index], { sayUntil: 0, sayClass: 0, sayEntry: null, queue: [], game: null }));
-    await inject(pet["sensor.last_care"], {
+    await injectUntil(pet["sensor.last_care"], {
       attributes: { moments: [{ type: "house_moment", category: "dishwasher", at: new Date().toISOString() }] },
-    });
-    await page.waitForTimeout(500);
+    }, null, { settle: 500 });
     const dish = await bubble();
     check("H8: a dishwasher's house moment from the sensor says its line", h8.pools.dishwasher.includes(dish), dish);
     await shot("05-house_moment");
@@ -6814,6 +6875,9 @@ async function main() {
       const keep = { voicedAt: s.voicedAt, queue: s.queue, catchCount: s.catchCount, asleep: s.asleep, calling: s.calling };
       const visit = el._visit;
       el._visit = () => {}; // friend_home looks in again: not in these checks
+      // Every check below swaps el._hass (as another user, a stub callService or callWS, a fresh
+      // connection) across awaits: HA's pushes held off, as in the name sheet block.
+      const release = window.__holdHass(el);
       // Free to talk, whatever the dev pet is doing.
       Object.assign(s, { asleep: false, calling: false, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0 });
       const t = {
@@ -6858,6 +6922,7 @@ async function main() {
       } finally {
         el._state = realState;
         el._hass = realHass;
+        release();
         el._visit = visit;
         Object.assign(s, keep);
         s.sayUntil = 0;
@@ -7925,10 +7990,9 @@ async function main() {
 
     // Live: the moment arrives through sensor.last_care and both lines show.
     await hush();
-    await inject(pet["sensor.last_care"], {
+    await injectUntil(pet["sensor.last_care"], {
       attributes: { moments: [{ type: "stage_changed", stage: "teen", from: "child", personality: "charming", at: new Date().toISOString() }] },
-    });
-    await page.waitForTimeout(500);
+    }, null, { settle: 500 });
     const stageLine = await bubble();
     await shot("07e-reveal-stage-line");
     let revealLine = "";
@@ -8275,18 +8339,16 @@ async function main() {
   for (const [minutes, frames] of [[12, "egg_wiggle"], [4, "egg_crack"]]) {
     let src = "";
     for (let i = 0; i < 3 && !src.includes(frames); i++) {
-      await inject(pet["sensor.life_stage"], {
+      await injectUntil(pet["sensor.life_stage"], {
         state: "egg", attributes: { hatches_at: new Date(Date.now() + minutes * 60000).toISOString() },
-      });
-      await page.waitForTimeout(1200);
+      }, null, { settle: 1200 });
       src = (await cur().locator(".pet").getAttribute("src")) || "";
     }
     check(`egg shows ${frames}`, src.includes(frames), src.split("/").slice(-1)[0]);
   }
   // UX fix 2, F12: an egg's status page is "you two" and when it hatches, none of the care meters.
   for (const [minutes, line] of [[25, "warm and growing ♪"], [10, "wiggling! any minute ♪"], [4, "cracking! ♥"]]) {
-    await inject(pet["sensor.life_stage"], { state: "egg", attributes: { hatches_at: new Date(Date.now() + minutes * 60000).toISOString() } });
-    await page.waitForTimeout(1200);
+    await injectUntil(pet["sensor.life_stage"], { state: "egg", attributes: { hatches_at: new Date(Date.now() + minutes * 60000).toISOString() } }, null, { settle: 1200 });
     const egg = await card.first().evaluate((el) => {
       const s = el._slides[el._index];
       if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
@@ -8301,8 +8363,7 @@ async function main() {
   // UX fix 4, F2: an egg can be patted (it rocks, says "♪", the status stays shut) and doesn't greet
   // by name (its greeting waits for the hatch). F10: the bubble counts "N min" with a no-break
   // space, and says what the status says in the last 6 minutes.
-  await inject(pet["sensor.life_stage"], { state: "egg", attributes: { hatches_at: new Date(Date.now() + 25 * 60000).toISOString() } });
-  await page.waitForTimeout(1200);
+  await injectUntil(pet["sensor.life_stage"], { state: "egg", attributes: { hatches_at: new Date(Date.now() + 25 * 60000).toISOString() } }, null, { settle: 1200 });
   const eggPat = await card.first().evaluate((el) => {
     const s = el._slides[el._index];
     if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
@@ -8353,8 +8414,7 @@ async function main() {
   check("motion 1: an idle egg rocks once on its own, the next 40-90 s out",
     wobbleIdle.egg && wobbleIdle.none && wobbleIdle.rock && !wobbleIdle.rock2 &&
       wobbleIdle.armed > 39000 && wobbleIdle.armed <= 90000 && wobbleIdle.next > 39000 && wobbleIdle.next <= 90000, JSON.stringify(wobbleIdle));
-  await inject(pet["sensor.life_stage"], { state: "egg", attributes: { hatches_at: new Date(Date.now() + 4 * 60000).toISOString() } });
-  await page.waitForTimeout(1200);
+  await injectUntil(pet["sensor.life_stage"], { state: "egg", attributes: { hatches_at: new Date(Date.now() + 4 * 60000).toISOString() } }, null, { settle: 1200 });
   await page.waitForTimeout(700); // the idle rock above is over
   const wobbleCrack = await eggWobble();
   check("motion 1: a cracking egg rocks twice in a row (rock2)", wobbleCrack.egg && wobbleCrack.rock2 && !wobbleCrack.rock, JSON.stringify(wobbleCrack));
@@ -8362,8 +8422,7 @@ async function main() {
   const wobbleCalm = await eggWobble();
   await page.emulateMedia({ reducedMotion: null });
   check("motion 1: an egg does not rock by itself under reduced motion", wobbleCalm.egg && !wobbleCalm.rock && !wobbleCalm.rock2, JSON.stringify(wobbleCalm));
-  await inject(pet["sensor.life_stage"], { state: "egg", attributes: { hatches_at: new Date(Date.now() + 25 * 60000).toISOString() } });
-  await page.waitForTimeout(1200);
+  await injectUntil(pet["sensor.life_stage"], { state: "egg", attributes: { hatches_at: new Date(Date.now() + 25 * 60000).toISOString() } }, null, { settle: 1200 });
   // The name sheet (settings S3): naming the new generation. It lives here, after the moments section, because
   // it swaps the pet's states for a while; the moments checks near the layout and timing limit are touchy about that.
   // (SKIP_S3 leaves it out, to tell its effects from others'.) The lay press, the server's answers and the
@@ -8419,7 +8478,7 @@ async function main() {
     // Home Assistant's frontend pushes its own hass to the card on any state change. A push inside the
     // retry's 2 s wait would swap the stubbed callWS and states for the real ones (the retry then goes to
     // the real server, the sheet closes): hold pushes off while this block runs; the finally puts HA's latest.
-    Object.defineProperty(el, "hass", { configurable: true, get: () => el._hass, set: () => {} });
+    const release = window.__holdHass(el);
     try {
       // The trigger: the sheet opens when the sensor shows an egg of the next generation, and not before.
       put("adult", gen);
@@ -8594,9 +8653,9 @@ async function main() {
       el._toggleStatus(s);
     } finally {
       window.setTimeout = realTimeout;
-      delete el.hass; // the card's own setter again
-      // Home Assistant's own hass as it is now, not the copy taken at the start (this block ran for seconds).
-      el.hass = document.querySelector("home-assistant").hass;
+      // The card's own setter again, and Home Assistant's own hass as it is now, not the copy taken at
+      // the start (this block ran for seconds).
+      release();
       s.sayUntil = 0;
       s.queue = [];
       s.wasGone = false;
@@ -9537,8 +9596,7 @@ async function main() {
       document.querySelector("home-assistant").hass.states[e].attributes.moments || [], pet["sensor.last_care"]);
     const mediaAt = new Date().toISOString();
     const media = { type: "watching", title: "Bluey Check", at: mediaAt };
-    await inject(pet["sensor.last_care"], { attributes: { moments: [media, ...publicNow] } });
-    await page.waitForTimeout(1000);
+    await injectUntil(pet["sensor.last_care"], { attributes: { moments: [media, ...publicNow] } }, null, { settle: 1000 });
     const once = await card.evaluate(async (el, { media, me }) => {
       const s = el._slides[el._index];
       const fromPublic = window.__spoken.filter((t) => t.includes("Bluey Check")).length;
@@ -9826,9 +9884,8 @@ async function main() {
     const publicNow = await evaluate((e) =>
       document.querySelector("home-assistant").hass.states[e].attributes.moments || [], pet["sensor.last_care"]);
     await card.first().evaluate((el) => { window.__h8 = []; el._line = function (slide, cls, text) { window.__h8.push(text); }; });
-    await inject(pet["sensor.last_care"], { attributes: { moments: [
-      { type: "house_live", category: "custom", reaction: "hop", text: "Old server words", at: new Date().toISOString() }, ...publicNow] } });
-    await page.waitForTimeout(800);
+    await injectUntil(pet["sensor.last_care"], { attributes: { moments: [
+      { type: "house_live", category: "custom", reaction: "hop", text: "Old server words", at: new Date().toISOString() }, ...publicNow] } }, null, { settle: 800 });
     const old = await card.first().evaluate((el) => { delete el._line; return window.__h8; });
     check("H8: a house_live on the sensor (an old server's) is never said", !old.some((t) => /Old server words/.test(t)), JSON.stringify(old));
     await inject(pet["sensor.last_care"], { attributes: { moments: publicNow } });
@@ -9880,9 +9937,8 @@ async function main() {
     const publicNow = await evaluate((e) =>
       document.querySelector("home-assistant").hass.states[e].attributes.moments || [], pet["sensor.last_care"]);
     await card.first().evaluate((el) => { window.__h5 = []; el._line = function (slide, cls, text) { window.__h5.push(text); }; });
-    await inject(pet["sensor.last_care"], { attributes: { moments: [
-      { type: "doorbell_live", at: new Date().toISOString() }, ...publicNow] } });
-    await page.waitForTimeout(800);
+    await injectUntil(pet["sensor.last_care"], { attributes: { moments: [
+      { type: "doorbell_live", at: new Date().toISOString() }, ...publicNow] } }, null, { settle: 800 });
     const old = await card.first().evaluate((el) => { delete el._line; return window.__h5; });
     check("H5: a doorbell_live on the sensor (an old server's) is never said", !old.some((t) => pool.includes(t)), JSON.stringify(old));
     await inject(pet["sensor.last_care"], { attributes: { moments: publicNow } });
