@@ -144,7 +144,7 @@ test("every BUSY_OWNERS field is assigned somewhere in src/card (a rename leaves
 test("isBusy: each owner alone makes the slide busy, none makes it free", () => {
   const NOW = 5000;
   const on = {
-    game: { game: "hop" }, mode: { mode: { id: "probe" } }, scene: { scene: {} }, power: { power: {} }, powerPending: { powerPending: true },
+    game: { game: "hop" }, scene: { scene: {} }, power: { power: {} }, powerPending: { powerPending: true },
     visitor: { visitor: {} }, asking: { asking: true }, laySheet: { laySheet: {} }, picker: { picker: {} },
     linking: { linking: true }, calling: { calling: true }, asleep: { asleep: true },
     pose: { poseUntil: NOW + 1 }, status: { statusOpen: true },

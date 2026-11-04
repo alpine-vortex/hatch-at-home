@@ -755,7 +755,7 @@ function bowlCuts(rows, rim) {
   return best?.cuts || null;
 }
 
-class HatchPetCardCare extends HatchPetCardMode {
+class HatchPetCardCare extends HatchPetCardActions {
   // A mood's frames for this stage (<stage>_<mood>_<n>), or null when the species has none.
   _moodFrames(s, mood) {
     return s.species.moods?.includes(mood) && s.drawn

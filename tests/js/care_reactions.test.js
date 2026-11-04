@@ -22,7 +22,7 @@ function card({ calm = false, species, drawn = "child" } = {}) {
   };
   const consts = ["REACT_MS", "READY_MS", "REACTIONS", "STAGE_POSES", "REACT_REFUSALS", "REFUSAL_VARIANTS", "REFUSAL_POOL", "SPOILED_BY"]
     .map(konst).join("");
-  const methods = ["_reactFrames", "_reactMove", "_poseEnd", "_propShow", "_careVariant", "_owned"].map(method).join(",\n");
+  const methods = ["_reactFrames", "_reactMove", "_poseEnd", "_propShow", "_careVariant"].map(method).join(",\n");
   vm.runInNewContext(`${consts}\nthis.api = {${methods}};\nthis.REACTIONS = REACTIONS; this.REACT_REFUSALS = REACT_REFUSALS;` +
     `this.REFUSAL_VARIANTS = REFUSAL_VARIANTS; this.SPOILED_BY = SPOILED_BY; this.STAGE_POSES = STAGE_POSES;`, ctx);
   const sp = species || { moods: ["content", "excited", "cozy", "bored", "sleepy"], frames: 2, acts: { eat: ["baby", "teen", "adult"], refuse: ["baby", "teen", "adult"] } };

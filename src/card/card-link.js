@@ -33,7 +33,7 @@ class HatchPetCardLink extends HatchPetCardVisitors {
   _linkTick(host) {
     const L = this._link;
     // A pet that falls asleep, calls, starts a game or a care scene, or opens the status ends it.
-    if (L && (L.host.asleep || L.guest.asleep || L.host.calling || this._owned(L.host) || L.host.scene ||
+    if (L && (L.host.asleep || L.guest.asleep || L.host.calling || L.host.game || L.host.scene ||
       L.host.screen.classList.contains("show-status"))) this._linkEnd();
     if (this._booting || this._link || this._slides.length < 2) return;
     const now = Date.now();
@@ -58,7 +58,7 @@ class HatchPetCardLink extends HatchPetCardVisitors {
   // the week from Monday; nothing else on it changes the pet.
   _socialFull(s) {
     const level = this._state(s, "sensor.life_stage")?.attributes.social_level;
-    if (level !== SOCIAL_MAX || s.asleep || this._owned(s) || !s.ids?.device) return;
+    if (level !== SOCIAL_MAX || s.asleep || s.game || !s.ids?.device) return;
     if (s.sayUntil > Date.now() || s.queue?.some((q) => lineClass(q) >= KEPT)) return;
     const monday = new Date();
     monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));

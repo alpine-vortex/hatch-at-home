@@ -211,7 +211,6 @@ class HatchPetCard extends HatchPetCardLink {
     s.gameBox.classList.remove("showgo");
     if (line) this._write(s, line);
     s.sayUntil = line ? Date.now() + 4000 : 0;
-    this._modeExit(s, "game"); // its last act: a shell mode the game was in ends with it (a no-op if none)
   }
 
   _toggleLights(s) {

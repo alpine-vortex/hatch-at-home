@@ -166,13 +166,6 @@ class HatchPetCardBase extends HTMLElement {
     }
   }
 
-  // Who owns the screen (shell modes plan 3.7): a game (the picker on), or a shell mode that owns it
-  // (`owns: false` opts out). Every "may this happen now" read asks this, not s.game, so a mode that is
-  // not a game keeps moments, visitors, wander, scenes and the link off too (tests/js/owned_reads.test.js).
-  _owned(s) {
-    return !!s?.game || !!(s?.mode && s.mode.owns !== false);
-  }
-
   disconnectedCallback() {
     clearInterval(this._timer);
     clearTimeout(this._headTimer);
@@ -191,7 +184,6 @@ class HatchPetCardBase extends HTMLElement {
     // does a line typing out, and the private channel.
     for (const s of this._slides || []) {
       if (s.game) this._endGame(s, null);
-      this._modeExit(s, "teardown"); // a shell mode too (a no-op once the game's end has left it)
       this._sceneEnd(s, { quiet: true }); // a care scene's rAF and its blanket's timers go with the card
       this._drapeStop(s);
       this._stopTyping(s);
