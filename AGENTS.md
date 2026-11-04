@@ -32,6 +32,7 @@ Where things live:
 | lines | poses, wishes, BABY, PERSONA |
 | lines-fresh | the fresh-expand copy block (scripts/copy-scan.js's COPY_TABLES) |
 | ui-copy | screen copy, kindred, follow text, QUESTIONS, notes, dreams, moment consts, helpers |
+| shell-modes | `SHELL_MODES` (the shell-mode table: one entry per mode, 8 slots each; none ships in slice 1), `SHELL_TINTS`, `shellCheck` (the schema), `shellIcon` (pure, no `this`, no DOM, no game words; docs/plan-2026-11-04-shell-modes.md) |
 | shell-data | moulded shell, finishes, traits, server clock, `timeAgo` |
 | style | `STYLE`, `SCENE_STYLE` (CSS strings; the one part over 1,000 lines) |
 | card-base | setConfig, hass, connect, channel, finding pets |
@@ -45,6 +46,7 @@ Where things live:
 | card-sheets | shell picker, lay sheet, name sheet, `_set*` |
 | card-journal | journal, photos, every world, finds page |
 | card-actions | actions, the care scenes' shared frame (`_sceneStart`, `_sceneRender`, `_sceneEnd`, the answer) |
+| card-mode | the shell mode engine (`HatchPetCardMode`): `_modeEnter`, `_modeExit`, `_modeSync`, `_modeClick` (the one click handler of the eight buttons), `_modeGuard`, `_modeEscape`, and `_paintCaps`, the one writer of the eight buttons' state (no `s.game`, `_endGame` or `GAMES`: tests/js/shell_modes.test.js; "who owns the screen" is `_owned(s)` in card-base, tests/js/owned_reads.test.js) |
 | card-care | `SCENES` (one entry per care scene: medicine, clean, feed), the bowl clip (`bowlCuts`), `_sceneFrames`, `_sceneArt` |
 | card-games | games, dig |
 | card-board | Hop of the Day's board mode (`HatchPetCardBoard`; behind `experimental_hop`): the picker row, the board and its keys in the `gameBox` overlay, park/resume, undo |

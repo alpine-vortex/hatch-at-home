@@ -6,6 +6,7 @@ device-fx.js
 lines.js
 lines-fresh.js
 ui-copy.js
+shell-modes.js
 shell-data.js
 style.js
 card-base.js
@@ -19,6 +20,7 @@ card-status.js
 card-sheets.js
 card-journal.js
 card-actions.js
+card-mode.js
 card-care.js
 card-games.js
 card-board.js
