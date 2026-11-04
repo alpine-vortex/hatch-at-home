@@ -2,7 +2,11 @@
 (view "board"), built by hop.py itself so no grid is hand-typed (plan
 2026-11-02-hop-of-the-day, ship 2b). Each entry is the reply a pet of that family
 and stage would get on the fixed day, plus a winning and a tidy move list (move
-letters) from hop.py's solver, so the bench can pin a solved or tidy view.
+letters) from hop.py's solver, so the bench can pin a solved or tidy view. The
+family boards are woodland's (its stumps from child up, ship 4a); each twist world
+adds its own (`<world>-<family>-<stage>`). `landing` is the shortest move list
+whose last move ends off its named cell (a stump's twin, a rug's slide), or null
+on a board with no twist: the bench's `moves` for a shot just after one.
 
 Run from the repo root with the dev venv, only when the generator changes
 (GEN_VERSION); the file is committed:
@@ -23,30 +27,57 @@ from custom_components.virtual_pet import hop  # noqa: E402
 DAY = "2026-06-15"  # a Monday: the full width
 WORLD = "woodland"
 PET = "bench"
-ENTRIES = [(family, "adult") for family in hop.FAMILIES] + [
-    ("hop", "baby"),
-    ("hop", "child"),
-    ("hop", "teen"),
+ENTRIES = [(WORLD, family, "adult") for family in hop.FAMILIES] + [
+    (WORLD, "hop", "baby"),
+    (WORLD, "hop", "child"),
+    (WORLD, "hop", "teen"),
+    # A twist world's own boards (ship 4a: hearth's rugs).
+    ("hearth", "hop", "adult"),
+    ("hearth", "dig", "child"),
 ]
+
+
+def landing(board: hop.Board) -> str | None:
+    """The shortest list (first in index order) whose last move lands off its
+    named cell, by a breadth-first walk of the states."""
+    if hop.twist_of(board) is None:
+        return None
+    level = [(hop.start_state(board), [])]
+    seen = {level[0][0]}
+    while level:
+        nxt = []
+        for state, path in level:
+            for cell in hop.legal_targets(board, state):
+                after = hop.apply_move(board, state, cell)
+                assert after is not None
+                if after.pos != cell:
+                    return hop.encode([*path, cell])
+                if after not in seen and not after.done:
+                    seen.add(after)
+                    nxt.append((after, [*path, cell]))
+        level = nxt
+    return None
 
 
 def main() -> int:
     out = {"gen_version": hop.GEN_VERSION, "day": DAY, "boards": {}}
-    for family, stage in ENTRIES:
+    for world, family, stage in ENTRIES:
         specials, w, h = hop.params_for(stage, DAY)
-        board = hop.hop_board(PET, DAY, WORLD, family, specials, w, h)
+        board = hop.hop_board(PET, DAY, world, family, specials, w, h)
         solved = hop.solve(board)
-        out["boards"][f"{family}-{stage}"] = {
+        name = f"{family}-{stage}" if world == WORLD else f"{world}-{family}-{stage}"
+        out["boards"][name] = {
             "reply": {
                 "result": "ok",
                 "day": DAY,
                 **board.to_dict(),
-                "twist": None,
+                "twist": hop.twist_of(board),
                 "done": False,
                 "tidy": False,
             },
             "win": hop.encode(solved.win) if solved.win is not None else None,
             "tidy": hop.encode(solved.tidy) if solved.tidy is not None else None,
+            "landing": landing(board),
         }
     path = os.path.join(ROOT, "dev", "bench", "hop-boards.json")
     with open(path, "w", encoding="utf-8") as fh:

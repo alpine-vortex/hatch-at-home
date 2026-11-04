@@ -41,6 +41,9 @@ const allSpecies = () => fs.readdirSync(path.join(FRONTEND, "sprites"))
   .filter((d) => fs.existsSync(path.join(FRONTEND, "sprites", d, "species.json")));
 const worldOf = (species) => Object.keys(WORLDS).find((w) => WORLDS[w].roster.includes(species)) || "woodland";
 
+// Hop of the Day's canned boards (scripts/hop_bench_boards.py) and the twist worlds the built ships cover (ship 4a).
+const HOP_BENCH = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "dev", "bench", "hop-boards.json"), "utf8"));
+const HOP_TWIST_WORLDS = [["woodland", "hop-adult"], ["hearth", "hearth-hop-adult"]];
 // The world visitors: worlds.json's roster (the play data is the card's).
 const VISITORS = Object.fromEntries(Object.entries(WORLDS).map(([w, world]) => [w, world.visitors || []]));
 const CROSSERS = new Set(["shootingstar"]); // the card's VISITOR_PLAY with cross: true
@@ -373,6 +376,16 @@ const PRESETS = {
         view: "board", board: { fixture: "hop-baby" } });
       out.push({ ...base, group: `hop-${width}-calm`, name: `hop/${width}-calm`, label: "reduced motion",
         view: "board", motion: "reduce", board: { fixture: "swim-adult", moves: "win", take: 3 } });
+      // Ship 4a's twist worlds: each one's board at the start and just after its first jump or slide (the
+      // fixture's `landing`: the shortest list whose last move lands off its named cell).
+      for (const [world, fixture] of HOP_TWIST_WORLDS) {
+        const fx = HOP_BENCH.boards[fixture];
+        const at = { width, world, group: `hop-${width}-worlds` };
+        out.push({ ...at, name: `hop/${width}-${world}`, label: `${world} (${fx.reply.twist}): the board`, view: "board",
+          board: { fixture } });
+        out.push({ ...at, name: `hop/${width}-${world}-landed`, label: `${world}: after ${fx.landing}`, view: "board",
+          board: { fixture, moves: fx.landing } });
+      }
     }
     return out;
   },
