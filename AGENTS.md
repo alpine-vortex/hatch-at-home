@@ -123,6 +123,12 @@ and card-check. To have commits refuse unformatted Python, run
 wait) and writes the same gate-passed marker on a pass. Prefer it for the batch gate:
 it takes none of this machine's CPU, so workers aren't slowed while it runs.
 
+**Before you report a ship branch done, run `scripts/ci-gate` on it** (owner,
+2026-11-04), and again after every follow-up fix. A narrow `--only` run is for
+iterating; it misses rows in other sections that test the same behaviour (two
+slices reached the batch gate broken that way). Report the run's link. A FLAKE
+line is fine; a FAIL is yours to fix, even in a section you didn't touch.
+
 The manual route, if you need it:
 
 - Never use port 8123, or another worker's port. Copy `dev/config` to a scratch
