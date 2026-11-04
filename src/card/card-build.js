@@ -342,6 +342,12 @@ class HatchPetCardBuild extends HatchPetCardBase {
     s.screen.addEventListener("click", () => {
       // A game on show keeps its screen: a stray tap must not end it unseen (the
       // Status button still does, on purpose).
+      // The picker has no close button (shell modes slice 3): a tap on the screen outside its list closes it.
+      // A swipe is not a tap. A game that has started keeps its screen.
+      if (s.game?.picking) {
+        if (!this._swiped) this._endGame(s, null);
+        return;
+      }
       if (this._owned(s)) return;
       // A tap on a visit in progress is a pat on the host, not the Status button: it
       // would end the hello (UX8 F1).

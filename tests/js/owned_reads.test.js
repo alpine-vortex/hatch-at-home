@@ -19,6 +19,7 @@ const ALLOWED = [
   ["card-base.js", "if (s.game) this._endGame(s, null);", "an exit site: the card's teardown ends the game (3.5)"],
   ["card-build.js", "else if (s.game) this._quitGame(s, this._quitLine(s));", "an exit site: Escape quits a game or the picker (3.5)"],
   ["card-build.js", "this._pickGame(s, b.dataset.game)", "the picker button's data attribute, not the slide"],
+  ["card-build.js", "if (s.game?.picking) {", "the picker's own exit: a tap outside its list closes it (3.5; the picker is not a mode)"],
   ["card-build.js", "if (s.game?.picking) this._hopRowRefresh(s)", "the picker's own Hop row (D2: the picker is not a mode)"],
   ["card-build.js", "if (s.game) this._endGame(s, null);", "an exit site: _forget ends the last pet's game (3.5)"],
   ["card-build.js", "if (x.game && i !== to) this._quitGame(x, null);", "an exit site: a slide change quits the game (3.5)"],

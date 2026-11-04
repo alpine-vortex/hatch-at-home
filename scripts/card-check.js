@@ -3676,7 +3676,51 @@ async function main() {
   await page.waitForTimeout(600);
   check("experimental_catch: true is ignored: the picker keeps its three games, no catch",
     (await cur().locator(".gpick button").count()) === 3 && (await cur().locator('.gpick [data-game="catch"]').count()) === 0);
-  await page.keyboard.press("Escape"); // the picker has no close button (shell modes slice 3): Escape, on the card
+  // The picker has no close button (shell modes slice 3): Escape, Play again and a tap on the screen outside its
+  // list close it. A tap and a press over a second or two: the pet's idle is held still (the shard 4 rule).
+  await quietIdle(card);
+  const pickerState = () => card.evaluate((el) => {
+    const s = el._slides[el._index];
+    return { game: !!s.game, hidden: s.gameBox.hidden, status: s.screen.classList.contains("show-status"), mode: !!s.mode,
+      play: s.buttons.play.getAttribute("aria-label") };
+  });
+  const before = await pickerState();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  const byEscape = await pickerState();
+  await button(2).click(); // Play opens the picker again
+  await page.waitForTimeout(500);
+  const open2 = await pickerState();
+  await button(2).click(); // Play while it is open closes it
+  await page.waitForTimeout(300);
+  const byPlay = await pickerState();
+  await button(2).click();
+  await page.waitForTimeout(500);
+  const open3 = await pickerState();
+  const blank = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const r = s.screen.getBoundingClientRect();
+    const list = [...s.gameBox.querySelectorAll(".gpick button, .ghop")].map((b) => b.getBoundingClientRect());
+    // a point on the screen's left edge, level with the middle, clear of every button of the list
+    const y = r.top + r.height * 0.5;
+    return { x: r.left + 3, y, clear: list.every((b) => b.left > r.left + 3 || b.top > y || b.bottom < y) };
+  });
+  await page.mouse.click(blank.x, blank.y); // a tap outside the list
+  await page.waitForTimeout(300);
+  const byTap = await pickerState();
+  await button(2).click();
+  await page.waitForTimeout(500);
+  const open4 = await pickerState();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  const closed = await pickerState();
+  await quietIdle(card, false);
+  check("the picker closes three ways with no close button: Escape, Play pressed again, and a tap on the screen outside its list (never the status sheet)",
+    before.game && !byEscape.game && byEscape.hidden && open2.game && !byPlay.game && byPlay.hidden && !byPlay.status &&
+      open3.game && blank.clear && !byTap.game && byTap.hidden && !byTap.status && !byTap.mode,
+    JSON.stringify({ before, byEscape, open2, byPlay, open3, blank, byTap }));
+  check("the picker opens again after each close, and the care Play cap is back (a tap on a game in the list still starts it: the play section above)",
+    open4.game && !closed.game && closed.play === byPlay.play, JSON.stringify({ open4, closed, byPlay }));
   await page.waitForTimeout(300);
   // 3a. Reduced motion: the pet's src stays one still picture, even in a game. Time is
   // moved, never waited for.

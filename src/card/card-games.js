@@ -5,6 +5,11 @@ class HatchPetCardGames extends HatchPetCardCare {
 
   _startGame(s, button) {
     this._tapped(button, s);
+    // Play while the picker is open closes it (it has no close button; shell modes slice 3, FM 2026-11-04).
+    if (s.game?.picking) {
+      this._endGame(s, null);
+      return;
+    }
     if (s.game) this._quitGame(s, null); // Play mid-game starts over
     this._clearAsk(s); // a game takes the screen
     const energy = Number.parseFloat(this._state(s, "sensor.energy")?.state);
