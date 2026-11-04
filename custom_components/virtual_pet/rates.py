@@ -114,6 +114,9 @@ OPENING_KEEP_MINUTES = 30  # a dropped Higher or Lower opening is shown again
 # hand-made fallback stands in, and drops one whose solve passes HOP_STATE_CAP
 # states (the hint's search, ship 5, has the same cap).
 HOP_MAX_MOVES = 200
+# The day's first win pays the dig's 23 (once a day, so it can't be farmed);
+# the day's first tidy also pays one find of the pet's world.
+HOP_WIN_HAPPINESS = 23.0
 HOP_CANDIDATES = 60
 HOP_STATE_CAP = 100_000
 

@@ -1,6 +1,7 @@
 """virtual_pet.hop, action board (Hop of the Day ship 2a; plan
 docs/plan-2026-11-02-hop-of-the-day.md): the reply, the day's cache, the
-refusals that write nothing, and the build off the event loop."""
+refusals that write nothing, and the build off the event loop. The settle,
+and the day's pin `board` writes since ship 3a, are tests/test_hop_settle.py."""
 
 from __future__ import annotations
 
@@ -127,10 +128,14 @@ async def test_wednesday_is_a_column_narrower(hass, now, hass_storage, freezer):
     assert wednesday["id"] != monday["id"]
 
 
-async def test_a_stage_change_changes_the_board(hass, now, hass_storage):
+async def test_a_stage_change_changes_tomorrows_board(hass, now, hass_storage, freezer):
+    # Ship 3a: the day's first board pins the stage (hop_day), so growing up
+    # mid-day changes tomorrow's board, not today's.
     await ready(hass, now, hass_storage)
     child = await board(hass)
     coordinator(hass).state.age_hours = TEEN
+    assert await board(hass) == child
+    freezer.move_to("2026-10-27 14:00:00+00:00")  # Tuesday
     teen = await board(hass)
     assert (child["specials"], child["w"]) == (1, 5)
     assert (teen["specials"], teen["w"]) == (2, 6)
@@ -248,9 +253,9 @@ async def test_the_reply_holds_no_user_or_entry_id(
     assert coordinator(hass).pet_id not in text
 
 
-async def test_only_board_is_an_action(hass, now, hass_storage):
+async def test_only_board_and_settle_are_actions(hass, now, hass_storage):
     await ready(hass, now, hass_storage)
-    for data in ({"entity_id": PET, "action": "settle"}, {"entity_id": PET}):
+    for data in ({"entity_id": PET, "action": "hint"}, {"entity_id": PET}):
         with pytest.raises(vol.Invalid):
             await hass.services.async_call(
                 DOMAIN, "hop", data, blocking=True, return_response=True
@@ -268,7 +273,7 @@ def test_the_service_has_its_text_and_fields():
     fields = set(
         yaml.safe_load((package / "services.yaml").read_text())["hop"]["fields"]
     )
-    assert fields == {"entity_id", "action"}
+    assert fields == {"entity_id", "action", "id", "moves", "shared"}
     for name in ("strings.json", "translations/en.json"):
         service = json.loads((package / name).read_text())["services"]["hop"]
         assert service["name"] and service["description"]

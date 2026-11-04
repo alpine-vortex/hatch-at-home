@@ -425,7 +425,7 @@
     },
     "hop": {
       "name": "Hop of the Day",
-      "description": "Hop of the Day, the pet's daily board game. The board action returns today's board for the pet: the same on every screen all day, built once and kept until midnight. It changes nothing and pays nothing, and is refused (result egg, asleep, away or too_tired) when the pet could not play a game now.",
+      "description": "Hop of the Day, the pet's daily board game. The board action returns today's board for the pet: the same on every screen all day, built once and kept until midnight, and refused (result egg, asleep, away or too_tired) when the pet could not play a game now. The settle action sends the moves of a board played to the nest; the server replays them and pays the day's first win, and one find for the day's first tidy win. A later settle the same day answers ok with already true. Other results: illegal, not_won, too_long, board_changed (load today's board), egg, asleep or away.",
       "fields": {
         "entity_id": {
           "name": "Pet",
@@ -433,7 +433,19 @@
         },
         "action": {
           "name": "Action",
-          "description": "board: return today's board."
+          "description": "board: return today's board. settle: replay and pay a board played to the nest."
+        },
+        "id": {
+          "name": "Board",
+          "description": "Settle: the id of the board that was played, from the board action's reply."
+        },
+        "moves": {
+          "name": "Moves",
+          "description": "Settle: the moves from the start, one letter per move: the cell stepped on, a to x in reading order."
+        },
+        "shared": {
+          "name": "Shared screen",
+          "description": "Set by the card on a shared screen. Settle only."
         }
       }
     },

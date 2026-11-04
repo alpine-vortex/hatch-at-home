@@ -3210,40 +3210,136 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         return info
 
     async def async_hop_board(self) -> dict[str, Any]:
-        """Today's Hop board for this pet, or why there is none. Changes
-        nothing: no care log (so not start_game), no event, no save, no
-        publish, and no person (the board is the pet's, the same on every
-        screen)."""
+        """Today's Hop board for this pet, or why there is none. No care log
+        (so not start_game), no event and no person (the board is the pet's,
+        the same on every screen). It writes only the day's pin: on the day's
+        first ask `hop_day` becomes today's with the stage now, which fixes
+        the board for the day (plan §8); saved and published then, never
+        otherwise. A refusal writes nothing."""
         assert self.state is not None
         now = self._now()
         self._advance(now)
-        refusal = model._refuse_play(self.state)
+        refusal = self._hop_refusal(model._refuse_play(self.state))
         if refusal is not None:
-            if refusal == "away" and self.privacy:
-                refusal = "asleep"
             return {"result": refusal}
-        day = self._today(now)[0]
-        specials, w, h = hop.params_for(model.life_stage(self.state), day)
+        if model.pin_hop_day(self.state, self._today(now)[0]):
+            self._save()  # a delayed write: a restart must keep the pin
+            self._publish()
+        pinned = dict(self.state.hop_day)
+        # The stored day: today, or a day ahead after a clock set back.
+        day = pinned["day"]
+        specials, w, h = hop.params_for(pinned["stage"], day)
         board = await self.async_hop_day_board(
             day, hop.family_of(self.state.species), specials, w, h
         )
+        paid = self.state.hop_day  # read again: a settle may have paid meanwhile
+        same = paid.get("day") == day
         return {
             "result": model.OK,
             "day": day,
             **board.to_dict(),
-            # `twist` is ship 4's; `done` and `tidy` are ship 3a's (the day's
-            # pay state). Until they ship the board is a plain, unpaid one.
-            "twist": None,
-            "done": False,
-            "tidy": False,
+            "twist": None,  # ship 4's
+            "done": same and paid["done"],
+            "tidy": same and paid["tidy"],
         }
+
+    def _hop_refusal(self, refusal: str | None) -> str | None:
+        """A private pet's `away` is told as `asleep`, as a game's is."""
+        if refusal == "away" and self.privacy:
+            return "asleep"
+        return refusal
+
+    async def async_hop_settle(
+        self,
+        board_id: str,
+        moves: str,
+        context: Context | None,
+        shared: bool = False,
+    ) -> dict[str, Any]:
+        """A Hop board the card played to the nest: replay its move list on
+        the board `hop_day` pins and pay (plan §6-§7). The card's claim is
+        never trusted, only the replay. Never pins or rolls `hop_day`: an
+        empty or past one is `board_changed`, with nothing built or written
+        (Decided 18). Everything that awaits comes first; then one block
+        with no await re-checks with a fresh now and pays, so two screens
+        settling at once pay once.
+
+        `shared` is accepted as play_game's is: the day and its pay are the
+        pet's (the household's) either way, and the bond goes to the person
+        who settled. Nothing of Hop is kept per person."""
+        state = self.state
+        assert state is not None
+        now = self._now()
+        self._advance(now)
+        refusal = self._hop_refusal(model.refuse_hop_settle(state))
+        if refusal is not None:
+            return {"result": refusal}
+        pinned = dict(state.hop_day)
+        if not pinned or self._today(now)[0] > pinned["day"]:
+            return {"result": "board_changed"}
+        by = await self._who(context)
+        person = await self._person(context)
+        day, stage = pinned["day"], pinned["stage"]
+        specials, w, h = hop.params_for(stage, day)
+        board = await self.async_hop_day_board(
+            day, hop.family_of(state.species), specials, w, h
+        )
+        if board.id != board_id:
+            return {"result": "board_changed"}
+        replay = hop.replay(board, moves)
+        if replay["too_long"]:
+            return {"result": "too_long"}
+        if not replay["legal"]:
+            return {"result": "illegal", "bad_index": replay["bad_index"]}
+        if not replay["won"]:
+            return {"result": "not_won"}
+        # No await from here: what the awaits could have changed is checked
+        # again (the build can take most of a second: the pet may have
+        # fallen asleep, or the day turned and a `board` rolled it).
+        state = self.state
+        assert state is not None
+        now = self._now()
+        self._advance(now)
+        refusal = self._hop_refusal(model.refuse_hop_settle(state))
+        if refusal is not None:
+            return {"result": refusal}
+        current = state.hop_day
+        if (
+            current.get("day") != day
+            or current.get("stage") != stage
+            or self._today(now)[0] > day
+        ):
+            return {"result": "board_changed"}
+        info, events = model.settle_hop(
+            state,
+            now,
+            replay["tidy"],
+            by,
+            self.world,
+            self.finds,
+            self._find_flags,
+            self.known_finds,
+            self.rng,
+        )
+        if info["paid"]:
+            # Not game_record (no "beat your best" for a daily board) and not
+            # favourite_game (Hop is not in GAMES): the bond only.
+            events += self._bond(person, "game", "hop")
+        self._actor = person
+        try:
+            self._fire(events)
+        finally:
+            self._actor = None
+        self._save()
+        self._publish()
+        return info
 
     async def async_hop_day_board(
         self, day: str, family: str, specials: int, w: int, h: int
     ) -> hop.Board:
         """The day's board, built once off the loop and kept for the day. Calls
-        with the same arguments at once share one build. Ship 3a's settle
-        calls this too, so it replays the board the screen was shown."""
+        with the same arguments at once share one build. The settle calls
+        this too, so it replays the board the screen was shown."""
         key = (day, self.world, family, specials, w, h)
         for old in [k for k in self._hop_boards if k[0] != day]:
             del self._hop_boards[old]

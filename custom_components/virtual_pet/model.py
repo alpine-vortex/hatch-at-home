@@ -618,6 +618,12 @@ class PetState:
     # asleep, away) sees them, and they have no time limit.
     parked: dict[str, Game] = field(default_factory=dict)
     games: dict[str, dict[str, int]] = field(default_factory=dict)  # kind -> counts
+    # Hop of the Day's day (plan 2026-11-02-hop-of-the-day §8): {"day": local
+    # date, "stage": the stage when the day's board was first asked for (it
+    # pins the board for the day), "done": a win has paid, "tidy": a tidy has
+    # paid}. {} until the first board. Only `board` (the day's pin) and the
+    # settle's pay block write it. Nothing personal: no move list, no person.
+    hop_day: dict[str, Any] = field(default_factory=dict)
     sick_unannounced: str | None = (
         None  # cause, if it fell sick asleep (told on waking)
     )
@@ -787,11 +793,12 @@ class PetState:
             kind: {
                 k: int(n) if isinstance(n, int | float) else 0
                 for k, n in {"played": 0, "won": 0, **counts}.items()
-                if k in ("played", "won", "dropped")
+                if k in ("played", "won", "dropped", "tidy")
             }
             for kind, counts in _mapping(kwargs.get("games")).items()
             if isinstance(counts, dict)
         }
+        kwargs["hop_day"] = _hop_day(kwargs.get("hop_day"))
         kwargs["temperament"] = {
             t: float(f)
             for t, f in _mapping(kwargs.get("temperament")).items()
@@ -2656,6 +2663,38 @@ def _finish_game(
 ) -> tuple[dict[str, Any], list[Event]]:
     """A game's last round settled it: pay, count, log and tell."""
     kind = game.kind
+    counts = state.games.setdefault(kind, {"played": 0, "won": 0})
+    counts["played"] += 1
+    counts["won"] += won
+    info["won"] = won
+    _pay_game(
+        state,
+        happiness,
+        won,
+        now,
+        by,
+        _game_score(game),
+        {"type": "game_finished", "game": kind, "won": won, "wins": game.wins},
+        events,
+    )
+    return info, events
+
+
+def _pay_game(
+    state: PetState,
+    happiness: float,
+    won: bool,
+    now: float,
+    by: str | None,
+    score: str,
+    finished: Event,
+    events: list[Event],
+) -> None:
+    """What every finished game pays and costs, logs and tells (a Game's
+    rounds and Hop of the Day's settle alike): the player's win bonus, the
+    play need, happiness, the play costs (each clamped: energy stops at 0),
+    the excitement, the care log, the `care` and `finished` events, and the
+    happiness call a win may answer."""
     if won:
         happiness += R.PLAYER_WIN_HAPPINESS * _scale(state, "player")
     happiness_before = state.happiness
@@ -2666,12 +2705,7 @@ def _finish_game(
     state.hunger = _clamp(state.hunger + R.PLAY_HUNGER)
     state.weight = _clamp(state.weight + R.WEIGHT_GAME)
     state.last_excite = now
-    counts = state.games.setdefault(kind, {"played": 0, "won": 0})
-    counts["played"] += 1
-    counts["won"] += won
     result = "won" if won else "lost"
-    info["won"] = won
-    score = _game_score(game)
     _log(
         state,
         {
@@ -2680,14 +2714,124 @@ def _finish_game(
             "by": by,
             "result": result,
             "score": score,
-            "game": kind,
+            "game": finished["game"],
         },
     )
     events.append({"type": "care", "action": "game", "result": result})
-    events.append(
-        {"type": "game_finished", "game": kind, "won": won, "wins": game.wins}
-    )
+    events.append(finished)
     _resolve_call(state, now, events, state.happiness > happiness_before)
+
+
+# --- Hop of the Day: the day's pin and the settle's pay ----------------------
+# (plan 2026-11-02-hop-of-the-day §6-§8; the rules and the replay are hop.py's)
+
+
+def _hop_day(value: Any) -> dict[str, Any]:
+    """A saved hop_day, checked: a canonical ISO date, a stage that has a
+    board, done and tidy bools. Anything else drops the whole map (it reads
+    as no board asked for today: the next `board` pins the day again)."""
+    if not isinstance(value, dict):
+        return {}
+    day, stage = value.get("day"), value.get("stage")
+    done, tidy = value.get("done"), value.get("tidy")
+    if not (
+        isinstance(day, str)
+        and stage in LIFE_STAGES
+        and stage != "egg"  # an egg is refused a board, so never pinned
+        and isinstance(done, bool)
+        and isinstance(tidy, bool)
+    ):
+        return {}
+    try:
+        if date.fromisoformat(day).isoformat() != day:
+            return {}  # "20261102" parses but would not compare as a date string
+    except ValueError:
+        return {}
+    return {"day": day, "stage": stage, "done": done, "tidy": tidy}
+
+
+def pin_hop_day(state: PetState, today: str) -> bool:
+    """`board`'s pin: on the day's first ask (no map, or its day behind
+    today), the map is today's with the stage now, nothing paid. A day that
+    went backwards (a timezone west, a clock set back, a restore) is the same
+    day: the map stays (Decided 19). True if it was written."""
+    day = state.hop_day.get("day")
+    if day is not None and today <= day:
+        return False
+    state.hop_day = {
+        "day": today,
+        "stage": life_stage(state),
+        "done": False,
+        "tidy": False,
+    }
+    return True
+
+
+def refuse_hop_settle(state: PetState) -> str | None:
+    """A settle's refusals: a game's, but never too_tired (Decided 17). A
+    board takes minutes and the energy may fall meanwhile; a won board is not
+    lost to it (the pay's energy cost stops at 0)."""
+    refusal = _refuse_play(state)
+    return None if refusal == "too_tired" else refusal
+
+
+def settle_hop(
+    state: PetState,
+    now: float,
+    tidy: bool,
+    by: str | None,
+    world: str,
+    finds: list[dict[str, Any]],
+    flags: dict[str, bool | None] | None,
+    known: dict[str, set[str]],
+    rng: random.Random,
+) -> tuple[dict[str, Any], list[Event]]:
+    """A won Hop board, replayed by the caller on the board `hop_day` pins,
+    after its refusals and its day check. The day's first win pays
+    HOP_WIN_HAPPINESS and costs a finished game (counted once a day: played
+    and won); the day's first tidy also pays one find of the world, outside
+    the find clock (next_find_at is untouched), and is counted. A settle
+    after that pays nothing (`already`). `tidy` is set on the first tidy
+    whatever the find's outcome (Decided 20). The reply has all four flags."""
+    day = state.hop_day["day"]
+    events: list[Event] = []
+    paid = not state.hop_day["done"]
+    find_due = tidy and not state.hop_day["tidy"]
+    found = False
+    if find_due:
+        # The house's flags are None until it is read once: {} then (every
+        # `when` token missing, the rare fallback weight), never a raise.
+        find = pick_find(state, world, finds, flags or {}, rng)
+        if find is not None:
+            found = True
+            if add_find(state, day, world, find["id"], known):
+                events.append({"type": "found", "id": find["id"], "world": world})
+    counts = state.games.setdefault("hop", {"played": 0, "won": 0})
+    if paid:
+        counts["played"] += 1
+        counts["won"] += 1
+        state.hop_day["done"] = True
+        _pay_game(
+            state,
+            R.HOP_WIN_HAPPINESS,
+            True,
+            now,
+            by,
+            "tidy" if tidy else "win",
+            {"type": "game_finished", "game": "hop", "won": True, "tidy": tidy},
+            events,
+        )
+    if find_due:
+        counts["tidy"] = counts.get("tidy", 0) + 1
+        state.hop_day["tidy"] = True
+    info = {
+        "result": OK,
+        "won": True,
+        "tidy": tidy,
+        "paid": paid,
+        "found": found,
+        "already": not (paid or found),
+    }
     return info, events
 
 

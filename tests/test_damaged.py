@@ -126,6 +126,17 @@ DELETE = object()
         ("game", {"kind": "left_right", "started": "x"}),
         ("poops", "x"),
         ("sick_unannounced", 3),
+        # Hop of the Day's day (ship 3a): dropped whole, the pet loads.
+        ("hop_day", "x"),
+        (
+            "hop_day",
+            {"day": "2026-13-40", "stage": "child", "done": False, "tidy": False},
+        ),
+        (
+            "hop_day",
+            {"day": "2026-10-26", "stage": "elder", "done": False, "tidy": False},
+        ),
+        ("hop_day", {"day": "2026-10-26", "stage": "child", "done": 1, "tidy": False}),
     ],
 )
 async def test_a_damaged_field_never_stops_a_pet_loading(
