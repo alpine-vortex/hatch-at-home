@@ -16,6 +16,14 @@ and Q1-Q5: ship 2a is marked shipped and its text matches the build; Decided 12-
 the first mate's answers; ship 2b carries the review's card findings. **Q3 (where the keys
 live) was decided by the owner on 2026-11-03: Option A, the keys in the `gameBox` overlay
 (Decided 16)**; section 1 and ship 2b were edited to match (s2800).
+Folded on 2026-11-03 (s2856) from adversarial review s2855 of ship 3a (P1-P17, Q1-Q4) and
+the first mate's answers (Decided 17-20): every finding was checked against the code at
+`0bc3c1b8` first. Sections 6-8, ship 3a and ship 3b carry the edits. In short: `settle`
+refuses `egg`, `away`, `asleep` and not `too_tired`; it answers `board_changed` on a stale or
+empty `hop_day` and never writes it; the day rolls over only forward; `tidy` is set whatever
+the find's outcome; the reply is one table (`ok` with `won`, `tidy`, `paid`, `found`,
+`already`; plus `not_won`); the pay block re-checks after its awaits; `hop_day` is published
+on the life-stage sensor. Ship 3a can be built from this plan alone.
 
 Sources: scout s2713's report (Pick, Shared base, section 1, Owner decisions) and its
 `renders/hop-sample-solver.py` (the sample board below is its board, rules adjusted in
@@ -573,17 +581,20 @@ earlier text contradicted itself).** The rule, in one place:
   from empty.
 - **Server side, per settle** (a pure function of the replay and the `hop_day` map):
   first settle of the day, plain or tidy: pays the 23 (`done` set). A tidy settle also pays
-  the find if `tidy` is not set (and sets it). A plain settle after `done`: answers
-  `already`, pays nothing. A tidy settle after a plain win: pays the find and no second 23.
-  A settle after `tidy`: `already`. Nothing to undo ever costs anything.
+  the find if `tidy` is not set (and sets it, whatever the find's outcome: Decided 20). A plain
+  settle after `done`: `ok` with `already: true`, pays nothing. A tidy settle after a plain
+  win: pays the find and no second 23. A settle after `tidy`: `already: true`. Nothing to
+  undo ever costs anything.
 - Once the day is tidy the solved view has no restart ("back tomorrow"); free practice
   boards (ship 5) are the only thing left to play, unpaid.
 - A reload on the same day shows the solved view without a path (the card keeps no list
   after a settle and the server never stored one); "try for tidy" is offered unless tidy is
   set, read from the published `hop_day`.
 - **Midnight and bedtime.** A board is for one day and one id. A settle on yesterday's day
-  answers `board_changed` and the card loads today's board, dropping the parked moves; a
-  board played across midnight is lost. A settle refused with `asleep` leaves the moves in
+  (`hop_day` empty, or its `day` behind today) answers `board_changed` and writes nothing
+  (Decided 18); the card loads today's board, dropping the parked moves; a board played
+  across midnight is lost. A day that goes *backwards* (a timezone change, a clock set
+  back, a restored save) is the same day, not a new one (Decided 19). A settle refused with `asleep` leaves the moves in
   the parked list and the player can retry once the pet wakes the same day; if the day
   turns first, they are dropped. This is accepted rather than adding a grace window: a
   board that crosses midnight or bedtime is rare and costs only free replay. (If the owner
@@ -598,8 +609,19 @@ stubbing the card-check uses for the dig works.
 | `action` | in | reply |
 |---|---|---|
 | `board` | | `{result: "ok", day, id, w, h, grid (rows), family, specials, world, twist, done, tidy}`; a refusal is `{result: "<code>"}`. As built in 2a: `twist` is `null` (ship 4 fills it), `done` and `tidy` are `false` (3a fills them from `hop_day`) |
-| `settle` | `id`, `moves` (a string, one letter per move: the **stepped-on** cell's index in reading order, `a`-`x`) | `{result, won, tidy, paid, found?, already}` or `illegal` (with the index of the first bad move), `board_changed`, `too_long` |
+| `settle` | `id`, `moves` (a string, one letter per move: the **stepped-on** cell's index in reading order, `a`-`x`), `shared` | one reply table, below |
 | `hint` | `id`, `moves` so far | ship 5: `{result, next}` the next cell of some **winning** list from there (not a tidy one: that would make tidy free) |
+
+**The `settle` reply, one table (review s2855 P5).** `result` is one of `ok`, `illegal` (with
+`bad_index`, the index of the first bad move), `board_changed`, `too_long`, `not_won` (the
+list is legal but does not end in the nest: a buggy or forged caller; pays nothing, writes
+nothing), and the refusals `egg`, `asleep`, `away` (never `too_tired`: Decided 17). On `ok`
+the fields are: `won` (always `true`), `tidy` (this list was tidy), `paid` (the 23 was paid
+by this settle), `found` (a find was picked and added by this settle, to the basket or,
+when the basket was full, straight to the collection; `false` if none was picked or the
+tidy find was already paid), and `already` (`true` when this settle paid nothing at all:
+no 23 and no find). `already` is a boolean beside `result: "ok"`, never a `result` code;
+ship 3b reads it so. The reply always carries all four booleans on `ok`.
 
 Targets, not move kinds: the server derives the move from where the pet was to the stepped-on
 cell (the pet has one family, so a two-cell straight move is unambiguous), and applies the
@@ -610,23 +632,48 @@ is the household's; the private-pet `away` answer is rewritten to `asleep`. **`b
 `shared` and no person** (as built in 2a: the board is the pet's, the same for every caller,
 and nothing is read from or written to a person; the only privacy rule is the `away` →
 `asleep` rewrite). So `shared` is a field of `settle` alone: 3a adds it to the schema for
-that action (optional, ignored by `board`), not 2a. The same refusals (`egg`, `asleep`,
-`away`, `too_tired`) apply at `board` and `settle`. A refusal at `settle`
+that action (optional, ignored by `board`), not 2a. **The refusals differ** (Decided 17):
+`board` refuses `egg`, `asleep`, `away` and `too_tired`; `settle` refuses only `egg`, `away`
+and `asleep`. `too_tired` is `board`-only because a board is served while the pet can play,
+and a 16-40 move board takes minutes, in which energy can fall under
+`PLAY_MIN_ENERGY`: a won board must not be lost to tiredness. The pay costs `PLAY_ENERGY`,
+and `_clamp` holds energy at 0. The settle's refusals go through `model._refuse_play` with
+`too_tired` ignored (the build may split the helper, or test `energy` out of its result);
+`board` is unchanged. A refusal at `settle`
 leaves the moves in the card's parked list so the player can retry. `board` refuses
 **without writing the care log** (`start_game` logs every refusal and fires a `care` event;
 a row opened on a tired pet would fill the capped log; 2a calls `model._refuse_play(state)`
 directly, after `_advance(now)`, and no `start_game`, `_fire`, `_save` or `_publish`); `settle` writes one care entry on a
 paid settle, like a finished game, and none on a refusal.
 
+**The stage and the day for the replay (Decided 18, 19).** `settle` carries only `id` and
+`moves`, so the board it rebuilds comes from `hop_day`, never from the live stage. Before it
+builds anything it reads `hop_day`: if the map is empty (never pinned, or a damaged load
+dropped it mid-day) or its `day` is behind today (`today > hop_day["day"]`, the card was
+open across midnight and nobody called `board`), it answers `board_changed` and does not
+build, write or save; the card then calls `board`, which pins today's stage. Otherwise it
+builds from `hop_day["stage"]` for `hop_day["day"]` (a stored day *ahead* of today, after a
+clock set back, is still that day) and compares the board's id with the request's; a
+mismatch answers `board_changed` and writes nothing. **`board` is the only writer of
+`hop_day` apart from the pay block** (section 8).
+
 **No race on the pay.** `async_play_game` awaits `_who` and `_person` and then mutates
-synchronously (`coordinator.py:2820-2870`). The settle does the same: everything that
+synchronously (`coordinator.py:3160-3205`). The settle does the same: everything that
 awaits (the board rebuild, which runs the generator in the executor if it is not cached,
 and the replay) comes first (the rebuild is `PetCoordinator.async_hop_day_board(day, family,
 specials, w, h)`, built in 2a: settle calls it so it replays the board the screen was shown,
-and concurrent callers share one build); then, in one synchronous block with no `await`, it re-reads
-`hop_day`, decides paid / `already`, and writes. Two screens settling at once both finish
-the awaited part, and only the first through the block pays. A pytest settles twice
-concurrently (`asyncio.gather`) and asserts one pay.
+and concurrent callers share one build); then, in one synchronous block with no `await`, it
+**re-checks everything the awaits could have changed, with a fresh `now`** (review s2855
+P4: the rebuild can take 0.87 s and a pet can fall asleep, or the local day can turn,
+in that time): `_advance(now)`, the settle's refusals (`egg`, `away`, `asleep`), and that
+`hop_day` is still the entry the board was built for (same `day` and `stage`, and its `day`
+not behind `self._today(now)[0]`); on any miss it answers the refusal or `board_changed`
+and writes nothing. Then it decides paid / `already` and writes. Two screens settling at
+once both finish the awaited part, and only the first through the block pays. Pytests:
+two concurrent settles (`asyncio.gather`) pay once; a settle whose rebuild is slow
+(monkeypatch `hop_board` to wait on an event) while another screen's `board` rolls the day
+answers `board_changed` and writes no `done`; one where the pet falls asleep meanwhile
+answers `asleep`.
 
 **The cheat surface, honestly.**
 - **A forged "won" is impossible:** the server decides. A forged *move list* only works if
@@ -634,8 +681,13 @@ concurrently (`asyncio.gather`) and asserts one pay.
   being public (or a friend's list pasted in) gives a free solve, not an exploit: the pay
   is one 23 and one find a day.
 - **Replay a day's list to be paid again:** `hop_day.day`, `.done` and `.tidy` make the
-  second `settle` answer `already` and pay nothing. A tidy settle after a plain win pays the
-  find once and no second 23.
+  second `settle` answer `ok` with `already: true` and pay nothing. A tidy settle after a
+  plain win pays the find once and no second 23.
+- **A day that comes back (accepted, one case closed):** the rollover is `today >` the
+  stored day, so a timezone change westward or a clock set back does not reset `done` and
+  `tidy` for a date already paid (Decided 19). Still accepted, because they need no normal
+  play: a damaged load that drops `hop_day` mid-day, or a save restored from an earlier
+  backup, can pay a day twice. The cost is one 23 and one find.
 - **A list for another pet or day:** the board id binds (pet, day, generator, family,
   specials); a mismatch answers `board_changed`/`illegal`.
 - **Cost of a bad request:** capped at 200 moves, a replay is O(moves); no search runs on
@@ -658,9 +710,23 @@ concurrently (`asyncio.gather`) and asserts one pay.
   `play` need (`_meets_need(state, "play")`). `_finish_game` takes a `Game`
   (`model.py:2540-2575`: `game.kind`, `_game_score`), and Hop has no `Game`, so ship 3a
   adds a separate `settle_hop` in `model.py` with its own tail and factors the shared pay
-  (happiness, costs, need, log) out of `_finish_game` rather than building a fake `Game`.
+  out of `_finish_game` rather than building a fake `Game`. **The shared tail, all of it
+  (review s2855 P9):** `PLAYER_WIN_HAPPINESS * _scale(state, "player")` added to the
+  happiness, `_meets_need(state, "play")` then `last_care_at`, happiness (clamped),
+  `PLAY_ENERGY`, `PLAY_HUNGER` and `WEIGHT_GAME` (each `_clamp`ed: **energy stops at 0**,
+  Decided 17), `last_excite`, the `_log` entry, the `care` event, and
+  `_resolve_call(state, now, events, state.happiness > happiness_before)`. Skipping the
+  last leaves a happiness call open after a 23-point win. Only what is bound to a `Game`
+  stays out: the `games[kind]` counting (Hop counts days, section 8), `_game_score`, and
+  the event's `wins`. The log entry is `{"at", "action": "game", "by", "result": "won",
+  "score": "tidy" or "win", "game": "hop"}`; one grep of the card for a renderer keyed on
+  the log's `game` kind found none (`card-journal.js` only reads the `games` counts), and
+  the build repeats it before writing. `game_finished` is what grants the play wish and the
+  `dream_seed` (`coordinator.py:1505-1509`), so the event is fired through `_fire` like a
+  finished game's.
 - **No loss:** an unsolved board, a ✕, a restart or a refusal costs and earns nothing and
-  logs nothing. There is no 12-happiness loss branch, because nothing can be lost. (This
+  logs nothing. (Which refusals `settle` has is section 6: not `too_tired`, so a won
+  board is never lost to tiredness; Decided 17.) There is no 12-happiness loss branch, because nothing can be lost. (This
   differs from the dig, where a 3-minute idle drop is a loss.)
 - **Tidy:** the day's first tidy settle also pays **one find** from the pet's world, picked
   and added exactly as `roll_find` does it (`can_find`, `pick_find` with the
@@ -668,6 +734,21 @@ concurrently (`asyncio.gather`) and asserts one pay.
   find clock**: `next_find_at` is not touched, so a tidy never delays or doubles the
   clock. A full basket sends the find to the collection unseen, as `add_find` already does.
   A tidy that comes after an earlier plain win the same day pays the find and no second 23.
+  **What the find pay does around the edges (review s2855 P1, P8; Decided 20):**
+  - **`_find_flags` is `None`** until the house has been read once (`coordinator.py:278`,
+    set at `:927`; `_roll_find` guards it at `:1340`), and `find_weight` calls
+    `flags.get(...)`, which raises on `None`. The tidy pay passes **`{}`** when the flags are
+    `None` (every `when` token missing: the rare fallback weight, a bias only) and never
+    raises, and it never defers. All of `settle`'s writes happen after this call or are
+    safe if it fails, so nothing is left half-written.
+  - **`tidy` is set on the first tidy settle, whatever the find's outcome.** The find is
+    attempted once. `pick_find` returns `None` when the pool is empty; `add_find` returns
+    `False` when the basket is full and the find goes to the collection. Either way `tidy`
+    is set, so the card stops offering "try for tidy" and the restart key cannot become a
+    loop. The reply's `found` is `true` when a find was picked (basket or collection) and
+    `false` when none was.
+  - **A `found` event (the card's moment, `coordinator.py:169`) fires only when the find went
+    into the basket**, as `roll_find`'s does; a full-basket find fires none.
 - **Events and bond:** the settle emits `game_finished` with `game: "hop"`, `won: true`,
   and a `tidy` bool. It is a **separate coordinator method**, not `async_play_game`'s
   loop: that loop calls `game_record(... event["wins"])` unconditionally
@@ -676,15 +757,17 @@ concurrently (`asyncio.gather`) and asserts one pay.
   `game_record` is **not** used (decided: its "beat your best" line has no meaning for a
   one-a-day board), and nor is `favourite_game`: `add_bond` picks a favourite from `GAMES`
   (`model.py:3442-3444`) and Hop is not in it, so Hop can never be a favourite; fine for a
-  first build. `games_played` (`model.py:1551`) counts Hop, one a day, toward the 15-game
-  "player" trait (`rates.py:272`); accepted.
+  first build. `games_played` (`model.py:1657`) counts Hop, one a day (not one per settle), toward the
+  15-game "player" trait (`rates.py:272`); accepted. `add_bond` records `bond["games"]["hop"]`
+  (a free key) and `known` is built from `GAMES`, so Hop is never a favourite.
 - Constants: `R.HOP_WIN_HAPPINESS`, `R.HOP_MAX_MOVES = 200`, `R.HOP_FALLBACK_TRIES = 200`,
   `R.HOP_HINTS_PER_MIN` (ship 5) in `rates.py` (the games block), none in the card.
 - The find pay uses the call site `_roll_find` already has (`coordinator.py:1299-1316`):
   `pick_find` and `add_find` take `self.world`, `self.finds`, `self._find_flags`,
-  `self.known_finds`, `self.rng`. `roll_find` sets `next_find_at` itself
-  (`model.py:~2965`), so calling `pick_find` and `add_find` directly leaves the clock
-  alone, as claimed. `can_find`'s asleep rule is moot: a settle refuses asleep.
+  `self.known_finds`, `self.rng` (with `{}` for the flags while they are `None`, above). `roll_find` sets
+  `next_find_at` itself (`model.py:3051`), so calling `pick_find` and `add_find` directly leaves the clock
+  alone, as claimed. `can_find`'s asleep rule is moot: a settle refuses asleep (and the pay block re-checks it
+  after the awaits, section 6).
 
 ## 8. Saved state and migration (ship 3a, tier 2)
 
@@ -700,31 +783,62 @@ hop_day: dict = field(default_factory=dict)   # {"day": "2026-11-02", "stage": "
   mid-day changes tomorrow's board, not today's. `done`: a win has paid today. `tidy`: a
   tidy has paid today.
 - **Ship 3a changes `board`** (in 2a it writes nothing and reads the stage live). A `board`
-  call for a new day (`day != today`) overwrites the map with
-  `{"day": today, "stage": stage_now, "done": False, "tidy": False}`. A stale `day` is read
-  as empty and rewritten on the next call (no sweep needed).
+  call that passes the refusals and finds `hop_day` empty, or its `day` **behind** today
+  (`today > hop_day["day"]`; ISO date strings compare), overwrites the map with
+  `{"day": today, "stage": stage_now, "done": False, "tidy": False}` (Decided 19). A day
+  that goes backwards (`today < hop_day["day"]`: a timezone change west, a clock set back, a
+  restore) is the same day: the map stays, and `board` serves that stored day's board
+  (reply `day` is the stored day). A stale `day` is read as empty and rewritten on the
+  next `board` call (no sweep needed). **`board` is the only writer of `hop_day` apart
+  from the pay block** (Decided 18): `settle` never pins or rolls it. A refused `board`
+  (`egg`, `asleep`, `away`, `too_tired`) is checked first and still writes nothing.
+  **The rollover write is followed by `_save()` and `_publish()`** (review P7): `_save`
+  is a delayed write (`async_delay_save`), so without it a restart loses the pin and the
+  next `board` could pin a different stage, a new id; `_publish` moves the sensor attribute
+  (3b reads it). Tests: after one rolling `board` call the sensor attribute and `to_dict()`
+  carry the new day and `async_delay_save` was called; a second same-day `board` writes
+  nothing (no `async_delay_save`, no publish); a `board` with `today < stored day` writes
+  nothing and keeps `done`/`tidy`; `today > stored` rolls and resets them.
 - **Counts:** `games["hop"]` joins the existing map as `{"played": days won, "won": days
   won, "tidy": days tidy}`. `from_dict` whitelists the keys
-  (`model.py:~774`, `("played", "won", "dropped")`), so `"tidy"` is added to that tuple.
+  (`model.py:790`, `("played", "won", "dropped")`), so `"tidy"` is added to that tuple.
+  The transitions (review P10): the day's first settle, plain or tidy, is `played` +1 and
+  `won` +1 (a tidy one also `tidy` +1); a tidy settle after a plain win is `tidy` +1 only;
+  a plain settle after `done` and any settle after `tidy` change nothing. So
+  `games_played` rises by 1 a day, not per settle. `lay_egg` copies `game_counts(state)`
+  raw into the journal record (`model.py:2058`) and `_retired` keeps any dict, so `tidy`
+  rides into the journal without a whitelist: harmless.
   There is **no streak** (decided): counts only go up, so a missed day costs
   nothing, per the experience plan's "never guilt, nagging, ranking people or anxious
   timers".
 - **Migration:** none beyond defaults. An old save has no `hop_day`, so it loads as `{}`; an
   old `games` has no `hop` entry. `from_dict` validates `hop_day`: `day` an ISO date string,
   `stage` one of `LIFE_STAGES`, `done` and `tidy` bools; anything else drops the whole map.
-  `shift_times` has nothing to shift (a date, no times). A retire or a new egg clears it,
-  like the game. **Downgrade:** an older version keeps unknown top-level keys and re-emits
-  them in `to_dict` (`from_dict` keeps unknown keys, `model.py:665-675, 819`; `to_dict`
-  re-emits them, `:659`; the dig's `parked` relied on it); ship 3a's test round-trips a save
-  with `hop_day` through the current loader to confirm the key survives, and
-  `test_damaged.py`'s pattern covers a damaged map.
+  `shift_times` has nothing to shift (a date, no times). A retire or a new egg clears it
+  by construction: `lay_egg` builds `PetState.new(...)` and copies only named fields, so
+  `hop_day` is `{}` (test: after `lay_egg`, `hop_day == {}`). One subtlety: `lay_egg` copies
+  `state.unknown` to the egg (`model.py:2073`), so a `hop_day` that an older version kept
+  as an unknown key would follow the egg; it is a stale day and reads as empty at the
+  next `board`. **Downgrade:** an older version keeps `hop_day` as an unknown top-level key
+  and re-emits it (`from_dict` keeps unknown keys, `model.py:684, 834`; `to_dict` `:668`;
+  the dig's `parked` relied on it), covered by the general unknown-key test, so no new test
+  claims it. What a downgrade does lose is `games.hop.tidy`: the older whitelist drops it
+  (accepted). `test_damaged.py`'s parametrised table (`:111-130`) gets `hop_day` rows
+  (wrong type, a bad date, an unknown stage, `done` not a bool).
 - `SAVE`/`diagnostics`: the day's board is **not** stored (it is rebuilt), and the move list
   is never stored, so nothing about how a person played is saved. `diagnostics.py:99` dumps
   `pet.to_dict()`, so `hop_day` (day, stage, done, tidy: nothing personal) appears in the
-  `pet` block on its own; ship 3a's diagnostics test snapshot is updated for it.
-- **Published:** `hop_day` is an attribute on the mood sensor beside `games`
-  (`sensor.py:314`) and is added to that sensor's unrecorded list, as `games` is, so the
-  recorder does not keep it. A private pet publishes it as it publishes `games`.
+  `pet` block on its own. There is no diagnostics snapshot test to update (checked: none
+  snapshots the `pet` block); 3a's test asserts `hop_day` is in the `pet` block and is not
+  redacted (it is not in `REDACT_STATE`, `diagnostics.py:85`, and should not be).
+- **Published:** `hop_day` is an attribute on the **life-stage sensor** (`LifeStageSensor`,
+  `sensor.py:141`) beside `games` (`:315`), and is added to **that** class's
+  `_unrecorded_attributes` (`:148-160`, where `games` is), so the recorder does not keep it
+  (the mood sensor, `MoodSensor` at `:101`, has a different set and is not the place; the
+  card reads `games` from the stage sensor, `card-journal.js:132`, and will read
+  `hop_day` there). `DebugSensor` also publishes `games` (`:398`) and does not get
+  `hop_day`: nothing reads it there. A private pet publishes it as it publishes `games`.
+  `tests/test_recorded.py` asserts `hop_day` is not recorded.
 
 ## 9. Slices
 
@@ -994,7 +1108,11 @@ privacy mapping, the service text for `settle`.
 What 2a left for it (shipped `73564bfb`; ship 2a above):
 - **The schema.** `HOP_SCHEMA` has `entity_id` and `action` (`vol.In(["board"])`). 3a adds
   `settle` to the list and the optional fields `id`, `moves` and `shared` for it; `board`
-  ignores them. `shared` and the person exist for `settle` only (section 6). `services.yaml`,
+  ignores them. `shared` and the person exist for `settle` only (section 6). Types at the
+  boundary (review s2855 P15): `moves` is `vol.All(cv.string, vol.Length(max=R.HOP_MAX_MOVES
+  + 1))` (so a megabyte string is rejected by the schema, and 201 letters reach the server's
+  own `too_long` reply), `id` is `vol.All(cv.string, vol.Length(max=32))`, `shared` is
+  `vol.Optional("shared", default=False): cv.boolean` as `play_game` has it. `services.yaml`,
   `strings.json` and `translations/en.json` get the new fields in the same ship (a test in
   `tests/test_hop_service.py` already checks the three agree).
 - **The board for the replay** is `await self.async_hop_day_board(day, family, specials, w, h)`
@@ -1008,34 +1126,79 @@ What 2a left for it (shipped `73564bfb`; ship 2a above):
   (`HATCH_HOP.encode(g.moves)`, letters a-x) and `shared`; the `board` reply's shape is
   `{result, day, id, w, h, grid, family, specials, world, twist, done, tidy}`, which the card's
   `valid` check reads without `done`/`tidy`/`twist`. No server change comes from 2b.
-- `board` stops being write-free at a day rollover (section 8); every other `board` call, and
-  every refusal, still writes nothing and logs nothing. The "board refuses without the care
-  log" test of 2a stays.
+- **2a's `async_hop_board` changes, and so do some of 2a's tests.** It computes `specials, w, h`
+  from the live stage (`coordinator.py:3226`); 3a reads the pinned stage instead. The 2a tests
+  that vary the stage mid-day (`tests/test_hop_service.py:100-120`, the cache-by-key tests)
+  get their *expectations edited* (a mid-day stage change no longer changes today's board),
+  not only new tests added beside them.
+- `board` stops being write-free at a day rollover (section 8), and that write is followed by
+  `_save()` and `_publish()`; every other `board` call, and every refusal, still writes
+  nothing and logs nothing. The "board refuses without the care log" test of 2a stays.
+- **`settle`'s order** (sections 6-8; the build follows it): schema; `_advance(now)`; the
+  settle's refusals (`egg`, `away`, `asleep`; `away` rewritten to `asleep` for a private pet;
+  never `too_tired`); `hop_day` empty or behind today -> `board_changed` (no build, no
+  write); the await (`_who`, `_person`, the board from the pinned stage); the replay
+  (`too_long`, `illegal`, `not_won`, id mismatch -> `board_changed`); then one synchronous
+  block with a fresh `now` that re-checks the refusals and that `hop_day` is the entry the
+  board was built for, decides paid / `already`, pays (`settle_hop`, the tidy find with
+  `{}` for `None` flags), updates `hop_day` and the counts, fires the events, `_save()`,
+  `_publish()`.
 
 Acceptance:
 - pytest (`tests/test_hop.py` and `tests/test_finds.py`'s pattern): settle with a
   solver-made winning list pays 23 plus the trait bonus and the play costs, once; a second
-  settle answers `already` and pays nothing; a tidy list pays the find once (basket and
+  settle answers `ok` with `already: true` and pays nothing; a tidy list pays the find once (basket and
   full-basket cases); **a tidy settle after a plain win pays the find and no second 23**;
   **two concurrent settles pay once** (`asyncio.gather`); an illegal list, a too-long list,
   another pet's board id and a stale generator id each answer their code and pay nothing;
-  every refusal (`egg`, `asleep`, `away`, `too_tired`, and `away` rewritten to `asleep` for
-  a private pet, all through `model._refuse_play` as 2a's `board` does) pays nothing and
-  writes no log; a new day resets `done` and `tidy`; `shared`
+  `settle` refuses `egg`, `away` and `asleep` (and `away` rewritten to `asleep` for a private
+  pet) and pays nothing and writes no log; **`settle` does not refuse `too_tired`**: a pet at
+  energy 10 settles a won board, pays, and its energy ends at 0 (Decided 17); `board` still
+  refuses `too_tired` (2a's test stays); a new day resets `done` and `tidy`; `shared`
   goes to the household and the bond to the person; `game_record` and `favourite_game` are
   not called; no `next_find_at` change.
+- **The review's edge cases (s2855), one test each:**
+  - tidy settle with `_find_flags = None`: no raise, one find from the `{}` fallback (P1);
+  - settle on an empty `hop_day`, and on one whose `day` is behind today: `board_changed`,
+    nothing built (assert no `hop_board` call), nothing written, nothing saved (P3, Decided 18);
+  - a `board` with `today < stored day` writes nothing and keeps `done`/`tidy`; `today >
+    stored` rolls and resets them (P13, Decided 19);
+  - a settle whose rebuild is slow while another screen's `board` rolls the day: `board_changed`,
+    no `done` written; one where the pet falls asleep during the await: `asleep`, no pay (P4);
+  - the rollover `board`: sensor attribute and `to_dict()` carry the new day, `async_delay_save`
+    was called; a second same-day `board` writes nothing (P7);
+  - tidy with an empty find pool: `tidy` set, `found: false`, no event; tidy with a full
+    basket: `tidy` set, `found: true`, the find in the collection, no `found` event; tidy
+    in the basket: `found: true` and the event (P8, Decided 20);
+  - a legal list that stops short of the nest: `not_won`, nothing paid or written (P5);
+  - the reply carries `won`, `tidy`, `paid`, `found`, `already` on every `ok`, and `already`
+    is `true` exactly when nothing was paid (P5);
+  - an open happiness call is closed by a hop win; the care-log entry has `game: "hop"` and
+    `score: "win"` or `"tidy"` (P9);
+  - `games["hop"]` transitions: first settle tidy = `played`, `won`, `tidy` each +1; plain
+    then tidy = `tidy` +1 only; a plain settle after `done` changes nothing;
+    `games_played` rises by 1 a day, not per settle (P10);
+  - an over-long `moves` string is rejected at the schema; 201 letters answer `too_long` (P15).
 - Save: an old save loads (`hop_day` `{}`); a new one round-trips; a damaged `hop_day` (wrong
-  types, bad date, unknown stage) is dropped; the unknown-key survival check; `games["hop"]`
-  loads with and without `tidy`; the published attribute and the diagnostics snapshot.
-- **One real-HA round trip:** fetch the board, feed the reply to `scripts/hop_solve.py`,
-  settle with its list, check the pay and the saved day. (The earlier "a list from the
-  fixtures" could not match the live board.)
+  types, bad date, unknown stage) is dropped, as rows in `test_damaged.py`'s parametrised
+  table (wrong type, a bad date, an unknown stage, `done` not a bool; P16); the general
+  unknown-key survival check stands (no new downgrade claim; P12); `games["hop"]` loads with
+  and without `tidy`; after `lay_egg`, `hop_day == {}` (P11); the attribute is on the
+  life-stage sensor and is in its unrecorded set (`tests/test_recorded.py`; P6); `hop_day` is
+  in the diagnostics `pet` block and not redacted (P16).
+- **The round trip** (review P16): a pytest with the real HA test harness imports
+  `scripts/hop_solve.py`'s solver, fetches the board through
+  `hass.services.async_call("virtual_pet", "hop", ..., return_response=True)` as
+  `tests/test_hop_service.py` does for `board`, solves the reply and settles with its list,
+  and checks the pay and the saved day. No device is needed; the batch gate (`scripts/ci-gate`)
+  runs it with the rest. (A list from the fixtures could not match the live board.)
 
 ### Ship 3b: the row's state, settle wiring, flag removal (card, tier 1, S-M)
 
 The card sends the move list when the pet enters the nest, shows the solved view with its
 restart ("try for tidy"), reads `hop_day` for the row's label, shows the settle replies
-(win, tidy with a find, `already`, `illegal`, `board_changed`, each refusal), and removes
+(`ok` with `paid`/`found`/`already`, `illegal`, `not_won`, `board_changed`, `too_long`,
+`egg`/`away`/`asleep`; section 6's table), and removes
 `experimental_hop` (a YAML-only key; with it gone no config key is left to remove, and the
 card-check run "flag off builds nothing" is dropped); `strings`/guide/README/how-to-play
 lines (draft). It reads `done` and `tidy` from `hop_day`, as the sensor attribute, and from
@@ -1046,9 +1209,14 @@ the `board` reply once 3a fills them (2b ignores both).
   `g.done`/`g.tidy` (local `HATCH_HOP.isTidy`), clears the parked list, reacts and says
   "solved"/"tidy". 3b adds the settle call there with the `_hopFetch` pattern (a seam of its
   own, `_hopSettle`, for card-check). The **parked list must not be cleared at the nest any
-  more**: it is cleared when the settle answers `ok`/`found`/`already`, and kept for a
+  more**: it is cleared when the settle answers `ok` (any of its flags), and kept for a
   refused settle (the acceptance row below), so the line in `_hopMove` (`_hopStore(g.key, null)`)
-  moves into the settle's reply handler.
+  moves into the settle's reply handler. The reply's `result` decides: `ok` clears the list
+  and shows the solved view (tidy from the reply's `tidy`, which also ends "try for tidy"
+  for the day, whether `found` is true or false: Decided 20); `board_changed` loads the
+  new board and drops the list; `egg`/`away`/`asleep` keep it; `illegal`, `not_won`,
+  `too_long` keep it too (they are bugs; the board stays as it is and the bubble says so).
+  `settle` never answers `too_tired` (Decided 17), so the card has no line for it there.
 - **Already built in 2b, not 3b's:** the solved view's keys (undo off once `g.done`, restart on
   only while `!g.tidy`, aria "try for tidy"), `_hopRestart`, the bubble lines. 3b changes the
   *source* of `tidy` (the settle reply, then `hop_day`) and the bubble's text per settle code.
@@ -1065,7 +1233,8 @@ the `board` reply once 3a fills them (2b ignores both).
 
 Acceptance:
 - card-check on stubbed replies: the settle contract above; a plain win then a restart then a
-  tidy settle (stubbed `already` then `found`); the solved view has no undo and a restart
+  tidy settle (stubbed `ok` with `already: true`, then `ok` with `found: true`, then one with
+  `found: false` that still ends "try for tidy"); the solved view has no undo and a restart
   only while tidy is not set; `board_changed` loads the new board and drops the parked
   moves; a refused settle (asleep) keeps the moves; the row reads open / solved / tidy from
   the attribute and from a stale `day` (open); a reload on the same day shows the solved
@@ -1177,6 +1346,13 @@ page. All with draft copy.
   row at 300-420 px, and any timing beyond the scratch run. The sample board's counts
   (20 winning lists, 3 tidy, shortest win 12 moves, shortest tidy 16) were re-run by the
   review with its own solver and hold.
+- The replay is deterministic across restarts and upgrades (a pure function of the pet id,
+  day, world, family, specials, size and `n`, seeded through `random.Random(str)`), with one
+  caveat (review s2855 P14): `random.Random(str)` is stable across CPython versions, but the
+  `shuffle`/`choices`/`sample` call sequences are not guaranteed to be, so an HA upgrade that
+  changes CPython could build a different grid from the same seed. The id hashes the grid,
+  so the effect is `board_changed` for a board in flight, never a double pay; ship 1's
+  `tests/fixtures/hop_golden.json` catches it in CI.
 - Path puzzles with sinking tiles are a known genre. The piece, the species moves, the
   growth and the world twists are what is this game's own.
 
@@ -1222,7 +1398,8 @@ made later the same day.
 
 12. **`board` refuses `too_tired`** (first mate, Q1), with `egg`, `asleep` and `away`, through
     `model._refuse_play`. A tired pet shows no Hop; the row and the card's own `_startGame`
-    (energy under 15) agree. Built in 2a.
+    (energy under 15) agree. Built in 2a. **Scope: `board` only; `settle` does not refuse
+    `too_tired` (Decided 17).**
 13. **The cache is keyed on the full argument tuple, today only** (first mate, Q2): `(day,
     world, family, specials, w, h)` in the coordinator (the pet is the coordinator), other
     days' keys dropped on each call, so memory does not grow and a stage change, a world
@@ -1241,3 +1418,20 @@ made later the same day.
     and the aria labels are untouched, so no care action can fire from a game key by
     construction. Option B (the real care pad becomes the keys) is dropped with its guards.
     Section 1 and ship 2b were edited to match and the "pending Q3" marks cleared (s2800).
+
+## Decided (2026-11-03, review s2855)
+
+The first mate answered review s2855's Q1-Q4 on 2026-11-03 (they are folded into sections
+6-8, ship 3a and ship 3b; s2856).
+
+17. **`settle` refuses only `egg`, `away` and `asleep`; `too_tired` applies at `board` only**
+    (first mate, Q1). The pay costs `PLAY_ENERGY`, clamped at 0 (`_clamp`). A won board is
+    never lost to tiredness; sleep still blocks it, with the parked retry. Amends Decided 12's
+    scope and the 3a acceptance.
+18. **`settle` on a stale or empty `hop_day` answers `board_changed`, never writes, never
+    builds** (first mate, Q2). `board` is the only writer of `hop_day` apart from the pay
+    block, and the only place the stage is pinned.
+19. **The day rolls over only when `today > stored day`** (first mate, Q3). A day that goes
+    backwards (timezone, clock, restore) is the same day. One test.
+20. **`tidy` is set on the first tidy settle even if the find cannot be added** (first mate,
+    Q4). The reply carries `found: true/false`; the card stops offering "try for tidy".
