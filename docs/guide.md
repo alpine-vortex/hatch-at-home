@@ -643,7 +643,7 @@ nothing. Phone notifications for hatching, growing up and falling sick still com
 at home. The sitter's care earns no bond and is logged without a name, and the
 sitter's rounds still move `sensor.<pet>_last_care` (with privacy on, a "napping" pet
 is fed at set times), so an automation that wants people only reads the `log`
-attribute and its `by`. Restarts still freeze the pet, as always.
+attribute and its `by`. Restarts still freeze the pet, as always; the sitter does not make an extra round for a restart, only the one that is due.
 
 ### The house helps
 
