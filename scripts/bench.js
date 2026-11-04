@@ -348,6 +348,15 @@ const PRESETS = {
     for (const width of [300, 330, 420]) {
       const base = { width, world: "woodland", group: `hop-${width}` };
       out.push({ ...base, name: `hop/${width}-picker`, label: "picker with the Hop row", view: "games", hop: true });
+      // Ship 3b: the row in its other two states (hop_day on the life-stage sensor), and a reload on a solved / tidy day.
+      for (const state of ["solved", "tidy"]) {
+        out.push({ ...base, name: `hop/${width}-picker-${state}`, label: `picker, the row ${state}`, view: "games", hop: true, hopDay: state });
+      }
+      for (const state of [true, "tidy"]) {
+        out.push({ ...base, group: `hop-${width}-reload`, name: `hop/${width}-reload-${state === true ? "solved" : "tidy"}`,
+          label: `a reload on a ${state === true ? "solved" : "tidy"} day (the nest, no path)`, view: "board",
+          board: { fixture: "hop-adult", done: state } });
+      }
       for (const f of families) {
         const board = { fixture: `${f}-adult` };
         const shot = (state, label, extra) => out.push({ ...base, group: `hop-${width}-${f}`, name: `hop/${width}-${f}-${state}`,

@@ -114,6 +114,10 @@
         Object.assign(attrs, { shell_finish: shot.shellFinish ?? null, shell_finish_options: shot.shellOptions,
           shell_locked: shot.shellLocked || {} });
       }
+      // Ship 3b: `hopDay: "solved" | "tidy"` is the sensor's hop_day for today (the Hop row's state); left out, none.
+      if (i === 0 && shot.hopDay) {
+        attrs.hop_day = { day: hopToday(undefined, now), stage, done: true, tidy: shot.hopDay === "tidy" };
+      }
       put("sensor", "life_stage", stage, attrs);
       const mood = pet.mood || "content";
       // The mood's own need shows as a flag (the button it wants lights up).
@@ -759,6 +763,8 @@
     const fx = HOP_FIXTURES.boards[b.fixture || "hop-adult"];
     if (!fx) throw new Error(`no hop fixture ${b.fixture}`);
     shot.hopReply = b.reply || fx.reply;
+    // `done: true | "tidy"`: the day is already solved (a reload on the same day, ship 3b): the board reply says so.
+    if (b.done) shot.hopReply = { ...shot.hopReply, done: true, tidy: b.done === "tidy" };
     return fx;
   }
   // What the shot measured, into the shot's .json: the cell and key sizes the board drew, and the
