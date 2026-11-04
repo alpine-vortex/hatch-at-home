@@ -33,7 +33,7 @@ CARE_ACTIONS = (*model.ACTIONS, *model.REQUEST_ACTIONS, LIGHTS_OUT)
 
 # "Pip is ...", then what the pet says.
 MOOD_WORDS = {
-    "away": "at the sitter's",
+    "away": "with the sitter",
     "egg": "snug in its egg",
     "sick": "sick",
     "asleep": "asleep",
@@ -55,7 +55,7 @@ RESTING_CALM = {"content", "cozy", "bored"}
 
 def mood_word(mood: str, flags: list[str]) -> str:
     """ "Pip is <this>": the mood's word, with resting folded in. Asleep says
-    only "asleep" (the sitter's privacy answers that too)."""
+    only "asleep" (privacy answers that for a visit by the sitter too)."""
     word = MOOD_WORDS[mood]
     if "resting" not in flags or mood == "asleep":
         return word
@@ -80,7 +80,7 @@ DONE = {
 REFUSED = {
     "egg": "hasn't hatched yet",
     "asleep": "is asleep",
-    "away": "is at the sitter's",
+    "away": "is with the sitter",
     "full": "is full",
     "too_tired": "is too tired to play",
     "already_clean": "is already clean",
@@ -153,13 +153,13 @@ def spoken_status(
 ) -> str:
     """ "Hi, sunbeam! Pip is cozy: toasty by the fire." The greeting first; the
     pet's reason without the marks a voice would read out (*, ~, ♪), and left
-    out when it only repeats the mood ("at the sitter's: at the sitter's")."""
+    out when it only repeats the mood ("asleep: zzz")."""
     said = re.sub(r"\bz+\b", "", MARKS.sub("", reason), flags=re.IGNORECASE)
     said = re.sub(r"\s+", " ", said).strip(" .")
     speech = f"{name} is {mood}"
     words = set(re.findall(r"[\w']+", said.casefold()))
     mood_words = set(re.findall(r"[\w']+", mood.casefold()))
-    # Whole words: a reason that only repeats the mood ("at the sitter's") is left out.
+    # Whole words: a reason that only repeats the mood is left out.
     if said and not words <= mood_words and not mood_words <= words:
         end = "" if said.endswith(("!", "?", "…")) else "."
         speech += f": {said}{end}"
@@ -270,8 +270,11 @@ class StatusIntent(intent.IntentHandler):
                 pet.spoken_visitor(),
             )
         )
+        # With the sitter (privacy off) it says only that: "Pip is with the
+        # sitter." (the reason, "the sitter's here", would repeat it).
+        said = "" if mood == "away" else reason
         response.async_set_speech(
-            spoken_status(name, mood_word(mood, flags), reason, traits, nickname, about)
+            spoken_status(name, mood_word(mood, flags), said, traits, nickname, about)
         )
         response.async_set_speech_slots(
             {
@@ -321,7 +324,13 @@ class CareIntent(intent.IntentHandler):
         pet = find_pet(intent_obj, slots.get(SLOT_PET, {}).get("value"))
         action = slots[SLOT_ACTION]["value"]
         name = pet_name(pet)
-        if action == LIGHTS_OUT:
+        assert pet.state is not None
+        if pet.state.away and pet.privacy:
+            # Privacy: a voice can't be used to find out the house is empty; it
+            # sounds as a sleeping pet does (plan sitter §5.2). The card and the
+            # buttons still care for it (owner D1, Q-B).
+            result = "asleep"
+        elif action == LIGHTS_OUT:
             result = await pet.async_set_lights_out(True, intent_obj.context)
         else:
             result = await pet.async_action(action, intent_obj.context)

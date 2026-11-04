@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
+from freezegun.api import FrozenDateTimeFactory
+from homeassistant.const import STATE_OFF
+from homeassistant.core import HomeAssistant
 import pytest
+from pytest_homeassistant_custom_component.common import async_capture_events
 
 from custom_components.virtual_pet import home, model, rates as R
+from custom_components.virtual_pet.const import DOMAIN
 from custom_components.virtual_pet.home import Presence, Readings, evaluate
+
+from .test_init import STORE_KEY, hatched_pet, settle, setup_with_house
+from .test_sitter import pet_of
 
 HOUR = 3600.0
 MIN = 60.0
@@ -571,7 +580,7 @@ def test_a_fourth_run_in_a_day_gives_no_moment():
     ]
 
 
-def test_the_robot_is_dropped_while_asleep_or_away():
+def test_the_robot_is_dropped_while_asleep():
     m = home.HouseMoments()
     moments(m, robot(robot_docked=True))
     assert moments(m, robot(robot_cleaning=True), awake=False) == []
@@ -631,3 +640,38 @@ def test_a_finished_appliance_is_a_house_moment_once_per_kind():
     # It is dropped while the pet is asleep, away or an egg: no catching up.
     assert moments(m, done, awake=False) == []
     assert moments(m, Readings(night=False)) == []
+
+
+# --- End to end: the zone empties, the sitter comes and goes (C2) ---------------
+
+
+async def test_the_zone_empties_the_sitter_comes_and_goes(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """The channel's half is in test_a_round_never_reaches_the_bus_...: a test
+    client's token lives half an hour, this one runs two."""
+    freezer.move_to("2026-10-26 14:00:00+00:00")
+    start = datetime.now(UTC).timestamp()
+    hass_storage[STORE_KEY] = hatched_pet(start, discipline=100.0, hunger=50.0)
+    hass.states.async_set("zone.home", "1")
+    went = async_capture_events(hass, f"{DOMAIN}_went_away")
+    came = async_capture_events(hass, f"{DOMAIN}_came_home")
+    await setup_with_house(hass)
+    pet = pet_of(hass)
+    assert pet._house_view()["sitter"] is None
+    hass.states.async_set("zone.home", "0")
+    await settle(hass, freezer)
+    for _ in range(26):  # a bit over two hours of ticks
+        await settle(hass, freezer, 5 * 60)
+    assert pet.state.away and len(went) == 1
+    # The arrival round fed it (hunger had decayed under 65).
+    assert pet.state.care_log[0]["action"] == "sitter_feed"
+    assert pet._house_view()["sitter"]["last"]["did"] == ["feed"]
+    hass.states.async_set("zone.home", "1")
+    await settle(hass, freezer)
+    assert not pet.state.away and len(came) == 1
+    assert pet._house_view()["sitter"] is None
+    assert hass.states.get("sensor.pip_mood").attributes["reason"] == "you're back!!"
+    assert hass.states.get("binary_sensor.pip_calling").state == STATE_OFF

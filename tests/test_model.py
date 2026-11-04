@@ -99,15 +99,16 @@ def test_downtime_is_frozen():
     assert not pet.sick
 
 
-def test_away_freezes_everything():
+def test_away_lives_on_with_the_sitter():
+    # Plan sitter §3.1: no freeze. It ages, its needs decay, and no call is made.
     start = at(9)
     pet = hatched(start)
     pet.away = True
     events = run(pet, start + 10 * HOUR)
-    assert events == []
-    assert pet.hunger == 90.0
-    assert pet.age_hours == 30.0
+    assert pet.age_hours == pytest.approx(40.0)
+    assert pet.happiness < 90.0 and pet.energy < 90.0
     assert pet.last_updated == start + 10 * HOUR
+    assert "call_started" not in types(events)
 
 
 def test_hunger_call_missed_once_then_latched():
@@ -210,12 +211,13 @@ def test_downtime_overnight_still_wakes_it_in_the_morning():
     assert "woke_up" in types(events) and not pet.asleep
 
 
-def test_an_unfinished_game_ends_when_it_goes_away_or_to_sleep():
+def test_an_unfinished_game_runs_on_with_the_sitter():
+    # Plan sitter §3.7: going away no longer ends a game.
     pet = hatched(at(9))
     model.play_game(pet, "left", at(9), NoLuck())
     pet.away = True
     info, _ = model.play_game(pet, "left", at(9, 1), NoLuck())
-    assert info == {"result": "away"} and pet.game is None
+    assert info["result"] == model.OK and info["round"] == 2
 
 
 def test_laying_an_egg_keeps_the_days_chore_treats():
@@ -371,14 +373,15 @@ def test_lights_out_refused_when_rested_by_day():
     assert pet.care_log[0]["result"] == "not_sleepy"
 
 
-def test_lights_out_refused_when_flipped_away_and_dropped_on_return():
+def test_lights_out_with_the_sitter_is_refused_at_once():
     start = at(10)
     pet = hatched(start, energy=100.0)
     pet.away = True
-    model.set_lights_out(pet, True, start, SETTINGS)
+    events = model.set_lights_out(pet, True, start, SETTINGS)
+    assert {"type": "care", "action": "lights_out", "result": "not_sleepy"} in events
+    assert not pet.asleep and not pet.lights_out
     pet.away = False
-    events = model.come_home(pet, start + HOUR, SETTINGS)
-    assert not pet.asleep and not pet.lights_out and events == []
+    assert model.come_home(pet, start + HOUR, SETTINGS) == []
 
 
 def test_lights_out_naps_when_tired_or_near_bedtime():
@@ -914,8 +917,8 @@ def test_lay_egg_waits_a_week_into_adulthood():
     pet.age_hours = ADULT + R.LAY_EGG_AFTER_ADULT_HOURS
     assert model.can_lay_egg(pet)
     assert "lay_egg" in model.requests(pet, at(12), SETTINGS)
-    pet.away = True
-    assert not model.can_lay_egg(pet)
+    pet.away = True  # with the sitter it may (plan sitter §3.7)
+    assert model.can_lay_egg(pet)
     pet.away, pet.sick = False, True  # get well first
     assert not model.can_lay_egg(pet)
     assert model.lay_egg(pet, at(12), random.Random(1)) == (pet, [])
@@ -1430,26 +1433,34 @@ def test_saves_without_a_personality_are_backfilled_and_bad_ones_dropped():
     assert model.PetState.from_dict(baby).personality is None
 
 
-def test_lights_out_while_away_is_applied_on_return():
+def test_lights_out_with_the_sitter_is_applied_at_once():
     start = at(14)
     pet = hatched(start)
     pet.away = True
-    model.set_lights_out(pet, True, start, SETTINGS)
-    assert pet.lights_out and not pet.asleep
-    events = model.come_home(pet, start + HOUR, SETTINGS)
+    events = model.set_lights_out(pet, True, start, SETTINGS)
     assert types(events) == ["fell_asleep"]
-    assert pet.asleep and pet.napping
+    assert pet.asleep and pet.napping and pet.lights_before_away is None
 
 
-def test_lights_flipped_on_and_off_while_away_change_nothing():
+def test_an_old_saves_lights_flip_while_away_is_applied_once_at_load():
+    # Saved before the sitter came to the house: lights out flipped while away.
+    start = at(14)
+    data = hatched(start).to_dict()
+    data.update(away=False, lights_out=True, lights_before_away=False)
+    pet = model.PetState.from_dict(data, now=start)
+    events = model.settle_legacy_lights(pet, start, SETTINGS, settles=True)
+    assert types(events) == ["fell_asleep"]
+    assert pet.asleep and pet.napping and pet.lights_before_away is None
+    assert model.settle_legacy_lights(pet, start, SETTINGS, settles=True) == []
+
+
+def test_an_old_saves_lights_flipped_on_and_off_while_away_change_nothing():
     pet = hatched(at(23, 30))
     pet.asleep = True  # dozed off on its own
     pet.wake_at = at(7, day=2)
-    pet.away = True
-    model.set_lights_out(pet, True, at(23, 40), SETTINGS)
-    model.set_lights_out(pet, False, at(23, 45), SETTINGS)
-    assert model.come_home(pet, at(23, 50), SETTINGS) == []
-    assert pet.asleep
+    pet.lights_before_away = False  # flipped on, then off again
+    assert model.settle_legacy_lights(pet, at(23, 50), SETTINGS, settles=True) == []
+    assert pet.asleep and pet.lights_before_away is None
 
 
 @pytest.mark.parametrize(
@@ -1836,7 +1847,7 @@ def test_the_idle_drop_and_sleep_count_a_guessed_game():
     assert types(events).index("game_finished") < types(events).index("fell_asleep")
 
 
-def test_going_away_drops_a_guessed_game():
+def test_a_drop_ends_a_guessed_game_as_a_loss():
     pet = hatched(at(9))
     _guessed_left_right(pet)
     events = model.drop_game(pet, at(9, 1))
@@ -2054,13 +2065,13 @@ def test_every_chore_treat_earned_is_delivered_after_sleep():
     assert types(events).count("chore_treat") == R.CHORE_TREATS_PER_DAY
 
 
-def test_every_chore_treat_earned_is_delivered_after_away():
+def test_chore_treats_land_with_the_sitter_too():
+    # Plan sitter §3.4 (A3): a treat is a person's chore; the pet is awake and living.
     pet = hatched(at(9))
     pet.away = True
     assert model.chores_done(pet, 5, at(9)) == 5
-    assert model.give_treats(pet, at(10)) == []
-    pet.away = False
-    assert types(model.give_treats(pet, at(11))) == ["chore_treat"] * 5
+    assert types(model.give_treats(pet, at(10))) == ["chore_treat"] * 5
+    assert [r["by"] for r in pet.care_log] == [None] * 5
 
 
 def test_old_saves_without_weight_start_in_the_middle():
@@ -2941,7 +2952,7 @@ def test_a_sick_pet_asks_for_medicine_every_4_hours():
     assert pet.call is not None and pet.call.reason == "sick" and pet.call.recall
 
 
-def test_recalls_pause_while_away_and_shift_with_the_clock():
+def test_recalls_pause_across_downtime_and_shift_with_the_clock():
     start = at(9)
     pet = _missed_hunger(start)
     pet.last_recall_at = start - HOUR
@@ -3079,12 +3090,15 @@ def test_a_new_egg_starts_on_its_worlds_own_shell():
     assert "shell_finish" not in egg.unknown and egg.unknown["later"] == 1
 
 
-def test_an_away_pet_does_not_become_sick():
+def test_a_pet_that_falls_sick_with_the_sitter_gets_medicine_at_the_next_round():
+    # Plan sitter §3.4: sickness stays live as a safety net; the round cures it.
     start = at(9)
     pet = hatched(start, health=R.SICK_BELOW_HEALTH - 1)
     pet.away = True
     events = run(pet, start + 5 * HOUR)
-    assert "became_sick" not in types(events)
+    assert types(events).count("became_sick") == 1
+    assert "recovered" in types(events) and not pet.sick
+    assert any(r["action"] == "sitter_medicine" for r in pet.care_log)
 
 
 # --- The social meter (top10 §6) ------------------------------------------------

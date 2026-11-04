@@ -14365,6 +14365,29 @@ async function main() {
     const fullDone = await feedEnd();
     check("feed: a pet the card already sees full plays no scene, and the refusal as today",
       !fullTap.scene && !fullTap.bowl && fullDone.pose && /full/.test(fullDone.line), JSON.stringify({ fullTap, fullDone }));
+    // Sitter S1 (plan sitter-visits 7 S1, B7): with "keep presence private" on, the sensors show a pet
+    // the sitter is looking after as napping (mood asleep, binary_sensor.asleep on), and the server now
+    // takes care for it. This card predates the sitter: a Feed press that ends ok must not break it.
+    await feedState(pet);
+    await put(pet, "sensor.mood", { state: "asleep", attributes: { reason: "zzz", flags: ["asleep"], requests: [] } });
+    await put(pet, "binary_sensor.asleep", { state: "on" });
+    await page.waitForTimeout(600);
+    const sitterErrors = errors.length;
+    const sitterCalls = (await feedLook()).calls;
+    const sitterEnabled = await card.evaluate((el) => !el._slides[el._index].buttons.feed.disabled);
+    await feedTap();
+    await page.waitForTimeout(80);
+    await answer(pet, "feed");
+    await page.waitForTimeout(1200);
+    const sitterDone = await feedEnd();
+    const sitterAlive = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      return { slides: el._slides.length, pet: !!s.pet.getAttribute("src"), shown: s.screen.isConnected };
+    });
+    check("sitter S1 (B7): privacy on, a visiting pet shows napping; Feed goes out once, ends ok, and the card carries on",
+      sitterEnabled && sitterDone.calls === sitterCalls + 1 && !sitterDone.scene && sitterDone.els === 0 &&
+      !/didn't work/.test(sitterDone.line) && sitterAlive.pet && sitterAlive.shown && errors.length === sitterErrors,
+      JSON.stringify({ sitterEnabled, sitterDone, sitterAlive, errors: errors.slice(sitterErrors) }));
     // No reply: it holds at the gate, gives up 2 s on, and a late reply plays the floor (pose, prop, line).
     await feedState(pet);
     await feedTap();

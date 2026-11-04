@@ -412,21 +412,19 @@ def test_the_chance_can_miss() -> None:
     assert pet.next_find_at > t  # the roll happened: rescheduled
 
 
-@pytest.mark.parametrize("why", ["away", "egg", "asleep", "napping"])
-def test_no_roll_away_as_an_egg_or_asleep_and_the_clock_pauses(why: str) -> None:
+@pytest.mark.parametrize("why", ["egg", "asleep", "napping"])
+def test_no_roll_as_an_egg_or_asleep_and_the_clock_pauses(why: str) -> None:
     """R2, owner Q2: the clock is paused, not reset (left as it was)."""
     pet, t = awake_pet(), 1_000_000.0
     pet.next_find_at = t - 1
-    if why == "away":
-        pet.away = True
-    elif why == "egg":
+    if why == "egg":
         pet.age_hours = 0.1
     else:
         pet.asleep = True
         pet.napping = why == "napping"
     assert roll(pet, t) == [] and pet.next_find_at == t - 1 and pet.basket == []
     unset = awake_pet()
-    unset.away, unset.asleep = pet.away, pet.asleep
+    unset.asleep = pet.asleep
     unset.age_hours = pet.age_hours
     assert roll(unset, t) == [] and unset.next_find_at is None
 
@@ -460,8 +458,13 @@ def test_only_night_sky_rolls_asleep() -> None:
     pet.asleep, pet.next_find_at = True, t - 1
     assert len(roll(pet, t, world="nightsky")) == 1
     assert pet.basket[0]["world"] == "nightsky"
-    pet.away, pet.next_find_at = True, t - 1  # away: not even Night Sky
-    assert roll(pet, t, world="nightsky") == [] and pet.next_find_at == t - 1
+
+
+def test_finds_roll_with_the_sitter_here() -> None:
+    """Plan sitter §3.7: the pet is at home with the sitter, so finds go on."""
+    pet, t = awake_pet(), 1_000_000.0
+    pet.away, pet.next_find_at = True, t - 1
+    assert len(roll(pet, t)) == 1 and pet.next_find_at > t
 
 
 def test_a_world_with_no_finds_rolls_nothing() -> None:
