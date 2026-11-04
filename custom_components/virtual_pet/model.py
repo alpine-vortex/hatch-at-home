@@ -1856,12 +1856,14 @@ def _sitter_slots(day: date, settings: Settings) -> list[tuple[float, bool]]:
 
 
 def _sitter_slot(now: float, settings: Settings) -> tuple[float, bool]:
-    """The latest slot at or before now (today's and yesterday's are looked
-    at: there is always one) and whether it is the day's last."""
+    """The latest slot at or before now (the day before yesterday's, yesterday's
+    and today's are looked at: there is always one, even for a wake time of
+    23:30, whose first slot falls after midnight) and whether it is the day's
+    last."""
     today = datetime.fromtimestamp(now, settings.tz).date()
     slots = [
         slot
-        for day in (today - timedelta(days=1), today)
+        for day in (today - timedelta(days=2), today - timedelta(days=1), today)
         for slot in _sitter_slots(day, settings)
         if slot[0] <= now
     ]
@@ -4012,10 +4014,17 @@ def settle_legacy_lights(
 ) -> list[Event]:
     """At load: an old save's lights flip made while away is applied once
     (come_home), and a save that is away counts as the sitter arriving (plan
-    sitter §3.10): the whine by the option, a round if awake, calls settled."""
+    sitter §3.10): the whine by the option, calls settled on every load; the
+    arrival round only for an old save (no sitter_served) or when a slot is
+    due, so a reload or restart during a visit is not a free round."""
     events = come_home(state, now, settings)
     if state.away:
-        events += sitter_arrives(state, now, settings, settles)
+        if state.sitter_served == 0.0 or sitter_due(state, now, settings) is not None:
+            events += sitter_arrives(state, now, settings, settles)
+        else:
+            if settles and sitter_settles(state):
+                events.append({"type": "call_settled"})
+            _sitter_settle_call(state, now, events)
     return events
 
 
