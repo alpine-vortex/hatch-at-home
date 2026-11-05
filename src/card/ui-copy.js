@@ -723,6 +723,12 @@ function loadImage(src) {
   return IMAGES.get(src);
 }
 
+// A photo holds its own images while it draws; the map must not keep them after (perf s2933). The
+// decoded images live as long as the photo's locals do; the browser's cache serves the next load.
+function releaseImages(srcs) {
+  for (const src of srcs) IMAGES.delete(src);
+}
+
 // A creature's sprite; "bird/medicine" borrows another species' sprite.
 function spriteSrc(speciesId, sprite) {
   const path = sprite.includes("/") ? sprite : `${speciesId}/${sprite}`;

@@ -26,3 +26,18 @@ test("_build adopts it and drops the <style> only when it has one", () => {
   assert.match(src, /root\.adoptedStyleSheets = \[sheet\]/);
   assert.match(src, /sheet \? "" : `<style>\$\{STYLE\}\$\{SCENE_STYLE\}<\/style>`/);
 });
+
+test("perf: a photo's images are not kept in the IMAGES map after it loads them", () => {
+  const code = src.match(/\nconst IMAGES = new Map\(\);[\s\S]*?\nfunction releaseImages\(srcs\) \{[\s\S]*?\n\}\n/)[0];
+  const c = { Image: class { set src(v) { this.onload(); } } };
+  vm.runInNewContext(`${code}\nthis.o = { IMAGES, loadImage, releaseImages };`, c);
+  const { IMAGES, loadImage, releaseImages } = c.o;
+  return Promise.all([loadImage("a"), loadImage("b")]).then(([a1]) => {
+    assert.strictEqual(IMAGES.size, 2);
+    return loadImage("a").then((a2) => {
+      assert.strictEqual(a1, a2, "re-use while held");
+      releaseImages(["a", "b"]);
+      assert.strictEqual(IMAGES.size, 0);
+    });
+  });
+});

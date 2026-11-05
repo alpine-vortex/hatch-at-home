@@ -297,12 +297,18 @@ class HatchPetCardJournal extends HatchPetCardSheets {
       .filter(([, t]) => t);
     const flairSrc = (t) => `${BASE}/ui/flair_${FLAIR[t].art ? `${t}_1` : t}.png?v=${VERSION}`;
     const bg = sp.backgrounds?.day || Object.values(sp.backgrounds || {})[0];
-    const [back, pet, perch, ...pieces] = await Promise.all([
-      bg ? loadImage(spriteSrc(photo.species, bg)) : null,
-      sprite ? loadImage(spriteSrc(photo.species, `${stage}_content_1`)) : null,
-      sp.perch ? loadImage(spriteSrc(photo.species, sp.perch)) : null,
-      ...shown.map(([, t]) => loadImage(flairSrc(t)).catch(() => null)),
-    ]);
+    const srcs = [
+      bg ? spriteSrc(photo.species, bg) : null,
+      sprite ? spriteSrc(photo.species, `${stage}_content_1`) : null,
+      sp.perch ? spriteSrc(photo.species, sp.perch) : null,
+      ...shown.map(([, t]) => flairSrc(t)),
+    ];
+    let back, pet, perch, pieces;
+    try {
+      [back, pet, perch, ...pieces] = await Promise.all(srcs.map((src, i) => (src ? (i > 2 ? loadImage(src).catch(() => null) : loadImage(src)) : null)));
+    } finally {
+      releaseImages(srcs.filter(Boolean)); // the locals hold them for the draw; the map does not keep them
+    }
     try {
       await document.fonts?.load("22px Tiny5");
     } catch (err) {
