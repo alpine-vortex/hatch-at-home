@@ -38,7 +38,7 @@ const draw = (s, mood = "excited") => { s.frames = card._shownFrames(s, mood); r
 const EXCITED = ["teen_excited_1", "teen_excited_2"];
 const CONTENT = ["teen_content_1", "teen_content_2"];
 
-test("the excited frames show for 10 s from excitedSince, then the content frames", () => {
+test("the excited frames show for 3 s from excitedSince, then the content frames", () => {
   env.calm = false;
   env.now = 1_000_000;
   const s = slide(env.now);
@@ -55,11 +55,11 @@ test("the tick redraws when the window ends, with no hass push", () => {
   const s = slide(env.now);
   draw(s);
   s.frame = 1;
-  env.now += 5000;
+  env.now += EXCITED_POSE_MS / 2;
   card._excitedSettle(s);
   assert.deepStrictEqual([...s.frames], EXCITED, "mid-window: left alone");
   assert.strictEqual(s.frame, 1);
-  env.now += 5000;
+  env.now += EXCITED_POSE_MS / 2;
   card._excitedSettle(s);
   assert.deepStrictEqual([...s.frames], CONTENT);
   assert.strictEqual(s.frame, 0);
@@ -143,10 +143,11 @@ test("under normal motion the excited frames alternate every tick, then the cont
     seen.push(pet.src);
   }
   const at = (n) => seen[n]; // the picture after n ticks, 700 ms each
-  for (let n = 0; n < 14; n++) assert.strictEqual(at(n), `teen_excited_${(n % 2) + 1}`, `tick ${n} (${n * 700} ms)`);
-  assert.ok(new Set(seen.slice(0, 14)).size === 2, "both excited frames were shown");
-  // 14 x 700 = 9.8 s is the last tick inside the window; the redraw comes on the first tick past 10 s.
-  const after = seen.slice(15);
+  const inside = Math.ceil(EXCITED_POSE_MS / 700); // ticks 0..inside-1 are inside the window
+  assert.ok(inside >= 4, "a few flaps");
+  for (let n = 0; n < inside; n++) assert.strictEqual(at(n), `teen_excited_${(n % 2) + 1}`, `tick ${n} (${n * 700} ms)`);
+  assert.ok(new Set(seen.slice(0, inside)).size === 2, "both excited frames were shown");
+  const after = seen.slice(inside + 1); // the redraw comes on the first tick past the window
   assert.ok(after.every((f) => f.startsWith("teen_content_")), after.join());
   assert.ok(new Set(after).size === 2, "the content frames alternate too: " + after.join());
   after.forEach((f, i) => i && assert.notStrictEqual(f, after[i - 1], "never the same frame twice running"));
