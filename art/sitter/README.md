@@ -76,3 +76,9 @@ grid, on-model with her `stand_1`, 160-168 px tall):
 `sitters/gingham/sitter.json` lists her idles (`scripts/sync-sitter.py` copies them into her manifest row; a row's
 `idles` replaces the default list, so it holds the seven defaults plus `knit biscuit glasses nap`). `review.py`
 knows the four new pose names; a sitter without them is not "missing" them.
+
+Polish (s2910): `nap_1`, `nap_2` gain a hand-placed "Z" (4 px grid, her outline colour, cream fill) that grows and
+drifts up-right between the two frames; the figure is unchanged. `knitread_1`, `knitread_2` are the in-between of
+`knit` and `read` (frame 1 lowers the knitting into her lap, frame 2 lifts the book with the knitting left on her lap),
+Sol-drawn on the same chair at `knit`'s x. They are served (the manifest lists them) but nothing plays them yet; they
+are not in her `idles`.

@@ -276,6 +276,7 @@
     "feed": ["feed_1", "feed_2"],
     "glasses": ["glasses_1", "glasses_2"],
     "knit": ["knit_1", "knit_2"],
+    "knitread": ["knitread_1", "knitread_2"],
     "laugh": ["laugh_1", "laugh_2"],
     "medicine": ["medicine_1", "medicine_2"],
     "nap": ["nap_1", "nap_2"],
