@@ -1317,7 +1317,7 @@
   // shot is taken with the mode on. Writes `<shot>.json` (`mode`).
   // The special is "✦2", the plan's fallback (3.6) for a column too narrow for "special 2"; that longer
   // caption is measured on its own (`long`) at every width.
-  const PROBE_CAPS = [["prev", "left"], ["▲", "up"], ["▼", "down"], ["next", "right"], ["✦", "✦2"], ["↶", "undo"], ["↻", "restart"], ["✕", "quit"]];
+  const PROBE_CAPS = [["◀", "left"], ["▲", "up"], ["▼", "down"], ["▶", "right"], ["✦", "✦2"], ["↶", "undo"], ["↻", "restart"], ["✕", "quit"]];
   const PROBE_LONG = "special 2";
   const probeMode = () => ({
     id: "bench-probe", tint: "game", announce: "probe on",

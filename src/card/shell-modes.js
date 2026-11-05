@@ -29,7 +29,7 @@ const SHELL_TINTS = Object.freeze({ game: "#c4e2f2" });
 // The game entries (slices 2 and 3), shellGame and shellHop. The three server games (slice 2): two inputs on the outer slots 1 and 4 (owner decision D3), quit on 8,
 // the rest off. Every slot but quit is blocked while a request is out (`g.busy`); the dig's keep also
 // while the basket is empty. A game's slot functions read `s.game` (its own state); the engine does not.
-// The glyphs are the stopgaps of decision D5 (the pixel icons are slice 4). Escape and the quit slot run
+// The icons are the pixel icons of slice 4A (frontend/ui/icon_mode_*.png). Escape and the quit slot run
 // the game's own quit path (the server's "end" call, then _endGame, which exits the mode); an exit from
 // outside the game (idle, asleep, egg, a reload) ends the game with no server call, as the
 // card-layout idle block did: the server has dropped it already. The dig's idle line is its bubble.
@@ -40,7 +40,7 @@ function shellGame(id, left, right, idleLine) {
     id,
     slots: [
       side(left, "left"), null, null, side(right, "right"), null, null, null,
-      { icon: "✕", cap: "quit", aria: "Stop the game", act: (card, s) => card._quitGame(s, card._quitLine(s)) },
+      { icon: "icon_mode_quit", cap: "quit", aria: "Stop the game", act: (card, s) => card._quitGame(s, card._quitLine(s)) },
     ],
     tint: "game",
     announce: "game buttons on",
@@ -60,8 +60,8 @@ function shellGame(id, left, right, idleLine) {
 // the board's _hopDraw (enabled, label), so these functions are pure reads of the slide. Escape and the quit
 // slot run the game's quit path; hop is not a server game, so that makes no call. The idle exit (D7) counts
 // from the last accepted input and waits while a settle, the board's load or a request is in flight.
-// Glyphs are the stopgaps of D5; the special's cap is the glyph and its count ("special 2" clips at narrow
-// widths, plan 3.6). Any other exit ends the board with no line; it is resumable from the parked list.
+// The special's cap is its bare count (the icon carries the word; "special 2" clipped at narrow widths, plan
+// 3.6, FM2) and its aria-label still says "special". Any other exit ends the board with no line; it is resumable from the parked list.
 function shellHop() {
   const key = (name, icon, cap) => ({
     icon, cap,
@@ -72,10 +72,11 @@ function shellHop() {
   return {
     id: "hop",
     slots: [
-      key("left", "◀", "left"), key("up", "▲", "up"), key("down", "▼", "down"), key("right", "▶", "right"),
-      { ...key("special", "✦", (s) => `✦${s.game?.keys?.special?.count ?? 0}`), on: (s) => !!s.game?.special },
-      key("undo", "↶", "undo"), key("restart", "↻", "restart"),
-      { icon: "✕", cap: "quit", aria: "Stop the game", act: (card, s) => card._quitGame(s, card._quitLine(s)) },
+      key("left", "icon_mode_left", "left"), key("up", "icon_mode_up", "up"), key("down", "icon_mode_down", "down"),
+      key("right", "icon_mode_right", "right"),
+      { ...key("special", "icon_mode_special", (s) => `${s.game?.keys?.special?.count ?? 0}`), on: (s) => !!s.game?.special },
+      key("undo", "icon_mode_undo", "undo"), key("restart", "icon_mode_restart", "restart"),
+      { icon: "icon_mode_quit", cap: "quit", aria: "Stop the game", act: (card, s) => card._quitGame(s, card._quitLine(s)) },
     ],
     tint: "game",
     announce: "game buttons on",
@@ -95,23 +96,23 @@ function shellHop() {
 // object passed to _modeEnter, not an entry.
 const SHELL_MODES = Object.freeze({
   left_right: shellFreeze(shellGame("left_right",
-    { icon: "prev", cap: "left", aria: "Guess left" },
-    { icon: "next", cap: "right", aria: "Guess right" }, null)),
+    { icon: "icon_mode_left", cap: "left", aria: "Guess left" },
+    { icon: "icon_mode_right", cap: "right", aria: "Guess right" }, null)),
   higher_lower: shellFreeze(shellGame("higher_lower",
-    { icon: "▼", cap: "lo", aria: "Guess lower" },
-    { icon: "▲", cap: "hi", aria: "Guess higher" }, null)),
+    { icon: "icon_mode_down", cap: "lo", aria: "Guess lower" },
+    { icon: "icon_mode_up", cap: "hi", aria: "Guess higher" }, null)),
   dig: shellFreeze(shellGame("dig",
-    { icon: "✓", cap: "keep", aria: "Keep the basket", enabled: (s) => !s.game?.busy && !!s.game?.basket },
-    { icon: "✱", cap: "dig", aria: "Dig a leaf" }, GAME_COPY.idle)),
+    { icon: "icon_mode_keep", cap: "keep", aria: "Keep the basket", enabled: (s) => !s.game?.busy && !!s.game?.basket },
+    { icon: "icon_mode_dig", cap: "dig", aria: "Dig a leaf" }, GAME_COPY.idle)),
   hop: shellFreeze(shellHop()),
 });
 
-// A cap's icon: a frontend/ui pixel icon ("icon_..."), one of the shelf's outline icons (ICON_PATHS:
-// "prev", "next"), or a short glyph ("✦"). Empty for an off slot.
+// A cap's icon: a frontend/ui pixel icon ("icon_mode_left"), drawn at 24 px (the size the care caps' own pixel
+// icons use, so the cap's box does not change from the care state), or a short glyph ("✦", a probe's).
+// Empty for an off slot.
 function shellIcon(key) {
   if (!key) return "";
-  if (/^icon_\w+$/.test(key)) return pixelIcon(key);
-  if (Object.hasOwn(ICON_PATHS, key)) return icon(key, 22);
+  if (/^icon_\w+$/.test(key)) return pixelIcon(key, 24);
   const glyph = String(key).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
   return `<b class="glyph" aria-hidden="true">${glyph}</b>`;
 }

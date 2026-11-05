@@ -5332,7 +5332,7 @@ async function main() {
       sm.diff = (a, b) => a.flatMap((x, i) => Object.keys(x).filter((k) => JSON.stringify(x[k]) !== JSON.stringify(b[i][k]))
         .map((k) => `${i + 1}.${k}: ${JSON.stringify(x[k])} -> ${JSON.stringify(b[i][k])}`));
       // The probe: slots 1, 2, 4, 6, 7 live, 3 blocked, 5 off, 8 the quit (the exit slot, Escape too).
-      const ICONS = ["prev", "▲", "▼", "next", "", "↶", "↻", "✕"];
+      const ICONS = ["◀", "▲", "▼", "▶", "", "↶", "↻", "✕"];
       sm.probe = (over = {}) => {
         const slot = (i, extra = {}) => ({ icon: ICONS[i - 1], cap: `p${i}`, aria: `probe slot ${i}`, act: () => sm.acts.push(i), ...extra });
         const m = {
@@ -5382,7 +5382,7 @@ async function main() {
     // the cap's background has a transition: the tint is read once it has run
     await page.waitForTimeout(400);
     on.tint = await card.evaluate((el) => [...new Set(el.__sm.eight().map((b) => getComputedStyle(b.querySelector(".cap")).backgroundColor))]);
-    const want = ["prev", "▲", "▼", "next", null, "↶", "↻", "✕"];
+    const want = ["◀", "▲", "▼", "▶", null, "↶", "↻", "✕"];
     const slotsOk = on.eight.every((b, i) => (want[i] === null
       ? b.disabled && b.hidden === "true" && b.aria === "" && b.cap === "" && !b.glyph
       : b.icon === want[i] && b.cap === (i === 7 ? "quit" : `p${i + 1}`) && b.aria === (i === 7 ? "quit the probe" : `probe slot ${i + 1}`)
@@ -5706,9 +5706,13 @@ async function main() {
         sm.release();
         await p;
         const open = { st: sm.slotState(s).join(), live: s.modeLive.textContent, gl: s.gameBox.querySelectorAll(".gl, .gr").length, focus: sm.focus(s),
-          aria: sm.eight(s).map((b) => b.getAttribute("aria-label")).join("|") };
+          aria: sm.eight(s).map((b) => b.getAttribute("aria-label")).join("|"),
+          // slice 4A: the table's icon keys, and the pixel <img> each live or blocked slot draws at 24 px
+          icons: sm.eight(s).map((b) => b.dataset.icon).join(),
+          imgs: sm.eight(s).map((b) => { const i = b.querySelector(".cap img.picon"); return i ? `${i.getAttribute("src").replace(/\?.*$/, "").replace(/^.*\/ui\//, "")} ${i.getAttribute("width")}x${i.getAttribute("height")}` : ""; }).join() };
         const dig = kind === "dig";
         const [one, four] = CAPS[kind];
+        const ICON = { left_right: ["left", "right"], higher_lower: ["down", "up"], dig: ["keep", "dig"] };
         const want = `${dig ? "blocked" : "live"},off,off,live,off,off,off,live`;
         const wantEarly = "blocked,off,off,blocked,off,off,off,live";
         // a press on slot 1 and slot 4, twice each, while the server answers: one call, no care press, no scene, no rim
@@ -5732,7 +5736,10 @@ async function main() {
         el._endGame(s, null);
         const done = sm.gone(s, "the pick", kind);
         done.ok = done.ok && picker.pick && picker.pickBox && !picker.mode && picker.same && early.mode === kind && early.st === wantEarly
-          && early.caps === [one, "", "", four, "", "", "", "quit"].join() && open.st === want && open.gl === 0 && open.focus === (dig ? 3 : 0)
+          && early.caps === [one, "", "", four, "", "", "", "quit"].join()
+          && open.icons === [`icon_mode_${ICON[kind][0]}`, "", "", `icon_mode_${ICON[kind][1]}`, "", "", "", "icon_mode_quit"].join()
+          && open.imgs === [`icon_mode_${ICON[kind][0]}.png 24x24`, "", "", `icon_mode_${ICON[kind][1]}.png 24x24`, "", "", "", "icon_mode_quit.png 24x24"].join()
+          && open.st === want && open.gl === 0 && open.focus === (dig ? 3 : 0)
           && open.live === `game buttons on: ${dig ? "" : `${one}, `}${four}, quit` && busy.sent === 1 && busy.press === 0 && !busy.scene && !busy.rim
           && busy.quit === null && busy.st === wantEarly && busy.burst === "" && busy.cap === (dig ? four : one);
         rows.push({ ...done, picker, early, open, busy });
@@ -5967,6 +5974,9 @@ async function main() {
         const open = { st: st(s), mode: s.mode?.id, kind: s.game?.kind, caps: sm.eight(s).map((b) => b.children[1].textContent).join(), focus: sm.focus(s),
           live: s.modeLive.textContent, gx: s.gameBox.querySelectorAll(".gx, .hk, .hkeys, .gl, .gr").length,
           pressed: sm.eight(s)[4].getAttribute("aria-pressed"), aria5: sm.eight(s)[4].getAttribute("aria-label"),
+          // slice 4A: the pixel icons, and the special's cap is the bare count (the label keeps "special", FM2)
+          icons: sm.eight(s).map((b) => b.dataset.icon).join(),
+          imgs: sm.eight(s).map((b) => { const i = b.querySelector(".cap img.picon"); return i ? `${i.getAttribute("src").replace(/\?.*$/, "").replace(/^.*\/ui\//, "")} ${i.getAttribute("width")}x${i.getAttribute("height")}` : ""; }).join(),
           blockedLabels: sm.eight(s).slice(0, 4).filter((b) => b.getAttribute("aria-disabled") === "true").map((b) => b.getAttribute("aria-label")) };
         const d = dirs(s);
         sm.eight(s)[4].click(); // special on
@@ -5983,7 +5993,9 @@ async function main() {
         sm.eight(s)[6].click(); // restart
         const restarted = s.game.moves.length;
         rows.push({ kind: "hop", label: "the keys: all eight slots, labels, the special toggles aria-pressed, a move, undo, restart", open, armed, unarmed, before, moved, undone, restarted,
-          ok: open.mode === "hop" && open.kind === "hop" && !/off/.test(open.st) && /live$/.test(open.st) && /^left,up,down,right,✦\d,undo,restart,quit$/.test(open.caps) &&
+          ok: open.mode === "hop" && open.kind === "hop" && !/off/.test(open.st) && /live$/.test(open.st) && /^left,up,down,right,\d,undo,restart,quit$/.test(open.caps) &&
+            open.icons === "icon_mode_left,icon_mode_up,icon_mode_down,icon_mode_right,icon_mode_special,icon_mode_undo,icon_mode_restart,icon_mode_quit" &&
+            open.imgs === ["left", "up", "down", "right", "special", "undo", "restart", "quit"].map((n) => `icon_mode_${n}.png 24x24`).join() && /special/i.test(open.aria5) &&
             open.gx === 0 && open.pressed === "false" && /^Special move, \d left$/.test(open.aria5) && open.blockedLabels.every((l) => /, (blocked|sunk)$/.test(l)) &&
             open.live.startsWith("game buttons on: ") && open.focus === d[0] && armed.pressed === "true" && armed.cls && armed.g === true && unarmed.pressed === "false" && !unarmed.g &&
             before.moves === 0 && before.undo === "true" && before.restart === "true" && moved.moves === 1 && moved.undo === null && moved.restart === null && moved.press === 0 &&

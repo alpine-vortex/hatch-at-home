@@ -92,10 +92,10 @@ function probe(over = {}) {
   return {
     id: "probe", tint: "game", announce: "probe on",
     slots: [
-      { icon: "prev", cap: "back", aria: "go back", act: act("back") },
+      { icon: "icon_mode_left", cap: "back", aria: "go back", act: act("back") },
       null,
       { icon: "✦", cap: (s) => `star ${s.stars || 0}`, aria: (s) => `star, ${s.stars || 0} left`, act: act("star"), on: (s) => !!s.armed },
-      { icon: "next", cap: "next", aria: "go on", act: act("next"), enabled: (s) => !s.blocked },
+      { icon: "icon_mode_right", cap: "next", aria: "go on", act: act("next"), enabled: (s) => !s.blocked },
       null, null, null,
       { icon: "✕", cap: "done", aria: "done", act: (card, s) => card._modeExit(s, "quit") },
     ],
@@ -202,8 +202,8 @@ test("enter: all eight show the slots, off slots are disabled, hidden and unlabe
   assert.deepStrictEqual(st.map((x) => x.hidden), [null, "true", null, null, "true", "true", "true", null]);
   assert.deepStrictEqual(st.map((x) => x.pressed), [null, null, "false", null, null, null, null, null]);
   assert.ok(st.every((x) => x.tinted && !x.wanted && !x.on && x.desc === null));
-  assert.deepStrictEqual(st.map((x) => x.icon), ["prev", "", "✦", "next", "", "", "", "✕"]);
-  assert.match(all[0].cap.innerHTML, /<svg/);
+  assert.deepStrictEqual(st.map((x) => x.icon), ["icon_mode_left", "", "✦", "icon_mode_right", "", "", "", "✕"]);
+  assert.match(all[0].cap.innerHTML, /<img class="picon" src="\/b\/ui\/icon_mode_left\.png\?v=t" width="24" height="24"/);
   assert.match(all[2].cap.innerHTML, /<b class="glyph" aria-hidden="true">✦<\/b>/);
   assert.strictEqual(all[1].cap.innerHTML, "");
   assert.ok(s.devClasses.has("moded"));
@@ -558,9 +558,10 @@ test("slice 3: the hop entry: all eight slots, the plan's order, one tint, quit 
   assert.strictEqual(m.exit.idleAt({ game: g }), 5);
   assert.deepStrictEqual([{}, { busy: true }, { settling: true }, { hopLoading: true }].map((x) => m.exit.idleHold({ game: x })),
     [false, true, true, true]);
-  // the special's cap is the glyph and its count; it is pressed while armed
+  // the special's cap is the bare count (4A, FM2); it is pressed while armed
   const s = { game: { keys: { special: { count: 2, enabled: true } }, special: true } };
-  assert.strictEqual(m.slots[4].cap(s), "✦2");
+  assert.strictEqual(m.slots[4].cap(s), "2");
+  assert.strictEqual(M.shellText(m.slots[4].aria, s), "special"); // the label still says it (no key label yet)
   assert.strictEqual(m.slots[4].on(s), true);
 });
 
@@ -581,7 +582,7 @@ test("slice 3: hop's slots read the keys the board wrote; a press runs _hopKey; 
   assert.deepStrictEqual(b.map((x) => x.getAttribute("aria-disabled")), [null, "true", null, "true", "true", "true", "true", null]);
   assert.ok(b.every((x) => !x.disabled), "no slot of hop is off: all eight are focusable");
   assert.deepStrictEqual(b.map((x) => x.getAttribute("aria-pressed")), [null, null, null, null, "false", null, null, null]);
-  assert.strictEqual(b[4].caption.textContent, "✦0");
+  assert.strictEqual(b[4].caption.textContent, "0");
   card._modeClick(s, 0);
   card._modeClick(s, 1); // blocked: nothing
   card._modeClick(s, 2);
@@ -591,4 +592,63 @@ test("slice 3: hop's slots read the keys the board wrote; a press runs _hopKey; 
   card._endGame = (sl, line) => { ended.push(line); sl.game = null; card._modeExit(sl, "game"); };
   card._modeExit(s, "idle");
   assert.deepStrictEqual([s.mode, [...ended]], [null, [null]]);
+});
+
+// ---- slice 4A: the pixel icons ----
+
+const MODE_ICONS = ["left", "right", "up", "down", "keep", "dig", "special", "undo", "restart", "quit"].map((n) => `icon_mode_${n}`);
+const pngSize = (file) => {
+  const b = fs.readFileSync(file);
+  assert.strictEqual(b.subarray(1, 4).toString(), "PNG", file);
+  return [b.readUInt32BE(16), b.readUInt32BE(20)];
+};
+
+test("4A acceptance 1: every slot of every table mode names an icon_mode_* key whose PNG exists and is 96x96; the table uses exactly the ten", () => {
+  const used = new Set();
+  for (const [id, m] of Object.entries(M.SHELL_MODES)) {
+    m.slots.forEach((slot, i) => {
+      if (!slot) return;
+      assert.match(slot.icon, /^icon_mode_\w+$/, `${id} slot ${i + 1}: no glyph, no SVG name, not empty`);
+      const file = path.join(ROOT, "custom_components/virtual_pet/frontend/ui", `${slot.icon}.png`);
+      assert.ok(fs.existsSync(file), `${slot.icon}.png exists`);
+      assert.deepStrictEqual(pngSize(file), [96, 96], `${slot.icon}.png is 96x96`);
+      used.add(slot.icon);
+    });
+  }
+  assert.deepStrictEqual([...used].sort(), [...MODE_ICONS].sort());
+  // the plan's table, slot by slot
+  const icons = (id) => Array.from(M.SHELL_MODES[id].slots, (x) => x && x.icon.replace("icon_mode_", ""));
+  assert.deepStrictEqual(icons("left_right"), ["left", null, null, "right", null, null, null, "quit"]);
+  assert.deepStrictEqual(icons("higher_lower"), ["down", null, null, "up", null, null, null, "quit"]);
+  assert.deepStrictEqual(icons("dig"), ["keep", null, null, "dig", null, null, null, "quit"]);
+  assert.deepStrictEqual(icons("hop"), ["left", "up", "down", "right", "special", "undo", "restart", "quit"]);
+});
+
+test("4A: shellIcon draws a pixel icon at 24 px; no SVG branch (a shelf arrow name is a glyph now); a probe's glyph stays", () => {
+  assert.strictEqual(M.shellIcon("icon_mode_up"), '<img class="picon" src="/b/ui/icon_mode_up.png?v=t" width="24" height="24" alt="">');
+  assert.doesNotMatch(M.shellIcon("prev"), /<svg/);
+  assert.match(M.shellIcon("prev"), /class="glyph"/);
+  assert.match(M.shellIcon("✦"), /<b class="glyph" aria-hidden="true">✦<\/b>/);
+  assert.strictEqual(M.shellIcon(""), "");
+  // the carousel arrows keep ICON_PATHS and icon()
+  assert.match(src, /icon\("prev", 20\)/);
+  assert.match(src, /const ICON_PATHS = /);
+  assert.doesNotMatch(dataPart.match(/function shellIcon[\s\S]*?\n\}\n/)[0], /ICON_PATHS/);
+});
+
+test("4A: hop's special caption is the bare count, its label keeps 'special'", () => {
+  const m = M.SHELL_MODES.hop;
+  for (const count of [0, 1, 2, 3]) assert.strictEqual(m.slots[4].cap({ game: { keys: { special: { count } } } }), String(count));
+  assert.strictEqual(m.slots[4].cap({}), "0");
+  assert.match(M.shellText(m.slots[4].aria, { game: { keys: { special: { label: "Special move, 2 left" } } } }), /special/i);
+  assert.match(M.shellText(m.slots[4].aria, {}), /special/);
+  // the other seven captions are unchanged table copy
+  assert.deepStrictEqual(Array.from(m.slots).filter((x, i) => i !== 4).map((x) => x.cap), ["left", "up", "down", "right", "undo", "restart", "quit"]);
+});
+
+test("4A acceptance 7: every table mode quits on slot 8 and on Escape", () => {
+  for (const [id, m] of Object.entries(M.SHELL_MODES)) {
+    assert.strictEqual(m.exit.escape, true, `${id} exit.escape`);
+    assert.strictEqual(m.exit.slot, 8, `${id} exit.slot`);
+  }
 });
