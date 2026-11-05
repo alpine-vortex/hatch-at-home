@@ -2,8 +2,11 @@
 
 **Date:** 2026-11-04
 **Status:** Plan only, revised 2026-11-04 after the adversarial review (s2878, findings P1-P22,
-folded in here and cited as "review P#"). Four slices; **slice 1 (the engine) is built and on
-main** (`a698d6d7`), slices 2-4 are not started.
+folded in here and cited as "review P#"). Four slices; **slices 1 (the engine), 2 (the three
+server games) and 3 (Hop) are built and on main** (slice 1 `a698d6d7`). **Slice 4 is split
+(2026-11-05, from the s2907 review, cited "review S4 #n"): 4A, the pixel icons, is specified below
+and ready to brief; 4B, the keys, is PARKED** (owner 2026-11-05: later, behind the Hop art and
+the icon wiring).
 **Basis:** `5e7616c0` (`fm-hop-exp`) for sections 2 and 4 (the "as it was" tree). Where a ref in
 sections 3.5-3.6 and 6 names a line that slice 1 moved, it has been re-pointed to main
 (`a75f00e1`, 2026-11-04); recheck when a slice starts (the card parts move often).
@@ -73,12 +76,15 @@ All six are the owner's, 2026-11-04. Cite them as "owner decision D#".
 | D2 | **The picker stays as it is**, on screen. The shell changes only once a game starts (the picker's buttons carry long labels and a prompt; they are not icon material). |
 | D3 | **Two-button games use the outer slots 1 and 4**, the old `.gl`/`.gr` positions and Hop's left/right. Slots 2 and 3 are dimmed and inert. |
 | D4 | **Hop's arrows are one row, slots 1-4: left, up, down, right** (the `HOP_KEYS` order, `card-board.js:83`). Special, undo, restart and quit are slots 5-8. |
-| D5 | **Existing icons and glyphs first, pixel icons later; one game tint colour.** The first slices ship the current SVG icons and glyphs (`icon("prev")` etc., `prefs.js:17-20`; the "✦ ↶ ↻ ✕" the mock used). The pixel icons follow in slice 4. The tint is one colour for every game, not the world's accent. |
+| D5 | **Existing icons and glyphs first, pixel icons later; one game tint colour.** The first slices ship the current SVG icons and glyphs (`icon("prev")` etc., `prefs.js:17-20`; the "✦ ↶ ↻ ✕" the mock used). The pixel icons follow in slice 4A. The tint is one colour for every game, not the world's accent. |
 | D6 | **The engine is a general shell mode.** The owner: "We may use this for other modes and features in the future outside of games, so keep that in mind during design." So a mode is a table entry (8 slots, a tint, an exit rule) with its own enter and exit; games call them. Nothing in slice 1 may assume a game. |
 | D7 | **Hop idles out after 3 minutes**, like the server games; the care buttons come back on its quit, so a forgotten board can't lock the shell. (Owner 2026-11-04, review Q1.) |
 | D8 | **Opening the status sheet keeps ending a game** (`card-layout.js:786`, as built). A non-game mode chooses per mode (`exit.status`). (Owner 2026-11-04, review Q2.) |
 | D9 | **Hop's future hint goes on the board** (a tap on the nest or a long-press), never a ninth key; the 8 slots stay. (Owner 2026-11-04, review Q3.) |
 | D10 | **An integration reload (`s.reloading`) ends the mode.** Modes are not saved across a reload. (Owner 2026-11-04, review Q4.) |
+| D11 | **Slice 4B (keys) is parked**: later, behind the Hop art (s2874) and the icon wiring (4A). (Owner 2026-11-05.) |
+| FM2 | **Q3 (2026-11-05):** Hop's special cap is the **bare count** once it has a pixel icon (the "✦2" goes); its `aria-label` keeps the word "special". For 4B: **S = special, R = restart**. First mate. |
+| FM3 | **Q4 (2026-11-05):** the mode icons are drawn for the pale-blue `#c4e2f2` face only (D5 gives one game tint); **the owner signs the art** before merge. First mate. |
 | FM | Server games enter the mode at `_gameView` (before the server answers) and accept a one-beat swap-and-restore on a refusal (review P11). First mate, 2026-11-04. |
 
 Nothing here needs the server: the three server games already take 2 inputs plus close, and
@@ -273,9 +279,11 @@ its slot `on` is `g.special`.
 
 Nothing exceeds eight, and Hop uses all eight. A future mode that wants more keeps its own
 on-screen keys. **Hop's future hint (Hop ship 5) goes on the board, not on a ninth key**
-(owner decision D9): a tap on the nest or a long-press, which that ship designs. The Hop plan's
-reserved eighth cell or shared slot for `hint` (`docs/plan-2026-11-02-hop-of-the-day.md:126-128,
-1157, 1209`) is released by this plan; the first mate updates that doc when slice 3 lands. The
+(owner decision D9): a tap on the nest or a long-press, which that ship designs. Slice 3 has
+landed with all eight slots used and no hint slot (`shellHop` in `shell-modes.js`). The Hop
+plan's reserved eighth cell or shared slot for `hint` (`docs/plan-2026-11-02-hop-of-the-day.md:126-128,
+1157, 1209`, and "the hint key is a ninth key" at `:1774`) is released by this plan; **that doc
+still says the old thing**, and the first mate updates it (not part of this plan's slices). The
 picker is not a mode (D2).
 
 ### 3.5 Exits and interruptions
@@ -333,11 +341,14 @@ Escape. The `gameBox` listener goes in the same slice so Escape never fires twic
   (top of this document); slice 2 changes no layout until it is answered. Captions are one
   line, clipped rather than wrapped, each at or under about 40 px at 284. Hop's special
   carries its count and **"special 2" clips at 284 and 300 everywhere and at 330 on the `pad`
-  mould**, so slice 3 uses the glyph and the count, "✦2" (it fits at 420).
-- **Keyboard.** Today only Tab and Escape work (no arrow handler on the board). Escape works
-  from the moment the handler is on the device (slice 1), including with focus on a swapped
-  cap. Slice 4 adds a mode-level `keys` map (arrows and WASD are Hop's directions, `Z` is
-  undo, Esc is quit), active only when focus is in the card.
+  mould**, so slice 3 uses the glyph and the count, "✦2" (it fits at 420). **With the pixel icon (4A) the
+  cap is the bare count (FM2, 2026-11-05), so the clip goes**; the `aria-label` still says
+  "special".
+- **Keyboard.** Today only Tab and Escape work (no arrow handler on the board). Escape is
+  **built** (slice 1): it works from the moment the handler is on the device, including with
+  focus on a swapped cap, and the table modes all set `escape: true` on slot 8. The arrow and
+  letter keys are **slice 4B, parked** (section 6): a `keys` array on each slot, routed through
+  `_modeClick`, with the design notes and acceptance recorded there.
 
 ### 3.7 Who owns the screen (review P3, D6)
 
@@ -429,8 +440,7 @@ not a branch in the engine.
 
 ## 6. The slices
 
-Order: 1 → 2 → 3 → 4. Slices 2 and 3 each start after 1; 3 may start after 2 or in parallel
-if the key hooks of `_hopKey` are not touched by both. Each slice states what card-check, the
+Order: 1 → 2 → 3 → 4A; 4B is parked (D11). Slices 1-3 are built; 4A needs only them (and its art). Each slice states what card-check, the
 bench and node tests must show; every acceptance line below is one of those three. A slice that
 changes card methods runs `scripts/gate --auto`, but slices 1-3 change methods every slide
 calls, so `scripts/pick-sections` will likely pick `all`: budget `scripts/ci-gate` (review P17);
@@ -611,7 +621,7 @@ and `HOP_KEYS`'s rendering go; `_hopKey`, `_hopTap`, `_hopRefocus` stay and are 
 sets Hop's key state. `g.lastAt` is set on every accepted Hop input and Hop gets
 `exit.idleMs = GAME_IDLE_MS` (D7). The board takes the whole overlay. The bench's `hopInfo`
 (`dev/bench/page.js:774-798`) and `keyState` and the Hop sections of card-check (the `.hk`,
-`.gx` and `.hkeys` lines: 12 in `board`, 2 in `resume`, 1 in `play`) move to `.toy`. There is
+`.gx` and `.hkeys` lines: 12 in `board`, 2 in `resume`, 1 in `play`; **the slice 3 worker found three more `.gx` lines than these counts**, so trust a fresh `grep -F`, not the numbers) move to `.toy`. There is
 no visual golden to regenerate: the only Hop golden, `tests/fixtures/hop_golden.json`, is
 server boards, which this change cannot touch (review P17).
 
@@ -640,20 +650,180 @@ Acceptance:
    change is listed in the commit.
 9. Hop is still behind `experimental_hop` (a flag-off card has no Hop row and no Hop mode).
 
-### Slice 4: the pixel icons, and the keys
+### Slice 4: the pixel icons (4A) and the keys (4B, parked)
 
-Optional and last. The table's icon keys change from the SVG/glyph stopgaps to pixel icons
-(24 grid at 4x, drawn like `pixelIcon`): left, right, up, down, keep, dig, special, undo,
-restart, quit (about 10). The art goes through the art pipeline, not this plan. The
-mode-level `keys` map (arrows/WASD, `Z`, Esc) lands here, as part of the engine.
+Optional and last. Folded in from the s2907 review (2026-11-05; cited "review S4 #n"). It is two
+ships with no code in common: **4A** swaps the stopgap glyphs for pixel icons (an art job, then
+a small code ship) and is ready to brief; **4B** adds keyboard keys and is **PARKED** (owner
+2026-11-05: later, behind the Hop art and the icon wiring, D11). 4B does not need 4A, nor 4A 4B.
+Escape needs neither: it is built (3.5, 3.6).
 
-Acceptance:
-1. A node test: every icon key in the table exists in `frontend/ui` (or the stopgap glyph
-   still resolves); no key is missing.
-2. A card-check row per key in Hop: the key moves the pet, only when focus is in the card;
-   outside the card it does nothing; Esc quits every mode.
-3. Bench `--preset ui` shows the icons at 300/330/420 with the `.cap` and `.toy` rects
-   unchanged from slice 1's numbers (R3).
+#### 4A: the pixel icons
+
+**The icon table.** Every slot of all four modes maps to one of ten icons (review S4 #1). The
+"today" column is `shell-modes.js` at `b7b5884d`; lo/hi reuse down/up (no extra art), and
+left/right replace both the SVG `prev`/`next` of left_right and Hop's `◀`/`▶` glyphs.
+
+| mode | slot | glyph today | icon key after |
+|---|---|---|---|
+| left_right | 1 | `prev` (SVG, `ICON_PATHS`) | `icon_mode_left` |
+| left_right | 4 | `next` (SVG, `ICON_PATHS`) | `icon_mode_right` |
+| higher_lower | 1 (lo) | `▼` | `icon_mode_down` |
+| higher_lower | 4 (hi) | `▲` | `icon_mode_up` |
+| dig | 1 (keep) | `✓` | `icon_mode_keep` |
+| dig | 4 (dig) | `✱` | `icon_mode_dig` |
+| hop | 1 (left) | `◀` | `icon_mode_left` |
+| hop | 2 (up) | `▲` | `icon_mode_up` |
+| hop | 3 (down) | `▼` | `icon_mode_down` |
+| hop | 4 (right) | `▶` | `icon_mode_right` |
+| hop | 5 (special) | `✦` | `icon_mode_special` |
+| hop | 6 (undo) | `↶` | `icon_mode_undo` |
+| hop | 7 (restart) | `↻` | `icon_mode_restart` |
+| every mode | 8 (quit) | `✕` | `icon_mode_quit` |
+
+That is **ten files**: `icon_mode_{left,right,up,down,keep,dig,special,undo,restart,quit}.png`
+in `custom_components/virtual_pet/frontend/ui/` (review S4 #2). The `mode_` infix keeps them clear
+of a future care icon (`icon_dig`, `icon_play` already exists). `shellIcon` already loads any
+`^icon_\w+$` key as `${BASE}/ui/<key>.png?v=${VERSION}` (`pixelIcon`, `prefs.js:24-26`), so the
+table only changes its strings.
+
+**What goes dead, and what does not (checked at `b7b5884d`; this corrects the review, which
+called `ICON_PATHS` and `icon()` dead).** The `ICON_PATHS` branch of `shellIcon`
+(`shell-modes.js:114`) has no caller left once left_right stops using `prev`/`next`: **4A removes
+that branch** and the words about it in the comment above `shellIcon`. `ICON_PATHS` itself and
+`icon()` (`prefs.js:17`, `:78`) are **not** dead: the card's own carousel arrows use them
+(`icon("prev", 20)`, `icon("next", 20)`, `card-build.js:22`, `:24`), so they stay. The glyph
+branch of `shellIcon` stays for probes (the bench's, card-check's and the node test's), which are
+objects and not table modes.
+
+**Art spec** (review S4 #4). For the art job; the ship worker does not draw.
+
+- **Size and grid:** a 24-cell grid at 4x, a 96x96 PNG, like every `frontend/ui` icon (`pixelIcon`
+  draws it at 24 CSS px; the `.picon` rule is `image-rendering: pixelated`, `style.js:1583`).
+- **Palette:** 4-bit (16 colours at most), the same as `icon_feed` and `icon_status`.
+  Transparent background.
+- **Silhouette first.** A mode cap is 39.5 px wide at card width 284 (Q-A), so the glyph must read
+  as one shape: a clear outline, no fine interior detail, no text or letters in the art (the
+  caption carries the words).
+- **Drawn for the `#c4e2f2` face only** (FM3). The mode tint is one colour (`--mode-tint`, default
+  `#c4e2f2`, with `color: #3a2a1a`, `style.js:1735`), the same in both Home Assistant themes
+  and on every finish, so there is **no dark variant**. A PNG ignores `currentColor`: the icon
+  is a fixed colour, so nothing asserts a tint on the `<img>` (R14).
+- **Legible in the states the cap has:** live; `.armed` (Hop's special, a held-down face,
+  `style.js:1740-1742`); and blocked at 0.6 opacity (`.toy[aria-disabled="true"]`,
+  `style.js:1744`). The contact sheet shows all three.
+- **Pipeline:** the sheets go through `art/ui/cut_ui.py` (3x3 sheets cut to the 24 grid, 96x96
+  PNGs; `ICONS = {"icons_1": [9 names], "icons_2": [9 names]}`). Ten icons do not fit one sheet:
+  4A adds **`icons_3`** (nine names) and **`icons_4`** (the tenth). Image-model prompts, logs
+  and run scripts stay in the gitignored `private-content/art/runs/<run>/` (AGENTS.md, "Art
+  runs stay local"); only the finished PNGs and the `cut_ui.py` change are committed.
+- **Contact sheet:** `cut_ui.py` draws its contact sheet on cream buttons (`CREAM`, 255,247,236)
+  and a dark row; neither is the mode face. 4A adds a row on `#c4e2f2` (live, `.armed`, and
+  0.6 opacity) at 24 and 48 px, and **the owner signs this sheet** (FM3) before the PNGs merge.
+
+**The code ship.** The table's icon strings become the keys above; `shellIcon` loses the
+`ICON_PATHS` branch; Hop's special caption becomes the bare count (`${count}`, FM2) with its
+`aria-label` unchanged; `shellIcon` passes its size explicitly (24, the size the care caps' own
+pixel icons already use, so the box does not change from the care state, review S4 #5); the card's
+`VERSION` is bumped so `?v=` busts the cache (`prefs.js:6`). The PNGs ship: `release.yml` zips all
+of `custom_components/virtual_pet`, so `frontend/ui` goes with it (no packaging list to edit).
+
+Acceptance (review S4 #3, #5, #6):
+1. **A node test that can fail** (review S4 #3). It walks every slot of every `SHELL_MODES` entry:
+   each non-null slot's `icon` must match `^icon_mode_\w+$` (no glyph, no SVG name, not empty), and
+   `custom_components/virtual_pet/frontend/ui/<icon>.png` must exist and be 96x96. (The old
+   wording, "exists, or the stopgap glyph still resolves", could not fail: `shellIcon` turns any
+   string into a glyph.) The set of names the table uses is exactly the ten above. Probes keep
+   their glyphs and are not walked.
+2. **Bench, the right preset** (review S4 #6). `--preset ui` is "status, game picker, bubble"
+   (`dev/bench/README.md:20`) and shows no mode. A table mode shows in the Hop `view: "board"`
+   shots (`--preset hop`) and the server games' shots; `--mode probe` is the probe only. So 4A
+   adds a preset, **`mode-icons`**: each of the four table modes at widths 300, 330 and 420, dpr
+   1, 2 and 3, written with the `mode-pass.json` checks (the `.toy` and `.cap` rects, the caption
+   inside its column), and it makes the contact sheet of acceptance 5.
+3. **R3, a before and after pair** (review S4 #5). The `.toy` and `.cap` rects are compared
+   between a **stopgap** render (the glyph table, at the parent commit) and the **pixel** render,
+   per mode, slot and width, not against slice 1's probe numbers (those are the probe's, not the
+   shipped modes'). The icon box is the one deliberate change: the glyph is `font 20px`
+   (`style.js:1745`), the left_right SVG is 22, the pixel icon 24. The `.toy` and `.cap` rects
+   must be equal; the commit lists the icon box before and after.
+4. **The bench's width floor is fixed first** (review S4 #6). `MODE_MIN_TOY = 44`
+   (`scripts/bench.js:1793`, used at `:1813` and `:1828`, comment at `:1790`) still fails the
+   accepted widths: the `.toy` is **39.5 px at 284 and 43.02 at 300** (Q-A, accepted 2026-11-04).
+   4A sets the floor to those (or a per-width table: 39.5 at 284, 43 at 300, 44 from 330) and
+   fixes the summary line, so `mode-pass.json` can pass before the icons rely on it.
+5. **Contact sheet, signed.** The ten icons on `#c4e2f2`, live / armed / 0.6 opacity, at 24 and
+   48 px, copied to the worker dir; the owner signs it off before merge (FM3).
+6. **Card-check** `shellmode` and `board` rows pass, with the changed icon assertions listed in
+   the commit. The probe's `ICONS` array (`card-check.js:5335`) keeps its glyphs and SVG names: a
+   probe is not a table mode. A row proves Hop's special cap is the bare count and its
+   `aria-label` still contains "special".
+7. **Esc, one node assertion** (review S4 #11; nothing new is built): every `SHELL_MODES` entry
+   has `exit.escape === true` and `exit.slot === 8`. The behaviour is already covered by
+   card-check (`shellmode`, the Escape rows). Esc with the status sheet open stays the sheet's,
+   by design.
+8. `motion_rule` and `owned_reads` still pass; `scripts/ci-gate` on the ship branch, as for any
+   card change.
+
+#### 4B: the keys (PARKED, owner 2026-11-05)
+
+**Parked: later, behind the Hop art (s2874) and 4A.** Nothing below is briefed. The design
+notes and acceptance are the review's defects 7-10, kept so the ship can start from them. Keys
+help desktop dashboards only; wall tablets (D7's case) have no keys (review Q5).
+
+**Open for the owner, still open:**
+- **Q1, keys for the other three games.** left_right on Left/Right is obvious. higher_lower:
+  by position (Left = lo, Right = hi) or by meaning (Down = lo, Up = hi)? dig: any keys, or
+  none (`keep`/`dig` have no natural arrow; `k`/`d` was the review's guess)?
+- **Q2, WASD.** Keep it, or arrows only? Home Assistant binds single letters on the document
+  (the review recalled `a` Assist, `e` entity search, `c` command palette, `d` device search,
+  `m` my link; **not verified**, to be checked on a real HA before choosing). Recommended:
+  arrows, Z, S and R for the first ship; WASD only if the owner wants it and a real-HA row proves
+  HA does not steal `a`/`d`.
+
+**Decided (FM2, 2026-11-05):** S = special, R = restart. With Z = undo (the review's), the arrow
+keys on Hop's four directions, and Esc = quit (built).
+
+**Design notes** (review S4 #7-#10):
+- **#7, where the map lives.** A `keys: [event.key names]` array on each slot in the table (e.g.
+  `left: ["ArrowLeft"]`). The schema `shellCheck` (`shell-modes.js:127`) has no such field
+  today. It rejects duplicate keys within a mode, a non-string, and any key on slot 8 other than
+  `Escape`. The engine builds the map from `s.mode.slots`; it holds no key names itself, so rule 6
+  of 3.2 (no game words) holds. The map, subject to Q1: left_right slot 1 `ArrowLeft`, slot 4
+  `ArrowRight`; hop slots 1-4 on the four arrows, 5 `s`, 6 `z`, 7 `r`.
+- **#8, one gate: through `_modeClick`, not `_hopKey`.** The key resolves to a slot index and calls
+  `_modeClick(s, i)` (`card-mode.js:164`). `_hopKey` (`card-board.js:486`) is only the slot's `act`
+  and guards `g.keys[k].enabled` alone; `_modeClick` also skips a blocked or off slot, closes an
+  open status sheet, stamps `s.modeAt` and calls `_tapped(b, s, { perk: false })` (the cap press).
+  The three server games' `act` is `_guess`, which has no busy guard of its own, so a key calling
+  it directly would fire a guess while a request is in flight. (The plan's earlier line, "hooks
+  onto `_hopKey(s, name)`", was wrong.)
+- **#9, the handler and Home Assistant.** Listen on `s.device`, as Escape does
+  (`card-build.js:271`). `preventDefault()` and `stopPropagation()` every key it handles (arrows
+  would scroll the page or the dashboard). Ignore events with ctrl, meta or alt, `e.isComposing`,
+  `e.repeat`, an input, textarea, select or contenteditable target, and while `show-status` or
+  `s.laySheet` is up. If Space or Enter is ever mapped it must `preventDefault`, or it fires twice
+  with the native click.
+- **#10, "only when focus is in the card" has no mechanism yet.** A listener on `s.device` is
+  scoped, but a tap on the screen or the board background drops focus (`.game` and `.device` are
+  not focusable; only `.hgrid` has `tabindex=-1`, `card-board.js:305`, and `.status` has -1,
+  `card-build.js:172`). The keys then stop working with the mode still on. The ship picks one and
+  writes it here: the engine focuses `.device` (or the first live slot) on enter and after a
+  screen tap, or `.game` gets `tabindex=-1` so a click on the board keeps focus.
+
+**Acceptance** (review S4 #7-#10; Playwright's `page.keyboard.press` goes to the focused element):
+1. **Node:** every table mode's keys resolve to live slot indices; no duplicates; modifiers,
+   repeat, composing and input targets are ignored; a blocked slot sends nothing; `card-mode.js`
+   still has no game words (slice 1 acceptance 2).
+2. **Card-check, each Hop key:** with focus on a swapped cap, and on the grid, the key moves the
+   pet / toggles special / undoes / restarts; with focus on a real element **outside** the card
+   (a sibling input in the dashboard; the `dispatchEvent` pattern at `card-check.js:5463` only
+   proves bubbling), or after `blur()`, nothing happens; with the status sheet open, nothing; a
+   key during `g.busy` sends nothing; a held key (`e.repeat`) acts once.
+3. **A handled key does not scroll** (`defaultPrevented`), and, if WASD is kept, `a` and `d` do
+   not open HA's Assist or device search on a real HA.
+4. The Q1 keys for the three server games, once answered, get the same rows.
+5. `motion_rule` and `owned_reads` still pass.
 
 ## 7. Risks
 
@@ -661,7 +831,7 @@ Acceptance:
 |---|---|---|
 | R1 | Care buttons are unavailable mid-game: a behaviour change (D1). | Decided. Slice 2 acceptance 2 proves it; the swap and the announcement say so. |
 | R2 | `_update` repaints `disabled`, `.wanted`, `.on`, `aria-description`, the icon and the caption of all eight (`card-layout.js:697-731`) and the reload loop disables them (`:518`); a swap would be painted over, or a quit slot natively disabled. | `_paintCaps` is the one writer (3.2 rule 2); slice 1 acceptances 6 and 7 prove an entity going `unavailable` mid-mode, and the new state at exit. |
-| R3 | A swapped icon changes the cap box, and `_bands`/`_mould` (which read `.toy` rects and `--cap-*`) misplace the shell. | Same box rule (3.2 rule 4); slice 1 acceptance 10 compares rects before, during and after and records the hit area (39.5 px at 284) and caption fit; slice 4 re-checks with the pixel icons. |
+| R3 | A swapped icon changes the cap box, and `_bands`/`_mould` (which read `.toy` rects and `--cap-*`) misplace the shell. | Same box rule (3.2 rule 4); slice 1 acceptance 10 compares rects before, during and after and records the hit area (39.5 px at 284) and caption fit; slice 4A re-checks with the pixel icons, as a before/after pair per mode at an explicit icon size (24), since the stopgap glyph box (20/22) differs from the pixel one (24). |
 | R4 | A stale cap after an exit path nobody tested. | The 3.5 table lists every real call site; slices 1-3 prove each row on the stable-field snapshot; `_modeExit` restores from `careHome`. |
 | R5 | Bench `keyState`/`hopInfo` and the Hop card-check sections read `.hk`. | Slice 3 re-points them; its acceptance 8 forbids silent assertion edits; the lines are counted in the slice text. |
 | R6 | Screen-reader users lose the Hop labels, or hear "Feed" on a dead slot. | The swap carries the labels (3.6); off slots are `disabled`, `aria-hidden`, unlabelled; one announcement in its own node, listing the live buttons. Slice 3 acceptance 3 checks the labels. |
@@ -672,7 +842,7 @@ Acceptance:
 | R11 | A new part in `manifest.txt` hits a TDZ error. | Card-check in slice 1 (AGENTS.md). |
 | R12 | The cell sizes in section 4 are for the adult board, from one bench overlay, at one dpr. | Ranges, not points; the bench measures dpr 1-3; smaller boards get larger cells; slice 3 acceptances 1 and 2. |
 | R13 | Motion: a rebound on the caps meets the shared-transform rule. | 3.3: translate/scale/colour only, `calm()` honoured; `motion_rule.test.js` run with the slice. |
-| R14 | The tint loses to a finish rule, or vanishes on a see-through shell. | Slice 1 acceptance 11 reads the computed colour of every cap over every finish. |
+| R14 | The tint loses to a finish rule, or vanishes on a see-through shell. | Slice 1 acceptance 11 reads the computed colour of every cap over every finish. That proves the **cap face** only: the pixel icons of 4A are fixed-colour PNGs that ignore `currentColor`, so nothing asserts a tint on the `<img>`; they are drawn for the one face colour and signed off on a contact sheet (4A, FM3). |
 | R15 | A wall tablet left on a Hop board has dead care buttons for ever. | D7: Hop idles out at 3 min; slice 3 acceptance 5. |
 | R16 | A reload or a status-sheet open leaves a mode half on. | D10 and D8: both end the mode; slice 1 acceptance 7 and slice 2 acceptance 4. |
 
@@ -696,13 +866,14 @@ The study proposed only these, as proposals. Nothing else here is player-facing.
   the engine extends with the live slots' labels: "game buttons on: left, right, quit".
 - The quit caption: "quit" or "done" (the study leaned to "quit").
 - The special caption: "special", with its use count, or a glyph and the count if the measured
-  column clips it (3.6).
+  column clips it (3.6). With the pixel icon (4A) it is the **bare count** and the `aria-label`
+  keeps "special" (FM2, 2026-11-05).
 - The slot captions: "keep" and "dig" (dig), "lo" and "hi" (higher_lower, today's `.gl`/`.gr`
   text), and the Hop labels from `HOP_COPY`, which stay as built. The left_right slots reuse
   the existing prev/next arrows. **Their captions are open (Q-B, top of this document):** this
   line said "no caption", but the schema and slice 1's acceptance 1 need non-empty, unique
   captions. Proposed: "left" and "right". Needs first-mate copy approval like the rest.
-- Hop's captions (FM copy approval, 2026-11-04): "left", "up", "down", "right", the special's glyph and count ("✦2"), "undo", "restart", "quit".
+- Hop's captions (FM copy approval, 2026-11-04): "left", "up", "down", "right", the special's glyph and count ("✦2"; the bare count from 4A, FM2), "undo", "restart", "quit".
 - Off slots have no caption and no label.
 
 ## 10. Owner decisions on the review, and what is open
@@ -716,8 +887,10 @@ Answered 2026-11-04 (the first mate adds them to the section 1 table as D7-D10):
 | D9 | **Hop's future hint goes on the board (a tap on the nest, or a long-press), never a ninth key; the 8 slots stay.** | 3.4 |
 | D10 | **An integration reload (`s.reloading`) ends the mode.** | 3.5 reload row, slice 1 acceptance 7, slice 2 acceptance 4 |
 
-Open for the first mate after slice 1: Q-A (touch at 284/300) and Q-B (left_right's captions),
-at the top of this document. Open for the owner: none. The two small things the slices settle on their own: the final
+Answered 2026-11-05 (owner and first mate): slice 4B parked (D11); Q3 the special's bare count, S and
+R for 4B (FM2); Q4 icons drawn for `#c4e2f2` only, the owner signs the art (FM3). Slice 1's Q-A and Q-B
+were answered 2026-11-04 (top of this document). **Open for the owner: Q1 (keys for the other three
+games) and Q2 (WASD), both in slice 4B, parked.** The two small things the slices settle on their own: the final
 manifest position of the two new parts (slice 1 finds it with card-check), and whether the
 `.moded` tint is a custom property or a class (slice 1 settled both: the parts sit after `ui-copy`
 and after `card-actions`, and the tint is a class, `.device.moded .buttons > .toy.tinted .cap`,
