@@ -268,13 +268,17 @@
     "wave": ["wave_1", "wave_2"],
     "window": ["window_1", "window_2"]
   }},
-  "full-gingham": {"kind": "full", "finish": "gingham", "dir": "full/gingham", "poses": {
+  "full-gingham": {"kind": "full", "finish": "gingham", "idles": ["stretch", "tea", "laugh", "water", "window", "tidy", "pat", "knit", "biscuit", "glasses", "nap"], "dir": "full/gingham", "poses": {
+    "biscuit": ["biscuit_1", "biscuit_2"],
     "cheer": ["cheer_1", "cheer_2"],
     "clean": ["clean_1", "clean_2"],
     "doze": ["doze_1", "doze_2"],
     "feed": ["feed_1", "feed_2"],
+    "glasses": ["glasses_1", "glasses_2"],
+    "knit": ["knit_1", "knit_2"],
     "laugh": ["laugh_1", "laugh_2"],
     "medicine": ["medicine_1", "medicine_2"],
+    "nap": ["nap_1", "nap_2"],
     "pat": ["pat_1", "pat_2"],
     "play": ["play_1", "play_2"],
     "read": ["read_1", "read_2"],

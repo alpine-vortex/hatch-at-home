@@ -11,13 +11,15 @@ poses = {}
 for p in sorted(fr.glob("*.png")):
     m = re.match(r"(.+?)(?:_(\d))?\.png", p.name)
     poses.setdefault(m.group(1), []).append(p.name)
-ORDER = "stand walk wave read doze chair feed play clean medicine tuck pat cheer shoo stretch tea laugh water window tidy".split()
+ORDER = "stand walk wave read doze chair feed play clean medicine tuck pat cheer shoo stretch tea laugh water window tidy knit biscuit glasses nap".split()
 poses = dict(
     sorted(
         poses.items(),
         key=lambda kv: (ORDER.index(kv[0]) if kv[0] in ORDER else 99, kv[0]),
     )
 )
+# poses only the granny (gingham) draws; other sitters are not "missing" them
+GRANNY_ONLY = "knit biscuit glasses nap".split()
 SP = ["hamster", "corgi", "deer"]
 SPR = "../../custom_components/virtual_pet/frontend/sprites"
 h = [
@@ -92,9 +94,15 @@ if SIT.is_dir():
                 key=lambda kv: (ORDER.index(kv[0]) if kv[0] in ORDER else 99, kv[0]),
             )
         )
-        missing = [n for n in ORDER if n not in sp_poses and n != "chair"]
+        missing = [
+            n
+            for n in ORDER
+            if n not in sp_poses and n != "chair" and n not in GRANNY_ONLY
+        ]
         note = (
-            " (own redraw: slower walk, knitting for read)" if fin == "gingham" else ""
+            " (own redraw: a shuffling walk, read is knitting; her own extras: knit, and the idles biscuit, glasses, nap)"
+            if fin == "gingham"
+            else ""
         )
         miss = (
             f" <b style='color:#b03'>missing: {', '.join(missing)}</b>"
