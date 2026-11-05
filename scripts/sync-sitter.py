@@ -29,7 +29,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts" / "art"))
-from palette import served_bytes  # noqa: E402  (the served copy is stored as an exact palette)
+from palette import same_pixels, served_bytes  # noqa: E402  (the served copy is stored as an exact palette)
 
 ART = ROOT / "art" / "sitter"
 OUT = ROOT / "custom_components" / "virtual_pet" / "frontend" / "sitter"
@@ -144,7 +144,7 @@ def main() -> int:
     ):
         stale.append(OUT / "sitters.json")
     for dest, src in files.items():
-        if not dest.exists() or dest.read_bytes() != served_bytes(str(src)):
+        if not dest.exists() or not same_pixels(str(dest), str(src)):
             stale.append(dest)
     extra = [p for p in OUT.rglob("*.png") if p not in files] if OUT.exists() else []
     if args.check:

@@ -46,6 +46,12 @@ def palette_png(path: str) -> bytes | None:
     return data
 
 
+def same_pixels(a: str, b: str) -> bool:
+    """Two PNGs show the same picture (byte equality would depend on the zlib in use)."""
+    with Image.open(a) as x, Image.open(b) as y:
+        return x.size == y.size and np.array_equal(visible(x), visible(y))
+
+
 def served_bytes(path: str) -> bytes:
     """The bytes to ship for a PNG: its exact palette form if that is smaller, else as is."""
     with open(path, "rb") as f:
