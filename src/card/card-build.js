@@ -1,11 +1,31 @@
+// One parsed stylesheet for every card on the page (perf s2933): a constructed sheet adopted by each
+// shadow root, instead of a 164 KB <style> copy per card. null where unsupported (or if it throws):
+// the card then writes its own <style>, as before.
+let cardSheet;
+function sharedSheet() {
+  if (cardSheet === undefined) {
+    cardSheet = null;
+    try {
+      if (typeof CSSStyleSheet === "function" && "adoptedStyleSheets" in Document.prototype) {
+        const sheet = new CSSStyleSheet();
+        sheet.replaceSync(STYLE + SCENE_STYLE);
+        cardSheet = sheet;
+      }
+    } catch (e) { cardSheet = null; }
+  }
+  return cardSheet;
+}
+
 class HatchPetCardBuild extends HatchPetCardBase {
   // --- Building --------------------------------------------------------------
 
   _build() {
     this._sharedSeen = sharedScreen(); // what the card last saw (connectedCallback)
     const root = this.attachShadow({ mode: "open" });
+    const sheet = sharedSheet();
+    if (sheet) root.adoptedStyleSheets = [sheet];
     root.innerHTML = `
-      <style>${STYLE}${SCENE_STYLE}</style>${MONO_FILTER}
+      ${sheet ? "" : `<style>${STYLE}${SCENE_STYLE}</style>`}${MONO_FILTER}
       <ha-card>
         <div class="head">
           <div><div class="title-row"><img class="emblem" alt=""><div class="title"></div></div>
