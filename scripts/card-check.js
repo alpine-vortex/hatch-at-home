@@ -1155,7 +1155,7 @@ async function main() {
   }
   // The boot screen shows once per browser: every page here starts as if it had
   // been shown, except the boot checks' (they set the session flag and clear it).
-  const bootVersion = /const BOOT_VERSION = "([^"]*)"/.exec(
+  const bootVersion = /BOOT_VERSION\s*=\s*"([^"]*)"/.exec(
     fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8"))?.[1];
   await context.addInitScript((v) => {
     try {

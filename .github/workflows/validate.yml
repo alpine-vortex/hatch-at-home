@@ -88,6 +88,11 @@ jobs:
       - run: scripts/test
       # Joins src/card/ into the card and checks every part and the result.
       - run: node scripts/build-card.js
+      # The release form (terser mangle only): the browser tests that mount the card run on it,
+      # so a mangling bug fails here and not after the tag. HATCH_CARD_MIN makes ensureBuilt
+      # build it. The card job's shard 1 does the same against a real HA.
+      - run: npm install --no-save terser@5.44.0
+      - run: HATCH_CARD_MIN=1 node --test tests/js/leak_guard.test.js tests/js/audio_suspend.test.js
 
   # scripts/card-check against a throwaway HA: navigation, the status screen,
   # action feedback, the editor, and no errors in the browser console.
@@ -118,7 +123,13 @@ jobs:
           key: playwright-1.64.1-${{ runner.os }}
       # The version the local gate uses (NODE_PATH=~/github/relink/node_modules).
       - run: npm install --no-save playwright@1.64.1 && npx playwright install --with-deps chromium
+      # Shard 1 runs on the release build (terser mangle only, .br/.gz beside it), the others
+      # on the plain card. HA reads the file per request, so the rebuild needs no restart.
+      - if: matrix.shard == '1/5'
+        run: npm install --no-save terser@5.44.0
       - run: scripts/card-check --shard ${{ matrix.shard }}
+        env:
+          HATCH_CARD_MIN: ${{ matrix.shard == '1/5' && '1' || '' }}
       # The log's tail was mostly optional-dependency noise (ffmpeg, turbojpeg,
       # mutagen, the frozen router): our lines and the errors only. All of it is
       # in the hass-log artifact.

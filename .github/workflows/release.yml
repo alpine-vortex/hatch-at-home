@@ -33,8 +33,13 @@ jobs:
       # HACS downloads this one zip (hacs.json zip_release) instead of fetching
       # thousands of files one by one, which left a half-installed 0.36.0.
       # The card is built from src/card/ (gitignored, so a checkout has none).
+      # --min: terser mangle only (no compress pass), plus .br and .gz beside the card, which
+      # HA's aiohttp static handler serves to clients that accept them (about 150 KB br).
+      # terser is pinned here and in scripts/build-card.js (TERSER); no package.json.
       - name: Build the card
-        run: node scripts/build-card.js
+        run: |
+          npm install --no-save terser@5.44.0
+          node scripts/build-card.js --min
       - name: Zip the integration
         run: cd custom_components/virtual_pet && zip -qr "$GITHUB_WORKSPACE/virtual_pet.zip" . -x '__pycache__/*' '*/__pycache__/*'
       # A wrong entry name gives an empty file, which passes --check: the size test bites.
@@ -43,6 +48,25 @@ jobs:
           unzip -p virtual_pet.zip frontend/hatch-pet-card.js > "$RUNNER_TEMP/card.js"
           node --check "$RUNNER_TEMP/card.js"
           test "$(wc -c < "$RUNNER_TEMP/card.js")" -gt 100000
+          # The siblings must decompress to exactly the shipped card, or a browser gets another file.
+          unzip -p virtual_pet.zip frontend/hatch-pet-card.js.br > "$RUNNER_TEMP/card.js.br"
+          unzip -p virtual_pet.zip frontend/hatch-pet-card.js.gz > "$RUNNER_TEMP/card.js.gz"
+          node -e '
+            const z = require("zlib"), f = require("fs"), t = process.env.RUNNER_TEMP;
+            const card = f.readFileSync(t + "/card.js");
+            if (!z.brotliDecompressSync(f.readFileSync(t + "/card.js.br")).equals(card)) throw new Error("card.js.br differs from the card");
+            if (!z.gunzipSync(f.readFileSync(t + "/card.js.gz")).equals(card)) throw new Error("card.js.gz differs from the card");
+            if (card.length > 700000) throw new Error("the card is not minified: " + card.length);
+          '
+      # A ceiling, so a stray asset or an unminified card shows up here. 0.47.0 measured 27.3 MB (the card ~0.15 MB of it); the
+      # echo below says the size; raise it on purpose when the art grows.
+      - name: The zip is not bigger than its ceiling
+        run: |
+          size=$(wc -c < virtual_pet.zip)
+          echo "virtual_pet.zip is $size bytes"
+          test "$size" -lt "$ZIP_CEILING"
+        env:
+          ZIP_CEILING: "30000000"
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

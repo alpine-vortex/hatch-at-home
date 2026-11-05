@@ -16,6 +16,11 @@ next build overwrites a hand edit and says so. A new part goes in `manifest.txt`
   rebuilds on save; HA still needs a restart).
 - Console stacks and card-check failures point at the built file:
   `node scripts/build-card.js --where <line>` gives the part and line.
+- Release form: `node scripts/build-card.js --min` (terser mangle only, needs
+  `npm install --no-save terser@5.44.0`) writes the minified card plus `.br`/`.gz` beside
+  it; HA's static handler serves those to clients that accept them. Only release.yml and
+  CI use it (`HATCH_CARD_MIN=1` makes any `ensureBuilt` build it). A plain build deletes
+  the siblings. `--where` is for the plain build only.
 - JS tests read the joined text through `tests/js/card-source.js`.
 - History before the move: `git blame -C -C src/card/<part>.js` follows the lines into
   the old file (`.git-blame-ignore-revs` lists the move commit).
