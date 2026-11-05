@@ -37,27 +37,28 @@ test("whose sitter (6.6): by_finish names it; a finish with no row, null or base
     assert.strictEqual(S.pick(manifest, finish).id, id);
     assert.strictEqual(S.pick(manifest, finish).row, manifest.sitters[id]);
   }
-  assert.strictEqual(S.pick(manifest, "gingham").id, "look-gingham");
+  assert.strictEqual(S.pick(manifest, "stripes").id, "look-stripes"); // a finish with no full sitter keeps its look
   // A by_finish entry whose row is missing from the manifest is the base, not a crash.
-  assert.strictEqual(S.pick({ ...plain(manifest), by_finish: { aqua: "full-aqua" } }, "aqua").id, manifest.base);
+  assert.strictEqual(S.pick({ ...plain(manifest), by_finish: { aqua: "full-nowhere" } }, "aqua").id, manifest.base);
 });
 
 test("a full sitter beats the look of the same finish (S3c drop-in); a finish without one keeps its look", () => {
-  const full = { kind: "full", finish: "aqua", poses: { stand: ["stand_1", "stand_2"], doze: ["doze_1", "doze_2"], feed: ["feed_1"] } };
+  const full = { kind: "full", finish: "stripes", poses: { stand: ["stand_1", "stand_2"], doze: ["doze_1", "doze_2"], feed: ["feed_1"] } };
   const m = plain(manifest);
-  m.sitters["full-aqua"] = full;
-  m.by_finish.aqua = "full-aqua";
-  assert.strictEqual(S.pick(m, "aqua").id, "full-aqua");
-  assert.strictEqual(S.pick(m, "gingham").id, "look-gingham");
+  m.sitters["full-stripes"] = full;
+  m.by_finish.stripes = "full-stripes";
+  assert.strictEqual(S.pick(m, "stripes").id, "full-stripes");
+  assert.strictEqual(S.pick(m, "dots").id, "look-dots");
   // every pose it has is used, with no pose table to edit
-  assert.deepStrictEqual(plain(S.show(m.sitters["full-aqua"], "feed")), ["feed_1", "stand_1"]); // one frame: alternates with the stand
-  assert.deepStrictEqual(plain(S.show(m.sitters["full-aqua"], "doze")), ["doze_1", "doze_2"]);
-  assert.strictEqual(S.still(m.sitters["full-aqua"], true), false, "with a doze it dozes, it does not stand still");
+  assert.deepStrictEqual(plain(S.show(m.sitters["full-stripes"], "feed")), ["feed_1", "stand_1"]); // one frame: alternates with the stand
+  assert.deepStrictEqual(plain(S.show(m.sitters["full-stripes"], "doze")), ["doze_1", "doze_2"]);
+  assert.strictEqual(S.still(m.sitters["full-stripes"], true), false, "with a doze it dozes, it does not stand still");
 });
 
 test("every look in the manifest has stand, wave and its accessory, and the rules play it by F3", () => {
   for (const [finish, id] of Object.entries(manifest.by_finish)) {
     const row = manifest.sitters[id];
+    if (row.kind !== "look") continue; // a finish with a full sitter plays every pose it has (S3c), not the look rules
     assert.ok(S.has(row, "stand") && S.has(row, "wave"), finish);
     assert.deepStrictEqual(plain(S.show(row, "walk")), plain(S.frames(row, "stand")), `${finish}: no walk, so it slides standing`);
     for (const cue of S.CUES) assert.deepStrictEqual(plain(S.show(row, cue)), plain(S.frames(row, "stand")), `${finish}: ${cue} stands`);

@@ -342,34 +342,34 @@ test("S3b whose sitter: the pet's shell, else its world's, read at each draw; th
   const e = make({ shell: "aqua" });
   e.card._sitterLook = "base"; // the bench's flag
   assert.strictEqual(e.card._sitterRow(e.s), manifest.sitters.base);
-  e.card._sitterLook = "gingham";
-  assert.strictEqual(e.card._sitterRow(e.s), lookOf("gingham"));
+  e.card._sitterLook = "stripes";
+  assert.strictEqual(e.card._sitterRow(e.s), lookOf("stripes"));
 });
 
 test("S3b a look draws its own frames, sliding in standing, and a round's pose is its stand (the prop works)", () => {
   reset();
   const sitterEl = pic();
-  const { card, s } = make({ sitterEl, shell: "dune" });
+  const { card, s } = make({ sitterEl, shell: "dots" });
   sync(card, s, null);
   sync(card, s, view());
   assert.strictEqual(s.sit.step.pose, "walk");
   card._sitterPaint(s);
-  assert.match(seen(sitterEl), /^looks\/dune\/stand_1\.png$/, "the walk is its stand frames");
+  assert.match(seen(sitterEl), /^looks\/dots\/stand_1\.png$/, "the walk is its stand frames");
   assert.ok(sitterEl.classList.contains("art"));
   card._sitterNext(s, Date.now()); // the wave: wave_1 alternating with stand_1
   assert.strictEqual(s.sit.step.pose, "wave");
   s.sit.frame = 0;
   card._sitterPaint(s);
-  assert.strictEqual(seen(sitterEl), "looks/dune/wave_1.png");
+  assert.strictEqual(seen(sitterEl), "looks/dots/wave_1.png");
   s.sit.frame = 1;
   card._sitterPaint(s);
-  assert.strictEqual(seen(sitterEl), "looks/dune/stand_1.png");
+  assert.strictEqual(seen(sitterEl), "looks/dots/stand_1.png");
   card._sitterNext(s, Date.now());
   // a round: the pose is feed, the picture is the stand, the prop is the species' own
   card._sitterCue(s, { at: 1, did: ["feed"] }, Date.now());
   assert.strictEqual(s.sit.step.pose, "feed");
   card._sitterPaint(s);
-  assert.match(seen(sitterEl), /^looks\/dune\/stand_[12]\.png$/);
+  assert.match(seen(sitterEl), /^looks\/dots\/stand_[12]\.png$/);
   assert.deepStrictEqual([...world.props], ["bowl_food"]);
 });
 
@@ -391,20 +391,20 @@ test("S3b a look never swaps to the base sitter: every frame of a visit is its o
 test("S3b night, a look: it stands still (stand_2) before the empty chair, no sway, no idle; base sitters doze", () => {
   reset();
   const sitterEl = pic();
-  const { card, s } = make({ sitterEl, shell: "aqua" });
+  const { card, s } = make({ sitterEl, shell: "waves" });
   sync(card, s, view(), "night");
   assert.ok(!sitterEl.hidden);
   assert.strictEqual(card._sitterPose(s, Date.now()), "stand");
   assert.ok(sitterEl.classList.contains("doze"), "the lean (CSS rotate) is on");
   s.sit.frame = 0;
   card._sitterPaint(s);
-  assert.strictEqual(seen(sitterEl), "looks/aqua/stand_2.png");
+  assert.strictEqual(seen(sitterEl), "looks/waves/stand_2.png");
   assert.ok(sitterEl.classList.contains("seat"));
   assert.strictEqual(sitterEl.attrs.seat.src.replace(/^.*\/sitter\//, "").replace(/\?v=.*$/, ""), "base/chair.png");
   for (let i = 0; i < 6; i++) card._sitterTick(s, Date.now() + i * 700);
   assert.strictEqual(s.sit.frame, 0, "it does not sway");
   assert.strictEqual(s.sit.step, null, "and no idle");
-  assert.strictEqual(seen(sitterEl), "looks/aqua/stand_2.png");
+  assert.strictEqual(seen(sitterEl), "looks/waves/stand_2.png");
   // the same card, a base sitter: it dozes and no seat is drawn
   const b = pic();
   const base2 = make({ sitterEl: b });
@@ -435,15 +435,15 @@ test("S3b a look's visit has no idle poses, no cheer, no read: it stands", () =>
 test("S3b the shell changes mid-visit: the sitter swaps once the new one is ready, with no beat; until then it stays", () => {
   reset();
   const sitterEl = pic();
-  const { card, s } = make({ sitterEl, shell: "aqua" });
+  const { card, s } = make({ sitterEl, shell: "waves" });
   sync(card, s, view());
   card._sitterPaint(s);
-  assert.match(seen(sitterEl), /^looks\/aqua\//);
+  assert.match(seen(sitterEl), /^looks\/waves\//);
   card._sitArt.rows["look-camo"] = "loading";
   card._shellChoice = () => "camo";
   const before = s.sit.step;
   card._sitterPaint(s);
-  assert.match(seen(sitterEl), /^looks\/aqua\//, "the new look is not ready: the old one stays, not the base");
+  assert.match(seen(sitterEl), /^looks\/waves\//, "the new look is not ready: the old one stays, not the base");
   card._sitArt.rows["look-camo"] = "ready";
   card._sitterPaint(s);
   assert.match(seen(sitterEl), /^looks\/camo\//);
