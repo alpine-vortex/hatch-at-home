@@ -25,7 +25,21 @@ const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
 // Every read of the card below (and the page HA serves) is the join of src/card/.
-require("./build-card.js").ensureBuilt();
+const buildCard = require("./build-card.js");
+buildCard.ensureBuilt();
+// The checks below read the card's text (regexes over its source). With HATCH_CARD_MIN=1 the
+// built file is the release form (mangled, respaced), so those reads get the plain join of
+// src/card/ instead; the page and HA still serve the built file.
+{
+  const read = fs.readFileSync;
+  fs.readFileSync = function (f, ...rest) {
+    if (typeof f === "string" && path.resolve(f) === buildCard.OUT && process.env.HATCH_CARD_MIN === "1") {
+      const text = buildCard.join();
+      return rest.length && rest[0] ? text : Buffer.from(text);
+    }
+    return read.call(this, f, ...rest);
+  };
+}
 
 // 127.0.0.1, not localhost: HA registers a service worker on localhost, and page.route
 // never sees what it serves (the sprite and old-card stand-ins would not apply).
