@@ -76,7 +76,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - run: scripts/setup
       # tests/js/leak_guard.test.js mounts the card in a browser (skipped without Playwright).
       # The version and cache key are the card job's below.
@@ -106,7 +106,7 @@ jobs:
         with:
           # oldcard loads past releases' cards with `git show v0.37.0:...`.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - run: scripts/setup
       # HA boots while the browser installs below; card-check waits for it.
       - run: nohup scripts/develop > hass.log 2>&1 &
