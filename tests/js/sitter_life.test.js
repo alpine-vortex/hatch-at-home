@@ -30,13 +30,13 @@ const sandbox = {
   serverNow: () => world.now,
   dayOrdinal: () => 20000,
   loadJson: () => new Promise(() => {}), // the art never loads here: the rules do not need it
-  Image: class {},
+  Image: class { set src(v) { this.onload?.(); } decode() { return Promise.resolve(); } },
   BASE: "/b", VERSION: "t",
   HOUSE_LINES: { bits: {} }, HOUSE_CATEGORY: {}, HOUSE_REQUEST: {}, SEASON_START_BITS: {}, FOUND_BITS: 1,
   findsShown: () => false, foundBit: () => null,
   out: null,
 };
-const names = ["_sitterArt", "_sitterLoad", "_sitterChair", "_sitterFinish", "_sitterSettled", "_sitterSrc", "_sit", "_sitterOnScreen", "_sitterBusy", "_sitterSync", "_sitterPose", "_sitterRow",
+const names = ["_sitterArt", "_sitterLoad", "_sitterWarm", "_sitterChair", "_sitterFinish", "_sitterSettled", "_sitterSrc", "_sit", "_sitterOnScreen", "_sitterBusy", "_sitterSync", "_sitterPose", "_sitterRow",
   "_sitterFrames", "_sitterPaint", "_sitterReset", "_sitterArrive", "_sitterLeave", "_sitterCue", "_sitterPlay", "_sitterNext",
   "_sitterSlide", "_sitterTick", "_sitterCheer", "_awayNote", "_dayBits"];
 vm.runInNewContext([
@@ -514,4 +514,32 @@ test("S3c a full sitter drops in: a finish with one uses every pose it has, and 
   s.sit.step = null;
   card._sitterPaint(s);
   assert.match(seen(sitterEl), /^full\/aqua\/doze_/, "a full sitter dozes");
+});
+
+test("perf: a sitter's frames come lazily: stand first, the first beat behind it, the rest when asked", async () => {
+  reset();
+  const asked = [];
+  const pending = [];
+  const keep = sandbox.Image;
+  sandbox.Image = class { set src(v) { asked.push(v); pending.push(this); } decode() { return Promise.resolve(); } };
+  try {
+    const { card, s } = make();
+    card._sitArt = { state: "ready", manifest, rows: {} };
+    card._sitterLoad("base");
+    await Promise.resolve(); await Promise.resolve();
+    const stems = asked.map((u) => u.match(/\/([a-z]+)_\d\.png/)?.[1]);
+    assert.ok(asked.length < 12, `only the first beat's frames, got ${asked.length}`);
+    assert.deepStrictEqual([...new Set(stems)].filter(Boolean).sort(), ["chair", "stand", "walk", "wave"].sort().filter((p) => p !== "chair" || stems.includes("chair")));
+    // a pose not loaded yet is asked for, and the last frame stays until it loads
+    const img = { v: "x.png", getAttribute() { return this.v; }, setAttribute(_k, v) { this.v = v; } };
+    s.sitterEl.querySelector = () => img;
+    s.sitterEl.hidden = false;
+    s.sit = { step: { pose: "feed" }, frame: 0, ticks: 0 };
+    s.sitter = view();
+    const n = asked.length;
+    card._sitterPaint(s);
+    assert.strictEqual(img.v, "x.png", "the old frame stays");
+    assert.ok(asked.length > n && /feed_1/.test(asked[n]), "feed is fetched on demand");
+    pending.filter((p) => /feed_/.test(p.src ?? "")).forEach(() => {});
+  } finally { sandbox.Image = keep; }
 });
