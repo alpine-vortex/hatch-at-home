@@ -90,7 +90,7 @@ download, restart. HACS replaces the folder you copied.
   A card that can't reach the private channel (an older integration, or it hasn't connected
   yet) draws the sitter beside a calmly content pet when presence is not private; with it
   private such a card can only see a napping pet and no sitter. The sitter is a drawn
-  person, the same for every pet for now. A card that is open when the sitter comes sees it
+  person, and each of the 24 shell finishes has a sitter look of its own (the rest get the base one). A card that is open when the sitter comes sees it
   walk in and wave, and sees it wave and leave when someone is home again (a card opened or
   reloaded mid-visit just shows it standing, and so does reduced motion). Each care round the
   sitter does plays on the card too, and now and then it stretches, has tea or looks out of
@@ -112,11 +112,11 @@ download, restart. HACS replaces the folder you copied.
   the pet hides on one side and you guess with the arrows; a win cheers it up more than
   plain play. **Higher or lower:** the pet shows a number from 1 to 9 and you guess
   whether the next is lower (lo) or higher (hi); it's mostly skill, so a win pays like
-  plain play. Five rounds each; three right guesses win. ✕ stops a game. **Berry dig:**
+  plain play. Five rounds each; three right guesses win. The quit button (the eighth round button) stops a game. **Berry dig:**
   each round the pet faces a leaf pile hiding 6 berries and 2 bees (the number is the
   leaves left). **dig** turns one leaf: a berry goes in this round's basket, a bee scares
   the basket off and ends the round. **keep** banks the basket and ends the round. Five
-  rounds; 5 berries banked win, and a win pays a little more than higher or lower. ✕ puts
+  rounds; 5 berries banked win, and a win pays a little more than higher or lower. Quit puts
   a dig aside instead of ending it: your next berry dig carries on from the same pile,
   round and bank, however much later. Each person has their own; someone else starts
   fresh. (The `play` button entity is still plain play, for
@@ -888,7 +888,7 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   `keep` on an empty basket answers `empty_basket` and changes nothing. A game costs energy
   like play, and an unfinished one is dropped after 3 minutes (a guess after that
   starts a new left or right game, and its answer has `restarted: true`; higher or
-  lower and the berry dig answer `no_game`). `end: true` (the card's ✕) ends the game in
+  lower and the berry dig answer `no_game`). `end: true` (the card's quit button) ends the game in
   progress with no reward, penalty or log line; a berry dig that has started is put aside
   instead (`parked: true` in the answer) for whoever ended it, and their next dig carries
   on from it. Calls with no person (automations) share one household slot. A dig guess
