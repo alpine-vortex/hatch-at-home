@@ -487,6 +487,29 @@ const PRESETS = {
       motion: "reduce", game: "dig", digReplies: [r(1, 2, 2), r(2, 2, 0, { found: "bee", round_over: true })], digTaps: ["dig"] });
     return out;
   },
+  // Slice 4A, the pixel icons: each of the four table modes (SHELL_MODES, real entries over a stub game) at
+  // widths 284, 300, 330 and 420 and dpr 1, 2 and 3, written with the mode-pass.json checks (the .toy and .cap
+  // rects, the caption inside its column, the width floor, the icon box); plus Hop's armed special and blocked
+  // keys at 420 (the cap's three states: live, .armed, 0.6 opacity), which the contact sheet shows.
+  "mode-icons"() {
+    const out = [];
+    const modes = [["left_right", "left/right"], ["higher_lower", "lo/hi"], ["dig", "dig"], ["hop", "Hop"]];
+    for (const width of [284, 300, 330, 420]) {
+      for (const dpr of [1, 2, 3]) {
+        for (const [id, label] of modes) {
+          out.push({ width, dpr, world: "woodland", mode: "table", modeId: id, group: `mode-icons-${width}-${dpr}x`,
+            name: `mode-icons/${width}-${dpr}x-${id}`, label: `${label}, ${width} px, ${dpr}x` });
+        }
+      }
+    }
+    out.push({ width: 420, dpr: 2, world: "woodland", mode: "table", modeId: "hop", modeSpecial: true, group: "mode-icons-states",
+      name: "mode-icons/420-2x-hop-armed", label: "Hop, the special armed (.armed)" });
+    out.push({ width: 420, dpr: 2, world: "woodland", mode: "table", modeId: "hop", modeKeys: ["up", "down", "undo"], group: "mode-icons-states",
+      name: "mode-icons/420-2x-hop-blocked", label: "Hop, up/down/undo blocked (0.6)" });
+    out.push({ width: 420, dpr: 2, world: "woodland", mode: "table", modeId: "dig", modeKeys: ["keep"], group: "mode-icons-states",
+      name: "mode-icons/420-2x-dig-blocked", label: "dig, keep blocked (0.6)" });
+    return out;
+  },
   // Hop of the Day (ship 2b, behind experimental_hop): the picker with the Hop row, then per width and
   // family (a canned `board` reply built by hop.py, dev/bench/hop-boards.json) a board at the start, a lit
   // cell (the first tap of a two-tap commit), a spent special, the solved view (a plain win) and the tidy view
@@ -1787,30 +1810,44 @@ async function pixelShares(browser, pairs) {
 // pet's through a settle and a pat, and every species' drape on frame 3 as the card's table says.
 const LIGHTS_SHARE_MAX = 0.02;
 // The shell mode pass rule (shell modes plan, slice 1 acceptance 10 and 11), over the `mode` info a
-// `--mode probe` shot writes: every .toy at least 44 px wide and every caption inside its column; the
+// `--mode probe` (or `--mode table`) shot writes: every .toy at least the width's floor (below) wide and every caption inside its column; the
 // .toy and .cap rects the same before, during and after the mode (R3); with the mode on, all eight caps'
 // computed colour is the tint, on every finish; --cap-tones unchanged.
-const MODE_MIN_TOY = 44;
+// The .toy floor per card width (plan Q-A, accepted 2026-11-04: 39.5 px at 284, 43.02 at 300, 44 and up from 330;
+// slice 4A acceptance 4). A width between two rows takes the lower row's floor.
+const MODE_MIN_TOY_AT = [[284, 39.5], [300, 43], [330, 44]];
+const modeMinToy = (width) => MODE_MIN_TOY_AT.reduce((f, [w, v]) => (width >= w ? v : f), MODE_MIN_TOY_AT[0][1]);
 function modePass(shots) {
   const rows = [];
-  for (const s of shots.filter((x) => x.mode === "probe" && x.file)) {
+  for (const s of shots.filter((x) => x.mode && x.file)) {
     const m = JSON.parse(fs.readFileSync(s.file.replace(/\.png$/, ".json"), "utf8")).mode;
     const why = [];
     if (!m) why.push("no mode info");
     else {
       // within 0.05 px: the first layout and a re-layout can differ by a float's last digit
       const near = (p, q) => p.every((v, i) => Math.abs(v - q[i]) <= 0.05);
-      const same = (a, b) => a.every((x, i) => near(x.toy, b[i].toy) && near(x.cap, b[i].cap));
+      // an armed slot (Hop's special) is held down on purpose, so its .cap sits 2 art px lower: only its .toy is compared
+      const same = (a, b) => a.every((x, i) => near(x.toy, b[i].toy) && (a[i].armed || b[i].armed || near(x.cap, b[i].cap)));
       if (!same(m.before, m.during) || !same(m.during, m.after)) why.push("a .toy or .cap rect moved");
       const clipped = m.during.filter((x) => !x.fits);
       if (clipped.length) why.push(`caption past its column: ${clipped.map((x) => `${x.caption} ${x.captionW}/${x.column}`).join(", ")}`);
       const off = m.during.filter((x) => x.color !== m.tintRgb);
       if (off.length) why.push(`cap not the tint (${m.tintRgb}): ${off.map((x) => `${x.caption} ${x.color}`).join(", ")}`);
       if (!m.tonesSet || !m.tonesSame) why.push("--cap-tones changed or unset");
+      const floor = modeMinToy(s.width);
+      const thin = m.during.filter((x) => x.toy[2] < floor);
+      if (thin.length) why.push(`.toy under the ${floor} px floor at ${s.width}: ${thin.map((x) => `${x.caption} ${x.toy[2]}`).join(", ")}`);
+      if (m.modeId !== "bench-probe") {
+        // Slice 4A acceptance 2: a table mode's live and blocked slots each draw a 96 x 96 frontend/ui pixel icon at 24 px
+        // (the key the table names); an off slot draws none.
+        const bad = m.during.filter((x) => (x.caption || x.icon) && !(x.icon?.kind === "img" && /^\/virtual_pet\/frontend\/ui\/icon_mode_\w+\.png$/.test(x.icon.src)
+          && x.icon.natural[0] === 96 && x.icon.natural[1] === 96 && x.icon.box[2] === 24 && x.icon.box[3] === 24));
+        if (bad.length) why.push(`not a 24 px icon_mode_* pixel icon: ${bad.map((x) => `${x.caption} ${x.icon ? `${x.icon.kind} ${x.icon.box?.slice(2)}` : "none"}`).join(", ")}`);
+      }
     }
     const toyW = m ? Math.min(...m.during.map((x) => x.toy[2])) : null;
     rows.push({ name: s.name, width: s.width, dpr: s.dpr, finish: m?.finish ?? null, pass: !why.length, why,
-      toyW, wide: toyW >= MODE_MIN_TOY, worstFit: m ? Math.max(...m.during.map((x) => x.captionW - x.column)) : null, long: m?.long ?? null });
+      toyW, wide: toyW >= modeMinToy(s.width), modeId: m?.modeId ?? null, icons: m ? m.during.map((x) => x.icon?.box?.slice(2) ?? null) : null, worstFit: m ? Math.max(...m.during.map((x) => x.captionW - x.column)) : null, long: m?.long ?? null });
   }
   const bad = rows.filter((r) => !r.pass);
   console.log(`shell mode pass rule (captions fit, rects unchanged, caps = tint, tones unchanged): ${rows.length - bad.length} of ${rows.length} pass`);
@@ -1818,14 +1855,15 @@ function modePass(shots) {
   // The plan's touch claim (3.6) is a measure, not a rule: it holds only where the toy is that wide.
   const byWidth = {};
   for (const r of rows) {
-    const w = (byWidth[r.width] ||= { toyMin: Infinity, toyMax: 0, longFits: 0, n: 0 });
+    const w = (byWidth[r.width] ||= { toyMin: Infinity, toyMax: 0, longFits: 0, longN: 0, n: 0 });
     w.toyMin = Math.min(w.toyMin, r.toyW);
     w.toyMax = Math.max(w.toyMax, r.toyW);
     w.longFits += r.long?.fits ? 1 : 0;
+    w.longN += r.long ? 1 : 0;
     w.n++;
   }
   for (const [w, v] of Object.entries(byWidth)) {
-    console.log(`  card ${w}: toy ${v.toyMin}-${v.toyMax} px wide (${v.toyMin >= MODE_MIN_TOY ? "all" : "not all"} >= ${MODE_MIN_TOY}); "special 2" fits ${v.longFits} of ${v.n}`);
+    console.log(`  card ${w}: toy ${v.toyMin}-${v.toyMax} px wide (${v.toyMin >= modeMinToy(+w) ? "all" : "not all"} >= ${modeMinToy(+w)} floor)${v.longN ? `; "special 2" fits ${v.longFits} of ${v.longN}` : ""}`);
   }
   if (bad.length) process.exitCode = 1;
   return rows;
@@ -1927,7 +1965,7 @@ async function main() {
       console.log(`mono backlight ${bad ? "FAIL" : "ok"}: ${l.label} differ on ${(l.share * 100).toFixed(1)}% of pixels (need > ${MONO_LIT_MIN * 100}%)`);
       if (bad) process.exitCode = 1;
     }
-    if (shots.some((s) => s.mode === "probe")) {
+    if (shots.some((s) => s.mode)) {
       const rows = modePass(shots);
       fs.writeFileSync(path.join(opts.out, "mode-pass.json"), JSON.stringify(rows, null, 1));
     }

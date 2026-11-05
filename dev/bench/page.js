@@ -1305,7 +1305,7 @@
     window.bench.screenClass = cur.screen.className;
     if (shot.view === "board" || shot.view === "games") (window.bench.info ||= {}).hop = hopInfo(card, cur);
     if (shot.lightsAlign) (window.bench.info ||= {}).lights = lightsInfo(cur);
-    if (shot.mode === "probe") (window.bench.info ||= {}).mode = await modeInfo(card, cur);
+    if (shot.mode) (window.bench.info ||= {}).mode = await modeInfo(card, cur, shot);
     return true;
   }
 
@@ -1324,8 +1324,28 @@
     slots: PROBE_CAPS.map(([icon, cap]) => ({ icon, cap, aria: `probe ${cap}`, act: () => {} })),
     exit: { slot: 8, escape: true, status: "end" },
   });
-  async function modeInfo(card, cur) {
+  // `mode: "table"` with `modeId` (slice 4A, the `mode-icons` preset): a real SHELL_MODES entry, with a stub
+  // `s.game` so its slot functions read live keys (no server, no board). `modeKeys` names the keys to block
+  // (Hop: blocked keys read 0.6 opacity); `modeSpecial` arms Hop's special; `modeCount` is its count.
+  // Left in place after the shot (the pass reads `during`, the shot shows the mode); the exit reason
+  // "replace" skips the mode's onExit (it would end a game that is a stub).
+  function tableState(shot) {
+    const blocked = new Set(shot.modeKeys || []);
+    if (shot.modeId === "hop") {
+      const key = (n) => ({ enabled: !blocked.has(n), label: n, count: n === "special" ? shot.modeCount ?? 2 : undefined });
+      return { keys: Object.fromEntries(["left", "up", "down", "right", "special", "undo", "restart"].map((n) => [n, key(n)])), special: !!shot.modeSpecial };
+    }
+    if (shot.modeId === "dig") return { basket: blocked.has("keep") ? 0 : 1 };
+    return {};
+  }
+  async function modeInfo(card, cur, shot = {}) {
     const root = card.shadowRoot;
+    const table = shot.mode === "table";
+    const entry = () => {
+      if (!table) return probeMode();
+      cur.game = { kind: shot.modeId, ...tableState(shot) };
+      return SHELL_MODES[shot.modeId];
+    };
     const rest = async () => {
       clearTimeout(cur.swapTimer);
       for (const b of Object.values(cur.buttons)) b.classList.remove("swap");
@@ -1338,35 +1358,41 @@
     };
     const read = () => card._modeButtons(cur).map((b) => {
       const caption = b.lastElementChild;
-      return { toy: box(b), cap: box(b.querySelector(".cap")), caption: caption.textContent, captionW: caption.scrollWidth,
+      const ic = b.querySelector(".cap > img, .cap > svg, .cap > .glyph");
+      return { toy: box(b), cap: box(b.querySelector(".cap")), icon: ic ? { kind: ic.localName, box: box(ic), ...(ic.localName === "img" ? { src: ic.getAttribute("src").replace(/\?.*/, ""), natural: [ic.naturalWidth, ic.naturalHeight] } : {}) } : null,
+        aria: b.getAttribute("aria-label"), blocked: b.getAttribute("aria-disabled") === "true", armed: b.classList.contains("armed"), caption: caption.textContent, captionW: caption.scrollWidth,
         column: b.clientWidth, fits: caption.scrollWidth <= b.clientWidth, color: getComputedStyle(b.querySelector(".cap")).backgroundColor };
     });
     const tones = () => getComputedStyle(cur.device).getPropertyValue("--cap-tones");
     await rest();
     const before = read();
     const tonesBefore = tones();
-    card._modeEnter(cur, probeMode());
+    card._modeEnter(cur, entry());
     await rest();
     const during = read();
     const tonesDuring = tones();
-    const slot5 = card._modeButtons(cur)[4].lastElementChild;
-    slot5.textContent = PROBE_LONG; // measured in slot 5's column, then put back
-    const long = { caption: PROBE_LONG, width: slot5.scrollWidth, column: slot5.parentElement.clientWidth };
-    long.fits = long.width <= long.column;
-    slot5.textContent = PROBE_CAPS[4][1];
+    let long = null;
+    if (!table) {
+      const slot5 = card._modeButtons(cur)[4].lastElementChild;
+      slot5.textContent = PROBE_LONG; // measured in slot 5's column, then put back
+      long = { caption: PROBE_LONG, width: slot5.scrollWidth, column: slot5.parentElement.clientWidth };
+      long.fits = long.width <= long.column;
+      slot5.textContent = PROBE_CAPS[4][1];
+    }
     const tint = getComputedStyle(cur.device).getPropertyValue("--mode-tint").trim();
     const probe = document.createElement("i");
     probe.style.color = tint;
     document.body.append(probe);
     const tintRgb = getComputedStyle(probe).color;
     probe.remove();
-    card._modeExit(cur, "quit");
+    card._modeExit(cur, table ? "replace" : "quit");
+    if (table) cur.game = null;
     await rest();
     const after = read();
     const tonesAfter = tones();
-    card._modeEnter(cur, probeMode()); // the shot shows the mode
+    card._modeEnter(cur, entry()); // the shot shows the mode
     await rest();
-    return { finish: [...cur.device.classList].find((c) => c.startsWith("finish-")) || null, tint, tintRgb,
+    return { modeId: table ? shot.modeId : "bench-probe", finish: [...cur.device.classList].find((c) => c.startsWith("finish-")) || null, tint, tintRgb,
       long, before, during, after, tonesSame: tonesBefore === tonesDuring && tonesDuring === tonesAfter, tonesSet: !!tonesBefore };
   }
 
