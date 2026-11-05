@@ -59,3 +59,20 @@ navy sweater with big yellow stars, grey trousers and yellow shoes, so it does n
 sitter (lavender hair, moon) or the constellation one (near-black jacket); the waves sitter has dark
 navy wavy hair and a cream top fading into rolling blue wave stripes, against aqua's teal hair and
 striped sweater. `review.py` has a section per sitter.
+
+## The granny's own extras (art A6)
+
+`sitters/gingham/frames/` gains the granny's own poses (owner 2026-11-04: "her own poses (a slower walk,
+knitting in the chair, and so on)"), same contract as A2-A5 (256x256, feet on y=224, centred on x=128, 4 px
+grid, on-model with her `stand_1`, 160-168 px tall):
+
+- `knit_1`, `knit_2`: knitting on the shared chair, the long knitted piece over her knees and a red ball of wool on
+  the floor (the chair is drawn into the frame, as `read` and `doze` do, and sits on the same x as `read`'s chair; the
+  ball sticks out to the right).
+- `walk_1`, `walk_2` redrawn (same names): a shorter, shuffling stride.
+- `biscuit`, `glasses`, `nap`, two frames each, granny-only idles: offering a biscuit tin, polishing her glasses with a
+  hankie, a standing head-nod nap.
+
+`sitters/gingham/sitter.json` lists her idles (`scripts/sync-sitter.py` copies them into her manifest row; a row's
+`idles` replaces the default list, so it holds the seven defaults plus `knit biscuit glasses nap`). `review.py`
+knows the four new pose names; a sitter without them is not "missing" them.
