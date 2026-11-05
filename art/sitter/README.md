@@ -34,3 +34,9 @@ can swap a sitter per shell by folder. Nothing is wired in yet.
 - `woodland`, `aqua`, `grove`, `celestial`, `dune`: themed to their world shell, starting from
   `looks/<finish>/` of A1.
 - Cut with `cut_sheet.py`, one scale per sitter. `review.py` has a section per sitter.
+
+## Six more redrawn sitters (art A3)
+
+`glitter`, `hearts`, `rainbow`, `sunset`, `leaves`, `paws`: the same method and contract as A2
+(38 files each, 19 poses x 2, the same file names, 188-192 px standing), each a different person
+themed to its shell, starting from `looks/<finish>/`. `review.py` has a section per sitter.
