@@ -123,9 +123,11 @@ game key by construction. Hop's keys (all draft labels), eight in a 2×4 block:
 | special | the pet's special move, then ◀ ▲ ▼ ▶ (or a lit cell) picks where | shows "×n" uses left; disabled at 0 |
 | undo | take back the last move | free, no limit, restores a sunk pad and a spent use |
 | restart | back to the start | free |
-| hint | ask for a hint | ship 5; hidden before it ships |
+| hint | ask for a hint | **not a key** (shell-modes D9): ship 5 puts it on the board, see below |
 
-Eight keys, so ship 5's hint fills the last one; ships 2b-4 leave it blank. A confirm needs
+Eight keys, and the hint is **never a ninth key or a reserved slot** (shell-modes owner decision
+D9, 2026-11-04: on the board, a tap on the nest or a long-press; ship 5 designs which). The eight
+keys are the shell's eight buttons (`docs/plan-2026-11-04-shell-modes.md`, 3.4). A confirm needs
 no key: it is the second tap on the lit cell.
 
 **Tap, then confirm, for small cells.** Two-tap is the phone default, not the 300 px edge:
@@ -1154,7 +1156,7 @@ the board section with it on and one check that it is off by default.
 dig and the other games draw their keys in `gameBox` (`.gl`, `.gr`, `.gx`), over the LCD,
 swapped by `_gameView`; the care pad (`ACTIONS`, seven keys and the lights key) is a separate
 row whose presses go through `_press` (`card-actions.js`). Eight keys in a 2×4 block inside
-the overlay (◀ ▲ ▼ ▶, special, undo, restart, and a blank for ship 5's hint), built in
+the overlay (◀ ▲ ▼ ▶, special, undo, restart, close; no hint key, shell-modes D9), built in
 `_gameView` beside the dig's. `_press`, `_toggleLights`, the `wants` pulse and the pad's
 `aria-label`s are not touched. The cost: the overlay must hold the grid *and* the keys at
 300 px, so 2b's bench shots decide whether the 2×4 block fits under a 6×4 grid or the keys go
@@ -1206,8 +1208,8 @@ Acceptance:
   `play_game` call is made and no `.pet.<cls>` animation was added.
 - **The keys are a 2×4 column at the right of the board**, in the overlay (Decided 16): ◀ ▲ ▼ ▶,
   `✦n` (special), undo, restart, and the close button as the eighth. There is no blank for
-  ship 5's hint: ship 5 shares the restart slot or takes the cell the close button leaves. The
-  keys are sized from the overlay's height (24-44 px) and the grid takes the rest.
+  ship 5's hint, and none is reserved: the hint is never a key (shell-modes D9, on the board: a tap
+  on the nest or a long-press). The keys are sized from the overlay's height (24-44 px) and the grid takes the rest.
 - **Cell sizes are 19 / 22 / 28 px at card widths 300 / 330 / 420 (6×4 board)**, not the
   35-49 px this plan expected: the LCD is 198×148 px at 300 (228×171 at 330, 272×204 at 420) and the keys take a column of
   it. Every adult board is therefore tap-then-confirm; one tap commits only where the drawn
@@ -1748,7 +1750,8 @@ lantern), with the key labels (a crackle `sunk` only when fully sunk, a water-ph
 
 ### Ship 5: hints and practice boards (server and card, tier 1, S-M)
 
-The `hint` action (a server solve from the position; the card's hint key; the pet looks
+The `hint` action (a server solve from the position; the card's hint control on the board, a tap
+on the nest or a long-press, never a key, shell-modes D9; the pet looks
 toward the cell after three undos in a row, draft line "hmm… that way?"). The hint is the
 next cell of some **winning** list from the position, not a tidy one (a tidy hint would make
 tidy free and pay the find). It runs the solver with the same state cap, in the executor,
@@ -1771,16 +1774,17 @@ too. The cost is the generator's own solve (worst 2.3 s on a terrarium hop adult
 the most states 99,229, under the cap of 100,000), so the executor and the per-minute limit stand as planned.
 Practice boards carry their world's twist like the day's board (the same `hop_board` with `n`
 in the seed and `GEN_VERSION` 4); a practice settle that answers `practice` needs no
-`board_changed` path. The hint key is a ninth key: the board's key column is two keys by four
-(the arrows, the special key, undo, restart, close) at every width, so it needs a fifth row
-or a new layout, read on the bench at 300 / 330 / 420.
+`board_changed` path. The hint is **not a key** (shell-modes owner decision D9, 2026-11-04: never a ninth key, no
+reserved slot, the eight stay): the card shows it on the board, with a tap on the nest or a
+long-press, which this ship designs and reads on the bench at 300 / 330 / 420. (The earlier
+text here, "a ninth key" needing a fifth row, is withdrawn.)
 
 Acceptance: pytest — a hint from any reachable position is the first move of some
 winning list (checked on the fixtures and on generated boards), a hint from a dead end
 says so, hints cost nothing and save nothing, the per-minute limit answers and recovers;
 practice boards are deterministic, differ by `n`, pass checks 1-4 and never change
 `hop_day`, `games` or the happiness; card-check — the
-hint key calls the stubbed service and lights the returned cell; the pet's glance after
+hint control (nest tap or long-press, D9) calls the stubbed service and lights the returned cell; the pet's glance after
 three undos; bench — a hint shot.
 
 ### Device queue (not blocking any ship)

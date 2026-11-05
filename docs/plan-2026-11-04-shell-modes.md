@@ -4,9 +4,9 @@
 **Status:** Plan only, revised 2026-11-04 after the adversarial review (s2878, findings P1-P22,
 folded in here and cited as "review P#"). Four slices; **slices 1 (the engine), 2 (the three
 server games) and 3 (Hop) are built and on main** (slice 1 `a698d6d7`). **Slice 4 is split
-(2026-11-05, from the s2907 review, cited "review S4 #n"): 4A, the pixel icons, is specified below
-and ready to brief; 4B, the keys, is PARKED** (owner 2026-11-05: later, behind the Hop art and
-the icon wiring).
+(2026-11-05, from the s2907 review, cited "review S4 #n"): 4A, the pixel icons, is BUILT and on
+main (`7af36efd`, s2911; its deviations are in section 6); 4B, the keys, is PARKED** (owner
+2026-11-05: later, behind the Hop art; the icon wiring it waited on is done).
 **Basis:** `5e7616c0` (`fm-hop-exp`) for sections 2 and 4 (the "as it was" tree). Where a ref in
 sections 3.5-3.6 and 6 names a line that slice 1 moved, it has been re-pointed to main
 (`a75f00e1`, 2026-11-04); recheck when a slice starts (the card parts move often).
@@ -76,7 +76,7 @@ All six are the owner's, 2026-11-04. Cite them as "owner decision D#".
 | D2 | **The picker stays as it is**, on screen. The shell changes only once a game starts (the picker's buttons carry long labels and a prompt; they are not icon material). |
 | D3 | **Two-button games use the outer slots 1 and 4**, the old `.gl`/`.gr` positions and Hop's left/right. Slots 2 and 3 are dimmed and inert. |
 | D4 | **Hop's arrows are one row, slots 1-4: left, up, down, right** (the `HOP_KEYS` order, `card-board.js:83`). Special, undo, restart and quit are slots 5-8. |
-| D5 | **Existing icons and glyphs first, pixel icons later; one game tint colour.** The first slices ship the current SVG icons and glyphs (`icon("prev")` etc., `prefs.js:17-20`; the "✦ ↶ ↻ ✕" the mock used). The pixel icons follow in slice 4A. The tint is one colour for every game, not the world's accent. |
+| D5 | **Existing icons and glyphs first, pixel icons later; one game tint colour.** The first slices ship the current SVG icons and glyphs (`icon("prev")` etc., `prefs.js:17-20`; the "✦ ↶ ↻ ✕" the mock used). The pixel icons followed in slice 4A (built, `7af36efd`). The tint is one colour for every game, not the world's accent. |
 | D6 | **The engine is a general shell mode.** The owner: "We may use this for other modes and features in the future outside of games, so keep that in mind during design." So a mode is a table entry (8 slots, a tint, an exit rule) with its own enter and exit; games call them. Nothing in slice 1 may assume a game. |
 | D7 | **Hop idles out after 3 minutes**, like the server games; the care buttons come back on its quit, so a forgotten board can't lock the shell. (Owner 2026-11-04, review Q1.) |
 | D8 | **Opening the status sheet keeps ending a game** (`card-layout.js:786`, as built). A non-game mode chooses per mode (`exit.status`). (Owner 2026-11-04, review Q2.) |
@@ -282,8 +282,8 @@ on-screen keys. **Hop's future hint (Hop ship 5) goes on the board, not on a nin
 (owner decision D9): a tap on the nest or a long-press, which that ship designs. Slice 3 has
 landed with all eight slots used and no hint slot (`shellHop` in `shell-modes.js`). The Hop
 plan's reserved eighth cell or shared slot for `hint` (`docs/plan-2026-11-02-hop-of-the-day.md:126-128,
-1157, 1209`, and "the hint key is a ninth key" at `:1774`) is released by this plan; **that doc
-still says the old thing**, and the first mate updates it (not part of this plan's slices). The
+1157, 1209`, and "the hint key is a ninth key" at `:1774`) is released by this plan; the Hop plan
+was updated to say so (s2912, 2026-11-05). The
 picker is not a mode (D2).
 
 ### 3.5 Exits and interruptions
@@ -341,9 +341,9 @@ Escape. The `gameBox` listener goes in the same slice so Escape never fires twic
   (top of this document); slice 2 changes no layout until it is answered. Captions are one
   line, clipped rather than wrapped, each at or under about 40 px at 284. Hop's special
   carries its count and **"special 2" clips at 284 and 300 everywhere and at 330 on the `pad`
-  mould**, so slice 3 uses the glyph and the count, "✦2" (it fits at 420). **With the pixel icon (4A) the
-  cap is the bare count (FM2, 2026-11-05), so the clip goes**; the `aria-label` still says
-  "special".
+  mould**, so slice 3 used the glyph and the count, "✦2" (it fits at 420). **With the pixel icon (4A,
+  built) the cap is the bare count (FM2, 2026-11-05), so the clip is gone**; the `aria-label` still
+  says "special".
 - **Keyboard.** Today only Tab and Escape work (no arrow handler on the board). Escape is
   **built** (slice 1): it works from the moment the handler is on the device, including with
   focus on a swapped cap, and the table modes all set `escape: true` on slot 8. The arrow and
@@ -440,7 +440,7 @@ not a branch in the engine.
 
 ## 6. The slices
 
-Order: 1 → 2 → 3 → 4A; 4B is parked (D11). Slices 1-3 are built; 4A needs only them (and its art). Each slice states what card-check, the
+Order: 1 → 2 → 3 → 4A; 4B is parked (D11). Slices 1-3 and 4A are built. Each slice states what card-check, the
 bench and node tests must show; every acceptance line below is one of those three. A slice that
 changes card methods runs `scripts/gate --auto`, but slices 1-3 change methods every slide
 calls, so `scripts/pick-sections` will likely pick `all`: budget `scripts/ci-gate` (review P17);
@@ -650,15 +650,44 @@ Acceptance:
    change is listed in the commit.
 9. Hop is still behind `experimental_hop` (a flag-off card has no Hop row and no Hop mode).
 
-### Slice 4: the pixel icons (4A) and the keys (4B, parked)
+### Slice 4: the pixel icons (4A, built) and the keys (4B, parked)
 
 Optional and last. Folded in from the s2907 review (2026-11-05; cited "review S4 #n"). It is two
 ships with no code in common: **4A** swaps the stopgap glyphs for pixel icons (an art job, then
-a small code ship) and is ready to brief; **4B** adds keyboard keys and is **PARKED** (owner
+a small code ship) and is **BUILT, on main `7af36efd`** (s2911; deviations below); **4B** adds keyboard keys and is **PARKED** (owner
 2026-11-05: later, behind the Hop art and the icon wiring, D11). 4B does not need 4A, nor 4A 4B.
 Escape needs neither: it is built (3.5, 3.6).
 
-#### 4A: the pixel icons
+#### 4A: the pixel icons - BUILT, merged `7af36efd` (s2911, 2026-11-05)
+
+The text below is the spec as briefed; the table's "today" column is the stopgap table before
+4A. It shipped as specified, with these deviations and notes (s2911 `report.md`; ci-gate PASS on
+the branch):
+
+- **The probes use the glyphs ◀ ▶, not the SVG names `prev`/`next`.** The spec said probes keep
+  "their glyphs and SVG names", but with the `ICON_PATHS` branch of `shellIcon` gone (as the spec
+  asked) `prev`/`next` would render as the literal words. The bench's `PROBE_CAPS`, card-check's
+  probe `ICONS` and its `want`, and the node test's probe all use ◀ ▶; the node test's two
+  slots that tested the SVG use `icon_mode_left`/`icon_mode_right`. `shellIcon` is now: an
+  `^icon_\w+$` key is `pixelIcon(key, 24)`, anything else a glyph. `ICON_PATHS` and `icon()` stay
+  in `prefs.js` for the carousel arrows only.
+- **Bench: the floor is per width, and there is a `mode-icons` preset.** `MODE_MIN_TOY` became
+  `MODE_MIN_TOY_AT` (39.5 at 284, 43 at 300, 44 from 330; commit `c2e6788a`, first, acceptance 4).
+  `mode-icons` is 51 shots over the real `SHELL_MODES` entries with a stub game (`mode: "table"`),
+  at widths 284, 300, 330 and 420 (**284 added**; the spec listed 300, 330, 420), dpr 1-3, plus
+  Hop armed, Hop blocked and dig blocked. `modePass` now covers table shots too (an armed cap's
+  held-down `.cap` offset is left out of the `.cap` compare). 51 of 51 pass.
+- **Version: the card's `VERSION` only (0.46.0 → 0.46.1).** `const.py`, `manifest.json` and
+  `docs/features.md` still say 0.46.0, left to release prep (a manifest change would need its own
+  gate).
+- **R3 pair: a 0.28 px jitter at 300 dpr 3.** Of 1224 `.toy`/`.cap` rect comparisons, `.toy` rects
+  differ nowhere and `.cap` rects are equal within 0.05 px except at card width 300, dpr 3, where
+  the cap's y differs by up to 0.28 px. It shows in the no-mode state too and differs between two
+  runs, so it was read as sub-pixel render jitter, not the icons; the old card was not re-rendered
+  to prove it. The icon box went 12.3x20 glyph (22x22 for the left_right SVG) → 24x24 `<img>`.
+- **Hop's special cap is `${count}`**, its `aria-label` unchanged (contains "special"); a card-check
+  row asserts both.
+
 
 **The icon table.** Every slot of all four modes maps to one of ten icons (review S4 #1). The
 "today" column is `shell-modes.js` at `b7b5884d`; lo/hi reuse down/up (no extra art), and
@@ -767,7 +796,7 @@ Acceptance (review S4 #3, #5, #6):
 
 #### 4B: the keys (PARKED, owner 2026-11-05)
 
-**Parked: later, behind the Hop art (s2874) and 4A.** Nothing below is briefed. The design
+**Parked: later, behind the Hop art (s2874); 4A (the icon wiring) is built.** Nothing below is briefed. The design
 notes and acceptance are the review's defects 7-10, kept so the ship can start from them. Keys
 help desktop dashboards only; wall tablets (D7's case) have no keys (review Q5).
 
@@ -786,7 +815,7 @@ keys on Hop's four directions, and Esc = quit (built).
 
 **Design notes** (review S4 #7-#10):
 - **#7, where the map lives.** A `keys: [event.key names]` array on each slot in the table (e.g.
-  `left: ["ArrowLeft"]`). The schema `shellCheck` (`shell-modes.js:127`) has no such field
+  `left: ["ArrowLeft"]`). The schema `shellCheck` (`shell-modes.js:128`) has no such field
   today. It rejects duplicate keys within a mode, a non-string, and any key on slot 8 other than
   `Escape`. The engine builds the map from `s.mode.slots`; it holds no key names itself, so rule 6
   of 3.2 (no game words) holds. The map, subject to Q1: left_right slot 1 `ArrowLeft`, slot 4
