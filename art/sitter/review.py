@@ -78,7 +78,7 @@ if LK.is_dir():
 SIT = pathlib.Path("sitters")
 if SIT.is_dir():
     h.append(
-        "<h1>Sitters (A2-A5): twenty-four redrawn sitters, one per shell finish, the full pose set each</h1><p>The granny (gingham) has her own slower walk and knits in the chair; the others are themed to their shell (A2: the world shells; A3: glitter, hearts, rainbow, sunset, leaves, paws; A4: clear, constellation, glow, scales, smoke, speckle; A5: stars, twotone, stripes, dots, waves, camo). One section per sitter: each pose beside a hamster, a corgi and a deer, the two frames alternating once a second (never both at once). Open a section to see its poses.</p>"
+        "<h1>Sitters (A2-A5): twenty-four redrawn sitters, one per shell finish, the full pose set each</h1><p>The granny (gingham) has her own slower walk and knits and reads in the chair; the others are themed to their shell (A2: the world shells; A3: glitter, hearts, rainbow, sunset, leaves, paws; A4: clear, constellation, glow, scales, smoke, speckle; A5: stars, twotone, stripes, dots, waves, camo). One section per sitter: each pose beside a hamster, a corgi and a deer, the two frames alternating once a second (never both at once). Open a section to see its poses.</p>"
     )
     for fin in "gingham woodland aqua grove celestial dune glitter hearts rainbow sunset leaves paws clear constellation glow scales smoke speckle stars twotone stripes dots waves camo".split():
         d = SIT / fin / "frames"
@@ -100,7 +100,7 @@ if SIT.is_dir():
             if n not in sp_poses and n != "chair" and n not in GRANNY_ONLY
         ]
         note = (
-            " (own redraw: a shuffling walk, read is knitting; her own extras: knit, the idles biscuit, glasses, nap (with a drifting Z), and knitread, the knitting-to-reading in-between)"
+            " (own redraw: a shuffling walk, read is her with a book; her own extras: knit, the idles biscuit, glasses, nap (with a drifting Z), and knitread, the knit-to-read in-between: the knit idle plays knit, knitread, read)"
             if fin == "gingham"
             else ""
         )

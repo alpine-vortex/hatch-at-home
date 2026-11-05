@@ -283,6 +283,35 @@ test("an idle: at most one every 2 minutes over 10 minutes, none in a beat, a sc
   assert.strictEqual(s.sit.step, null);
 });
 
+test("the granny's knit idle plays on: knit, knitread, read, and a scene cuts the rest", () => {
+  reset();
+  const sitterEl = pic();
+  const m = JSON.parse(JSON.stringify(manifest));
+  const gin = m.sitters[m.by_finish.gingham];
+  gin.idles = ["knit"];
+  const { card, s } = make({ sitterEl, shell: "gingham" });
+  card._sitArt.manifest = m;
+  card._sitArt.rows[m.by_finish.gingham] = "ready";
+  sync(card, s, view());
+  assert.strictEqual(card._sitterRow(s), gin);
+  const t0 = Date.now();
+  const seenPoses = [];
+  for (let t = t0; t < t0 + 6 * 60000 && seenPoses.length < 3; t += 700) {
+    card._sitterTick(s, t);
+    const p = s.sit.step?.kind === "idle" ? s.sit.step.pose : null;
+    if (p && seenPoses[seenPoses.length - 1] !== p) seenPoses.push(p);
+  }
+  assert.deepStrictEqual(seenPoses, ["knit", "knitread", "read"]);
+  // a scene mid-chain: the whole idle ends, no knitread after it
+  s.sit.step = { pose: "knit", kind: "idle", ms: 4200 };
+  s.sit.steps = [{ pose: "knitread", kind: "idle", ms: 1400 }, { pose: "read", kind: "idle", ms: 4200 }];
+  s.sit.until = Infinity;
+  s.scene = {};
+  card._sitterTick(s, t0 + 1e7);
+  assert.strictEqual(s.sit.step, null);
+  assert.deepStrictEqual(s.sit.steps, []);
+});
+
 test("a pose the sitter lacks stands and the prop works; its own frames are used when it has them (F3)", () => {
   const { card } = make();
   const look = { poses: { stand: ["stand_1", "stand_2"], wave: ["wave_1"] } };

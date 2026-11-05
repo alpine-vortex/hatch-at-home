@@ -134,6 +134,13 @@ test("idles: a day's seed gives the same ones; each wait is 2 to 4 minutes; only
   assert.deepStrictEqual(plain(S.idle("s", 0, { ...base, idles: ["tea"] })).pose, "tea"); // a sitter's own list (the granny's knit)
 });
 
+test("chain: the granny's knit goes on to knitread, then read; a sitter without that art stops where it is", () => {
+  const g = manifest.sitters[manifest.by_finish.gingham];
+  assert.deepStrictEqual(plain(S.chain(g, "knit")).map((x) => x.pose), ["knitread", "read"]);
+  assert.deepStrictEqual(plain(S.chain(g, "tea")), []);
+  assert.deepStrictEqual(plain(S.chain({ poses: { knit: ["k"], read: ["r"] } }, "knit")), []); // no knitread: no jump to read
+});
+
 test("hold: doze at night; read when Pip sleeps or after 20 quiet minutes; stand in a scene; one change per 90 s", () => {
   const day = { night: false, asleep: false, busy: false, quietMs: 0, now: 1000 };
   assert.strictEqual(S.hold(base, { ...day, night: true }, null).pose, "doze");

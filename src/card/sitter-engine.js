@@ -86,6 +86,18 @@ const HATCH_SITTER = (() => {
 
   // The nth idle of a day (6.3): which pose and how long until the next, seeded by the card's
   // day-seed so a day replays the same. `idles` is the sitter's own list, if it has one.
+  // An idle that goes on into other poses (the granny: knit, lower the work, lift the book, read).
+  // The tail is only what the sitter's art has; a missing pose ends the idle there.
+  const CHAINS = Object.freeze({ knit: Object.freeze([["knitread", 1400], ["read", 4200]]) });
+  function chain(row, pose) {
+    const out = [];
+    for (const [p, ms] of CHAINS[pose] || []) {
+      if (!has(row, p)) break;
+      out.push({ pose: p, ms });
+    }
+    return out;
+  }
+
   function idle(seed, n, row) {
     const list = (Array.isArray(row?.idles) ? row.idles : IDLES).filter((p) => has(row, p));
     if (!list.length) return null;
@@ -119,5 +131,5 @@ const HATCH_SITTER = (() => {
     return [];
   }
 
-  return Object.freeze({ CUES, IDLES, MS, UNUSED, pick, frames, has, show, still, cue, isNew, arriveLine, rand, idle, hold, beat });
+  return Object.freeze({ CUES, IDLES, MS, UNUSED, pick, frames, has, show, still, cue, isNew, arriveLine, rand, idle, chain, hold, beat });
 })();
