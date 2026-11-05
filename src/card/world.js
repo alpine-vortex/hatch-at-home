@@ -6,6 +6,10 @@
 const FEED_FULL_AT = 95; // rates.py FEED_FULL_AT: a meal is refused above this
 const TRAIT_CAP = 4; // rates.py TRAIT_CAP, until the server says (life_stage trait_cap)
 const STAGE_DAYS = { teen: 5, adult: 14 }; // rates.py STAGE_STARTS (120 h, 336 h), from the egg
+// The excited frames are the celebration, a few flaps beside the greethop's bounce (owner: 10 s was much
+// too long): the mood itself lasts rates.py EXCITED_MINUTES, and the card draws its content frames after this.
+const EXCITED_POSE_MS = 3000;
+const excitedPosed = (since, now) => since > 0 && now - since < EXCITED_POSE_MS;
 const LINK_AFTER_MS = [600000, 1500000]; // the infrared link: 10-25 min after the page loads (random)
 // The day's first link waits for someone watching (gaps-seams 5a, owner Q7): 1-3 min into
 // a look (the first tap or swipe on a shown card, after none for LINK_TOUCHED_MS), and

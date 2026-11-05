@@ -576,7 +576,17 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     // egg gets no round, but the sitter is still in the house.
     this._sitterSync(s, sitter, scene);
     s.pet.classList.toggle("resting", !!rest && !lightsScene); // not breathing through a tuck or a wake
-    s.frames = this._petFrames(sp, stage, mood?.state, calling, this._eggMinutes(stageState), flags);
+    // Excited is a 15 min mood on the server, but its frames are the celebration: they show for
+    // EXCITED_POSE_MS from excitedSince, then the content frames (the mood, bubble and idle hops stay
+    // excited; _tick redraws when the window ends, _excitedSettle). A card loaded into an excited pet
+    // missed the start, so it is settled at once. Calm never holds the wings-up peak as a still.
+    const excited = mood?.state === "excited";
+    const excitedNow = excited && !s.excitedSince;
+    if (excitedNow) s.excitedSince = s.moodState === undefined ? Date.now() - EXCITED_POSE_MS : Date.now();
+    if (!excited) s.excitedSince = 0;
+    const eggMinutes = this._eggMinutes(stageState);
+    s.framesOf = (m) => this._petFrames(sp, stage, m, calling, eggMinutes, flags);
+    s.frames = this._shownFrames(s, mood?.state);
     const key = s.frames.join(",");
     if (calm() && s.framesKey !== key) s.frame = 0; // a new mood or stage: its first frame
     s.framesKey = key;
@@ -589,10 +599,6 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     // celebrates its start; after that, idle life adds an occasional hop.
     // The bounce celebrates the start once: one greethop, not a 10 s loop (care reactions, ship A),
     // and not over a reaction or a scene already moving the pet.
-    const excited = mood?.state === "excited";
-    const excitedNow = excited && !s.excitedSince;
-    if (excitedNow) s.excitedSince = Date.now();
-    if (!excited) s.excitedSince = 0;
     s.pet.classList.remove("hop");
     if (excitedNow && !calm() && !asleep && !s.scene && !(s.poseUntil > Date.now())) this._animate(s, s.pet, "greethop", 1400);
     s.pet.alt = s.species?.name || "pet";
@@ -816,6 +822,12 @@ class HatchPetCardLayout extends HatchPetCardBuild {
   _eggMinutes(stageState) {
     const at = stageState?.state === "egg" ? stageState.attributes.hatches_at : null;
     return at ? (new Date(at) - serverNow()) / 60000 : null;
+  }
+
+  // The frames for the mood on show: an excited pet draws its excited frames only for the celebration.
+  _shownFrames(s, mood) {
+    s.excitedPosed = mood === "excited" && !calm() && excitedPosed(s.excitedSince, Date.now());
+    return s.framesOf(mood === "excited" && !s.excitedPosed ? "content" : mood);
   }
 
   _petFrames(sp, stage, mood, calling, eggMinutes, flags = []) {
