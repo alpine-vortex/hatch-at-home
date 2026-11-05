@@ -4549,11 +4549,12 @@ async def test_card_siblings_are_served_compressed(
     gz = gzip.compress(plain)
     (tmp_path / "hatch-pet-card.js.gz").write_bytes(gz)
     await setup(hass)
-    client = await hass_client()
-    # The same registration the integration makes (async_setup), on a scratch dir.
+    # The same registration the integration makes (async_setup), on a scratch dir,
+    # before the client starts the server (a started router is frozen).
     await hass.http.async_register_static_paths(
         [StaticPathConfig("/virtual_pet/sibling_test", str(tmp_path), True)]
     )
+    client = await hass_client()
     url = "/virtual_pet/sibling_test/hatch-pet-card.js"
     for accept, enc, body in (
         ("br", "br", br),
