@@ -45,8 +45,12 @@ class HatchPetCardSeason extends HatchPetCardBoard {
         add(`leaf_${(i % 3) + 1}`, "leaf");
         const leaf = s.seasonBox.lastChild;
         leaf.style.left = `${8 + i * 15 + Math.random() * 6}%`;
-        leaf.style.setProperty("--leaf-ms", `${8 + Math.random() * 5}s`);
-        leaf.style.setProperty("--leaf-delay", `${-Math.random() * 12}s`);
+        const lane = document.createElement("div"); // the lane that falls (translate); the leaf drifts inside it
+        lane.className = "leafwrap";
+        lane.style.setProperty("--leaf-ms", `${8 + Math.random() * 5}s`);
+        lane.style.setProperty("--leaf-delay", `${-Math.random() * 12}s`);
+        lane.append(leaf);
+        s.seasonBox.append(lane);
       }
     }
   }

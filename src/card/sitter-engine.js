@@ -131,5 +131,14 @@ const HATCH_SITTER = (() => {
     return [];
   }
 
-  return Object.freeze({ CUES, IDLES, MS, UNUSED, pick, frames, has, show, still, cue, isNew, arriveLine, rand, idle, chain, hold, beat });
+  // Lazy frames (perf s2933): the poses to fetch right after the first stand frame (the arrival beat
+  // starts at once), and the pose the hold may switch to next (night: doze; day: read).
+  function upfront(row) {
+    return ["stand", "chair", "walk", "wave"].filter((p) => has(row, p));
+  }
+  function holdNext(row, night) {
+    return [night ? "doze" : "read"].filter((p) => has(row, p));
+  }
+
+  return Object.freeze({ upfront, holdNext, CUES, IDLES, MS, UNUSED, pick, frames, has, show, still, cue, isNew, arriveLine, rand, idle, chain, hold, beat });
 })();

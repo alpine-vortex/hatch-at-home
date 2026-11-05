@@ -31,17 +31,39 @@ class HatchPetCardSitter extends HatchPetCardLayout {
       this._slides?.forEach((s) => this._sitterPaint(s));
     };
     const first = HATCH_SITTER.frames(row, "stand")[0];
-    const stems = [...new Set(Object.values(row.poses).flat())];
-    const imgs = stems.map((stem) => {
-      const img = new Image();
-      img.onerror = () => set("failed");
-      img.src = this._sitterSrc(row, stem);
-      return [stem, img];
-    });
+    const img = new Image();
+    img.onerror = () => set("failed");
+    img.src = this._sitterSrc(row, first);
     const chair = this._sitterChair(row);
-    if (chair) { const img = new Image(); img.src = chair; } // a look at night sits before it (6.2); no state, it just warms the cache
-    imgs.find(([stem]) => stem === first)[1].decode().then(() => { if (art.rows[id] === "loading") set("ready"); }, () => set("failed"));
+    if (chair) { const c = new Image(); c.src = chair; } // a look at night sits before it (6.2); no state, it just warms the cache
+    img.decode().then(() => {
+      (art.have ||= new Set()).add(`${row.dir}/${first}`);
+      if (art.rows[id] === "loading") set("ready");
+      this._sitterWarm(row, HATCH_SITTER.upfront(row)); // the first beat's poses, right behind the stand
+    }, () => set("failed"));
     return "loading";
+  }
+
+  // Frames on demand (perf s2933): a pose's frames are fetched when something is about to need
+  // them, not all ~39 up front. `art.have` is what has loaded (keys `dir/stem`), `art.pend` what is
+  // in flight; no Image is kept, the browser's cache holds the bytes. `_sitterPaint` shows a frame
+  // only once it is in `have`, so a pose never shows blank, at worst the last frame a tick longer.
+  _sitterWarm(row, poses) {
+    const art = this._sitArt;
+    if (!art || !row) return;
+    const have = (art.have ||= new Set());
+    const pend = (art.pend ||= new Set());
+    for (const pose of poses) {
+      for (const stem of HATCH_SITTER.frames(row, pose)) {
+        const key = `${row.dir}/${stem}`;
+        if (have.has(key) || pend.has(key)) continue;
+        pend.add(key);
+        const img = new Image();
+        img.onload = () => { pend.delete(key); have.add(key); this._slides?.forEach((s) => this._sitterPaint(s)); };
+        img.onerror = () => {}; // a lost frame stays in `pend`: never asked for again this page, the last frame stays
+        img.src = this._sitterSrc(row, stem);
+      }
+    }
   }
 
   // The empty chair a sitter with no doze stands before at night: base art, not a person (6.2).
@@ -162,10 +184,15 @@ class HatchPetCardSitter extends HatchPetCardLayout {
     const still = HATCH_SITTER.still(row, s.sit.night);
     const stems = this._sitterFrames(row, this._sitterPose(s, Date.now()));
     if (!stems.length) return;
-    const stem = stems[still ? Math.min(1, stems.length - 1) : (calm() ? 0 : s.sit.frame) % stems.length]; // still: stand_2, no swaying
+    let stem = stems[still ? Math.min(1, stems.length - 1) : (calm() ? 0 : s.sit.frame) % stems.length]; // still: stand_2, no swaying
     const img = el.querySelector(".sit-img");
-    const src = this._sitterSrc(row, stem);
-    if (img.getAttribute("src") !== src) img.setAttribute("src", src);
+    const have = this._sitArt.have;
+    if (have && !have.has(`${row.dir}/${stem}`)) { // not loaded yet: fetch it, keep the last frame (the stand if none)
+      this._sitterWarm(row, [this._sitterPose(s, Date.now())]);
+      stem = img.getAttribute("src") ? null : HATCH_SITTER.frames(row, "stand")[0];
+    }
+    const src = stem && this._sitterSrc(row, stem);
+    if (src && img.getAttribute("src") !== src) img.setAttribute("src", src);
     const chair = still ? this._sitterChair(row) : null; // a look at night: the empty chair behind it
     el.classList.toggle("seat", !!chair);
     const seat = el.querySelector(".sit-seat");
@@ -218,6 +245,7 @@ class HatchPetCardSitter extends HatchPetCardLayout {
 
   _sitterPlay(s, plan, now) {
     const st = this._sit(s);
+    this._sitterWarm(this._sitterRow(s), plan.poses);
     st.steps = plan.poses.map((pose) => ({ pose, ms: plan.tidy ? HATCH_SITTER.MS.tidy : HATCH_SITTER.MS.cue, kind: "cue", tidy: plan.tidy }));
     this._sitterNext(s, now);
   }
@@ -281,12 +309,14 @@ class HatchPetCardSitter extends HatchPetCardLayout {
     if (st.step?.kind === "idle" && busy) { st.step = null; st.steps = st.steps.filter((x) => x.kind !== "idle"); } // a scene or a game: it stands (6.3)
     const pose = this._sitterPose(s, now);
     const row = this._sitterRow(s);
+    this._sitterWarm(row, [...HATCH_SITTER.holdNext(row, st.night), ...(busy ? ["cheer"] : [])]); // the next hold, and a cheer while a game runs
     const frames = this._sitterFrames(row, pose);
     if (frames.length > 1 && !calm() && !HATCH_SITTER.still(row, st.night) && !(pose === "doze" && st.ticks % 2)) st.frame = (st.frame + 1) % frames.length;
     if (!st.step && !st.steps.length && pose === "stand" && !st.night && !busy && !calm() && this._sitterOnScreen(s)) {
       const seed = `${dayOrdinal()}|${s.ids?.device}`;
       const next = HATCH_SITTER.idle(seed, st.idleN, row);
       if (next && !st.nextIdle) st.nextIdle = now + next.wait;
+      if (next) this._sitterWarm(row, [next.pose, ...HATCH_SITTER.chain(row, next.pose).map((x) => x.pose)]); // an idle is minutes away: its frames come first
       if (next && now >= st.nextIdle) {
         st.step = { pose: next.pose, ms: HATCH_SITTER.MS.idle, kind: "idle" };
         st.steps = HATCH_SITTER.chain(row, next.pose).map((x) => ({ ...x, kind: "idle" })); // knit goes on to knitread, read
@@ -304,6 +334,7 @@ class HatchPetCardSitter extends HatchPetCardLayout {
     const st = s.sit;
     if (!st || !s.sitter || s.sitterEl.hidden || st.step || st.steps.length || st.night || calm()) return;
     if (!this._sitterOnScreen(s) || !HATCH_SITTER.has(this._sitterRow(s), "cheer")) return;
+    this._sitterWarm(this._sitterRow(s), ["cheer"]);
     st.steps = [{ pose: "cheer", ms: HATCH_SITTER.MS.cue, kind: "cheer" }];
     this._sitterNext(s, Date.now());
   }

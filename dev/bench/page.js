@@ -1178,6 +1178,31 @@
         a.currentTime = shot.petAt;
       }
     }
+    // `fxProbe` (perf s2933): `{confetti, speck: "ltr"|"rtl", at}`: the birthday confetti and/or a speck put on
+    // through the card's own _confetti and its speck markup with a fixed random (a seeded walk), then every
+    // animation on the screen paused `at` ms in, so a before/after of the CSS that moves them is pixel for pixel.
+    // With `at` alone it seeks what is already there (the rain's streaks, a season's leaves, a glass drop).
+    if (shot.fxProbe) {
+      const fp = shot.fxProbe;
+      const random = Math.random;
+      let seed = 12345;
+      Math.random = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+      try {
+        if (fp.confetti) card._confetti(cur);
+        if (fp.speck) {
+          const sp = document.createElement("span");
+          sp.className = `speck${fp.speck === "rtl" ? " rtl" : ""}`;
+          cur.screen.append(sp);
+        }
+      } finally { Math.random = random; }
+      void cur.screen.offsetWidth;
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (const a of cur.screen.getAnimations({ subtree: true })) {
+        if (a instanceof CSSTransition) continue;
+        a.pause();
+        a.currentTime = fp.at ?? 0;
+      }
+    }
     // `statusClose`: ms. The status sheet (`view: "status"`) closed through the card's own _toggleStatus, its
     // wipe-up paused that many ms in (motion ship 2). Needs `view: "status"`; with `motion: reduce` it just closes.
     if (shot.statusClose !== undefined) {
