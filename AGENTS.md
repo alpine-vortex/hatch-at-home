@@ -74,6 +74,12 @@ while nobody watched. Existing player-facing privacy options (keep presence priv
 house words off sensors, remember me) keep working as built. Don't add privacy reviews,
 owner questions or limits beyond these two.
 
+## Art runs stay local
+
+Image-model prompts, request logs, reference sheets and run scripts live only in the
+gitignored `private-content/art/runs/<run>/` of the main checkout. Never commit or push
+them, not even to a side branch: this repo is public. Commit only the finished art.
+
 ## Motion on the card (composition rule)
 
 The pet's `transform` is shared, so two moves can silently cancel each other. The rule:
