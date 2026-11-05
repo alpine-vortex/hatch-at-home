@@ -351,6 +351,31 @@ const PRESETS = {
     }
     return out;
   },
+  // Sitter S3b (plan 6.2, 6.6, S3b): every finish's look in stand and wave beside Pip, then the look at
+  // night (standing still, the empty chair behind), then two beats with a look (the slide in, a round's
+  // prop). Finishes come from the served manifest, so a new look or full sitter joins by itself.
+  "sitter-looks"() {
+    const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "sitter", "sitters.json"), "utf8"));
+    const finishes = Object.keys(manifest.by_finish).sort();
+    const base = { group: "sitter-looks", world: "woodland", species: "fox", width: 330, clip: "screen", sitter: "day" };
+    const out = [];
+    for (const finish of finishes) {
+      out.push({ ...base, name: `sitter-looks/${finish}-stand`, label: `${finish}: stand`, sitterLook: finish, sitterPose: "stand:1" });
+      out.push({ ...base, name: `sitter-looks/${finish}-wave`, label: `${finish}: wave`, sitterLook: finish, sitterPose: "wave:1" });
+    }
+    for (const finish of finishes) {
+      out.push({ ...base, name: `sitter-looks/${finish}-night`, label: `${finish}: night, the chair`, sitterLook: finish, sitter: "night" });
+    }
+    out.push({ ...base, name: "sitter-looks/night-asleep", label: "night: Pip asleep (aqua)", sitterLook: "aqua", sitter: "night", scene: "dim", mood: "asleep" });
+    for (const ms of [0, 700, 1400]) {
+      out.push({ ...base, name: `sitter-looks/arrive-${ms}`, label: `gingham arrives ${ms} ms: slides in`, sitterLook: "gingham", sitterBeat: `arrive:${ms}` });
+    }
+    for (const cue of ["feed", "play", "clean", "medicine"]) {
+      out.push({ ...base, name: `sitter-looks/round-${cue}`, label: `grove, round: ${cue}: stands, the prop works`, sitterLook: "grove", sitterBeat: `round-${cue}:700` });
+    }
+    out.push({ ...base, name: "sitter-looks/base-control", label: "the base sitter (control)", sitterLook: "base", sitterPose: "stand:1" });
+    return out;
+  },
   sitter() {
     const out = [];
     const shot = (name, label, extra) => out.push({ name: `sitter/${name}`, group: "sitter", label, world: "woodland", width: 330,

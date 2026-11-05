@@ -60,3 +60,14 @@ test("a beat is JS-started behind calm(): a reduced-motion user gets no walk, wa
   assert.match(part, /!busy && !calm\(\) && this\._sitterOnScreen\(s\)/);
   assert.match(part, /if \(frames\.length > 1 && !calm\(\)/);
 });
+
+test("S3b a look's night lean is a static `rotate` on the picture: no animation, no transition, no transform, never .pet", () => {
+  const lean = sitterRules.find((r) => /\.sitter\.art\.seat\.doze \.sit-img/.test(r.sel));
+  assert.ok(lean, "the lean rule");
+  assert.match(lean.body, /(?<![-\w])rotate:/);
+  assert.doesNotMatch(lean.body, /animation|transition|(?<![-\w])transform:/);
+  const seat = sitterRules.filter((r) => /\.sit-seat/.test(r.sel));
+  assert.ok(seat.length >= 2);
+  for (const r of seat) assert.doesNotMatch(r.body, /animation|transition|transform/, r.sel);
+  assert.doesNotMatch(part, /\.style\.rotate/, "the lean is CSS, set by a class");
+});

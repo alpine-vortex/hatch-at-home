@@ -989,10 +989,10 @@
     if (shot.sitterView && !shot.noChannel) {
       const s = slides[0];
       s.house = { ...(s.house || {}), sitter: shot.sitterView };
-      card._sitterLook = shot.sitterLook ?? null; // --sitter-look (read by S3b; S3a has the base sitter only)
+      card._sitterLook = shot.sitterLook ?? null; // --sitter-look <finish|base>: whose sitter, instead of the pet's shell (6.6)
       card._redraw(s);
       // The art loads on the first sitter shown (card-sitter.js): wait for it, as a person's eye would.
-      for (let i = 0; i < 200 && card._sitArt?.state === "loading"; i++) await new Promise((r) => setTimeout(r, 25));
+      for (let i = 0; i < 200 && !(card._sitArt && card._sitterSettled(s)); i++) await new Promise((r) => setTimeout(r, 25));
       // `sitterPose` "<pose>[:frame]" pins the sitter in a pose; `sitterBeat` "<kind>:<ms>" pins a beat at ms
       // (arrive, leave, round-feed, ...) on a fixed clock: no timer runs, so the shot is the same every run.
       if (shot.sitterPose) {

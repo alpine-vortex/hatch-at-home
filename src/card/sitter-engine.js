@@ -16,13 +16,14 @@ const HATCH_SITTER = (() => {
   // The pose table's "when" (6.3, F5) as data, so a test can read it.
   const UNUSED = Object.freeze(["tuck", "shoo"]); // the art stays; the card never plays them
 
-  // Whose sitter (6.6). S3a: the base sitter for every pet. S3b reads `by_finish` here, and falls
-  // back to the base for a finish with no row or a row that failed to load.
+  // Whose sitter (6.6): the manifest's `by_finish` names it (a full sitter beats a look, the sync
+  // decides); a finish it does not list, null, or "base" gets the base sitter.
   function pick(manifest, finish) {
     const rows = manifest?.sitters;
     const base = rows?.[manifest?.base];
     if (!base) return null;
-    void finish;
+    const id = Object.hasOwn(manifest.by_finish || {}, finish ?? "") ? manifest.by_finish[finish] : null;
+    if (id && rows[id]) return { id, row: rows[id] };
     return { id: manifest.base, row: base };
   }
 
@@ -35,6 +36,23 @@ const HATCH_SITTER = (() => {
   // Whether the sitter has a pose, or must stand and let the prop work (6.2).
   function has(row, pose) {
     return frames(row, pose).length > 0;
+  }
+
+  // The frames to draw for a pose (6.2, S3 review F3): the sitter's own; a sitter never swaps to
+  // another person, so a pose it lacks is its stand, and the care prop does the work. A pose of
+  // one frame (a look's wave) alternates with the first stand frame so it still moves.
+  function show(row, pose) {
+    const own = frames(row, pose);
+    const stand = frames(row, "stand");
+    if (!own.length) return stand;
+    if (own.length === 1 && pose !== "chair" && pose !== "stand" && stand.length) return [own[0], stand[0]];
+    return own;
+  }
+
+  // Night with no doze frames (a look, 6.2): the sitter stands still, its second stand frame,
+  // with the empty chair behind it, leaning a little (CSS). A sitter with `doze` dozes instead.
+  function still(row, night) {
+    return !!night && !!row && !has(row, "doze");
   }
 
   // A round's `did` as a cue: the poses (the card's own four, in the round's order, two at most),
@@ -84,6 +102,7 @@ const HATCH_SITTER = (() => {
   // `prev`: { pose, at } the last hold and when it was chosen.
   function hold(row, inn, prev) {
     if (inn.night && has(row, "doze")) return { pose: "doze", at: prev?.pose === "doze" ? prev.at : inn.now };
+    if (inn.night) return prev?.pose === "stand" ? prev : { pose: "stand", at: inn.now }; // a look: still (6.2)
     const want = !inn.busy && has(row, "read") && (inn.asleep || inn.quietMs >= MS.readAfter) ? "read" : "stand";
     if (prev && (prev.pose === "read" || prev.pose === "stand") && prev.pose !== want && inn.now - prev.at < MS.readEvery) {
       return prev; // one change per 90 s
@@ -100,5 +119,5 @@ const HATCH_SITTER = (() => {
     return [];
   }
 
-  return Object.freeze({ CUES, IDLES, MS, UNUSED, pick, frames, has, cue, isNew, arriveLine, rand, idle, hold, beat });
+  return Object.freeze({ CUES, IDLES, MS, UNUSED, pick, frames, has, show, still, cue, isNew, arriveLine, rand, idle, hold, beat });
 })();

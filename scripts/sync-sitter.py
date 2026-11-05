@@ -9,8 +9,11 @@ custom_components/virtual_pet/frontend/sitter/ (docs/plan-2026-11-04-sitter-visi
 
 A sitter is a folder of PNGs. Its poses are whatever the folder holds, so a new sitter is a
 folder drop-in plus a row in sitters.json, and the card never asks for a file the manifest
-does not list. S3a ships the base sitter only; S3b (looks) and S3c (full sitters) switch
-their kind on in KINDS below.
+does not list. Three kinds are served (KINDS below): the base sitter, a look per shell finish
+(art/sitter/looks/<finish>/: stand, wave_1 and the accessory), and a full sitter per finish
+(art/sitter/sitters/<finish>/frames/, same pose names as the base, S3c). A finish with a full
+sitter is drawn by it, else by its look, else by the base (`by_finish` in the manifest). A full
+sitter folder may hold a sitter.json next to frames/ with `idles` (its own idle poses).
 """
 
 from __future__ import annotations
@@ -26,8 +29,10 @@ ROOT = Path(__file__).resolve().parent.parent
 ART = ROOT / "art" / "sitter"
 OUT = ROOT / "custom_components" / "virtual_pet" / "frontend" / "sitter"
 
-# Which kinds of sitter are served. S3b adds "look", S3c adds "full".
-KINDS = ("base",)
+# Which kinds of sitter are served. No full sitter exists yet: the folder is read when it appears.
+KINDS = ("base", "look", "full")
+# What a full sitter's sitter.json may say; anything else is a mistake, not a silent no-op.
+FULL_KEYS = ("idles",)
 
 FRAME = re.compile(r"^([a-z]+)_(\d+)$")
 
@@ -39,7 +44,7 @@ def poses_of(folder: Path) -> dict[str, list[str]]:
         m = FRAME.match(png.stem)
         pose, n = (m.group(1), int(m.group(2))) if m else (png.stem, 1)
         if png.stem == "accessory":
-            continue  # a look's prop, not a pose (S3b)
+            continue  # a look's prop, not a pose: listed under "files"
         poses.setdefault(pose, []).append((n, png.stem))
     return {
         pose: [stem for _, stem in sorted(frames)]
@@ -62,11 +67,15 @@ def sources() -> dict[str, tuple[Path, str, dict]]:
     if "full" in KINDS:
         for folder in sorted((ART / "sitters").glob("*/frames")):
             finish = folder.parent.name
-            found[f"full-{finish}"] = (
-                folder,
-                f"full/{finish}",
-                {"kind": "full", "finish": finish},
-            )
+            extra = {"kind": "full", "finish": finish}
+            own = folder.parent / "sitter.json"
+            if own.exists():
+                said = json.loads(own.read_text())
+                bad = sorted(set(said) - set(FULL_KEYS))
+                if bad:
+                    raise SystemExit(f"{own}: unknown keys {bad}; allowed {FULL_KEYS}")
+                extra.update(said)
+            found[f"full-{finish}"] = (folder, f"full/{finish}", extra)
     return found
 
 
@@ -79,6 +88,8 @@ def build() -> tuple[dict, dict[Path, Path]]:
         if not poses:
             raise SystemExit(f"{folder} holds no frames")
         sitters[sid] = {**extra, "dir": dest, "poses": poses}
+        if (folder / "accessory.png").exists():
+            sitters[sid]["files"] = ["accessory"]
         for png in sorted(folder.glob("*.png")):
             files[OUT / dest / png.name] = png
     # Which finish is drawn by which sitter: a full sitter beats a look. The base answers the rest.

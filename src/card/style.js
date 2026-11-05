@@ -419,8 +419,13 @@ const STYLE = `
   .sitter { position: absolute; left: -5%; bottom: 4%; height: 58%; aspect-ratio: 1; pointer-events: none;
     transition: translate 1.4s linear; }
   .sitter[hidden] { display: none; }
-  .sitter .sit-img { display: none; inset: 0; width: 100%; height: 100%; }
+  .sitter .sit-img { display: none; position: relative; z-index: 1; inset: 0; width: 100%; height: 100%; }
   .sitter.art .sit-img { display: block; }
+  /* A look has no doze frames (6.2): at night it stands still before the base art's empty chair
+     (.sit-seat, behind it), leaning a little: a static rotate, never an animation, never .pet. */
+  .sitter .sit-seat { display: none; position: absolute; inset: 0; width: 100%; height: 100%; }
+  .sitter.art.seat .sit-seat { display: block; }
+  .sitter.art.seat.doze .sit-img { rotate: 4deg; transform-origin: 50% 88%; }
   .sitter.art i { display: none; }
   .sitter:not(.art) { left: auto; right: 5%; bottom: 10%; width: 17%; height: 36%; aspect-ratio: auto; }
   .sitter i { position: absolute; display: block; }

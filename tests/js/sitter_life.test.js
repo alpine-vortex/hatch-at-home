@@ -29,7 +29,7 @@ const sandbox = {
   findsShown: () => false, foundBit: () => null,
   out: null,
 };
-const names = ["_sitterArt", "_sitterSrc", "_sit", "_sitterOnScreen", "_sitterBusy", "_sitterSync", "_sitterPose", "_sitterRow",
+const names = ["_sitterArt", "_sitterLoad", "_sitterChair", "_sitterFinish", "_sitterSettled", "_sitterSrc", "_sit", "_sitterOnScreen", "_sitterBusy", "_sitterSync", "_sitterPose", "_sitterRow",
   "_sitterFrames", "_sitterPaint", "_sitterReset", "_sitterArrive", "_sitterLeave", "_sitterCue", "_sitterPlay", "_sitterNext",
   "_sitterSlide", "_sitterTick", "_sitterCheer", "_awayNote", "_dayBits"];
 vm.runInNewContext([
@@ -50,9 +50,10 @@ const el = () => {
 // A card with one slide on show, the art "loaded" (the base row), a fixed clock.
 function make(over = {}) {
   const s = { sitterEl: el(), pet: el(), species: { props: { feed: "bowl_food", play: "play", clean: "bird/sparkle_clean", medicine: "bird/medicine" } },
-    subscribed: true, asleep: false, egg: false, scene: null, ids: { device: "dev" }, ...over };
+    subscribed: true, asleep: false, egg: false, scene: null, ids: { device: "dev" }, world: { shell: { finish: over.worldShell } }, ...over };
   const card = Object.assign(Object.create(o), {
-    _visible: true, _index: 0, _slides: [s], _sitArt: { state: "ready", pick: { id: "base", row: base } },
+    _visible: true, _index: 0, _slides: [s], _sitArt: { state: "ready", manifest, rows: Object.fromEntries(Object.keys(manifest.sitters).map((id) => [id, "ready"])) },
+    _shellChoice: () => over.shell ?? null,
     _state: () => ({ state: "" }), _owned: () => false,
     _animate: (_s, _el, cls) => world.animated.push(cls),
     _speak: (_s, text) => world.said.push(text),
@@ -312,4 +313,169 @@ test("F9: mixed with a person's or a moment's bits the template runs on the othe
 
 test("F9: privacy on shows the plain rows: the existing wording stays", () => {
   assert.strictEqual(note([["feed", 60]]), "while you were out, I had a meal!");
+});
+
+// ---- S3b: a look (docs/plan-2026-11-04-sitter-visits.md 6.2, 6.6) ----
+// An element whose picture and classes can be read back.
+const pic = () => {
+  const attrs = { img: {}, seat: {} };
+  const node = (k) => ({ getAttribute: (a) => attrs[k][a] ?? null, setAttribute: (a, v) => { attrs[k][a] = v; } });
+  const e = el();
+  e.querySelector = (sel) => node(sel === ".sit-seat" ? "seat" : "img");
+  e.attrs = attrs;
+  return e;
+};
+const lookOf = (finish) => manifest.sitters[manifest.by_finish[finish]];
+const seen = (e) => e.attrs.img.src.replace(/^.*\/sitter\//, "").replace(/\?v=.*$/, "");
+
+test("S3b whose sitter: the pet's shell, else its world's, read at each draw; the preview does not change it", () => {
+  reset();
+  const a = make({ shell: "aqua", worldShell: "woodland" });
+  assert.strictEqual(a.card._sitterFinish(a.s), "aqua");
+  const b = make({ worldShell: "woodland" });
+  assert.strictEqual(b.card._sitterFinish(b.s), "woodland");
+  const c = make({ shell: "aqua", previewFinish: "dune" });
+  assert.strictEqual(c.card._sitterFinish(c.s), "aqua", "the picker's preview is not the sitter's");
+  const d = make({});
+  assert.strictEqual(d.card._sitterFinish(d.s), null);
+  assert.strictEqual(d.card._sitterRow(d.s), manifest.sitters.base, "no shell at all: the base sitter");
+  const e = make({ shell: "aqua" });
+  e.card._sitterLook = "base"; // the bench's flag
+  assert.strictEqual(e.card._sitterRow(e.s), manifest.sitters.base);
+  e.card._sitterLook = "gingham";
+  assert.strictEqual(e.card._sitterRow(e.s), lookOf("gingham"));
+});
+
+test("S3b a look draws its own frames, sliding in standing, and a round's pose is its stand (the prop works)", () => {
+  reset();
+  const sitterEl = pic();
+  const { card, s } = make({ sitterEl, shell: "dune" });
+  sync(card, s, null);
+  sync(card, s, view());
+  assert.strictEqual(s.sit.step.pose, "walk");
+  card._sitterPaint(s);
+  assert.match(seen(sitterEl), /^looks\/dune\/stand_1\.png$/, "the walk is its stand frames");
+  assert.ok(sitterEl.classList.contains("art"));
+  card._sitterNext(s, Date.now()); // the wave: wave_1 alternating with stand_1
+  assert.strictEqual(s.sit.step.pose, "wave");
+  s.sit.frame = 0;
+  card._sitterPaint(s);
+  assert.strictEqual(seen(sitterEl), "looks/dune/wave_1.png");
+  s.sit.frame = 1;
+  card._sitterPaint(s);
+  assert.strictEqual(seen(sitterEl), "looks/dune/stand_1.png");
+  card._sitterNext(s, Date.now());
+  // a round: the pose is feed, the picture is the stand, the prop is the species' own
+  card._sitterCue(s, { at: 1, did: ["feed"] }, Date.now());
+  assert.strictEqual(s.sit.step.pose, "feed");
+  card._sitterPaint(s);
+  assert.match(seen(sitterEl), /^looks\/dune\/stand_[12]\.png$/);
+  assert.deepStrictEqual([...world.props], ["bowl_food"]);
+});
+
+test("S3b a look never swaps to the base sitter: every frame of a visit is its own, whatever the pose", () => {
+  reset();
+  const sitterEl = pic();
+  const { card, s } = make({ sitterEl, shell: "glow" });
+  sync(card, s, view());
+  for (const pose of ["walk", "wave", "feed", "play", "clean", "medicine", "cheer", "pat", "read", "doze", "tuck", "shoo", "tea"]) {
+    s.sit.step = { pose, ms: 1e9 };
+    for (const frame of [0, 1, 2]) {
+      s.sit.frame = frame;
+      card._sitterPaint(s);
+      assert.match(seen(sitterEl), /^looks\/glow\//, `${pose} ${frame}`);
+    }
+  }
+});
+
+test("S3b night, a look: it stands still (stand_2) before the empty chair, no sway, no idle; base sitters doze", () => {
+  reset();
+  const sitterEl = pic();
+  const { card, s } = make({ sitterEl, shell: "aqua" });
+  sync(card, s, view(), "night");
+  assert.ok(!sitterEl.hidden);
+  assert.strictEqual(card._sitterPose(s, Date.now()), "stand");
+  assert.ok(sitterEl.classList.contains("doze"), "the lean (CSS rotate) is on");
+  s.sit.frame = 0;
+  card._sitterPaint(s);
+  assert.strictEqual(seen(sitterEl), "looks/aqua/stand_2.png");
+  assert.ok(sitterEl.classList.contains("seat"));
+  assert.strictEqual(sitterEl.attrs.seat.src.replace(/^.*\/sitter\//, "").replace(/\?v=.*$/, ""), "base/chair.png");
+  for (let i = 0; i < 6; i++) card._sitterTick(s, Date.now() + i * 700);
+  assert.strictEqual(s.sit.frame, 0, "it does not sway");
+  assert.strictEqual(s.sit.step, null, "and no idle");
+  assert.strictEqual(seen(sitterEl), "looks/aqua/stand_2.png");
+  // the same card, a base sitter: it dozes and no seat is drawn
+  const b = pic();
+  const base2 = make({ sitterEl: b });
+  sync(base2.card, base2.s, view(), "night");
+  base2.card._sitterPaint(base2.s);
+  assert.match(seen(b), /^base\/doze_/);
+  assert.ok(!b.classList.contains("seat"));
+  // by day the chair goes
+  sync(card, s, view(), "day");
+  card._sitterPaint(s);
+  assert.ok(!sitterEl.classList.contains("seat"));
+});
+
+test("S3b a look's visit has no idle poses, no cheer, no read: it stands", () => {
+  reset();
+  const { card, s } = make({ shell: "stars" });
+  sync(card, s, view());
+  card._sitterNext(s, Date.now());
+  card._sitterNext(s, Date.now());
+  for (let i = 0; i < 400; i++) card._sitterTick(s, Date.now() + i * 700);
+  assert.strictEqual(s.sit.step, null, "no idle in 5 minutes");
+  card._sitterCheer(s);
+  assert.strictEqual(s.sit.step, null, "no cheer without a cheer pose");
+  s.asleep = true;
+  assert.strictEqual(card._sitterPose(s, Date.now() + 1e9), "stand");
+});
+
+test("S3b the shell changes mid-visit: the sitter swaps once the new one is ready, with no beat; until then it stays", () => {
+  reset();
+  const sitterEl = pic();
+  const { card, s } = make({ sitterEl, shell: "aqua" });
+  sync(card, s, view());
+  card._sitterPaint(s);
+  assert.match(seen(sitterEl), /^looks\/aqua\//);
+  card._sitArt.rows["look-camo"] = "loading";
+  card._shellChoice = () => "camo";
+  const before = s.sit.step;
+  card._sitterPaint(s);
+  assert.match(seen(sitterEl), /^looks\/aqua\//, "the new look is not ready: the old one stays, not the base");
+  card._sitArt.rows["look-camo"] = "ready";
+  card._sitterPaint(s);
+  assert.match(seen(sitterEl), /^looks\/camo\//);
+  assert.strictEqual(s.sit.step, before, "no beat");
+  card._sitArt.rows["look-glow"] = "failed";
+  card._shellChoice = () => "glow";
+  card._sitterPaint(s);
+  assert.ok(!sitterEl.classList.contains("art"), "a failed look is the placeholder, not another person");
+  assert.ok(card._sitterSettled(s));
+});
+
+test("S3c a full sitter drops in: a finish with one uses every pose it has, and never the look's", () => {
+  reset();
+  const sitterEl = pic();
+  const m = JSON.parse(JSON.stringify(manifest));
+  m.sitters["full-aqua"] = { kind: "full", finish: "aqua", dir: "full/aqua", poses: { ...m.sitters.base.poses, knit: ["knit_1", "knit_2"] }, idles: ["knit"] };
+  m.by_finish.aqua = "full-aqua";
+  const { card, s } = make({ sitterEl, shell: "aqua" });
+  card._sitArt.manifest = m;
+  card._sitArt.rows["full-aqua"] = "ready";
+  sync(card, s, view());
+  assert.strictEqual(card._sitterRow(s), m.sitters["full-aqua"]);
+  card._sitterCue(s, { at: 1, did: ["feed"] }, Date.now());
+  s.sit.step = { pose: "feed", ms: 1e9 };
+  s.sit.frame = 1;
+  card._sitterPaint(s);
+  assert.strictEqual(seen(sitterEl), "full/aqua/feed_2.png");
+  s.sit.step = { pose: "knit", ms: 1e9 };
+  card._sitterPaint(s);
+  assert.match(seen(sitterEl), /^full\/aqua\/knit_/);
+  sync(card, s, view(), "night");
+  s.sit.step = null;
+  card._sitterPaint(s);
+  assert.match(seen(sitterEl), /^full\/aqua\/doze_/, "a full sitter dozes");
 });

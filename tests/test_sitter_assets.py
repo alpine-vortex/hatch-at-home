@@ -106,9 +106,56 @@ def test_by_finish_names_real_sitters_and_finishes():
     for finish, sid in manifest["by_finish"].items():
         assert finish in R.SHELL_FINISHES, finish
         assert sid in manifest["sitters"], sid
-    # S3b switches looks on: from then on every finish has a sitter of its own.
-    if any(row["kind"] == "look" for row in manifest["sitters"].values()):
-        assert set(manifest["by_finish"]) == set(R.SHELL_FINISHES)
+    # S3b: every finish has a sitter of its own (a look at least, a full sitter beats it).
+    assert set(manifest["by_finish"]) == set(R.SHELL_FINISHES)
+
+
+def test_every_shell_finish_has_a_look_with_its_three_frames_and_accessory():
+    manifest = _manifest()
+    for finish in R.SHELL_FINISHES:
+        row = manifest["sitters"].get(f"look-{finish}")
+        assert row, f"{finish} has no look: art/sitter/looks/{finish}/"
+        assert row["kind"] == "look" and row["finish"] == finish
+        assert row["dir"] == f"looks/{finish}"
+        assert set(row["poses"]) == {"stand", "wave"}, finish
+        assert row["poses"]["stand"] == ["stand_1", "stand_2"], finish
+        assert row["poses"]["wave"] == ["wave_1"], finish
+        assert row["files"] == ["accessory"], finish
+    for sid, row in manifest["sitters"].items():
+        if row["kind"] == "look":
+            assert row["finish"] in R.SHELL_FINISHES, sid
+
+
+def test_a_full_sitter_folder_is_a_drop_in_that_beats_the_look(tmp_path, monkeypatch):
+    """S3c: art/sitter/sitters/<finish>/frames/ is served and drawn instead of that finish's look."""
+    sync = _sync()
+    art = tmp_path / "art" / "sitter"
+    png = (SERVED / "base" / "stand_1.png").read_bytes()
+    for folder, names in {
+        "frames": ["stand_1", "stand_2", "doze_1", "doze_2"],
+        "looks/aqua": ["stand_1", "stand_2", "wave_1", "accessory"],
+        "looks/dune": ["stand_1", "stand_2", "wave_1", "accessory"],
+        "sitters/aqua/frames": ["stand_1", "stand_2", "knit_1", "knit_2"],
+    }.items():
+        (art / folder).mkdir(parents=True)
+        for name in names:
+            (art / folder / f"{name}.png").write_bytes(png)
+    (art / "sitters" / "aqua" / "sitter.json").write_text('{"idles": ["knit"]}')
+    monkeypatch.setattr(sync, "ART", art)
+    monkeypatch.setattr(sync, "OUT", tmp_path / "out")
+    manifest, files = sync.build()
+    assert manifest["by_finish"] == {"aqua": "full-aqua", "dune": "look-dune"}
+    full = manifest["sitters"]["full-aqua"]
+    assert full["dir"] == "full/aqua" and full["idles"] == ["knit"]
+    assert full["poses"]["knit"] == ["knit_1", "knit_2"]
+    assert tmp_path / "out" / "full" / "aqua" / "knit_2.png" in files
+    (art / "sitters" / "aqua" / "sitter.json").write_text('{"walkspeed": 3}')
+    try:
+        sync.build()
+    except SystemExit as err:
+        assert "walkspeed" in str(err)
+    else:
+        raise AssertionError("an unknown key in sitter.json must fail the sync")
 
 
 def test_the_folder_stays_under_its_budget():

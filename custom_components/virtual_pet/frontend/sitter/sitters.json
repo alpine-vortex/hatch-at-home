@@ -1,7 +1,7 @@
 {
 "version": 1,
 "base": "base",
-"by_finish": {},
+"by_finish": {"aqua": "look-aqua", "camo": "look-camo", "celestial": "look-celestial", "clear": "look-clear", "constellation": "look-constellation", "dots": "look-dots", "dune": "look-dune", "gingham": "look-gingham", "glitter": "look-glitter", "glow": "look-glow", "grove": "look-grove", "hearts": "look-hearts", "leaves": "look-leaves", "paws": "look-paws", "rainbow": "look-rainbow", "scales": "look-scales", "smoke": "look-smoke", "speckle": "look-speckle", "stars": "look-stars", "stripes": "look-stripes", "sunset": "look-sunset", "twotone": "look-twotone", "waves": "look-waves", "woodland": "look-woodland"},
 "sitters": {
   "base": {"kind": "base", "dir": "base", "poses": {
     "chair": ["chair"],
@@ -24,6 +24,102 @@
     "water": ["water_1", "water_2"],
     "wave": ["wave_1", "wave_2"],
     "window": ["window_1", "window_2"]
+  }},
+  "look-aqua": {"kind": "look", "finish": "aqua", "dir": "looks/aqua", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-camo": {"kind": "look", "finish": "camo", "dir": "looks/camo", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-celestial": {"kind": "look", "finish": "celestial", "dir": "looks/celestial", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-clear": {"kind": "look", "finish": "clear", "dir": "looks/clear", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-constellation": {"kind": "look", "finish": "constellation", "dir": "looks/constellation", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-dots": {"kind": "look", "finish": "dots", "dir": "looks/dots", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-dune": {"kind": "look", "finish": "dune", "dir": "looks/dune", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-gingham": {"kind": "look", "finish": "gingham", "dir": "looks/gingham", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-glitter": {"kind": "look", "finish": "glitter", "dir": "looks/glitter", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-glow": {"kind": "look", "finish": "glow", "dir": "looks/glow", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-grove": {"kind": "look", "finish": "grove", "dir": "looks/grove", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-hearts": {"kind": "look", "finish": "hearts", "dir": "looks/hearts", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-leaves": {"kind": "look", "finish": "leaves", "dir": "looks/leaves", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-paws": {"kind": "look", "finish": "paws", "dir": "looks/paws", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-rainbow": {"kind": "look", "finish": "rainbow", "dir": "looks/rainbow", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-scales": {"kind": "look", "finish": "scales", "dir": "looks/scales", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-smoke": {"kind": "look", "finish": "smoke", "dir": "looks/smoke", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-speckle": {"kind": "look", "finish": "speckle", "dir": "looks/speckle", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-stars": {"kind": "look", "finish": "stars", "dir": "looks/stars", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-stripes": {"kind": "look", "finish": "stripes", "dir": "looks/stripes", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-sunset": {"kind": "look", "finish": "sunset", "dir": "looks/sunset", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-twotone": {"kind": "look", "finish": "twotone", "dir": "looks/twotone", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-waves": {"kind": "look", "finish": "waves", "dir": "looks/waves", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
+  }},
+  "look-woodland": {"kind": "look", "finish": "woodland", "dir": "looks/woodland", "files": ["accessory"], "poses": {
+    "stand": ["stand_1", "stand_2"],
+    "wave": ["wave_1"]
   }}
 }
 }
