@@ -551,7 +551,7 @@ test("perf: a frame that fails to load is requested once, not on every paint", (
   sandbox.Image = class { set src(v) { asked.push(v); this.onerror?.(); } decode() { return Promise.resolve(); } };
   try {
     const { card, s } = make();
-    card._sitArt = { state: "ready", manifest, rows: {}, have: new Set() };
+    card._sitArt = { state: "ready", manifest, rows: { base: "ready" }, have: new Set() };
     const img = { v: "x.png", getAttribute() { return this.v; }, setAttribute(_k, v) { this.v = v; } };
     s.sitterEl.querySelector = () => img;
     s.sitterEl.hidden = false;
