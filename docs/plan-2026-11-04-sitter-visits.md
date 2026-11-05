@@ -2,9 +2,8 @@
 
 **Date:** 2026-11-04
 **Status (reconciled 2026-11-04):** S1, S2, S3a, S3b, S3c and S4 built; S3 was split into S3a,
-S3b and S3c (section 7) after the S3 review (section 13). **Left:** the journal line "The sitter
-looked after Pip." (section 9), which S3a did not ship: it needs a server-side field and is not
-started (parked).
+S3b and S3c (section 7) after the S3 review (section 13). **Left:** nothing; the journal line
+(section 9) is built as a memories row (note "Journal line (decided 2026-11-05)" under section 9).
 **Revised 2026-11-04** after the adversarial review (worker s2883, findings A1-A9, B1-B7,
 C1-C3): section 12 maps each finding to where it is fixed. The tuning in 3.2 and 3.2a is now
 measured (`dev/sitter_sim.py`), not drafted.
@@ -1010,6 +1009,24 @@ Nothing here ships until the first mate approves it. Lines for Pip follow the ca
 **The journal / guide**
 - Journal line: "The sitter looked after Pip." (approved). A round's detail is not
   journalled (the log has it).
+
+**Journal line (decided 2026-11-05)** (owner + first mate; built as a `sitter_visit` row in
+`memories`, no new saved field, no STORE_VERSION bump):
+- One row per local day the sitter is in charge (a 3-day trip is up to 3 rows). The day dedupe
+  scans every `sitter_visit` row for the same `settings.tz` local date, so a restart mid-visit
+  (`settle_legacy_lights`) adds none.
+- Written whether "Keep presence private" is on or off. `at` is local NOON of that day in
+  `settings.tz` (a browser in another zone shows the same date); no time of day, no `by`, no
+  event or bus payload.
+- Written only once the sitter can actually serve the pet (`_sitter_can`), else on the first round
+  that does: an egg, an asleep or a resting pet gets none until then. It is written in
+  `sitter_round` (`sitter_visit_memory`), which both the arrival and the timed round call.
+- Row: `{"kind": "sitter_visit", "at": <noon epoch>, "name": <pet name at write time>}` (an old
+  generation keeps its own pet's name).
+- At most 3 `sitter_visit` rows are kept (the oldest sitter_visit goes, never another kind), then
+  the existing 30 cap. The card shows at most 2 `sitter_visit` rows within its newest 6.
+- Card text: "The sitter looked after <name>" (no period; the date follows after a comma). A
+  row without a name uses the current pet name; escaped.
 
 ## 10. Risks, and the questions left for the owner
 

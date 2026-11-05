@@ -96,7 +96,9 @@ download, restart. HACS replaces the folder you copied.
   sitter does plays on the card too, and now and then it stretches, has tea or looks out of
   the window; at night it dozes in the chair. When you have been out, the note says "the sitter
   fed me" or "the sitter and I played" for what the sitter did (with "Keep presence private" on
-  it says "had a meal" and "played" as before).
+  it says "had a meal" and "played" as before). The journal's memories line keeps the days
+  the sitter looked after the pet ("The sitter looked after Pip, Nov 5, 2026"): one a day, the
+  last few, whether or not presence is private.
 - **Power-on:** the first time a browser shows the card, the screen starts like a
   new toy: a pale-green screen with the HATCH logo and a blinking "▶ tap to start".
   A tap fills in the logo and cuts to the pet (with a rising beep if you turned
@@ -534,7 +536,7 @@ egg in …"). A pet still in its egg moves at once.
 | --- | --- |
 | `sensor.<pet>_hunger`, `_happiness`, `_energy`, `_health`, `_discipline`, `_weight` | Stats, 0–100 whole numbers. Hunger is a fullness meter: 100 is stuffed. Weight is healthy between 25 and 75. |
 | `sensor.<pet>_mood` | `egg`, `away`, `sick`, `asleep`, `calling`, `hungry`, `dirty`, `sleepy`, `bored`, `excited`, `cozy` or `content`. Attributes: `flags`, `reason` (what the speech bubble will say), `reason_key` (which sentence that is, for the card's baby talk), `call_deadline`. |
-| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `personality` (from teen; kept out of history), `games` (played and won per game), `hop_day` (Hop of the Day's day: `{day, stage, done, tidy}`, from the pet's first board of the day; the card's Hop row reads it), `memories` (first snow, frost and fog, the first warm day, and each season's first day), `hatches_at` (while an egg), `next_world`, `next_egg`, `journal` (the device's retired pets) and `week` (the journal's strip: days with a dream, a credited visitor or notable weather; kept out of history). |
+| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `personality` (from teen; kept out of history), `games` (played and won per game), `hop_day` (Hop of the Day's day: `{day, stage, done, tidy}`, from the pet's first board of the day; the card's Hop row reads it), `memories` (first snow, frost and fog, the first warm day, each season's first day, and the sitter's days), `hatches_at` (while an egg), `next_world`, `next_egg`, `journal` (the device's retired pets) and `week` (the journal's strip: days with a dream, a credited visitor or notable weather; kept out of history). |
 | `sensor.<pet>_poop`, `_care_misses` | Poop on screen (max 3) and care misses so far (attribute `discipline_misses`: fake calls nobody answered). |
 | `sensor.<pet>_last_care` | When it was last cared for. Attribute `log`: the last 20 actions and who did them; `moments`: the last 10 things that happened to it, for the card to react to. |
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |

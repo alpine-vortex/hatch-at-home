@@ -1900,6 +1900,7 @@ def sitter_round(state: PetState, now: float, settings: Settings) -> list[Event]
         return events
     slot, supper = _sitter_slot(now, settings)
     state.sitter_served = slot
+    sitter_visit_memory(state, now, settings)
     before = state.happiness
     did: list[str] = []
     if state.sick:
@@ -1932,6 +1933,34 @@ def sitter_round(state: PetState, now: float, settings: Settings) -> list[Event]
         events.append({"type": "sitter_round", "did": did, "at": now})
     _resolve_call(state, now, events, state.happiness > before)
     return events
+
+
+def sitter_visit_memory(state: PetState, now: float, settings: Settings) -> bool:
+    """The journal's line for a day the sitter looked after the pet (plan sitter
+    section 9, decided 2026-11-05): one memories row per local day (settings.tz)
+    the sitter is in charge, written by the first round that can serve the pet
+    (an egg, a sleeping or a resting pet gets none until then). The row is the
+    day only, at local noon so a browser in another zone shows the same date,
+    with the pet's name now: no time of day, no `by`, no event. Written with
+    "keep presence private" on or off. The day dedupe scans every sitter_visit
+    row, so a restart mid-visit adds none. At most SITTER_VISITS_KEPT of them
+    stay (the oldest sitter_visit goes, never another kind), then the cap."""
+    today = datetime.fromtimestamp(now, settings.tz).date()
+    for m in state.memories:
+        if m.get("kind") != "sitter_visit":
+            continue
+        try:
+            if datetime.fromtimestamp(m["at"], settings.tz).date() == today:
+                return False
+        except (OverflowError, OSError, ValueError):
+            continue  # a damaged save's absurd stamp is not today
+    noon = datetime.combine(today, time(12), settings.tz).timestamp()
+    state.memories.append({"kind": "sitter_visit", "at": noon, "name": state.name})
+    rows = [i for i, m in enumerate(state.memories) if m.get("kind") == "sitter_visit"]
+    for i in reversed(rows[:-SITTER_VISITS_KEPT]):
+        del state.memories[i]
+    del state.memories[:-MEMORIES_KEPT]
+    return True
 
 
 def sitter_arrives(
@@ -3052,6 +3081,7 @@ def _refuse_play(state: PetState) -> str | None:
 # --- Seasonal firsts -----------------------------------------------------------
 
 MEMORIES_KEPT = 30
+SITTER_VISITS_KEPT = 3  # sitter_visit rows among them (the journal line)
 
 
 def warm_start_month(latitude: float) -> int | None:

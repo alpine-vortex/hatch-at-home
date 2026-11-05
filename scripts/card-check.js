@@ -6726,12 +6726,14 @@ async function main() {
   for (let i = 0; i < 3 && !memory; i++) {
     await injectUntil(pet["sensor.life_stage"], {
       attributes: { memories: [{ kind: "first_snow", at: Date.now() / 1000 },
-        { kind: "season_spring", at: Date.now() / 1000 }] },
+        { kind: "season_spring", at: Date.now() / 1000 },
+        { kind: "sitter_visit", at: Date.now() / 1000, name: "Pip" }] },
     }, null, { settle: 1000 });
     const text = await cur().locator(".status").innerText();
-    memory = /first snow/.test(text) && /first day of spring/.test(text);
+    memory = /first snow/.test(text) && /first day of spring/.test(text)
+      && /The sitter looked after Pip, /.test(text);
   }
-  check("the journal shows memories (first snow, first day of spring)", memory);
+  check("the journal shows memories (first snow, first day of spring, the sitter's day)", memory);
   await shot("05-memories");
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
