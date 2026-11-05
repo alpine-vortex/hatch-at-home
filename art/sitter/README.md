@@ -19,3 +19,18 @@ Spec: docs/plan-2026-11-04-sitter-visits.md section 8.
   (owner's request): her full set of poses is the later redraw batch.
 - The look is not a recolour layer: a palette transfer over the base poses was tried and breaks
   on patterned clothes and on hair against skin, so a look needs its poses drawn.
+
+## The six redrawn sitters (art A2)
+
+`sitters/<finish>/frames/<pose>_<n>.png`: six fully redrawn sitters, each with the full pose set
+under A1's file names (19 poses, 2 frames each, 38 files; the chair is the shared
+`frames/chair.png`, and doze and read are drawn sitting on that chair). Same contract as
+`frames/`: 256x256 RGBA, feet on y=224, centred on x=128, 4 px grid, no care props. The card
+can swap a sitter per shell by folder. Nothing is wired in yet.
+
+- `gingham`: the granny (grey bun, round glasses, cardigan). Shorter and rounder: 168 px tall
+  standing, the others 188-192. Her own variants: a slow short-step `walk`, and `read` is
+  knitting in the chair (doze has the knitting in her lap).
+- `woodland`, `aqua`, `grove`, `celestial`, `dune`: themed to their world shell, starting from
+  `looks/<finish>/` of A1.
+- Cut with `cut_sheet.py`, one scale per sitter. `review.py` has a section per sitter.

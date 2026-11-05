@@ -33,7 +33,7 @@ h1{font-size:20px}h2{font-size:15px;margin:22px 0 6px}.row{display:flex;flex-wra
 .f1,.f2{animation:ab 1s steps(1) infinite}.f2{animation-name:ba}
 @keyframes ab{0%{opacity:1}50%{opacity:0}}@keyframes ba{0%{opacity:0}50%{opacity:1}}
 .still .f1,.still .f2{animation:none}.still .f2{opacity:0}
-.cap{position:absolute;left:4px;top:2px;font-size:11px;background:#fffa;color:#000;padding:0 3px;border-radius:3px}
+details{margin:8px 0}summary{cursor:pointer;font-size:15px}.cap{position:absolute;left:4px;top:2px;font-size:11px;background:#fffa;color:#000;padding:0 3px;border-radius:3px}
 .sheet{display:flex;flex-wrap:wrap;gap:4px}.sheet img{width:128px;height:128px;image-rendering:pixelated;background:#c8bea0}
 </style><h1>Sitter sprites: A1 review</h1>
 <p>Each pose beside a small (hamster), medium (corgi) and large (deer) pet, at the card's scale (sprite 256 box, 62% of the screen; both at the same scale). Frames alternate once a second. Sources: art/sitter/.</p>""".replace(
@@ -73,5 +73,58 @@ if LK.is_dir():
         h.append(
             f"<div class=sheet><img src='looks/{fin}/wave_1.png' title=wave><img src='looks/{fin}/accessory.png' title=accessory></div></div>"
         )
+SIT = pathlib.Path("sitters")
+if SIT.is_dir():
+    h.append(
+        "<h1>Sitters (A2): six redrawn sitters, the full pose set each</h1><p>The granny (gingham) has her own slower walk and knits in the chair; the other five are themed to their world shell. One section per sitter: each pose beside a hamster, a corgi and a deer, the two frames alternating once a second (never both at once). Open a section to see its poses.</p>"
+    )
+    for fin in "gingham woodland aqua grove celestial dune".split():
+        d = SIT / fin / "frames"
+        if not d.is_dir():
+            continue
+        sp_poses = {}
+        for p in sorted(d.glob("*.png")):
+            m = re.match(r"(.+?)(?:_(\d))?\.png", p.name)
+            sp_poses.setdefault(m.group(1), []).append(p.name)
+        sp_poses = dict(
+            sorted(
+                sp_poses.items(),
+                key=lambda kv: (ORDER.index(kv[0]) if kv[0] in ORDER else 99, kv[0]),
+            )
+        )
+        missing = [n for n in ORDER if n not in sp_poses and n != "chair"]
+        note = (
+            " (own redraw: slower walk, knitting for read)" if fin == "gingham" else ""
+        )
+        miss = (
+            f" <b style='color:#b03'>missing: {', '.join(missing)}</b>"
+            if missing
+            else ""
+        )
+        h.append(
+            f"<details><summary><b>{fin}</b>{note}: {len(sp_poses)} poses, {sum(len(v) for v in sp_poses.values())} frames{miss}</summary>"
+        )
+        h.append(
+            "<div class=sheet>"
+            + "".join(
+                f"<img src='sitters/{fin}/frames/{n}' title='{n}'>"
+                for v in sp_poses.values()
+                for n in v
+            )
+            + "</div>"
+        )
+        for pose, files in sp_poses.items():
+            h.append(f"<h2>{fin}: {pose}</h2><div class=row>")
+            for sp in SP:
+                h.append(
+                    f"<div class=cell><span class=cap>{sp}</span><img class=pet src='{SPR}/{sp}/adult_content_1.png'>"
+                )
+                for i, f in enumerate(files[:2]):
+                    h.append(
+                        f"<img class='sit f{i + 1}' src='sitters/{fin}/frames/{f}'>"
+                    )
+                h.append("</div>")
+            h.append("</div>")
+        h.append("</details>")
 h.append("</html>")
 out.write_text("\n".join(h))
