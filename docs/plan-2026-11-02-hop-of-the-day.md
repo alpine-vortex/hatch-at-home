@@ -173,7 +173,8 @@ never sees a half-played board.
   ("Motion on the card"; ship 2b says how). Sound is off unless the player opted in.
 - The pet reacts to each move with the frames it already has (`acts.ready` at the start, a
   hop frame per special, the `won` pose at the nest; the existing cheer or `aww` frames
-  stand in). No new art in any ship. A line is never required to play.
+  stand in). No new art in any ship (the board's cells excepted: owner 2026-11-04, see Decided
+  2026-11-04, board art). A line is never required to play.
 - The keys are part of the `gameBox` view, `_press` and the pad are untouched, so no care
   action can fire from a game key and the pad's `wants` pulse and aria labels need no
   handling.
@@ -2040,3 +2041,11 @@ which is built as 4a and 4b. The numbering continues.
 34. **Q9: `check()` rejects a candidate on `CycleError`** (`Verdict(False, "loop")`), beside the
     generalised touching rule over the never-sinking walkable class (section 2), so a missed
     adjacency costs a candidate, never the day's board.
+
+## Decided (2026-11-04, board art)
+
+1. **The board gets full pixel art** (owner, 2026-11-04: "get the full art"). This overrides
+   section 1's "no new art in any ship" for the board's cells: every plain cell and each world's
+   twist with its states, as `ui/hop_<world>_<tile>.png` drawn by style.js's `HOP_ART`. The pet's
+   own frames are unchanged. Woodland first, signed off by the owner before the other five worlds
+   (s2874's style test, then s2918's woodland v2 at 20 x 20 art px).

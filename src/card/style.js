@@ -1,4 +1,4 @@
-// Hop of the Day's cell art (ui/hop_<world>_<tile>.png, 16 x 16 art px): a world listed here draws its cells
+// Hop of the Day's cell art (ui/hop_<world>_<tile>.png, 20 x 20 art px): a world listed here draws its cells
 // from these tiles instead of the CSS stand-ins below (a world not listed keeps them). Each tile is one
 // cell's state; the selectors keep the cells' class names, and .legal/.lit stay rings drawn over the art (.legal
 // cream here: the dark ring is lost on a dark tile).
