@@ -3,7 +3,9 @@
 // custom_components/virtual_pet/frontend/hatch-pet-card.js (gitignored; unminified).
 //
 //   node scripts/build-card.js            build if the join differs; check every part
+//   node scripts/build-card.js --min      release build: terser mangle only, plus .br and .gz beside it
 //   node scripts/build-card.js --where N  the part and line for line N of the BUILT file
+//                                         (plain build only: a --min file has other line numbers)
 //   node scripts/build-card.js --watch    rebuild on every change under src/card/
 //
 // Scripts and tests call ensureBuilt() (or join() for the text alone). It always joins and
@@ -14,6 +16,8 @@
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
+const zlib = require("zlib");
+const { execFileSync } = require("child_process");
 
 const ROOT = path.join(__dirname, "..");
 const SRC = path.join(ROOT, "src", "card");
@@ -67,14 +71,49 @@ function check(text = join()) {
   new vm.Script(text, { filename: OUT });
 }
 
+// Release build: terser MANGLE ONLY (no compress pass, so no rewrites of the code's logic).
+// terser is not a repo dependency (there is no package.json): CI and a local --min run do
+// `npm install --no-save terser@${TERSER}`, like playwright. Sync, through its CLI.
+const TERSER = "5.44.0";
+function minify(text) {
+  let bin;
+  try {
+    bin = require.resolve("terser/bin/terser", { paths: [ROOT, process.cwd()] });
+  } catch {
+    throw new Error(`build-card: --min needs terser: npm install --no-save terser@${TERSER}`);
+  }
+  const out = execFileSync(process.execPath, [bin, "--mangle", "--ecma", "2020"], {
+    input: text, maxBuffer: 64 << 20, stdio: ["pipe", "pipe", "inherit"],
+  }).toString("utf8");
+  return out.endsWith("\n") ? out : out + "\n";
+}
+
+const SIBLINGS = [OUT + ".br", OUT + ".gz"];
+const rmSiblings = () => SIBLINGS.forEach((f) => fs.rmSync(f, { force: true }));
+function writeAtomic(file, data) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, data);
+  fs.renameSync(tmp, file);
+}
+
+// HATCH_CARD_MIN=1 makes every ensureBuilt (card-check, the JS browser tests) build the
+// release form, so CI can run them against the minified card.
+const wantMin = (min) => min ?? process.env.HATCH_CARD_MIN === "1";
+
 // Writes the join if the built file differs from it; returns the built path.
-function ensureBuilt({ quiet = false } = {}) {
-  const text = join();
+// A plain build deletes the .br/.gz siblings: aiohttp would serve a stale one in place of it.
+function ensureBuilt({ quiet = false, min } = {}) {
+  let text = join();
+  const isMin = wantMin(min);
+  if (isMin) text = minify(text);
   let old = null;
   try {
     old = fs.readFileSync(OUT, "utf8");
   } catch {}
-  if (old === text) return OUT;
+  if (old === text) {
+    if (!isMin) rmSiblings();
+    return OUT;
+  }
   check(text);
   if (old !== null) {
     let stamp = null;
@@ -84,11 +123,19 @@ function ensureBuilt({ quiet = false } = {}) {
     if (sha(old) !== stamp) process.stderr.write(`build-card: ${path.relative(ROOT, OUT)}: built file was edited by hand; overwritten\n`);
   }
   // Temp file and rename: two builds at once never leave half a file.
-  const tmp = `${OUT}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, text);
-  fs.renameSync(tmp, OUT);
+  rmSiblings(); // never a sibling that is not this file's
+  writeAtomic(OUT, text);
+  if (isMin) {
+    const buf = Buffer.from(text);
+    writeAtomic(OUT + ".br", zlib.brotliCompressSync(buf, { params: {
+      [zlib.constants.BROTLI_PARAM_QUALITY]: 11, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: buf.length } }));
+    writeAtomic(OUT + ".gz", zlib.gzipSync(buf, { level: 9 }));
+  }
   fs.writeFileSync(STAMP, sha(text) + "\n");
-  if (!quiet) process.stderr.write(`build-card: built ${path.relative(ROOT, OUT)}\n`);
+  if (!quiet) {
+    const sz = (f) => (fs.existsSync(f) ? fs.statSync(f).size : 0);
+    process.stderr.write(`build-card: built ${path.relative(ROOT, OUT)}${isMin ? ` (min ${sz(OUT)} B, gz ${sz(OUT + ".gz")} B, br ${sz(OUT + ".br")} B)` : ""}\n`);
+  }
   return OUT;
 }
 
@@ -104,7 +151,7 @@ function where(n) {
   throw new Error(`build-card: line ${n} is past the end of the card (${at} lines)`);
 }
 
-module.exports = { HEADER, OUT, SRC, join, check, ensureBuilt, where };
+module.exports = { HEADER, OUT, SRC, join, minify, check, ensureBuilt, where };
 
 if (require.main === module) {
   const args = process.argv.slice(2);
@@ -126,6 +173,8 @@ if (require.main === module) {
         }, 100);
       });
       console.error("build-card: watching src/card/ (HA still needs a restart to serve a new card)");
+    } else if (args[0] === "--min") {
+      ensureBuilt({ min: true });
     } else {
       ensureBuilt();
       check();

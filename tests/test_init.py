@@ -4531,3 +4531,43 @@ async def test_the_forecast_guard_reads_the_watchers_weather_not_the_entrys(
     pet._want_forecast(now + 99 * 3600)
     await hass.async_block_till_done(wait_background_tasks=True)
     assert len(calls) == 1
+
+
+async def test_card_siblings_are_served_compressed(
+    hass: HomeAssistant, now: float, hass_client, tmp_path
+) -> None:
+    """A .br/.gz beside the card (the release build writes them) is served to a client
+    that accepts it, with the same content type; identity gets the plain file."""
+    import gzip
+
+    from homeassistant.components.http import StaticPathConfig
+
+    plain = b"customElements.define('x',class{});\n" * 50
+    (tmp_path / "hatch-pet-card.js").write_bytes(plain)
+    br = b"\x0bnot-really-brotli"  # served as stored; this test never decodes it
+    (tmp_path / "hatch-pet-card.js.br").write_bytes(br)
+    gz = gzip.compress(plain)
+    (tmp_path / "hatch-pet-card.js.gz").write_bytes(gz)
+    await setup(hass)
+    client = await hass_client()
+    # The same registration the integration makes (async_setup), on a scratch dir.
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig("/virtual_pet/sibling_test", str(tmp_path), True)]
+    )
+    url = "/virtual_pet/sibling_test/hatch-pet-card.js"
+    for accept, enc, body in (
+        ("br", "br", br),
+        ("gzip", "gzip", gz),
+        ("br, gzip", "br", br),
+    ):
+        resp = await client.get(
+            url, headers={"Accept-Encoding": accept}, auto_decompress=False
+        )
+        assert resp.status == 200
+        assert resp.headers["Content-Encoding"] == enc, accept
+        assert "javascript" in resp.headers["Content-Type"]
+        assert "Accept-Encoding" in resp.headers.get("Vary", "")
+        assert await resp.read() == body
+    resp = await client.get(url, headers={"Accept-Encoding": "identity"})
+    assert "Content-Encoding" not in resp.headers
+    assert await resp.read() == plain
