@@ -11,7 +11,7 @@ poses = {}
 for p in sorted(fr.glob("*.png")):
     m = re.match(r"(.+?)(?:_(\d))?\.png", p.name)
     poses.setdefault(m.group(1), []).append(p.name)
-ORDER = "stand walk wave read doze chair feed play clean medicine tuck pat cheer shoo stretch tea laugh water window tidy knit biscuit glasses nap".split()
+ORDER = "stand walk wave read doze chair feed play clean medicine tuck pat cheer shoo stretch tea laugh water window tidy knit biscuit glasses nap knitread".split()
 poses = dict(
     sorted(
         poses.items(),
@@ -19,7 +19,7 @@ poses = dict(
     )
 )
 # poses only the granny (gingham) draws; other sitters are not "missing" them
-GRANNY_ONLY = "knit biscuit glasses nap".split()
+GRANNY_ONLY = "knit biscuit glasses nap knitread".split()
 SP = ["hamster", "corgi", "deer"]
 SPR = "../../custom_components/virtual_pet/frontend/sprites"
 h = [
@@ -100,7 +100,7 @@ if SIT.is_dir():
             if n not in sp_poses and n != "chair" and n not in GRANNY_ONLY
         ]
         note = (
-            " (own redraw: a shuffling walk, read is knitting; her own extras: knit, and the idles biscuit, glasses, nap)"
+            " (own redraw: a shuffling walk, read is knitting; her own extras: knit, the idles biscuit, glasses, nap (with a drifting Z), and knitread, the knitting-to-reading in-between)"
             if fin == "gingham"
             else ""
         )
