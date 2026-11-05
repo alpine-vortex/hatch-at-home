@@ -166,6 +166,13 @@ class HatchPetCardBase extends HTMLElement {
     }
   }
 
+  // Who owns the screen (shell modes plan 3.7): a game (the picker on), or a shell mode that owns it
+  // (`owns: false` opts out). Every "may this happen now" read asks this, not s.game, so a mode that is
+  // not a game keeps moments, visitors, wander, scenes and the link off too (tests/js/owned_reads.test.js).
+  _owned(s) {
+    return !!s?.game || !!(s?.mode && s.mode.owns !== false);
+  }
+
   disconnectedCallback() {
     clearInterval(this._timer);
     clearTimeout(this._headTimer);
@@ -184,6 +191,7 @@ class HatchPetCardBase extends HTMLElement {
     // does a line typing out, and the private channel.
     for (const s of this._slides || []) {
       if (s.game) this._endGame(s, null);
+      this._modeExit(s, "teardown"); // a shell mode too (a no-op once the game's end has left it)
       this._sceneEnd(s, { quiet: true }); // a care scene's rAF and its blanket's timers go with the card
       this._drapeStop(s);
       this._stopTyping(s);
@@ -241,7 +249,13 @@ class HatchPetCardBase extends HTMLElement {
     if (!s.subscribed && !s.subscribeFailed && !s.waitTimer) {
       s.waitTimer = setTimeout(() => {
         s.waitTimer = null;
-        if (!s.subscribed) s.subscribeFailed = true;
+        if (s.subscribed) return;
+        s.subscribeFailed = true;
+        // Silence is not an error: a send lost on a socket that was closing
+        // gets no reply and no catch. Ask once more, if the slide is still
+        // on this subscription (not gone, not already waiting on the error
+        // retry). subscribeFailed is set, so no second wait timer starts.
+        if (s.subKey && !s.gone && !s.retryTimer && this._slides?.includes(s)) this._subscribe(s, true);
       }, SUBSCRIBE_WAIT_MS);
     }
     Promise.resolve(conn.subscribeMessage((msg) => {

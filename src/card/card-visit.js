@@ -52,7 +52,13 @@ class HatchPetCardVisit extends HatchPetCardLooks {
   // "while you were out, I napped, watched the rain and had a snack!": up to
   // three things from the moments and care since the device last looked.
   _awayNote(s, since) {
-    const bits = this._dayBits(s, since);
+    const all = this._dayBits(s, since, true, true);
+    // The sitter's own rows (sitter plan 6.5, F9; privacy on shows them as plain feed and play, which
+    // keep the old wording): when the newest two bits are all the sitter's, one approved sentence.
+    // Otherwise the template, with only the bits that are not the sitter's.
+    const newest = all.slice(0, 2);
+    if (newest.length && newest.every((b) => b in SITTER_NOTE)) return SITTER_NOTE[newest.includes("sitter:played") ? "sitter:played" : "sitter:fed"]; // a play wins
+    const bits = all.filter((b) => !(b in SITTER_NOTE));
     // A nap alone isn't news (fresh-moment 2, owner Q2): no note.
     if (bits.every((b) => b === "napped")) return null;
     const list = bits.slice(0, 2); // two at most: a bubble on a 330 px card
@@ -62,7 +68,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
   // What the pet did since then, newest first, as bits ("watched TV"): its moments, the
   // finds while shown, then care unless care is false (the away note's, and the
   // evening's today line's, which leaves care out).
-  _dayBits(s, since, care = true) {
+  _dayBits(s, since, care = true, sitter = false) {
     const lastCare = this._state(s, "sensor.last_care")?.attributes || {};
     const after = (at) => new Date(at).getTime() > since;
     const bits = [];
@@ -95,7 +101,10 @@ class HatchPetCardVisit extends HatchPetCardLooks {
         : m.type === "house_moment" ? houseBit(m) : MOMENT_BITS[m.type]);
     }
     for (const e of care ? [...(lastCare.log || [])].reverse() : []) {
-      if (after(e.at) && (e.result === "ok" || e.result === "won" || e.result === "lost")) add(CARE_BITS[e.action]);
+      if (after(e.at) && (e.result === "ok" || e.result === "won" || e.result === "lost")) {
+        // The sitter's rows: only the away note reads them (a sitter_clean and a sitter_medicine add no bit: no copy for them).
+        add(Object.hasOwn(SITTER_ROWS, e.action) ? sitter && SITTER_ROWS[e.action] : CARE_BITS[e.action]);
+      }
     }
     return bits;
   }
@@ -155,7 +164,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
   }
 
   _greet(s) {
-    if (s.greeted || !this._channelHeard(s) || !this._free(s)) return;
+    if (s.greeted || !this._channelHeard(s) || !this._free(s) || this._sitterBusy(s)) return; // the sitter's walk-out first (6.4)
     // An egg doesn't talk (C15'): the greeting waits for the hatch, and its key stays unwritten (F2).
     if (this._state(s, "sensor.life_stage")?.state === "egg") return;
     s.greeted = true;
@@ -375,7 +384,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
   // A question with its answers as buttons (the line is already in the bubble).
   _ask(s, kind, entity = s.ids?.["sensor.life_stage"]) {
     const question = QUESTIONS[kind];
-    if (!question || s.game || s.ids?.["sensor.life_stage"] !== entity) {
+    if (!question || this._owned(s) || s.ids?.["sensor.life_stage"] !== entity) {
       s.asking = false; // a game, or another pet on this slide now: not now
       return;
     }

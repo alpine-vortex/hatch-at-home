@@ -59,7 +59,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
     if ((s.queue?.length || 0) > late.left) return false; // the first line not said yet
     late.after ??= Math.max(s.sayUntil || 0, now); // the line on show is done
     if (now < late.after || s !== this._slides[this._index] || this._booting || this._link || s.linking ||
-      s.power || s.calling || s.away || this._basketShows(s) || !this._freeBody(s)) return false;
+      s.power || s.calling || this._basketShows(s) || !this._freeBody(s)) return false;
     s.lateVisit = null;
     const v = this._visitorLate(s);
     if (!v || !oncePerDay(`visit-${s.ids?.device}`, this._visitDay(s))) return false;
@@ -97,7 +97,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
   // basket on show.
   _visitorFree(s, now = Date.now()) {
     return s === this._slides[this._index] && !this._booting && !!s.lookedFirst && !s.visitor &&
-      !this._link && !s.linking && !s.power && !s.calling && !s.away && (this._linkFree(s) || this._askOnly(s)) &&
+      !this._link && !s.linking && !s.power && !s.calling && (this._linkFree(s) || this._askOnly(s)) &&
       !this._basketShows(s) && // the basket's floor line: the visitor waits (review C7)
       now - (this._visitShown?.s === s ? this._visitShown.at : now) >= VISIT_SHOWN_MS &&
       now - (this._linkEndedAt ?? -Infinity) >= VISIT_AFTER_MS;
@@ -106,8 +106,8 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
   // Still fine to go on (each beat checks): the slide on show, awake, no game, scene,
   // link, gag, call or status. Else the visit ends at once, its picture gone.
   _visitorLive(s) {
-    return s === this._slides[this._index] && !s.asleep && !s.game && !s.scene && !s.linking &&
-      !s.power && !s.calling && !s.away && !s.screen.classList.contains("show-status");
+    return s === this._slides[this._index] && !s.asleep && !this._owned(s) && !s.scene && !s.linking &&
+      !s.power && !s.calling && !s.screen.classList.contains("show-status");
   }
 
   // From _tick, for the slide on show: at most one look every VISIT_CHECK_MS.
@@ -354,7 +354,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
     const b = s.basket;
     if (!b || s.collecting) return;
     const n = this._basketCount(s);
-    const show = n > 0 && !s.reveal && !s.egg && !!s.species && !s.away && !s.game && !s.scene;
+    const show = n > 0 && !s.reveal && !s.egg && !!s.species && !this._owned(s) && !s.scene;
     if (show) {
       const src = `${BASE}/ui/basket_${n}.png?v=${VERSION}`;
       const img = b.firstElementChild;

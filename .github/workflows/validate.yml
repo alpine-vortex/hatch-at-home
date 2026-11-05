@@ -17,8 +17,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  hacs:
+  # A push to main whose sha already passed Validate (the first mate's ci-gate runs
+  # it on an fm-* branch by workflow_dispatch, and a fast-forward merge keeps the
+  # sha) has nothing new to check: the heavy jobs below skip. A pull_request run
+  # does not count (it ran the merge ref, not this sha), and a sha with no green
+  # run still runs everything. Main is not branch-protected, so a skipped job is fine.
+  gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      passed: ${{ steps.prior.outputs.passed }}
+    steps:
+      - id: prior
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          passed=false
+          if [ "$EVENT" = push ]; then
+            n=$(gh api "repos/$REPO/actions/workflows/validate.yml/runs?head_sha=$SHA&status=success&per_page=50" \
+              --jq '[.workflow_runs[] | select(.event != "pull_request")] | length' || echo 0)
+            [ "${n:-0}" -gt 0 ] && passed=true
+            echo "successful Validate runs on $SHA: ${n:-0}"
+          fi
+          echo "passed=$passed" >> "$GITHUB_OUTPUT"
+
+  hacs:
+    needs: gate
+    if: needs.gate.outputs.passed != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa # main
         with:
@@ -28,13 +61,19 @@ jobs:
           ignore: brands description topics
 
   hassfest:
+    needs: gate
+    if: needs.gate.outputs.passed != 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: home-assistant/actions/hassfest@86d4564712fa02543c808e3a693dd04f9d3f8361 # master
 
   tests:
+    needs: gate
+    if: needs.gate.outputs.passed != 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
@@ -46,12 +85,15 @@ jobs:
   # scripts/card-check against a throwaway HA: navigation, the status screen,
   # action feedback, the editor, and no errors in the browser console.
   card:
-    # Four runs of sections side by side (card-check --shard): ~5 min, not ~14.
+    # Five runs of sections side by side (card-check --shard): ~5 min, not ~14.
+    needs: gate
+    if: needs.gate.outputs.passed != 'true'
     strategy:
       fail-fast: false
       matrix:
-        shard: ["1/4", "2/4", "3/4", "4/4"]
+        shard: ["1/5", "2/5", "3/5", "4/5", "5/5"]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -59,9 +101,28 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
       - run: scripts/setup
+      # HA boots while the browser installs below; card-check waits for it.
+      - run: nohup scripts/develop > hass.log 2>&1 &
+      # The Chromium download, keyed on the Playwright version (keep it equal to the
+      # npm install below). The apt libraries are not cached: --with-deps still adds them.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-1.64.1-${{ runner.os }}
       # The version the local gate uses (NODE_PATH=~/github/relink/node_modules).
       - run: npm install --no-save playwright@1.64.1 && npx playwright install --with-deps chromium
-      - run: nohup scripts/develop > hass.log 2>&1 &
       - run: scripts/card-check --shard ${{ matrix.shard }}
+      # The log's tail was mostly optional-dependency noise (ffmpeg, turbojpeg,
+      # mutagen, the frozen router): our lines and the errors only. All of it is
+      # in the hass-log artifact.
       - if: failure()
-        run: tail -n 200 hass.log
+        run: |
+          grep -E 'virtual_pet|ERROR|Traceback' hass.log |
+            grep -v -E 'ffmpeg|turbojpeg|mutagen|frozen router' | tail -n 200 || true
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hass-log-${{ strategy.job-index }}
+          path: hass.log
+          if-no-files-found: ignore
+          retention-days: 7

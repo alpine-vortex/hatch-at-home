@@ -27,7 +27,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.virtual_pet import model
-from custom_components.virtual_pet.const import DOMAIN
+from custom_components.virtual_pet.const import CONF_PRIVACY, DOMAIN
 from custom_components.virtual_pet.coordinator import async_rename
 from custom_components.virtual_pet.llm import PROMPT
 
@@ -208,6 +208,20 @@ async def test_privacy_keeps_the_sitter_quiet(
     assert speech(response) == "Pip is asleep."
 
 
+async def test_without_privacy_the_sitter_is_named_and_care_works(
+    hass: HomeAssistant, pip: MockConfigEntry
+) -> None:
+    hass.config_entries.async_update_entry(
+        pip, options={**pip.options, CONF_PRIVACY: False}
+    )
+    await hass.async_block_till_done()
+    pip.runtime_data.state.away = True
+    response = await ask(hass, "VirtualPetStatus")
+    assert speech(response).startswith("Pip is with the sitter.")
+    response = await ask(hass, "VirtualPetCare", action="feed")
+    assert speech(response) == "Pip is eating."
+
+
 def unexpose_all(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     registry = er.async_get(hass)
     for entity in er.async_entries_for_config_entry(registry, entry.entry_id):
@@ -381,8 +395,8 @@ def test_spoken_status_reads_well_aloud():
         "Hi, sunbeam! Pip is cozy: toasty by the fire."
     )
     # A reason that only repeats the mood isn't said twice.
-    assert spoken_status("Pip", "at the sitter's", "at the sitter's", [], None) == (
-        "Pip is at the sitter's."
+    assert spoken_status("Pip", "with the sitter", "with the sitter", [], None) == (
+        "Pip is with the sitter."
     )
     assert spoken_status("Pip", "excited", "♪ dancing ♪", ["night owl"], None) == (
         "Pip is excited: dancing. Traits: night owl."

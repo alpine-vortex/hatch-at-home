@@ -12,7 +12,6 @@ const REFUSALS = {
   spoiled: "hehe, whining works",
   no_game: "let's start over",
   egg: "...",
-  away: "i'm at the sitter's!",
   not_sleepy: "not sleepy yet ♪",
 };
 
@@ -52,6 +51,15 @@ const MEMORY_LABELS = {
   season_spring: "first day of spring", season_summer: "first day of summer", // ha-signals H7
   season_autumn: "first day of autumn", season_winter: "first day of winter",
 };
+// A memory whose words hold more than the kind: the sitter's day (plan sitter section 9, decided
+// 2026-11-05). The name is the pet's at the time (the row's own, else the current one); no period,
+// the date follows after a comma. The caller escapes it.
+const MEMORY_LINES = {
+  sitter_visit: (m, name) => `The sitter looked after ${(typeof m.name === "string" && m.name) || name || "the pet"}`,
+};
+// The journal shows the newest this many memories, and at most this many of them the sitter's.
+const MEMORIES_SHOWN = 6;
+const SITTER_MEMORIES_SHOWN = 2;
 // Idle life: something small every so often when nothing else is going on.
 const IDLE_MIN_MS = 20000;
 const IDLE_SPREAD_MS = 25000;

@@ -304,12 +304,8 @@ async def test_it_startles_with_the_pet_awake_only_then_cooldown_for_all_bells(
     await hass.async_block_till_done()
     assert await said(client) == []
     state.asleep = False
-    state.away = True
-    freezer.tick(timedelta(seconds=1))
-    ring(hass)
-    await hass.async_block_till_done()
-    assert await said(client) == []
-    state.away = False
+    # With the sitter here (away) it hears the bell: plan sitter §3.7, the
+    # gates table in test_sitter.py.
 
     freezer.tick(timedelta(seconds=1))
     ring(hass, "event.back_door")  # heard at once: nothing started a wait

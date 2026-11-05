@@ -29,14 +29,17 @@ Where things live:
 | hop-engine | `HATCH_HOP`, Hop of the Day's rules (one frozen namespace; hop.py's twin, no `this`) |
 | interaction-director | `HATCH_DIRECTOR`, the device-alive director: track leases, generation tokens, `BUSY_OWNERS` (one frozen namespace, pure, no `this`, no DOM; the card creates one per card in `_build`, device-fx.js is its first adapter) |
 | device-fx | `HATCH_DEVICE_FX`, the adapter for the director (slices 3B, 3C): wire entry to cue, the rain recipe (`dir-*` classes on the slide's `.hw.glass`), ambience paint, `live`, `enter`; and the rim cues (feed, play, clean, the confirmed tuck: `RIM`, `rim`, `dir-*` classes on the slide's `.hw.rim`) (one frozen namespace, no `this`, no DOM beyond the glass and the rim; the card's `_dir*` methods and `_rimCue` in card-visit call it) |
+| sitter-engine | `HATCH_SITTER`, the sitter's rules (one frozen namespace, pure, no `this`, no DOM, no clock; sitter plan S3a: whose sitter, the cue plan, the first-snapshot rule, idles, the hold pose, the beats; `card-sitter` is its adapter) |
 | lines | poses, wishes, BABY, PERSONA |
 | lines-fresh | the fresh-expand copy block (scripts/copy-scan.js's COPY_TABLES) |
 | ui-copy | screen copy, kindred, follow text, QUESTIONS, notes, dreams, moment consts, helpers |
+| shell-modes | `SHELL_MODES` (the shell-mode table: one entry per mode, 8 slots each; the three server games ship, built by `shellGame`, and hop, built by `shellHop`), `SHELL_TINTS`, `shellCheck` (the schema), `shellIcon` (pure, no `this`, no DOM; no game words except in `shellGame` and the table, whose slot functions read `s.game`; docs/plan-2026-11-04-shell-modes.md) |
 | shell-data | moulded shell, finishes, traits, server clock, `timeAgo` |
 | style | `STYLE`, `SCENE_STYLE` (CSS strings; the one part over 1,000 lines) |
 | card-base | setConfig, hass, connect, channel, finding pets |
 | card-build | `_build`, `_buildSlide`, low battery, power-on, `_update`, `_forget`, `_go` |
 | card-layout | `_layout`, `_mould`, `_renderShelf`, `_dress`, `_renderSlide`, `_say`, frames |
+| card-sitter | the sitter's life (`HatchPetCardSitter`): the art load (`frontend/sitter/`, `sitters.json`), `_sitterSync` (drawn by `_renderSlide`), beats, cues, idles, the one timer is `_sitterTick` (called by `_tick`), `_sitterAt` (the bench) |
 | card-tick | `_tick`, ghosting, idle, tricks, promise, `_speak`, `_pat`, `_sayLine` |
 | card-looks | `_firstLook`, follow-ups, gifts, welcome, wishes |
 | card-visit | `_catchUp`, greet, `_visit`, `_ask`, hearts, chirp, fx |
@@ -45,9 +48,10 @@ Where things live:
 | card-sheets | shell picker, lay sheet, name sheet, `_set*` |
 | card-journal | journal, photos, every world, finds page |
 | card-actions | actions, the care scenes' shared frame (`_sceneStart`, `_sceneRender`, `_sceneEnd`, the answer) |
+| card-mode | the shell mode engine (`HatchPetCardMode`): `_modeEnter`, `_modeExit`, `_modeSync`, `_modeClick` (the one click handler of the eight buttons), `_modeGuard`, `_modeEscape`, and `_paintCaps`, the one writer of the eight buttons' state (no `s.game`, `_endGame` or `GAMES`: tests/js/shell_modes.test.js; "who owns the screen" is `_owned(s)` in card-base, tests/js/owned_reads.test.js) |
 | card-care | `SCENES` (one entry per care scene: medicine, clean, feed), the bowl clip (`bowlCuts`), `_sceneFrames`, `_sceneArt` |
 | card-games | games, dig |
-| card-board | Hop of the Day's board mode (`HatchPetCardBoard`; behind `experimental_hop`): the picker row, the board and its keys in the `gameBox` overlay, park/resume, undo |
+| card-board | Hop of the Day's board mode (`HatchPetCardBoard`; behind `experimental_hop`): the picker row, the board in the `gameBox` overlay (its keys are the shell's eight, the `hop` mode), park/resume, undo |
 | card-season | seasons, party, costume |
 | card-visitors | world visitors, basket, reveal |
 | card-link | infrared link |
@@ -69,6 +73,12 @@ already shows the household is fair game for the card, including echoes of what 
 while nobody watched. Existing player-facing privacy options (keep presence private, keep
 house words off sensors, remember me) keep working as built. Don't add privacy reviews,
 owner questions or limits beyond these two.
+
+## Art runs stay local
+
+Image-model prompts, request logs, reference sheets and run scripts live only in the
+gitignored `private-content/art/runs/<run>/` of the main checkout. Never commit or push
+them, not even to a side branch: this repo is public. Commit only the finished art.
 
 ## Motion on the card (composition rule)
 
@@ -121,6 +131,12 @@ and card-check. To have commits refuse unformatted Python, run
 wait) and writes the same gate-passed marker on a pass. Prefer it for the batch gate:
 it takes none of this machine's CPU, so workers aren't slowed while it runs.
 
+**Before you report a ship branch done, run `scripts/ci-gate` on it** (owner,
+2026-11-04), and again after every follow-up fix. A narrow `--only` run is for
+iterating; it misses rows in other sections that test the same behaviour (two
+slices reached the batch gate broken that way). Report the run's link. A FLAKE
+line is fine; a FAIL is yours to fix, even in a section you didn't touch.
+
 The manual route, if you need it:
 
 - Never use port 8123, or another worker's port. Copy `dev/config` to a scratch
@@ -146,7 +162,7 @@ edits, art) and runs just the sections that use them, printing why. Add a neighb
 with `scripts/gate -- --only <list>` when a section needs one. If it picks `all`
 (server code), use `scripts/ci-gate`. A partial run writes no gate marker. The full
 gate is the first mate's, once per merged batch, through `scripts/ci-gate`; CI runs
-card-check as four parallel shards (`--shard k/4`), about 5-6 min. Login, the dashboard, stubs and the pet-finding prelude always
+card-check as five parallel shards (`--shard k/5`), about 5-6 min. Login, the dashboard, stubs and the pet-finding prelude always
 run, and `restart` puts dev's seeded bond and wish back. Sections lean on state their
 predecessors leave (the open sheet, the bond, the slide on show), so a lone section may
 need its neighbour in `--only`; `oldcard` pulls in `restart` by itself.

@@ -220,7 +220,7 @@ Acceptance checks (the reviewer can rerun each):
    file section 3 names, each handled (card-check alone has 17 hits in one file; prose hits
    in `art/` and `docs/` are harmless).
 4. `scripts/test` green from a fresh worktree with no built file (proves `ensureBuilt`).
-5. `scripts/ci-gate` full: hassfest, HACS, tests, all four card-check shards. Bench
+5. `scripts/ci-gate` full: hassfest, HACS, tests, all five card-check shards. Bench
    presets `shells`, `ui`, `species` render; compare shots by eye or with tolerance
    (byte-compare is noisy).
 6. The release steps run locally (build, zip, guard): the zip holds the card.

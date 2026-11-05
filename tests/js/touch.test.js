@@ -215,8 +215,9 @@ test("asleep: the third pat stirs (the sleepy face, a turn) and it stays asleep;
 
 test("a milestone line may replace the pat's own line on show, nothing else's", () => {
   const ctx = { Date, KEPT: 3, lineClass: (q) => q.cls || 0 };
-  vm.runInNewContext(`this.mayTalk = ${method("_patMayTalk").trim().replace(/^_patMayTalk/, "function")};`, ctx);
-  const self = { _questionOn: () => false };
+  vm.runInNewContext(`this.mayTalk = ${method("_patMayTalk").trim().replace(/^_patMayTalk/, "function")};` +
+    `this.owned = {${method("_owned")}}._owned;`, ctx);
+  const self = { _questionOn: () => false, _owned: ctx.owned };
   const held = (text, patSaid) => ({ sayUntil: Date.now() + 2000, sayClass: 4, sayEntry: { text }, patSaid, queue: [] });
   assert.strictEqual(ctx.mayTalk.call(self, held("hehe ♥", "hehe ♥")), false, "a plain pat may not talk over it");
   assert.strictEqual(ctx.mayTalk.call(self, held("hehe ♥", "hehe ♥"), true), true, "a milestone may");

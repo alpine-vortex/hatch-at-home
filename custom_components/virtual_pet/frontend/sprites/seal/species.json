@@ -7,7 +7,7 @@
   "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],
   "frames": 2,
   "extras": {"squint": "child_squint", "shiver": "child_shiver", "sweat": "child_sweat", "mask": "child_mask", "dance": "child_dance", "watch_tv": "child_watch_tv", "banana": ["child_banana_1", "child_banana_2"], "flipper_clap": ["child_flipper_clap_1", "child_flipper_clap_2"], "splash": ["child_splash_1", "child_splash_2"]},
-  "props": {"feed": "otter/bowl_food", "snack": "snack", "play": "play", "clean": "otter/bubbles", "medicine": "bird/medicine", "blanket": "bird/blanket", "attention": "bird/attention", "away": "bird/sitter_sign", "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]},
+  "props": {"feed": "otter/bowl_food", "snack": "snack", "play": "play", "clean": "otter/bubbles", "medicine": "bird/medicine", "blanket": "bird/blanket", "attention": "bird/attention", "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]},
   "backgrounds": {"day": "otter/bg_day", "night": "otter/bg_night", "rain": "otter/bg_rain", "dim": "otter/bg_night"},
   "words": {"food": "fish", "home": "rock"},
   "voice": { "sound": "arf", "catchphrase": "flip flop", "pitch": 560, "pace": 34, "likes": ["herring", "squid", "sardines"] },
@@ -21,6 +21,7 @@
     "teen_excited": [138, 64],
     "adult_excited": [154, 96]
   },
+  "signature": {"adult": ["adult_bask_1", "adult_bask_2"]},
   "waves": {"baby": ["baby_wave_1", "baby_wave_2"], "teen": ["teen_wave_1", "teen_wave_2"], "adult": ["adult_wave_1", "adult_wave_2"]},
   "acts": {"eat": ["baby", "child", "teen", "adult"], "cheer": ["baby", "teen", "adult"], "pat": ["baby", "child", "teen", "adult"], "refuse": ["baby", "teen", "adult"], "aww": ["baby", "teen", "adult"], "ready": ["baby", "teen", "adult"], "splash": ["baby", "teen", "adult"]}
 }

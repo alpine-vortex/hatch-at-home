@@ -124,7 +124,24 @@
       const flags = [...new Set([...(["hungry", "bored", "dirty", "sick", "sleepy"].includes(mood) ? [mood] : []), ...(pet.flags || [])])];
       if (shot.scene === "rain" && !flags.includes("rainy")) flags.push("rainy");
       if (pet.resting && !flags.includes("resting")) flags.push("resting"); // R1: the mood's flag
-      put("sensor", "mood", mood, { flags, ...(pet.lay ? { requests: ["lay_egg"] } : {}), ...(pet.reason ? { reason: pet.reason, reason_key: pet.reason_key } : {}) });
+      const moodAttrs = { flags, ...(pet.lay ? { requests: ["lay_egg"] } : {}), ...(pet.reason ? { reason: pet.reason, reason_key: pet.reason_key } : {}) };
+      // Sitter visits S2: `sitter: "day" | "night"` is a visit in progress on the lead pet (`night` also draws
+      // the night scene unless the shot names one). The sensors say what the server says: with privacy off
+      // the mood is "away" (the asleep sensor is real); with `privacy: "on"` the mood is "asleep" and the
+      // asleep sensor "on" (the mask). The channel's `house.sitter` view is the real mood either way
+      // (set below with the house; `noChannel: true` leaves it out, the card's degraded fallback).
+      const visit = i === 0 && !!shot.sitter;
+      if (visit) {
+        const reason = pet.reason || (mood === "hungry" ? "i'm hungry" : "i'm fine");
+        const reasonKey = pet.reason_key || (mood === "hungry" ? "hungry" : "content");
+        shot.sitterView = { mood, key: mood, reason, reason_key: reasonKey, flags: ["away", ...flags], asleep: mood === "asleep",
+          lights_out: false, last: null };
+        if (shot.privacy === "on") {
+          put("sensor", "mood", "asleep", { ...moodAttrs, flags: ["asleep"], reason: "zzz", reason_key: "asleep" });
+        } else {
+          put("sensor", "mood", "away", { ...moodAttrs, flags: ["away", ...flags], reason: "the sitter's here", reason_key: "away" });
+        }
+      } else put("sensor", "mood", mood, moodAttrs);
       // `moments`: [{type, ago (minutes), ...}], the public moments the away note reads.
       const moments = (pet.moments || []).map(({ ago = 30, ...m }) => ({ ...m, at: iso(-ago) }));
       put("sensor", "last_care", iso(-45), { log: pet.log || [], ...(pet.moments ? { moments } : {}) });
@@ -134,7 +151,7 @@
       put("sensor", "poop", String(pet.poop ?? (mood === "dirty" ? 2 : 0)));
       put("sensor", "care_misses", "0");
       put("binary_sensor", "calling", pet.calling || mood === "calling" ? "on" : "off");
-      put("binary_sensor", "asleep", mood === "asleep" ? "on" : "off");
+      put("binary_sensor", "asleep", mood === "asleep" || (visit && shot.privacy === "on") ? "on" : "off");
       for (const key of ["feed", "snack", "play", "clean", "medicine", "scold", "praise", ...(pet.lay ? ["lay_egg"] : [])]) put("button", key, "unknown");
       if (pet.lay) { // the select: "Surprise me" then the names, its state the pick
         const names = attrs.egg_roster.map((r) => r.name);
@@ -779,11 +796,21 @@
     const info = { box: [Math.round(box.width * 10) / 10, Math.round(box.height * 10) / 10] };
     if (s.game?.kind === "hop") {
       info.cell = s.game.cell;
-      info.key = Math.round(s.gameBox.querySelector(".hk").getBoundingClientRect().width * 10) / 10;
+      // Shell modes slice 3: the keys are the shell's eight buttons (the `hop` mode), the board takes the whole
+      // overlay (`box`): the grid's margins, whether it is centred, and whether any cell is clipped by it.
+      const toys = card._modeButtons(s);
+      info.key = Math.round(toys[0].getBoundingClientRect().width * 10) / 10;
       info.oneTap = s.game.cell >= 44;
       info.grid = rel(r(s.gameBox.querySelector(".hgrid")));
-      info.keys = rel(r(s.gameBox.querySelector(".hkeys")));
-      info.close = rel(r(s.gameBox.querySelector(".gx")));
+      const gr = r(s.gameBox.querySelector(".hgrid"));
+      const margins = [gr.left - box.left, gr.top - box.top, box.right - gr.right, box.bottom - gr.bottom];
+      info.margins = margins.map((n) => Math.round(n * 10) / 10);
+      info.centred = Math.abs(margins[0] - margins[2]) <= 1 && Math.abs(margins[1] - margins[3]) <= 1;
+      info.clipped = [...s.gameBox.querySelectorAll(".hc")].some((c) => {
+        const q = c.getBoundingClientRect();
+        return q.left < box.left - 0.5 || q.top < box.top - 0.5 || q.right > box.right + 0.5 || q.bottom > box.bottom + 0.5;
+      });
+      info.mode = s.mode?.id || null;
       info.moves = s.game.moves.length;
       info.uses = s.game.st.uses;
       info.done = s.game.done;
@@ -792,10 +819,10 @@
       info.labels = [...s.gameBox.querySelectorAll('.hc[role="img"]')].map((c) => [Number(c.dataset.i), c.getAttribute("aria-label")]);
       if (s.game.st.parity !== undefined) info.parity = s.game.st.parity;
       if (s.game.st.half !== undefined) info.half = s.game.st.half;
-      info.keyState = Object.fromEntries([...s.gameBox.querySelectorAll(".hk")].map((k) => [k.dataset.k,
-        `${k.getAttribute("aria-disabled") === "true" ? "off" : "on"}: ${k.getAttribute("aria-label")}`]));
+      info.keyState = Object.fromEntries(["left", "up", "down", "right", "special", "undo", "restart", "quit"].map((name, i) => [name,
+        `${toys[i].getAttribute("aria-disabled") === "true" ? "off" : "on"}: ${toys[i].getAttribute("aria-label")}` +
+        ` [${toys[i].children[1].textContent}${toys[i].getAttribute("aria-pressed") === "true" ? " pressed" : ""}]`]));
     } else {
-      const gx = r(s.gameBox.querySelector(".gx"));
       const bubble = r(s.bubble);
       const row = r(s.gameBox.querySelector(".ghop"));
       const games = [...s.gameBox.querySelectorAll(".gpick button")].map(r);
@@ -804,9 +831,9 @@
       info.rowClass = row ? s.gameBox.querySelector(".ghop").className : null;
       info.pick = s.gameBox.querySelector(".gpick").className;
       info.overlaps = [];
-      const all = [["close", gx], ["prompt", bubble], ["row", row], ...games.map((g, i) => [`game${i}`, g])];
+      const all = [["prompt", bubble], ["row", row], ...games.map((g, i) => [`game${i}`, g])];
       for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
-        if (all[i][0] === "row" || all[j][0] === "row" || all[i][0] === "close" || all[i][0] === "prompt") {
+        if (all[i][0] === "row" || all[j][0] === "row" || all[i][0] === "prompt") {
           if (hit(all[i][1], all[j][1])) info.overlaps.push(`${all[i][0]}+${all[j][0]}`);
         }
       }
@@ -902,7 +929,16 @@
         Math.random = () => (n < seq.length ? seq[n++] : (n++, 0.5));
       }
       Object.assign(cur, { moodState: shot.idle.mood || "content", nextIdle: 1, sayUntil: 0, poseUntil: 0, movingUntil: 0 });
+      // `idle.pose` (1 or 2, species nature N4): the move list is just "pose", so the child's own extra or the
+      // adult's species.json "signature" plays through the card's own _idle, held on that frame.
+      const moves = card._idleMoves;
+      if (shot.idle.pose) card._idleMoves = () => ["pose"];
       card._idle(cur);
+      card._idleMoves = moves;
+      if (shot.idle.pose && cur.poseFrames) {
+        card._show(cur, cur.pet, cur.poseFrames[Math.min(shot.idle.pose, cur.poseFrames.length) - 1]);
+        cur.poseUntil = Date.now() + 1e9;
+      }
       Math.random = real;
       cur.sayUntil = Date.now() + 1e9;
     }
@@ -948,6 +984,32 @@
         }
         card._askPlace(cur, step.box);
       }
+    }
+    // The sitter's view, as the channel sends it (`house.sitter`), unless the shot has no channel.
+    if (shot.sitterView && !shot.noChannel) {
+      const s = slides[0];
+      s.house = { ...(s.house || {}), sitter: shot.sitterView };
+      card._sitterLook = shot.sitterLook ?? null; // --sitter-look <finish|base>: whose sitter, instead of the pet's shell (6.6)
+      card._redraw(s);
+      // The art loads on the first sitter shown (card-sitter.js): wait for it, as a person's eye would.
+      for (let i = 0; i < 200 && !(card._sitArt && card._sitterSettled(s)); i++) await new Promise((r) => setTimeout(r, 25));
+      // `sitterPose` "<pose>[:frame]" pins the sitter in a pose; `sitterBeat` "<kind>:<ms>" pins a beat at ms
+      // (arrive, leave, round-feed, ...) on a fixed clock: no timer runs, so the shot is the same every run.
+      if (shot.sitterPose) {
+        const [pose, frame = "1"] = shot.sitterPose.split(":");
+        const st = card._sit(s);
+        st.step = { pose, ms: Infinity, kind: "pose" };
+        st.until = Infinity;
+        st.frame = Math.max(0, Number(frame) - 1);
+        s.sitterEl.hidden = false;
+      }
+      if (shot.sitterBeat) {
+        const [kind, ms = "0"] = shot.sitterBeat.split(":");
+        card._sitterAt(s, kind, Number(ms));
+      }
+      card._sitterPaint(s);
+      const img = s.sitterEl.querySelector(".sit-img");
+      for (let i = 0; i < 200 && s.sitterEl.classList.contains("art") && !(img.complete && img.naturalWidth); i++) await new Promise((r) => setTimeout(r, 25));
     }
     // The house view the channel would send (`house`, an object over it), and `basket`:
     // how many finds wait (house.basket, 0-3), so the basket shows through _basketSync.
@@ -1243,7 +1305,95 @@
     window.bench.screenClass = cur.screen.className;
     if (shot.view === "board" || shot.view === "games") (window.bench.info ||= {}).hop = hopInfo(card, cur);
     if (shot.lightsAlign) (window.bench.info ||= {}).lights = lightsInfo(cur);
+    if (shot.mode) (window.bench.info ||= {}).mode = await modeInfo(card, cur, shot);
     return true;
+  }
+
+  // `mode: "probe"` (shell modes slice 1, acceptance 10 and 11): a probe shell mode, an object the bench
+  // injects (not a SHELL_MODES entry), entered through the card's own _modeEnter. Its captions are the
+  // longest set a planned mode has (Hop's eight, with the special's count), so the fit is the worst case;
+  // test copy only, never shipped. Measures every .toy and .cap rect, each caption's fit in its column, the
+  // eight caps' computed colour and the device's --cap-tones before, during and after the mode, and the
+  // shot is taken with the mode on. Writes `<shot>.json` (`mode`).
+  // The special is "✦2", the plan's fallback (3.6) for a column too narrow for "special 2"; that longer
+  // caption is measured on its own (`long`) at every width.
+  const PROBE_CAPS = [["◀", "left"], ["▲", "up"], ["▼", "down"], ["▶", "right"], ["✦", "✦2"], ["↶", "undo"], ["↻", "restart"], ["✕", "quit"]];
+  const PROBE_LONG = "special 2";
+  const probeMode = () => ({
+    id: "bench-probe", tint: "game", announce: "probe on",
+    slots: PROBE_CAPS.map(([icon, cap]) => ({ icon, cap, aria: `probe ${cap}`, act: () => {} })),
+    exit: { slot: 8, escape: true, status: "end" },
+  });
+  // `mode: "table"` with `modeId` (slice 4A, the `mode-icons` preset): a real SHELL_MODES entry, with a stub
+  // `s.game` so its slot functions read live keys (no server, no board). `modeKeys` names the keys to block
+  // (Hop: blocked keys read 0.6 opacity); `modeSpecial` arms Hop's special; `modeCount` is its count.
+  // Left in place after the shot (the pass reads `during`, the shot shows the mode); the exit reason
+  // "replace" skips the mode's onExit (it would end a game that is a stub).
+  function tableState(shot) {
+    const blocked = new Set(shot.modeKeys || []);
+    if (shot.modeId === "hop") {
+      const key = (n) => ({ enabled: !blocked.has(n), label: n, count: n === "special" ? shot.modeCount ?? 2 : undefined });
+      return { keys: Object.fromEntries(["left", "up", "down", "right", "special", "undo", "restart"].map((n) => [n, key(n)])), special: !!shot.modeSpecial };
+    }
+    if (shot.modeId === "dig") return { basket: blocked.has("keep") ? 0 : 1 };
+    return {};
+  }
+  async function modeInfo(card, cur, shot = {}) {
+    const root = card.shadowRoot;
+    const table = shot.mode === "table";
+    const entry = () => {
+      if (!table) return probeMode();
+      cur.game = { kind: shot.modeId, ...tableState(shot) };
+      return SHELL_MODES[shot.modeId];
+    };
+    const rest = async () => {
+      clearTimeout(cur.swapTimer);
+      for (const b of Object.values(cur.buttons)) b.classList.remove("swap");
+      for (const a of root.getAnimations()) if (a instanceof CSSTransition) a.finish();
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    };
+    const box = (el) => {
+      const b = el.getBoundingClientRect();
+      return [b.x, b.y, b.width, b.height].map((v) => Math.round(v * 100) / 100);
+    };
+    const read = () => card._modeButtons(cur).map((b) => {
+      const caption = b.lastElementChild;
+      const ic = b.querySelector(".cap > img, .cap > svg, .cap > .glyph");
+      return { toy: box(b), cap: box(b.querySelector(".cap")), icon: ic ? { kind: ic.localName, box: box(ic), ...(ic.localName === "img" ? { src: ic.getAttribute("src").replace(/\?.*/, ""), natural: [ic.naturalWidth, ic.naturalHeight] } : {}) } : null,
+        aria: b.getAttribute("aria-label"), blocked: b.getAttribute("aria-disabled") === "true", armed: b.classList.contains("armed"), caption: caption.textContent, captionW: caption.scrollWidth,
+        column: b.clientWidth, fits: caption.scrollWidth <= b.clientWidth, color: getComputedStyle(b.querySelector(".cap")).backgroundColor };
+    });
+    const tones = () => getComputedStyle(cur.device).getPropertyValue("--cap-tones");
+    await rest();
+    const before = read();
+    const tonesBefore = tones();
+    card._modeEnter(cur, entry());
+    await rest();
+    const during = read();
+    const tonesDuring = tones();
+    let long = null;
+    if (!table) {
+      const slot5 = card._modeButtons(cur)[4].lastElementChild;
+      slot5.textContent = PROBE_LONG; // measured in slot 5's column, then put back
+      long = { caption: PROBE_LONG, width: slot5.scrollWidth, column: slot5.parentElement.clientWidth };
+      long.fits = long.width <= long.column;
+      slot5.textContent = PROBE_CAPS[4][1];
+    }
+    const tint = getComputedStyle(cur.device).getPropertyValue("--mode-tint").trim();
+    const probe = document.createElement("i");
+    probe.style.color = tint;
+    document.body.append(probe);
+    const tintRgb = getComputedStyle(probe).color;
+    probe.remove();
+    card._modeExit(cur, table ? "replace" : "quit");
+    if (table) cur.game = null;
+    await rest();
+    const after = read();
+    const tonesAfter = tones();
+    card._modeEnter(cur, entry()); // the shot shows the mode
+    await rest();
+    return { modeId: table ? shot.modeId : "bench-probe", finish: [...cur.device.classList].find((c) => c.startsWith("finish-")) || null, tint, tintRgb,
+      long, before, during, after, tonesSame: tonesBefore === tonesDuring && tonesDuring === tonesAfter, tonesSet: !!tonesBefore };
   }
 
   const HATCH_HOP_LETTERS = "abcdefghijklmnopqrstuvwx";

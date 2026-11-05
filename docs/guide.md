@@ -79,6 +79,26 @@ download, restart. HACS replaces the folder you copied.
 
 - Each pet stands in its device on its world's backdrop. Use the arrows, the dots or a
   swipe to move to the next device (a mostly vertical drag, reading or selecting, does nothing). A reload comes back to the pet you were looking at.
+- **The sitter:** when nobody has been home for the "The sitter comes after" time (2 h by
+  default), a sitter comes to look after the pet. The card shows the pet as it really is,
+  with the sitter beside it (standing by day, dozing in a chair at night) and a small
+  "sitter's here" label where the resting label goes; a resting pet shows "resting" instead.
+  Everything works as at home: the buttons, the lights, the games, the pat, the pet's
+  requests, and anyone signed in can still feed, clean, play and tuck in from work. Every
+  card shows this, whether "Keep presence private" is on or off, a shared screen too (the
+  switch only hides it from sensors and Assist). The old "at the sitter's" sign is gone.
+  A card that can't reach the private channel (an older integration, or it hasn't connected
+  yet) draws the sitter beside a calmly content pet when presence is not private; with it
+  private such a card can only see a napping pet and no sitter. The sitter is a drawn
+  person, the same for every pet for now. A card that is open when the sitter comes sees it
+  walk in and wave, and sees it wave and leave when someone is home again (a card opened or
+  reloaded mid-visit just shows it standing, and so does reduced motion). Each care round the
+  sitter does plays on the card too, and now and then it stretches, has tea or looks out of
+  the window; at night it dozes in the chair. When you have been out, the note says "the sitter
+  fed me" or "the sitter and I played" for what the sitter did (with "Keep presence private" on
+  it says "had a meal" and "played" as before). The journal's memories line keeps the days
+  the sitter looked after the pet ("The sitter looked after Pip, Nov 5, 2026"): one a day, the
+  last few, whether or not presence is private.
 - **Power-on:** the first time a browser shows the card, the screen starts like a
   new toy: a pale-green screen with the HATCH logo and a blinking "▶ tap to start".
   A tap fills in the logo and cuts to the pet (with a rising beep if you turned
@@ -516,7 +536,7 @@ egg in …"). A pet still in its egg moves at once.
 | --- | --- |
 | `sensor.<pet>_hunger`, `_happiness`, `_energy`, `_health`, `_discipline`, `_weight` | Stats, 0–100 whole numbers. Hunger is a fullness meter: 100 is stuffed. Weight is healthy between 25 and 75. |
 | `sensor.<pet>_mood` | `egg`, `away`, `sick`, `asleep`, `calling`, `hungry`, `dirty`, `sleepy`, `bored`, `excited`, `cozy` or `content`. Attributes: `flags`, `reason` (what the speech bubble will say), `reason_key` (which sentence that is, for the card's baby talk), `call_deadline`. |
-| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `personality` (from teen; kept out of history), `games` (played and won per game), `hop_day` (Hop of the Day's day: `{day, stage, done, tidy}`, from the pet's first board of the day; the card's Hop row reads it), `memories` (first snow, frost and fog, the first warm day, and each season's first day), `hatches_at` (while an egg), `next_world`, `next_egg`, `journal` (the device's retired pets) and `week` (the journal's strip: days with a dream, a credited visitor or notable weather; kept out of history). |
+| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `personality` (from teen; kept out of history), `games` (played and won per game), `hop_day` (Hop of the Day's day: `{day, stage, done, tidy}`, from the pet's first board of the day; the card's Hop row reads it), `memories` (first snow, frost and fog, the first warm day, each season's first day, and the sitter's days), `hatches_at` (while an egg), `next_world`, `next_egg`, `journal` (the device's retired pets) and `week` (the journal's strip: days with a dream, a credited visitor or notable weather; kept out of history). |
 | `sensor.<pet>_poop`, `_care_misses` | Poop on screen (max 3) and care misses so far (attribute `discipline_misses`: fake calls nobody answered). |
 | `sensor.<pet>_last_care` | When it was last cared for. Attribute `log`: the last 20 actions and who did them; `moments`: the last 10 things that happened to it, for the card to react to. |
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |
@@ -583,8 +603,7 @@ Bedtime and wake time are targets: the pet may turn in up to an hour either side
 | Motion sensors | none | Movement in the last 10 minutes means the house isn't quiet yet. | indoor occupancy sensors |
 
 Lights-out (the switch, or the sleep button on the card) always wins, and the house
-never wakes the pet. Flipped while the pet is at the sitter's, it takes effect when
-the pet comes home.
+never wakes the pet. It works the same while the sitter is here.
 
 ### Weather and air
 
@@ -612,16 +631,27 @@ Lights, a fireplace, the TV and music change the pet's scene and mood.
 
 ### People and privacy
 
-Who is home decides whether the pet is with you or at the sitter's. The two switches at the end decide what dashboards and sensors may show.
+Who is home decides whether the pet is with you or has a sitter over. The privacy switches decide what dashboards and sensors may show.
 
 | Field | Default | What it does | Example |
 | --- | --- | --- | --- |
 | Home zone | `zone.home` | Counts the people in it. Someone arriving gets an excited greeting, at most once every 30 minutes. | `zone.home` |
-| Off to the sitter's after | 2 h | With nobody home this long, the pet is frozen: no hunger, no aging, no calls. | 2 h |
-| The sitter calms a fussy pet | on | If the pet was fussing for attention (not a real need) when it left, the sitter settles it and it comes home happy. Off: the fussing waits for you. Real needs always wait. | on |
-| Keep presence private | on | An empty house shows the pet napping, never at the sitter's (care while it's away is refused as "asleep"), and the pet never says who came or went. For a wall tablet, also turn on "shared screen" in the card's settings. Turn it off to see "at the sitter's". | default |
+| The sitter comes after | 2 h | With nobody home this long, a sitter looks after your pet. It still gets older and hungry, and the sitter feeds it and tidies up at set times. | 2 h |
+| The sitter calms a fussy pet | on | On: if the pet was fussing for attention when the sitter arrived (not a real need), the sitter settles it. Off: the fussing waits for you. | on |
+| Keep presence private | on | On: sensors, Assist and the mood show your pet napping when nobody is home, and the pet never names anyone. The card still shows the sitter. For a wall tablet, also turn on "shared screen" in the card's settings. Turn it off to see "with the sitter" on the mood sensor and in Assist. | default |
 | Pets may remember what people tell them | on | Each person may turn memory on for themselves (see "Memory" under Privacy below); this pet then keeps their picks and tags, dates and fixed choices only, until they forget them. Off: this pet keeps, says and asks nothing from memory. (If you turn it off on only some pets, the pet with it off may use the day's one question slot first, and the others then don't ask that day.) Off on every pet, or removing a pet when no other pet allows it, erases everyone's memory. Per pet. | default |
 | Keep house words off sensors | off | Off: a news headline (`virtual_pet.share_news`) and a Custom house moment's own words (`virtual_pet.react`) sit on the pet's last-care sensor for a while, like its other moments, where any dashboard or template can read them. On: the open cards say them live, shared screens too, and they're kept nowhere: not on a sensor, not for a card opened later. The `virtual_pet_news` event keeps its headline either way (it's your automation's own words); `virtual_pet_house_moment` never carries the words while this is on. Per pet. | default |
+
+While the sitter is here the pet lives on as at home: it gets older and hungry, and
+anyone can still feed, clean, play and tuck it in, which counts as their care. The
+sitter comes about an hour after wake time, then every four hours, with the last
+round an hour before bedtime at the latest. It gives medicine, cleans, feeds and plays
+only when needed, and poop is tidied as it appears. The pet makes no calls and misses
+nothing. Phone notifications for hatching, growing up and falling sick still come, as
+at home. The sitter's care earns no bond and is logged without a name, and the
+sitter's rounds still move `sensor.<pet>_last_care` (with privacy on, a "napping" pet
+is fed at set times), so an automation that wants people only reads the `log`
+attribute and its `by`. Restarts still freeze the pet, as always; the sitter does not make an extra round for a restart, only the one that is due.
 
 ### The house helps
 
@@ -629,11 +659,11 @@ Who is home decides whether the pet is with you or at the sitter's. The two swit
 | --- | --- | --- | --- |
 | Heating | none | Thermostats (heating, or set to heat and below the target), switches and toggles that are on. While it's on the chilly pet doesn't ask for a blanket and shows "nice and cozy". If it comes on while the pet is chilly and awake, the house tucks it in (as a blanket would), at most twice a day. A blanket for rain or thunder stays yours. | your living-room thermostat |
 | Cooling | none | Fans, thermostats (cooling or running the fan), switches and toggles that are on. The same for a warm pet and the fan. | `fan.bedroom` |
-| Notice robot vacuums | on | Every `vacuum.*` in the house counts, with nothing to pick. While one is cleaning the pet watches the robot go by ("a robot's zooming around!"); when it starts and when it heads home the pet says so (at most 3 starts a day; nothing while the pet is asleep or at the sitter's). Cosmetic only. A vacuum added after the pet started listening needs the integration reloaded (Settings → Devices & services → Hatch at Home → ⋮ → Reload) before it's noticed. Off: the pet ignores robots. | all your vacuums |
-| Notice doorbells | on | Every doorbell in the house counts, with nothing to pick: any `event.*` entity whose device class is `doorbell` (Ring, UniFi Protect, Nest and DoorBird provide one). A press makes the pet startle, with two notes and a line. Nothing while the pet is asleep, away or an egg, and at most one every 30 minutes for each pet, however many doorbells. A restart, a reconnect or an old press never counts, only a press that just happened. The pet's "notices" row says "doorbell" and nothing more. **Privacy:** the press is said once, live, on every card open at that moment (remote viewers and shared screens too: anyone in the room heard the bell), and kept nowhere. It is never on a `virtual_pet_*` event, our logs or diagnostics, the sensors, the journal or the debug sensor, and a card opened later doesn't hear it. HA's own event entity and recorder still hold the press, as they always do. A doorbell added after the pet started listening needs the integration reloaded (Settings → Devices & services → Hatch at Home → ⋮ → Reload) before it's noticed. A doorbell you point the house moment blueprint at is heard once, by this setting. Off: the pet ignores doorbells. | all your doorbells |
-| Washer, dryer, dishwasher | none | Pick any number of switches, sensors and binary sensors; the pet says so when one finishes a cycle (once, never repeated or reminded; nothing while the pet is asleep or at the sitter's; at most once an hour per machine). A **binary sensor** counts as running after 10 minutes on, and done when it goes off. A **sensor that names a state** (Home Connect, SmartThings, LG ThinQ, Miele) is done when it moves from a running state to one with "finish", "end", "complete", "done" or "ready" in it. A **power sensor** (device class power) or a **switch that reports `current_power_w`** is running above the idle power for 10 minutes and done after about 3 minutes at or under it. A plain switch that reports no power says nothing. The 10 and 3 minutes are checked when the machine changes and every 5 minutes, so they can run up to about 5 minutes long. The pet says "the washer's finished!", "the dishes are all done!", "the dryer's done!" or "a machine finished", from the entity's device class or name (wash, dry, dish), else machine. After a restart the pet times a machine that is already running from the restart, and one that finished meanwhile isn't counted. Cosmetic only; only the kind is shared, never which machine. | `binary_sensor.washing_machine_running` |
+| Notice robot vacuums | on | Every `vacuum.*` in the house counts, with nothing to pick. While one is cleaning the pet watches the robot go by ("a robot's zooming around!"); when it starts and when it heads home the pet says so (at most 3 starts a day; nothing while the pet is asleep). Cosmetic only. A vacuum added after the pet started listening needs the integration reloaded (Settings → Devices & services → Hatch at Home → ⋮ → Reload) before it's noticed. Off: the pet ignores robots. | all your vacuums |
+| Notice doorbells | on | Every doorbell in the house counts, with nothing to pick: any `event.*` entity whose device class is `doorbell` (Ring, UniFi Protect, Nest and DoorBird provide one). A press makes the pet startle, with two notes and a line. Nothing while the pet is asleep or an egg, and at most one every 30 minutes for each pet, however many doorbells. A restart, a reconnect or an old press never counts, only a press that just happened. The pet's "notices" row says "doorbell" and nothing more. **Privacy:** the press is said once, live, on every card open at that moment (remote viewers and shared screens too: anyone in the room heard the bell), and kept nowhere. It is never on a `virtual_pet_*` event, our logs or diagnostics, the sensors, the journal or the debug sensor, and a card opened later doesn't hear it. HA's own event entity and recorder still hold the press, as they always do. A doorbell added after the pet started listening needs the integration reloaded (Settings → Devices & services → Hatch at Home → ⋮ → Reload) before it's noticed. A doorbell you point the house moment blueprint at is heard once, by this setting. Off: the pet ignores doorbells. | all your doorbells |
+| Washer, dryer, dishwasher | none | Pick any number of switches, sensors and binary sensors; the pet says so when one finishes a cycle (once, never repeated or reminded; nothing while the pet is asleep; at most once an hour per machine). A **binary sensor** counts as running after 10 minutes on, and done when it goes off. A **sensor that names a state** (Home Connect, SmartThings, LG ThinQ, Miele) is done when it moves from a running state to one with "finish", "end", "complete", "done" or "ready" in it. A **power sensor** (device class power) or a **switch that reports `current_power_w`** is running above the idle power for 10 minutes and done after about 3 minutes at or under it. A plain switch that reports no power says nothing. The 10 and 3 minutes are checked when the machine changes and every 5 minutes, so they can run up to about 5 minutes long. The pet says "the washer's finished!", "the dishes are all done!", "the dryer's done!" or "a machine finished", from the entity's device class or name (wash, dry, dish), else machine. After a restart the pet times a machine that is already running from the restart, and one that finished meanwhile isn't counted. Cosmetic only; only the kind is shared, never which machine. | `binary_sensor.washing_machine_running` |
 | Idle power | 5 W | For power readings: at or under this many watts counts as not running. | `5` |
-| Chore lists | none | To-do lists. Each item someone ticks off earns the pet a treat (a little food and happiness, up to 5 a day). Treats wait if it's asleep or away. | your chores list |
+| Chore lists | none | To-do lists. Each item someone ticks off earns the pet a treat (a little food and happiness, up to 5 a day). Treats wait if it's asleep. | your chores list |
 
 ### Moon and sky
 
@@ -804,8 +834,8 @@ and its misses as they were until it wakes. While it rests:
 Care still counts: a lot of play spends energy, so a pet may wake below a call
 level and ask at once, as it would anyway. A sick pet, or one with an old poop, asks
 about that on waking. Otherwise waking ("good stretch! i'm back ♪") brings no calls
-for hours. The sitter's freeze (nobody home) wins while it lasts; resting carries on
-when someone comes home. Every pet may rest at once (a holiday automation can flip
+for hours. Resting wins over the sitter: its needs are held, so the sitter has
+nothing to do, and resting carries on when someone comes home. Every pet may rest at once (a holiday automation can flip
 the switches); nothing wakes it by itself. An egg can't rest, because it would never
 hatch.
 
@@ -1061,7 +1091,7 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   hungry call, "hi hi, Sam!", "yay yay!". Babies get the most changes, children a
   few; teens and adults never change. A pet is a baby for about its first day of
   age and a child for about the next four, so about 4.5 days in all (age pauses
-  while it's away). A need still names the need (hungry, sleepy, play, stinky,
+  while it's resting). A need still names the need (hungry, sleepy, play, stinky,
   medicine), and its catchphrase never ends a baby line. The switch is yours: it
   follows you to every pet and every device you're signed in on, but a change made
   on one device reaches the others at their next visit, up to an hour later. Only

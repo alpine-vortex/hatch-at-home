@@ -202,15 +202,15 @@ class HatchPetCard extends HatchPetCardLink {
     s.game = null;
     s.gameTimers?.forEach(clearTimeout);
     s.gameTimers?.clear();
-    // Focus inside the game goes back to the play button, not the page's start.
+    // Focus inside the overlay (the picker, the close button) goes back to the play button, not the page's
+    // start. A server game's inputs are on the shell: _modeExit puts the focus back from there.
     const focused = s.gameBox.contains(this.shadowRoot?.activeElement);
     s.gameBox.hidden = true;
     if (focused) s.buttons.play?.focus({ preventScroll: true });
-    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
     s.pet.classList.remove("go-left", "go-right");
-    s.gameBox.classList.remove("showgo");
     if (line) this._write(s, line);
     s.sayUntil = line ? Date.now() + 4000 : 0;
+    this._modeExit(s, "game"); // its last act: a shell mode the game was in ends with it (a no-op if none)
   }
 
   _toggleLights(s) {

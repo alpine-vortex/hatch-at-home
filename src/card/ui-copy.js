@@ -503,7 +503,7 @@ const IDLE_ADDS = {
   charming: ["look", "perk"],
   plucky: ["wander", "perk"],
 };
-// Only these refusals react; asleep, egg, away and no_game do not (spoiled is a reaction of its
+// Only these refusals react; asleep, egg and no_game do not (spoiled is a reaction of its
 // own, see SPOILED_BY; an unfair scold turns the pet away).
 const REACT_REFUSALS = new Set(["full", "not_needed", "already_clean", "not_sick", "not_sleepy", "too_tired", "unfair"]);
 // What a refusal does besides the turn-away (ship A, plan 5.5), picked without repeating:
@@ -541,14 +541,24 @@ const MOMENT_CLASS = {
   rest_ended: BEAT, // ... and off: "good stretch! i'm back ♪" (REST_LINES.back)
 };
 // Resting (plan favourite-resting §4.3-§4.4, R1): the small label under the pet, the
-// settings row's helper. The label shows only when the pet is up and about at home: away
-// shows the sitter's sign, and asleep, sick and egg poses win.
+// settings row's helper. The label shows only when the pet is up and about: asleep, sick and
+// egg poses win (the sitter's own label gives way to it, card-layout).
 const REST_LABEL = "resting ☁";
+const SITTER_LABEL = "sitter's here"; // the small label while the sitter is in (approved copy, sitter plan 9)
+// The away note's sitter sentences (sitter plan 6.5, F9; approved 2026-11-04): a `sitter_*` log row's bit,
+// and the whole sentence the note says when the newest two bits are all the sitter's.
+const SITTER_ROWS = Object.freeze({ sitter_feed: "sitter:fed", sitter_play: "sitter:played", sitter_clean: null, sitter_medicine: null });
+const SITTER_NOTE = Object.freeze({
+  "sitter:fed": "while you were out, the sitter fed me!",
+  "sitter:played": "while you were out, the sitter and I played!",
+});
+// A card that knows the sitter is in but not how Pip is (no channel, privacy off: the mood sensor says "away").
+const SITTER_BLIND = Object.freeze({ blind: true });
 const REST_DAYDREAM_ODDS = 0.25; // a resting pet's hello is "i was just daydreaming" this often
 const REST_HELP = (name) => `${name} won't get any hungrier, and doesn't grow up until it's back. Visit any time.`;
-function restLabel(flags, { away = false, asleep = false, egg = false } = {}) {
-  if (!Array.isArray(flags) || !flags.includes("resting") || away || asleep || egg) return "";
-  return flags.includes("sick") || flags.includes("away") ? "" : REST_LABEL;
+function restLabel(flags, { asleep = false, egg = false } = {}) {
+  if (!Array.isArray(flags) || !flags.includes("resting") || asleep || egg) return "";
+  return flags.includes("sick") ? "" : REST_LABEL;
 }
 // The opening-pet rows (favourite §5.3, first-mate-approved lines): no ranking word, just
 // where this card opens, and (admins) where shared screens open.
@@ -620,7 +630,7 @@ const SICK_WEIGHT_BABY = "tummy hurts... too many snacks";
 const HEAVY_SNACK = ["one more and I'll be round as a ball!", "*pats tummy* getting a bit round..."];
 
 // The status row counting down to the next stage (gaps-seams 1a), or null: a child
-// to teen, a teen to grown up. "About", since ageing pauses while it's away.
+// to teen, a teen to grown up. "About", since ageing goes on while the sitter's here.
 function growsUp(stage, ageDays) {
   const next = { child: "teen", teen: "adult" }[stage];
   if (!next || typeof ageDays !== "number") return null;

@@ -171,7 +171,7 @@ class HatchPetCardJournal extends HatchPetCardSheets {
       <div class="jgrid">${tiles.join("")}</div>
       <button class="wlink">every world ›</button>
       ${this._photoRow(s)}
-      <div class="jlist">${olderLink}<div class="jmore"></div>${lines.join("")}${past.length < 2 ? "<div class=\"gt\">a week into adulthood, a pet can lay an egg</div>" : ""}${this._memories(stage.memories)}</div>
+      <div class="jlist">${olderLink}<div class="jmore"></div>${lines.join("")}${past.length < 2 ? "<div class=\"gt\">a week into adulthood, a pet can lay an egg</div>" : ""}${this._memories(stage.memories, now.name)}</div>
       <div class="jfoot"><button class="flink">${findsShown() ? "finds" : "visitors"} ›</button></div>`;
     const top = s.status.scrollTop;
     if (!this._setStatus(s, html)) return;
@@ -605,12 +605,17 @@ class HatchPetCardJournal extends HatchPetCardSheets {
   }
 
   // Seasonal firsts and other moments the family remembers, newest first.
-  _memories(memories) {
+  // `name` is the pet's now: a row from a pet without its own name (an old save) uses it.
+  _memories(memories, name) {
     if (!memories?.length) return "";
-    const items = [...memories].reverse().slice(0, 6).map((m) => {
+    let sitter = 0;
+    const shown = [...memories].reverse().slice(0, MEMORIES_SHOWN)
+      .filter((m) => m.kind !== "sitter_visit" || ++sitter <= SITTER_MEMORIES_SHOWN);
+    const items = shown.map((m) => {
       const when = new Date(m.at * 1000).toLocaleDateString(undefined,
         { month: "short", day: "numeric", year: "numeric" });
-      return `${escape(MEMORY_LABELS[m.kind] || m.kind.replace("_", " "))}, ${escape(when)}`;
+      const label = MEMORY_LINES[m.kind]?.(m, name) || MEMORY_LABELS[m.kind] || m.kind.replace("_", " ");
+      return `${escape(label)}, ${escape(when)}`;
     });
     return `<div class="gen"><span class="gt">memories: ${items.join(" · ")}</span></div>`;
   }

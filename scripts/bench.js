@@ -94,6 +94,23 @@ const PRESETS = {
     }
     return out;
   },
+  // Species nature N4: every adult with a species.json "signature", its content frame beside the pose's
+  // frames 1 and 2 (the card's own _idle, idle.pose), day and night. One sheet per scene.
+  signature() {
+    const out = [];
+    for (const id of allSpecies()) {
+      const sp = speciesData(id);
+      if (sp.ready === false || !sp.signature?.adult) continue;
+      for (const scene of ["day", "night"]) {
+        const base = { species: id, world: worldOf(id), scene, width: 330, clip: "screen", say: "", tile: 150, group: `signature-${scene}` };
+        out.push({ ...base, name: `signature/${id}-${scene}-content`, label: `${id} content` });
+        for (const pose of [1, 2]) {
+          out.push({ ...base, idle: { mood: "content", pose }, name: `signature/${id}-${scene}-${pose}`, label: `${id} pose ${pose}` });
+        }
+      }
+    }
+    return out;
+  },
   // Every shell finish on every world's own shape, day and night, at both card widths:
   // a sheet per world. Keep FINISHES in step with the card's.
   finishes() {
@@ -302,6 +319,122 @@ const PRESETS = {
     rimShot("medicine", "medicine (no cue)", { rimCue: { action: "medicine", at: 450 } });
     return out;
   },
+  // Sitter visits S2 (docs/plan-2026-11-04-sitter-visits.md 6.2, S2 acceptance): Pip drawn as at home with a
+  // placeholder sitter beside it and the "sitter's here" label, never the old sign. `--sitter day|night`,
+  // `--privacy on` (the sensors' mask), `--no-channel` (the degraded card).
+  // Sitter S3a (plan 6.3, 6.4, S3a verification): every pose of the base sitter beside three species, the
+  // beats at fixed times (a fixed clock, not petAt: the sitter is not a pet), night, reduced motion.
+  "sitter-life"() {
+    const out = [];
+    const POSES = ["stand", "walk", "wave", "read", "doze", "feed", "play", "clean", "medicine", "tuck", "pat", "cheer", "shoo",
+      "stretch", "tea", "laugh", "water", "window", "tidy"];
+    const base = { group: "sitter-life", world: "woodland", width: 330, clip: "screen", sitter: "day" };
+    for (const [species, world] of [["fox", "woodland"], ["otter", "tidepool"], ["hamster", "woodland"]]) {
+      for (const pose of POSES) {
+        for (const frame of [1, 2]) {
+          out.push({ ...base, name: `sitter-life/pose-${pose}-${frame}-${species}`, label: `${pose} ${frame}, ${species}`, species, world,
+            sitterPose: `${pose}:${frame}`, ...(pose === "doze" ? { scene: "night" } : {}) });
+        }
+      }
+    }
+    for (const ms of [0, 700, 1400, 2100]) {
+      out.push({ ...base, name: `sitter-life/arrive-${ms}`, label: `arrive ${ms} ms`, sitterBeat: `arrive:${ms}` });
+    }
+    for (const ms of [0, 1400, 2100]) out.push({ ...base, name: `sitter-life/leave-${ms}`, label: `leave ${ms} ms`, sitterBeat: `leave:${ms}` });
+    for (const cue of ["feed", "play", "clean", "medicine"]) {
+      out.push({ ...base, name: `sitter-life/round-${cue}`, label: `round: ${cue}`, sitterBeat: `round-${cue}:700` });
+    }
+    out.push({ ...base, name: "sitter-life/night", label: "night: in the chair", sitter: "night" });
+    out.push({ ...base, name: "sitter-life/night-asleep", label: "night: Pip asleep", sitter: "night", scene: "dim", mood: "asleep" });
+    for (const kind of ["arrive", "leave"]) {
+      out.push({ ...base, name: `sitter-life/${kind}-reduce`, label: `${kind}, reduced motion`, sitterBeat: `${kind}:700`, motion: "reduce" });
+    }
+    return out;
+  },
+  // Sitter S3b (plan 6.2, 6.6, S3b): every finish's sitter in stand and wave beside Pip, then at night
+  // (the chair), then two beats (the slide in, a round). Finishes come from the served manifest, so a
+  // new look or full sitter joins by itself. Since S3c every finish has a full sitter, so the stand and
+  // wave here are that sitter's own frames; `sitter-full` is the one that walks its other poses.
+  "sitter-looks"() {
+    const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "sitter", "sitters.json"), "utf8"));
+    const finishes = Object.keys(manifest.by_finish).sort();
+    const base = { group: "sitter-looks", world: "woodland", species: "fox", width: 330, clip: "screen", sitter: "day" };
+    const out = [];
+    for (const finish of finishes) {
+      out.push({ ...base, name: `sitter-looks/${finish}-stand`, label: `${finish}: stand`, sitterLook: finish, sitterPose: "stand:1" });
+      out.push({ ...base, name: `sitter-looks/${finish}-wave`, label: `${finish}: wave`, sitterLook: finish, sitterPose: "wave:1" });
+    }
+    for (const finish of finishes) {
+      out.push({ ...base, name: `sitter-looks/${finish}-night`, label: `${finish}: night, doze in the chair`, sitterLook: finish, sitter: "night" });
+    }
+    out.push({ ...base, name: "sitter-looks/night-asleep", label: "night: Pip asleep (aqua)", sitterLook: "aqua", sitter: "night", scene: "dim", mood: "asleep" });
+    for (const ms of [0, 700, 1400]) {
+      out.push({ ...base, name: `sitter-looks/arrive-${ms}`, label: `gingham arrives ${ms} ms`, sitterLook: "gingham", sitterBeat: `arrive:${ms}` });
+    }
+    for (const cue of ["feed", "play", "clean", "medicine"]) {
+      out.push({ ...base, name: `sitter-looks/round-${cue}`, label: `grove, round: ${cue}: its own pose`, sitterLook: "grove", sitterBeat: `round-${cue}:700` });
+    }
+    out.push({ ...base, name: "sitter-looks/base-control", label: "the base sitter (control)", sitterLook: "base", sitterPose: "stand:1" });
+    return out;
+  },
+  // Sitter S3c (plan 7 "S3c", 6.2-6.4): each full sitter in the poses its own folder holds. Per finish: the
+  // arrive beat (1400 ms: in, waving), one round pose (feed, play, clean, medicine rotate across the finishes), the night
+  // doze with the chair, and one idle (read and the card's idles rotate, frames 1 and 2 alternate); then the
+  // gingham granny in every pose her manifest row lists. Finishes and poses come from the served manifest.
+  "sitter-full"() {
+    const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "sitter", "sitters.json"), "utf8"));
+    const finishes = Object.keys(manifest.by_finish).sort().filter((f) => manifest.sitters[manifest.by_finish[f]]?.kind === "full");
+    const base = { group: "sitter-full", world: "woodland", species: "fox", width: 330, clip: "screen", sitter: "day" };
+    const CUES = ["feed", "play", "clean", "medicine"];
+    const IDLES = ["read", "tea", "stretch", "laugh", "tidy", "water", "window", "pat"];
+    const out = [];
+    finishes.forEach((finish, i) => {
+      const row = manifest.sitters[manifest.by_finish[finish]];
+      const look = { sitterLook: finish };
+      const cue = CUES[i % CUES.length];
+      const idles = row.idles || IDLES;
+      const idle = idles[i % idles.length];
+      out.push({ ...base, ...look, name: `sitter-full/${finish}-arrive`, label: `${finish}: arrived, wave (1400 ms)`, sitterBeat: "arrive:1400" });
+      out.push({ ...base, ...look, name: `sitter-full/${finish}-round-${cue}`, label: `${finish}: round, ${cue}`, sitterBeat: `round-${cue}:700` });
+      out.push({ ...base, ...look, name: `sitter-full/${finish}-night`, label: `${finish}: night, doze in the chair`, sitter: "night" });
+      out.push({ ...base, ...look, name: `sitter-full/${finish}-idle-${idle}`, label: `${finish}: idle, ${idle}`, sitterPose: `${idle}:${1 + (i % 2)}` });
+      // The mirrored walk-out (leave, 1750 ms: the slide, flipped) for every sixth finish.
+      if (i % 6 === 0) out.push({ ...base, ...look, name: `sitter-full/${finish}-leave`, label: `${finish}: leaves (1750 ms, mirrored, sliding out)`, sitterBeat: "leave:1750" });
+    });
+    // The granny (gingham) in every pose her row lists: frame 1, and both frames of the walk.
+    const granny = manifest.sitters[manifest.by_finish.gingham];
+    for (const [pose, frames] of Object.entries(granny?.poses || {})) {
+      frames.forEach((_, f) => {
+        if (f > 0 && pose !== "walk") return;
+        out.push({ ...base, sitterLook: "gingham", name: `sitter-full/granny-${pose}-${f + 1}`, label: `granny: ${pose} ${f + 1}`,
+          sitterPose: `${pose}:${f + 1}`, ...(pose === "doze" ? { scene: "night" } : {}) });
+      });
+    }
+    return out;
+  },
+  sitter() {
+    const out = [];
+    const shot = (name, label, extra) => out.push({ name: `sitter/${name}`, group: "sitter", label, world: "woodland", width: 330,
+      sitter: "day", ...extra });
+    shot("day", "day", {});
+    shot("night", "night: the sitter in a chair, Pip awake", { sitter: "night" });
+    shot("night-asleep", "night: Pip asleep, the dim", { sitter: "night", scene: "dim", mood: "asleep" });
+    shot("hungry", "hungry, no call (a visit settles calls)", { mood: "hungry" });
+    shot("resting", "resting: the resting label wins", { pet: { resting: true } });
+    shot("game", "a game running through the visit", { game: "dig" });
+    shot("shared", "a shared screen", { storage: { "hatch-shared-screen": "on" } });
+    shot("privacy-off", "privacy off, hungry", { mood: "hungry", privacy: "off" });
+    shot("privacy-on", "privacy on, hungry (the same as off)", { mood: "hungry", privacy: "on" });
+    shot("nochannel-off", "no channel, privacy off: the sitter, generic mood", { mood: "hungry", noChannel: true });
+    shot("nochannel-on", "no channel, privacy on: a napping pet, no sitter", { mood: "hungry", privacy: "on", noChannel: true });
+    shot("egg", "an egg", { stage: "egg" });
+    for (const [species, world] of [["fox", "woodland"], ["otter", "tidepool"], ["owl", "nightsky"]]) {
+      shot(`species-${species}`, species, { species, world });
+    }
+    shot("no-visit", "no visit (control)", { sitter: undefined });
+    for (const width of [420, 300]) shot(`day-${width}`, `day ${width}`, { width });
+    return out;
+  },
   // The card around the toy: status screen, game picker, a speech bubble.
   ui() {
     const out = [];
@@ -321,6 +454,9 @@ const PRESETS = {
       say: "*yawn* i had the best dream" });
     out.push({ name: "ui/woodland-bubble-pop", group: "ui", label: "clean, a bubble pops", world: "woodland", view: "card",
       bubblePop: true });
+    // Sitter S2: a visit, by day and at night (the full set is the `sitter` preset).
+    out.push({ name: "ui/woodland-sitter-day", group: "ui", label: "sitter, day", world: "woodland", view: "card", sitter: "day" });
+    out.push({ name: "ui/woodland-sitter-night", group: "ui", label: "sitter, night", world: "woodland", view: "card", sitter: "night" });
     return out;
   },
   // The Berry dig (playtime 2a) with scripted replies, at 420 and 330 (compact): a
@@ -349,6 +485,29 @@ const PRESETS = {
       game: "dig", digReplies: [r(0, 0, 0)] });
     out.push({ width: 330, world: "woodland", group: "dig-calm", name: "dig/330-bee-calm", label: "a bee, reduced motion",
       motion: "reduce", game: "dig", digReplies: [r(1, 2, 2), r(2, 2, 0, { found: "bee", round_over: true })], digTaps: ["dig"] });
+    return out;
+  },
+  // Slice 4A, the pixel icons: each of the four table modes (SHELL_MODES, real entries over a stub game) at
+  // widths 284, 300, 330 and 420 and dpr 1, 2 and 3, written with the mode-pass.json checks (the .toy and .cap
+  // rects, the caption inside its column, the width floor, the icon box); plus Hop's armed special and blocked
+  // keys at 420 (the cap's three states: live, .armed, 0.6 opacity), which the contact sheet shows.
+  "mode-icons"() {
+    const out = [];
+    const modes = [["left_right", "left/right"], ["higher_lower", "lo/hi"], ["dig", "dig"], ["hop", "Hop"]];
+    for (const width of [284, 300, 330, 420]) {
+      for (const dpr of [1, 2, 3]) {
+        for (const [id, label] of modes) {
+          out.push({ width, dpr, world: "woodland", mode: "table", modeId: id, group: `mode-icons-${width}-${dpr}x`,
+            name: `mode-icons/${width}-${dpr}x-${id}`, label: `${label}, ${width} px, ${dpr}x` });
+        }
+      }
+    }
+    out.push({ width: 420, dpr: 2, world: "woodland", mode: "table", modeId: "hop", modeSpecial: true, group: "mode-icons-states",
+      name: "mode-icons/420-2x-hop-armed", label: "Hop, the special armed (.armed)" });
+    out.push({ width: 420, dpr: 2, world: "woodland", mode: "table", modeId: "hop", modeKeys: ["up", "down", "undo"], group: "mode-icons-states",
+      name: "mode-icons/420-2x-hop-blocked", label: "Hop, up/down/undo blocked (0.6)" });
+    out.push({ width: 420, dpr: 2, world: "woodland", mode: "table", modeId: "dig", modeKeys: ["keep"], group: "mode-icons-states",
+      name: "mode-icons/420-2x-dig-blocked", label: "dig, keep blocked (0.6)" });
     return out;
   },
   // Hop of the Day (ship 2b, behind experimental_hop): the picker with the Hop row, then per width and
@@ -1293,6 +1452,13 @@ function normalize(raw) {
   for (let i = 1; i < count; i++) {
     shot.pets.push({ species: roster[i % roster.length], stage: "child", mood: "content", world: shot.world, ...(extra[i] || {}) });
   }
+  if (shot.sitter !== undefined && !["day", "night"].includes(shot.sitter)) throw new Error(`--sitter wants day or night, not ${shot.sitter}`);
+  if (shot.sitterPose !== undefined && !/^[a-z]+(:\d+)?$/.test(shot.sitterPose)) throw new Error(`--sitter-pose wants <pose>[:frame], not ${shot.sitterPose}`);
+  if (shot.sitterBeat !== undefined && !/^(arrive|leave|round-(feed|play|clean|medicine)):\d+$/.test(shot.sitterBeat)) {
+    throw new Error(`--sitter-beat wants arrive|leave|round-feed|round-play|round-clean|round-medicine:<ms>, not ${shot.sitterBeat}`);
+  }
+  if (shot.sitterLook !== undefined && !/^[a-z0-9_]+$/.test(shot.sitterLook)) throw new Error(`--sitter-look wants a finish or base, not ${shot.sitterLook}`);
+  if (shot.sitter === "night" && !raw.scene) shot.scene = "night"; // the sitter dozes in a chair at night (D4)
   shot.name ||= `shot-${shot.species || "x"}-${shot.stage}-${shot.mood}`;
   if (shot.lcd !== undefined || shot.booted || shot.mono || shot.bigText) {
     shot.storage = { ...(shot.booted ? { "hatch-booted": "1" } : {}), ...(shot.lcd !== undefined ? { "hatch-lcd": String(shot.lcd) } : {}),
@@ -1321,6 +1487,10 @@ function parseArgs(argv) {
     else if (key === "big-text") opts.shot.bigText = true; // the "big text" switch on (top10 4b)
     else if (key === "boot") opts.shot.booted = false;
     else if (key === "mine") opts.shot.mine = true;
+    else if (key === "sitter-pose") (opts.shot.sitter ||= "day", opts.shot.sitterPose = val()); // <pose>[:frame], the sitter pinned in a pose
+    else if (key === "sitter-look") (opts.shot.sitter ||= "day", opts.shot.sitterLook = val()); // <finish|base>; S3b reads it, S3a draws the base sitter
+    else if (key === "sitter-beat") (opts.shot.sitter ||= "day", opts.shot.sitterBeat = val()); // arrive|leave|round-<care>:<ms>, a beat pinned at ms
+    else if (key === "no-channel") opts.shot.noChannel = true; // with --sitter: the card has no channel (the degraded fallback)
     else if (key === "finds-shown") opts.shot.findsShown = true; // FINDS_SHOWN on
     else if (key === "gift") { const [world, id] = val().split("/"); opts.shot.gift = { id, world }; } // --gift woodland/pinecone
     else if (key === "journal") Object.assign(opts.shot, { journal: true, view: "journal" });
@@ -1432,7 +1602,7 @@ async function runShots(browser, base, shots, outDir, workers) {
           }, shot.lines);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(n));
         }
-        if (shot.costume || shot.deviceFx || shot.glassMark || shot.momentCue || shot.gift || shot.look || shot.care || shot.lightsAlign || shot.view === "board" || shot.view === "games") {
+        if (shot.costume || shot.deviceFx || shot.glassMark || shot.momentCue || shot.gift || shot.look || shot.care || shot.lightsAlign || shot.mode || shot.view === "board" || shot.view === "games") {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
         }
@@ -1639,6 +1809,66 @@ async function pixelShares(browser, pairs) {
 // scene's end and its dim step each within 2% of the plain state, the drape's box within 1 px of the
 // pet's through a settle and a pat, and every species' drape on frame 3 as the card's table says.
 const LIGHTS_SHARE_MAX = 0.02;
+// The shell mode pass rule (shell modes plan, slice 1 acceptance 10 and 11), over the `mode` info a
+// `--mode probe` (or `--mode table`) shot writes: every .toy at least the width's floor (below) wide and every caption inside its column; the
+// .toy and .cap rects the same before, during and after the mode (R3); with the mode on, all eight caps'
+// computed colour is the tint, on every finish; --cap-tones unchanged.
+// The .toy floor per card width (plan Q-A, accepted 2026-11-04: 39.5 px at 284, 43.02 at 300, 44 and up from 330;
+// slice 4A acceptance 4). A width between two rows takes the lower row's floor.
+const MODE_MIN_TOY_AT = [[284, 39.5], [300, 43], [330, 44]];
+const modeMinToy = (width) => MODE_MIN_TOY_AT.reduce((f, [w, v]) => (width >= w ? v : f), MODE_MIN_TOY_AT[0][1]);
+function modePass(shots) {
+  const rows = [];
+  for (const s of shots.filter((x) => x.mode && x.file)) {
+    const m = JSON.parse(fs.readFileSync(s.file.replace(/\.png$/, ".json"), "utf8")).mode;
+    const why = [];
+    if (!m) why.push("no mode info");
+    else {
+      // within 0.05 px: the first layout and a re-layout can differ by a float's last digit
+      const near = (p, q) => p.every((v, i) => Math.abs(v - q[i]) <= 0.05);
+      // an armed slot (Hop's special) is held down on purpose, so its .cap sits 2 art px lower: only its .toy is compared
+      const same = (a, b) => a.every((x, i) => near(x.toy, b[i].toy) && (a[i].armed || b[i].armed || near(x.cap, b[i].cap)));
+      if (!same(m.before, m.during) || !same(m.during, m.after)) why.push("a .toy or .cap rect moved");
+      const clipped = m.during.filter((x) => !x.fits);
+      if (clipped.length) why.push(`caption past its column: ${clipped.map((x) => `${x.caption} ${x.captionW}/${x.column}`).join(", ")}`);
+      const off = m.during.filter((x) => x.color !== m.tintRgb);
+      if (off.length) why.push(`cap not the tint (${m.tintRgb}): ${off.map((x) => `${x.caption} ${x.color}`).join(", ")}`);
+      if (!m.tonesSet || !m.tonesSame) why.push("--cap-tones changed or unset");
+      const floor = modeMinToy(s.width);
+      const thin = m.during.filter((x) => x.toy[2] < floor);
+      if (thin.length) why.push(`.toy under the ${floor} px floor at ${s.width}: ${thin.map((x) => `${x.caption} ${x.toy[2]}`).join(", ")}`);
+      if (m.modeId !== "bench-probe") {
+        // Slice 4A acceptance 2: a table mode's live and blocked slots each draw a 96 x 96 frontend/ui pixel icon at 24 px
+        // (the key the table names); an off slot draws none.
+        const bad = m.during.filter((x) => (x.caption || x.icon) && !(x.icon?.kind === "img" && /^\/virtual_pet\/frontend\/ui\/icon_mode_\w+\.png$/.test(x.icon.src)
+          && x.icon.natural[0] === 96 && x.icon.natural[1] === 96 && x.icon.box[2] === 24 && x.icon.box[3] === 24));
+        if (bad.length) why.push(`not a 24 px icon_mode_* pixel icon: ${bad.map((x) => `${x.caption} ${x.icon ? `${x.icon.kind} ${x.icon.box?.slice(2)}` : "none"}`).join(", ")}`);
+      }
+    }
+    const toyW = m ? Math.min(...m.during.map((x) => x.toy[2])) : null;
+    rows.push({ name: s.name, width: s.width, dpr: s.dpr, finish: m?.finish ?? null, pass: !why.length, why,
+      toyW, wide: toyW >= modeMinToy(s.width), modeId: m?.modeId ?? null, icons: m ? m.during.map((x) => x.icon?.box?.slice(2) ?? null) : null, worstFit: m ? Math.max(...m.during.map((x) => x.captionW - x.column)) : null, long: m?.long ?? null });
+  }
+  const bad = rows.filter((r) => !r.pass);
+  console.log(`shell mode pass rule (captions fit, rects unchanged, caps = tint, tones unchanged): ${rows.length - bad.length} of ${rows.length} pass`);
+  for (const r of bad.slice(0, 30)) console.log(`  FAIL ${r.name}: ${r.why.join("; ")}`);
+  // The plan's touch claim (3.6) is a measure, not a rule: it holds only where the toy is that wide.
+  const byWidth = {};
+  for (const r of rows) {
+    const w = (byWidth[r.width] ||= { toyMin: Infinity, toyMax: 0, longFits: 0, longN: 0, n: 0 });
+    w.toyMin = Math.min(w.toyMin, r.toyW);
+    w.toyMax = Math.max(w.toyMax, r.toyW);
+    w.longFits += r.long?.fits ? 1 : 0;
+    w.longN += r.long ? 1 : 0;
+    w.n++;
+  }
+  for (const [w, v] of Object.entries(byWidth)) {
+    console.log(`  card ${w}: toy ${v.toyMin}-${v.toyMax} px wide (${v.toyMin >= modeMinToy(+w) ? "all" : "not all"} >= ${modeMinToy(+w)} floor)${v.longN ? `; "special 2" fits ${v.longFits} of ${v.longN}` : ""}`);
+  }
+  if (bad.length) process.exitCode = 1;
+  return rows;
+}
+
 async function lightsPass(browser, shots) {
   const rows = [];
   const info = (name) => {
@@ -1734,6 +1964,10 @@ async function main() {
       const bad = l.share <= MONO_LIT_MIN;
       console.log(`mono backlight ${bad ? "FAIL" : "ok"}: ${l.label} differ on ${(l.share * 100).toFixed(1)}% of pixels (need > ${MONO_LIT_MIN * 100}%)`);
       if (bad) process.exitCode = 1;
+    }
+    if (shots.some((s) => s.mode)) {
+      const rows = modePass(shots);
+      fs.writeFileSync(path.join(opts.out, "mode-pass.json"), JSON.stringify(rows, null, 1));
     }
     if (opts.preset === "tuck") {
       const rows = await lightsPass(browser, shots);

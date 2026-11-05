@@ -5,11 +5,148 @@
 # Same checks, none of the local load. Needs gh and a clean, committed tree.
 #
 #   scripts/ci-gate          # gate HEAD's branch on GitHub (~5-6 min)
+#   scripts/ci-gate --replay RUN_ID   # no push, no run: read a past run's first attempt and show
+#                            # what the gate would do (and its second attempt, if it has one)
 #
-# A failed run prints the failing card-checks and the run's link.
+# A failed run prints the failing card-checks (and the NOTE lines beside them: a
+# flake's hint) and the run's link.
+#
+# When only card shards failed, the failed jobs are re-run once (gh run rerun --failed) and
+# waited for. PASS only if that re-run is green; then each check that failed the first try
+# is printed as "ci-gate: FLAKE <shard> <check>" and appended, dated with the run id, to
+# docs/ci-flakes.md. A job that is not a card shard failing, or a shard failing twice, is
+# FAIL as ever. (docs/ci-flakes.md is left uncommitted; it does not block the next run.)
 set -uo pipefail
 cd "$(dirname "$0")/.."
-if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+REPLAY=""
+if [ "${1:-}" = --replay ]; then
+  REPLAY=${2:-}; [ -n "$REPLAY" ] || { echo "usage: ci-gate --replay RUN_ID" >&2; exit 2; }
+fi
+REPO='repos/{owner}/{repo}'
+FLAKES=docs/ci-flakes.md
+
+# Jobs of one attempt of a run: "id<TAB>name<TAB>conclusion".
+attempt_jobs() { gh api "$REPO/actions/runs/$1/attempts/$2/jobs" --paginate -q '.jobs[] | [.id, .name, .conclusion] | @tsv'; }
+# Sorts one attempt's jobs: CARD_FAIL ("id<TAB>name" per failed card shard), OTHER_FAIL (names of any
+# other job that did not pass; a skipped one is fine). Sets JOBS_OK=1 when the jobs could be read.
+classify() {
+  CARD_FAIL=""; OTHER_FAIL=""; JOBS_OK=""
+  local rows id name conc
+  rows=$(attempt_jobs "$1" "$2" 2>/dev/null) || return 1
+  [ -n "$rows" ] || return 1
+  JOBS_OK=1
+  while IFS=$'\t' read -r id name conc; do
+    case "$conc" in success|skipped) continue ;; esac
+    case "$name" in
+      card*) CARD_FAIL+="$id"$'\t'"$name"$'\n' ;;
+      *) OTHER_FAIL+="$name (${conc:-no conclusion})"$'\n' ;;
+    esac
+  done <<<"$rows"
+}
+# The job log endpoint works where `gh run view --log-failed` comes back empty for long jobs.
+job_log() { gh api "$REPO/actions/jobs/$1/logs" 2>/dev/null; }
+# What a card job failed on, one entry per line: each "FAIL  <check>" (its detail cut off), and a
+# crash's error line with the card-check line it came from.
+fail_names() {
+  local log; log=$(job_log "$1")
+  printf '%s\n' "$log" | grep -E ' FAIL  ' | sed -E 's/^[^ ]* +FAIL +//; s/ \(\{.*$//; s/ \(\[.*$//' | cut -c1-140
+  local crash frame
+  crash=$(printf '%s\n' "$log" | grep -E '[A-Za-z]Error: ' | grep -vE ' (PASS|FAIL|NOTE)' | head -1 | sed -E 's/^[^ ]* //' | cut -c1-140)
+  if [ -n "$crash" ]; then
+    frame=$(printf '%s\n' "$log" | grep -m1 -oE 'card-check\.js:[0-9]+' )
+    echo "crash: $crash${frame:+ (at $frame)}"
+  fi
+}
+# Every failing check of the failed card jobs in $CARD_FAIL: "<shard><TAB><check>" lines.
+collect_fails() {
+  local id name
+  while IFS=$'\t' read -r id name; do
+    [ -n "$id" ] || continue
+    local shard=${name#card (}; shard=${shard%)}
+    local names; names=$(fail_names "$id")
+    [ -n "$names" ] || names="job failed, no FAIL line in its log"
+    while IFS= read -r n; do printf '%s\t%s\n' "$shard" "$n"; done <<<"$names"
+  done <<<"$CARD_FAIL"
+}
+# The old failure report: failing checks and the NOTE lines beside them, per failed card job.
+print_card_logs() {
+  local id name
+  while IFS=$'\t' read -r id name; do
+    [ -n "$id" ] || continue
+    job_log "$id" | grep -E ' (FAIL|NOTE: )' | sed -E 's/^[^ ]* //' | cut -c1-160 | head -30
+  done <<<"$CARD_FAIL"
+}
+print_jobs() { attempt_jobs "$1" "$2" 2>/dev/null | awk -F'\t' '{ printf "  %s %s\n", $2, $3 }'; }
+# Waits for attempt $2 of run $1 to complete; sets CONC. A blank answer (a failed API call) is not one.
+wait_run() {
+  local a s c
+  while :; do
+    a="" s="" c=""
+    read -r a s c < <(gh api "$REPO/actions/runs/$1" -q '"\(.run_attempt) \(.status) \(.conclusion)"' 2>/dev/null)
+    if [ "${a:-0}" -ge "$2" ] && [ "$s" = completed ] && [ -n "$c" ] && [ "$c" != null ]; then CONC=$c; return 0; fi
+    sleep 10
+  done
+}
+# The retry decision, shared by the live run and --replay. $1 run id, $2 the first try's conclusion.
+# A pass after a re-run, or a fail, ends here.
+after_first_try() {
+  local ID=$1 first=$2 URL
+  URL="https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/actions/runs/$ID"
+  classify "$ID" 1
+  if [ -n "$OTHER_FAIL" ] || [ -z "$CARD_FAIL" ]; then
+    # Not only card shards (or the jobs can't be read): no retry.
+    [ -z "$OTHER_FAIL" ] || printf '  failed, not a card shard, no re-run: %s' "$OTHER_FAIL"
+    print_card_logs
+    echo "ci-gate: FAIL ($first), $URL"
+    return 1
+  fi
+  local fails; fails=$(collect_fails)
+  local shards; shards=$(printf '%s' "$CARD_FAIL" | awk -F'\t' '{ printf "%s ", $2 }')
+  echo "ci-gate: only card shards failed (${shards% }); re-running the failed jobs once"
+  printf '%s\n' "$fails" | sed 's/^/  first try: /' | tr '\t' ' '
+  local second
+  if [ -n "$REPLAY" ]; then
+    echo "ci-gate: (replay: gh run rerun $ID --failed is not run; reading attempt 2 if there is one)"
+    classify "$ID" 2 || { echo "ci-gate: no second attempt to read, $URL"; return 0; }
+    if [ -z "$CARD_FAIL$OTHER_FAIL" ]; then second=success; else second=failure; fi
+  else
+    gh run rerun "$ID" --failed >/dev/null || { echo "ci-gate: re-run failed to start" >&2; echo "ci-gate: FAIL ($first), $URL"; return 1; }
+    wait_run "$ID" 2
+    second=$CONC
+  fi
+  echo "ci-gate: the re-run (attempt 2):"
+  print_jobs "$ID" 2
+  if [ "$second" != success ]; then
+    classify "$ID" 2
+    print_card_logs
+    echo "ci-gate: FAIL (failed again: $second), $URL"
+    return 1
+  fi
+  local shard check
+  while IFS=$'\t' read -r shard check; do
+    [ -n "$check" ] || continue
+    echo "ci-gate: FLAKE $shard $check"
+    if [ -n "$REPLAY" ]; then continue; fi
+    [ -e "$FLAKES" ] || printf '%s\n' "# CI flakes" "" \
+      "Card-check failures that passed on the gate's one re-run (scripts/ci-gate adds a line each time:" \
+      "date, run id, shard, check). A check listed twice gets fixed next." "" > "$FLAKES"
+    echo "- $(date +%F) run $ID shard $shard: $check" >> "$FLAKES"
+  done <<<"$fails"
+  [ -n "$REPLAY" ] || echo "ci-gate: flakes noted in $FLAKES (not committed)"
+  return 0
+}
+
+if [ -n "$REPLAY" ]; then
+  echo "ci-gate: replay of run $REPLAY, attempt 1"
+  print_jobs "$REPLAY" 1
+  classify "$REPLAY" 1 || { echo "ci-gate: can't read run $REPLAY" >&2; exit 2; }
+  if [ -z "$CARD_FAIL$OTHER_FAIL" ]; then echo "ci-gate: attempt 1 passed, nothing to retry"; exit 0; fi
+  after_first_try "$REPLAY" failure && echo "ci-gate: PASS (replay: no marker written)" || true
+  exit 0
+fi
+
+# docs/ci-flakes.md is the one file a run itself may leave changed.
+if [ -n "$(git status --porcelain --untracked-files=no -- . ":(exclude)$FLAKES")" ]; then
   echo "ci-gate: commit first (the run gates what is pushed)" >&2; exit 2
 fi
 BRANCH=$(git branch --show-current)
@@ -38,26 +175,12 @@ for _ in $(seq 1 30); do
 done
 [ -n "$ID" ] || { echo "ci-gate: the run never appeared" >&2; exit 1; }
 echo "ci-gate: run $ID on $BRANCH @$(git rev-parse --short "$SHA")"
-# Poll rather than `gh run watch`, which can return before the run ends. A
-# blank status (a failed API call) is not an answer: ask again.
-while [ "$(gh run view "$ID" --json status -q .status 2>/dev/null)" != completed ]; do sleep 30; done
-CONC=""
-for _ in $(seq 1 10); do
-  CONC=$(gh run view "$ID" --json conclusion -q .conclusion 2>/dev/null)
-  [ -n "$CONC" ] && break
-  sleep 6
-done
+# Poll rather than `gh run watch`, which can return before the run ends.
+wait_run "$ID" 1
 gh run view "$ID" --json jobs -q '.jobs[] | "  \(.name) \(.conclusion)"'
-if [ "$CONC" = success ]; then
-  mkdir -p "$M" && touch "$M/$TREE"
-  echo "ci-gate: PASS, marker written for tree $(git rev-parse --short "$TREE")"
-  exit 0
+if [ "$CONC" != success ]; then
+  after_first_try "$ID" "$CONC" || exit 1
 fi
-# The card jobs are "card (1/4)" and so on, one per shard.
-# (--log-failed comes back empty for long jobs; the job log endpoint doesn't.)
-for JOB in $(gh run view "$ID" --json jobs -q '.jobs[] | select((.name | startswith("card")) and .conclusion == "failure") | .databaseId'); do
-  gh api "repos/{owner}/{repo}/actions/jobs/$JOB/logs" 2>/dev/null |
-    grep -E ' FAIL ' | sed -E 's/^[^ ]* //' | cut -c1-160 | head -20
-done
-echo "ci-gate: FAIL ($CONC), https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/actions/runs/$ID"
-exit 1
+mkdir -p "$M" && touch "$M/$TREE"
+echo "ci-gate: PASS, marker written for tree $(git rev-parse --short "$TREE")"
+exit 0

@@ -5,6 +5,11 @@ class HatchPetCardGames extends HatchPetCardCare {
 
   _startGame(s, button) {
     this._tapped(button, s);
+    // Play while the picker is open closes it (it has no close button; shell modes slice 3, FM 2026-11-04).
+    if (s.game?.picking) {
+      this._endGame(s, null);
+      return;
+    }
     if (s.game) this._quitGame(s, null); // Play mid-game starts over
     this._clearAsk(s); // a game takes the screen
     const energy = Number.parseFloat(this._state(s, "sensor.energy")?.state);
@@ -19,7 +24,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     // A beat before the picker (care reactions, ship A): the ball drops in from the pad, the pet
     // perks at it, 600 ms. The picker does not wait: it opens now and the beat plays over its fade.
     const ball = s.species?.props?.play;
-    if (ball && !s.egg && !s.away) this._propShow(s, ball, 900);
+    if (ball && !s.egg) this._propShow(s, ball, 900);
     this._reactFrames(s, "played");
     // The pet's game of the day leads the list (G-a); the last game played keeps the focus.
     const today = this._gameOfDay(s);
@@ -99,10 +104,13 @@ class HatchPetCardGames extends HatchPetCardCare {
   // True when the games sit clear of the prompt and the close button (F6).
   _fitPicker(s) {
     const pick = s.gameBox.querySelector(".gpick");
-    const gx = s.gameBox.querySelector(".gx");
-    if (!pick || !gx || pick.hidden) return true;
+    if (!pick || pick.hidden) return true;
     const box = s.gameBox.getBoundingClientRect();
     if (!box.height) return true;
+    // The corner where the close button was (shell modes slice 3 removed it; Escape closes the picker). The
+    // picker keeps its layout (owner decision D2), so the corner is still kept clear: 44 px, at 4% and 6%.
+    const [cx, cy] = [box.right - box.width * 0.04, box.top + box.height * 0.06];
+    const gx = { getBoundingClientRect: () => ({ left: cx - 44, right: cx, top: cy, bottom: cy + 44, width: 44, height: 44 }) };
     pick.classList.remove("wrap", "tight", "snug");
     // The Hop row (flag on) sits at the foot, outside .gpick: it is measured too, so no game
     // button covers it, and the picker's room is the box less its strip.
@@ -219,28 +227,20 @@ class HatchPetCardGames extends HatchPetCardCare {
     return rows();
   }
 
-  // Show the picker ("pick") or a game's buttons (its key) in the game overlay.
+  // Show the picker ("pick") or a game's overlay (its key): the score and the number. A server game's two
+  // inputs are on the shell (SHELL_MODES, entered by _pickGame), not in the overlay.
   _gameView(s, view) {
     const box = s.gameBox;
     box.hidden = false;
     box.classList.toggle("dig", view === "dig");
-    box.classList.toggle("hop", view === "hop"); // the board's keys are the overlay's own (card-board.js)
+    box.classList.toggle("hop", view === "hop");
     box.querySelector(".gpick").hidden = view !== "pick";
     const row = box.querySelector(".ghop");
     if (row) row.hidden = view !== "pick";
     const hopb = box.querySelector(".hopb");
     if (hopb) hopb.hidden = view !== "hop";
     s.gameNum.hidden = view !== "higher_lower" && view !== "dig";
-    const [gl, gr] = [box.querySelector(".gl"), box.querySelector(".gr")];
-    gl.hidden = gr.hidden = view === "pick" || view === "hop";
     s.gameScore.hidden = view === "pick" || view === "hop";
-    const hl = view === "higher_lower";
-    const dig = view === "dig";
-    gl.innerHTML = hl ? '<span class="hl">lo</span>' : dig ? '<span class="hl">keep</span>' : icon("prev", 22);
-    gr.innerHTML = hl ? '<span class="hl">hi</span>' : dig ? '<span class="hl">dig</span>' : icon("next", 22);
-    gl.setAttribute("aria-label", hl ? "Guess lower" : dig ? "Keep the basket" : "Guess left");
-    gr.setAttribute("aria-label", hl ? "Guess higher" : dig ? "Dig a leaf" : "Guess right");
-    box.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
   }
 
   async _pickGame(s, kind) {
@@ -252,8 +252,10 @@ class HatchPetCardGames extends HatchPetCardCare {
     }
     const g = s.game = { kind, round: 0, wins: 0, busy: false };
     s.pet.classList.remove("go-left", "go-right");
-    s.gameBox.classList.remove("showgo");
     this._gameView(s, kind);
+    // The shell takes the game's two inputs and quit (slice 2). The focus goes to the first live slot
+    // (before the busy flip below, so it is not quit). The same kind again (the F13 restart) only repaints.
+    this._modeEnter(s, SHELL_MODES[kind], { from: s.buttons.play });
     // Playing together is the hello (F7): the day's "hi, <name>!" doesn't wait out the game.
     if (!s.greeted) this._greetSpent(s);
     this._reactFrames(s, "ready", { inGame: true }); // acts.ready, if the species has it
@@ -263,7 +265,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     // The server keeps the game: a start while one of this kind runs carries
     // on (same round, wins and number), so the card adopts what it replies.
     g.busy = true;
-    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
+    this._modeSync(s); // every slot but quit is blocked while the server answers
     s.gameScore.textContent = "thinking…";
     const info = await this._playCall(s, { game: kind });
     if (!info) return;
@@ -271,7 +273,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     g.round = info.round;
     g.wins = info.wins;
     g.lastAt = Date.now();
-    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
+    this._modeSync(s);
     s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
     // The prompt is kept on the game: a care line said over it gives way to it again.
     if (kind === "dig") {
@@ -286,8 +288,8 @@ class HatchPetCardGames extends HatchPetCardCare {
       this._write(s, said[0]);
       said.slice(1).forEach((line, i) => this._gameLater(s, g, 1500 * (i + 1), () => this._write(s, line, 60000)));
       s.sayUntil = Date.now() + 60000;
-      // Keep is disabled on an empty basket: start on dig then.
-      s.gameBox.querySelector(info.basket ? ".gl" : ".gr").focus({ preventScroll: true });
+      // Keep is blocked on an empty basket: start on dig then (slot 4, else slot 1).
+      this._modeButtons(s)[info.basket ? 0 : 3].focus({ preventScroll: true });
       return;
     } else if (kind === "left_right") {
       this._write(s, (g.prompt = "left or right? guess where i'll go!"));
@@ -298,7 +300,7 @@ class HatchPetCardGames extends HatchPetCardCare {
       if (!this._luckyNumber(s, g, info.number)) this._write(s, g.prompt);
     }
     s.sayUntil = Date.now() + 60000;
-    s.gameBox.querySelector(".gl").focus({ preventScroll: true });
+    this._modeButtons(s)[0].focus({ preventScroll: true });
   }
 
   // A delayed step of game `g`: dropped if the game ended or was replaced, and
@@ -372,7 +374,6 @@ class HatchPetCardGames extends HatchPetCardCare {
 
   async _guess(s, side) {
     if (!s.game || s.game.busy || !s.game.kind) return;
-    this._tapped(s.gameBox.querySelector(side === "left" ? ".gl" : ".gr"), s);
     const kind = s.game.kind;
     const game = GAMES.find((g) => g.key === kind);
     const guess = game.guesses[side === "left" ? 0 : 1];
@@ -383,7 +384,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     const g = s.game;
     g.busy = true;
     const mark = g.tap = (g.tap || 0) + 1;
-    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
+    this._modeSync(s);
     s.gameScore.textContent = "thinking…";
     const info = await this._playCall(s, { game: kind, guess });
     if (!info) return;
@@ -409,7 +410,6 @@ class HatchPetCardGames extends HatchPetCardCare {
       this._write(s, info.correct ? `yes! ${info.number}` : `nope, ${info.number}!`);
     } else {
       s.pet.classList.add(`go-${info.went}`);
-      s.gameBox.classList.add("showgo"); // F4: the guess buttons fade, so the pet shows
       this._write(s, info.correct ? "yes! you found me" : `nope, i went ${info.went}!`);
     }
     this._chirp(s, info.correct ? "tap" : "buzz"); // F14
@@ -420,7 +420,6 @@ class HatchPetCardGames extends HatchPetCardCare {
     // be read (GAME_READ_MS since this guess); a game's last guess waits longer (GAME_END_MS).
     this._gameLater(s, g, info.done ? GAME_END_MS : 900, () => {
       s.pet.classList.remove("go-left", "go-right");
-      s.gameBox.classList.remove("showgo");
       if (info.done) {
         if (info.won) this._chirp(s, "win");
         this._endGame(s, info.won ? `${info.wins}/${info.rounds}! you win ♪` :
@@ -429,7 +428,7 @@ class HatchPetCardGames extends HatchPetCardCare {
         return;
       }
       g.busy = false;
-      s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
+      this._modeSync(s);
       s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
       g.prompt = prompt;
       if (kind === "higher_lower" && this._luckyNumber(s, g, info.number)) return;
@@ -472,6 +471,7 @@ class HatchPetCardGames extends HatchPetCardCare {
 
   // G-c: the count line stays; half the time a teen or adult's own line 4 s later.
   _gameEndType(s, won) {
+    if (won) this._sitterCheer(s); // the sitter, if it's in, cheers (sitter plan 6.3)
     const key = won ? "game_win" : "game_lose";
     const own = this._persona(s)?.[key];
     if (!own || Math.random() >= GAME_TYPE_ODDS) return;
@@ -503,8 +503,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     s.gameScore.classList.add("two");
     s.gameScore.textContent = `round ${Math.min(info.round + 1, info.rounds)}/${info.rounds}\n` +
       `${info.wins} banked · basket ${info.basket}`;
-    s.gameBox.querySelector(".gl").setAttribute("aria-disabled", info.basket ? "false" : "true");
-    s.gameBox.querySelector(".gr").setAttribute("aria-disabled", "false");
+    this._modeSync(s); // keep reads the basket (blocked when empty), both read busy
   }
 
   // One tap of a Berry dig. A dig that finds a berry doesn't finish a round, so
@@ -525,7 +524,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     }
     g.busy = true;
     const mark = g.tap = (g.tap || 0) + 1;
-    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
+    this._modeSync(s);
     s.gameScore.textContent = "thinking…";
     const info = await this._playCall(s, { game: "dig", guess });
     if (!info) return;
@@ -549,7 +548,6 @@ class HatchPetCardGames extends HatchPetCardCare {
     g.basket = info.basket;
     g.lastAt = Date.now();
     this._digShow(s, info, true, info.found !== "bee"); // a berry or a safe basket is a win: the counter perks
-    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
     if (info.found === "bee") {
       s.propEl.src = BEE_FRAMES[0];
       s.propEl.style.left = "10%"; // beside the pile, clear of the score and the buttons
@@ -588,11 +586,9 @@ class HatchPetCardGames extends HatchPetCardCare {
       this._digShow(s, info);
       g.prompt = "dig or keep?";
       this._promptLater(s, g, mark, at);
-      // Keep is disabled on an empty basket: focus on it moves to dig.
-      const gl = s.gameBox.querySelector(".gl");
-      if (!g.basket && this.shadowRoot?.activeElement === gl) {
-        s.gameBox.querySelector(".gr").focus({ preventScroll: true });
-      }
+      // Keep is blocked on an empty basket: focus on it moves to dig.
+      const [keep, dig] = [this._modeButtons(s)[0], this._modeButtons(s)[3]];
+      if (!g.basket && this.shadowRoot?.activeElement === keep) dig.focus({ preventScroll: true });
     });
   }
 
@@ -608,7 +604,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     this._digShow(s, info, true);
     this._write(s, GAME_COPY.dugThere, 60000);
     s.sayUntil = Date.now() + 60000;
-    s.gameBox.querySelector(".gr").focus({ preventScroll: true });
+    this._modeButtons(s)[3].focus({ preventScroll: true });
   }
 }
 

@@ -43,9 +43,9 @@ test("every wander goes through _wander, which both callers have gated on calm()
 
 test("the call icon pops once, when a call arrives, then pulses as before", () => {
   assert.match(rule(".attention.arrive"), /animation: pop \.3s ease-out, pulse 1s ease-in-out \.3s infinite/);
-  assert.match(src, /const newCall = calling && s\.wasCalling === false && !away;/);
+  assert.match(src, /const newCall = calling && s\.wasCalling === false;/);
   assert.match(src, /else if \(newCall\) \{[^}]*classList\.add\("arrive"\)/);
-  assert.match(src, /if \(!calling \|\| away\) s\.attention\.classList\.remove\("arrive"\)/);
+  assert.match(src, /if \(!calling\) s\.attention\.classList\.remove\("arrive"\)/);
 });
 
 test("falling asleep seen live settles the pet; load, an egg and calm motion do not", () => {

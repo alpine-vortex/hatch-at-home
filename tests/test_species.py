@@ -31,6 +31,17 @@ def png(species: str, name: str) -> Path:
     return SPRITES / f"{path}.png"
 
 
+@pytest.mark.parametrize(
+    "species", sorted(p.parent.name for p in SPRITES.glob("*/species.json"))
+)
+def test_the_old_sitter_sign_is_retired(species: str) -> None:
+    # Sitter S4 (owner decision D5): the drawn sitter replaced the sign; no species
+    # names a sign prop, and the art is gone.
+    sp = json.loads((SPRITES / species / "species.json").read_text())
+    assert "away" not in (sp.get("props") or {})
+    assert not (SPRITES / species / "sitter_sign.png").exists()
+
+
 @pytest.mark.parametrize("species", READY)
 def test_every_referenced_sprite_exists(species: str) -> None:
     sp = json.loads((SPRITES / species / "species.json").read_text())
@@ -46,6 +57,12 @@ def test_every_referenced_sprite_exists(species: str) -> None:
         names += pose if isinstance(pose, list) else [pose]
     for stage, frames in (sp.get("waves") or {}).items():
         assert stage in sp["stages"] and stage != "child", f"{species} waves.{stage}"
+        names += frames
+    # The adult signature pose (species nature N4): an idle pose past the child stage.
+    for stage, frames in (sp.get("signature") or {}).items():
+        assert stage in sp["stages"] and stage not in ("baby", "child"), (
+            f"{species} signature.{stage}"
+        )
         names += frames
     for prop in (sp.get("props") or {}).values():
         names += prop if isinstance(prop, list) else [prop]

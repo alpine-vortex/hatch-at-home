@@ -216,16 +216,16 @@ def test_a_finished_game_when_bored_is_care_to_praise():
     assert pet.discipline == R.PRAISE_DISCIPLINE
 
 
-def test_away_three_days_takes_no_sample_and_keeps_the_praise_window():
+def test_downtime_of_three_days_takes_no_sample_and_keeps_the_praise_window():
+    # HA down (catch_up) stays frozen; a visit by the sitter is lived through
+    # (plan sitter §3.4: _sample runs, see test_sitter.py).
     start = at(9)
     pet = hatched(start, happiness=50.0)
     model.advance(pet, start + 5 * MIN, SETTINGS, NoLuck(), max_gap=None)
     model.apply_action(pet, "praise", start + 5 * MIN, NoLuck())
     samples = pet.discipline_samples
-    pet.away = True
     back = start + 5 * MIN + 72 * HOUR
-    model.advance(pet, back, SETTINGS, NoLuck(), max_gap=None)
-    pet.away = False
+    model.catch_up(pet, back)
     model.advance(pet, back + MIN, SETTINGS, NoLuck(), max_gap=None)
     assert pet.discipline_samples == samples  # no catch-up sample
     before = pet.happiness

@@ -194,12 +194,10 @@ async def test_the_family_follows_the_species(hass, now, hass_storage):
     [
         ({"age_hours": 0.0}, "egg"),
         ({"asleep": True}, "asleep"),
-        ({"away": True}, "away"),
         ({"energy": 5.0}, "too_tired"),
     ],
 )
 async def test_a_refusal_writes_nothing(hass, now, hass_storage, stats, code):
-    # Privacy off, so "away" is told as it is (the private case is below).
     hass_storage[STORE_KEY] = hatched_pet(now, **stats)
     await setup_with_house(hass, privacy=False)
     pet = coordinator(hass)
@@ -215,10 +213,11 @@ async def test_a_refusal_writes_nothing(hass, now, hass_storage, stats, code):
     assert pet._hop_boards == {}  # nothing built for a pet that can't play
 
 
-async def test_a_private_pet_away_looks_asleep(hass, now, hass_storage):
+async def test_a_private_pet_with_the_sitter_gets_its_board(hass, now, hass_storage):
+    # Plan sitter §3.7, owner D1: the card plays during a visit, privacy on too.
     await ready(hass, now, hass_storage)  # privacy defaults on
     coordinator(hass).state.away = True
-    assert await board(hass) == {"result": "asleep"}
+    assert (await board(hass))["result"] == "ok"
 
 
 async def test_the_board_runs_off_the_loop(hass, now, hass_storage, monkeypatch):

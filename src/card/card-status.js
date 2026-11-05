@@ -96,13 +96,13 @@ class HatchPetCardStatus extends HatchPetCardMoment {
     const nextEgg = [picked || heldPick || (adult ? SETUP_COPY.eggSurprise : null),
       stageAttrs.next_world && `in ${stageAttrs.next_world}`].filter(Boolean).join(" ");
     const nextStage = growsUp(this._state(s, "sensor.life_stage")?.state, stageAttrs.age_days);
-    // What it would like most, above today's wish; none asleep, away or in the egg.
+    // What it would like most, above today's wish; none asleep or in the egg.
     const moodNow = this._state(s, "sensor.mood");
     const wantKey = moodNow?.attributes.reason_key;
     const wantsNow = (moodNow?.attributes.flags || []).includes("sick") ? "sick"
       : (moodNow?.attributes.requests || []).find((r) => r !== "lay_egg" && WANT_WORDS[r]
         && this._state(s, `button.${r}`));
-    const want = s.asleep || moodNow?.state === "away" || isEgg ? null
+    const want = s.asleep || isEgg ? null
       : (String(wantKey).startsWith("call_") && WANT_WORDS[wantKey]) || WANT_WORDS[wantsNow]
         || (isHeavy(value("weight")) ? "a game, to run it off" : null);
     // How care is going, beside the upbringing it shapes (top10 4a; was in settings).
@@ -114,9 +114,8 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       ? row(null, "missed calls", `<span>${missed}</span>`) + row(null, "ignored whines", `<span>${whined}</span>`) : "";
     // Today's wish comes first of the rest: it changes daily, the rest is there every day.
     // Its day so far (E9 St-a): the evening's today line, else today's dream. A page, not a bubble.
-    // Resting (R1): said on its page whatever its pose (a sick resting pet shows sick); away
-    // shows the sitter's sign instead.
-    const restNow = !isEgg && moodNow?.state !== "away" && (moodNow?.attributes.flags || []).includes("resting");
+    // Resting (R1): said on its page whatever its pose (a sick resting pet shows sick).
+    const restNow = !isEgg && (moodNow?.attributes.flags || []).includes("resting");
     const today = !isEgg && ((this._evening() && this._todayLine(s)) || this._dreamSaid(s));
     // An egg has no meters or traits to read: "you two" and when it hatches (UX fix 2, F12).
     // The status is the pet's own page: its head and name at the band's left (UX fix 2, F10).

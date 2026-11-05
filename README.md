@@ -94,7 +94,7 @@ Connect what you already have in Home Assistant, and your pet may:
 | 🔔 rings the doorbell | startles, with two notes and a line |
 | 🔌 has anything else you point it at | notices it with the [house moment blueprint](docs/guide.md#let-the-pet-notice-things-house-moment-blueprint) |
 
-Every connection is optional. Away for a while? It waits safely with the sitter.
+Every connection is optional. Away for a while? A sitter comes over and looks after it.
 
 ## 🐣 HOW TO HATCH
 

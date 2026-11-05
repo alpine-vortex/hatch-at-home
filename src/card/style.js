@@ -433,7 +433,39 @@ const STYLE = `
   @keyframes bubblepop { 0% { transform: translateY(0); opacity: 1; } 80% { transform: translateY(-30px) scale(1); opacity: 1; }
     100% { transform: translateY(-30px) scale(0); opacity: 0; } }
   @keyframes pop { from { transform: scale(.3); opacity: 0; } }
-  .awaysign { left: 50%; bottom: 12%; height: 40%; margin-left: -20%; }
+  /* The sitter (sitter plan S3a, card-sitter.js): one element beside the pet, behind it, on the pet's
+     own 256 px sprite box so the frames sit on the same floor. Its motion is its own: translate
+     slides it in and out (a walk), scale -1 1 mirrors the walk out, the picture is a frame swap. Never
+     .pet's transform (AGENTS.md). Until the first frame decodes, or if one fails, the plain figure of S2
+     stands in (no .art). Every animation and transition here is one-shot and stilled by the
+     reduced-motion rule at the top of this sheet. */
+  .sitter { position: absolute; left: -5%; bottom: 4%; height: 58%; aspect-ratio: 1; pointer-events: none;
+    transition: translate 1.4s linear; }
+  .sitter[hidden] { display: none; }
+  .sitter .sit-img { display: none; position: relative; z-index: 1; inset: 0; width: 100%; height: 100%; }
+  .sitter.art .sit-img { display: block; }
+  /* A look has no doze frames (6.2): at night it stands still before the base art's empty chair
+     (.sit-seat, behind it), leaning a little: a static rotate, never an animation, never .pet. */
+  .sitter .sit-seat { display: none; position: absolute; inset: 0; width: 100%; height: 100%; }
+  .sitter.art.seat .sit-seat { display: block; }
+  .sitter.art.seat.doze .sit-img { rotate: 4deg; transform-origin: 50% 88%; }
+  .sitter.art i { display: none; }
+  .sitter:not(.art) { left: auto; right: 5%; bottom: 10%; width: 17%; height: 36%; aspect-ratio: auto; }
+  .sitter i { position: absolute; display: block; }
+  .sitter .sit-head { left: 24%; top: 0; width: 52%; aspect-ratio: 1; border-radius: 50%; background: #e8c9a4;
+    box-shadow: inset 0 -4px 0 #3a2a1a; }
+  .sitter .sit-body { left: 8%; top: 36%; width: 84%; bottom: 0; border-radius: 40% 40% 12% 12%; background: #5b7fa6; }
+  .sitter .sit-chair { display: none; left: -18%; right: -18%; bottom: -6%; height: 46%; border-radius: 6px;
+    background: #8a5a35; box-shadow: inset 0 -6px 0 #5e3b20; }
+  .sitter.doze:not(.art) { height: 30%; bottom: 8%; }
+  .sitter.doze:not(.art) .sit-chair { display: block; }
+  .sitter.doze:not(.art) .sit-head { top: 8%; rotate: 18deg; }
+  .sitter.doze:not(.art) .sit-body { top: 42%; bottom: 14%; }
+  /* Night to day: no frames stand it up, so a 200 ms cross-fade; at night it leaves by fading out. */
+  .sitter.fade { animation: sitter-fade .2s linear 1; }
+  .sitter.fade-out { animation: sitter-fade-out .4s linear 1 forwards; }
+  @keyframes sitter-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes sitter-fade-out { from { opacity: 1; } to { opacity: 0; } }
   .awaylabel { position: absolute; left: 0; right: 0; bottom: 5%; text-align: center;
     color: #fff; font-size: 15px; text-shadow: 0 1px 3px #000; }
   .bubble .untyped { visibility: hidden; } /* laid out whole, so it never grows */
@@ -451,16 +483,11 @@ const STYLE = `
     background: #fffdf5; color: #3a2a1a; box-shadow: 2px 2px 0 #3a2a1a; cursor: pointer; padding: 0;
     font: inherit; } /* the card's own font, not the browser's button font (F3) */
   .game button[aria-disabled="true"] { opacity: .5; cursor: default; }
-  /* F4: while the pet shows where it went, the guess buttons fade out of its way. */
-  .game.showgo .gl, .game.showgo .gr { opacity: .15; }
   .game button:focus-visible { outline: 3px solid #fffdf5; outline-offset: 2px;
     box-shadow: 0 0 0 6px #1d2a22; }
-  .game .gl { left: 4%; bottom: 8%; }
-  .game .gr { right: 4%; bottom: 8%; }
-  .game .gx { right: 4%; top: 6%; min-width: 44px; min-height: 44px; font: inherit; font-size: 14px; }
   .game .gpick { position: absolute; inset: 22% 0 0; display: flex; flex-direction: column; gap: 8px;
     align-items: center; justify-content: center; }
-  .game .gpick[hidden], .game .gnum[hidden], .game .gl[hidden], .game .gr[hidden] { display: none; }
+  .game .gpick[hidden], .game .gnum[hidden] { display: none; }
   /* The picker: chunky toy buttons like the device's own (cream, inked, pressing down). */
   .game .gpick button { position: static; display: flex; align-items: center; gap: 8px;
     border-radius: 14px; padding: 4px 14px 4px 10px; font: inherit; font-size: 14px; min-height: 44px;
@@ -505,8 +532,8 @@ const STYLE = `
   .game .ghop.tight { padding: 0 6px; font-size: 11px; white-space: nowrap; }
   .game .ghop.snug { min-height: 36px; line-height: 1.05; white-space: normal; }
   .game .ghop:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
-  /* The board: the grid on the left, the keys on the right (2 x 4; the close button is the eighth).
-     Sizes are set in JS (_hopLayout) from the overlay: --hk the key, --c the cell. No new art:
+  /* The board: the grid, centred in the whole overlay (the keys are the shell's eight buttons).
+     Sizes are set in JS (_hopLayout) from the overlay: --c the cell. No new art:
      the cells are CSS. The real pet stays under the board, still, and the piece wears its frame. */
   .game .hopb[hidden] { display: none; }
   .game .hgrid { position: absolute; display: grid; grid-auto-rows: var(--c); outline: none;
@@ -557,13 +584,6 @@ const STYLE = `
   .game .hpath path { fill: none; stroke: #3a2a1a; stroke-width: 2; stroke-dasharray: 2 4; stroke-linecap: round; }
   .game .hpiece { position: absolute; left: 0; top: 0; z-index: 2; image-rendering: pixelated;
     pointer-events: none; object-fit: contain; transition: translate .14s ease-out; }
-  .game .hkeys { position: absolute; display: grid; grid-template-columns: repeat(2, var(--hk));
-    grid-auto-rows: var(--hk); gap: 3px; pointer-events: none; }
-  .game .hk { position: static; min-width: 0; min-height: 0; width: var(--hk); height: var(--hk);
-    font: inherit; font-size: calc(var(--hk) * .42); line-height: 1; }
-  .game .hk.on { background: #3a2a1a; color: #fffdf5; }
-  .game.hop .gx { top: auto; right: var(--hr); bottom: var(--hb); width: var(--hk); height: var(--hk);
-    min-width: 0; min-height: 0; font-size: calc(var(--hk) * .42); }
   .screen:has(> .game.hop:not([hidden])) :is(.pet, .ghost, .drape, .perch, .attention) { visibility: hidden; }
   .screen:has(> .game.hop:not(.end):not([hidden])) .bubble { display: none; }
   /* Trait flair: placed in JS from the head point and the feet line. Every piece
@@ -723,15 +743,12 @@ const STYLE = `
   .game .gprop { position: absolute; bottom: 10%; width: 16%; image-rendering: pixelated;
     pointer-events: none; will-change: left, transform; }
   .game .gprop[hidden] { display: none; }
-  .game .hl { font: inherit; font-size: 14px; }
   .game .gscore { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%);
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
   .game .gscore.two { white-space: pre; text-align: center; line-height: 1.25; } /* the dig: round, then bank and basket */
-  /* The dig at 300 px: the two-line score between keep and dig, clear of both. */
+  /* The dig at 300 px: the two-line score, clear of the pet and the bubble. */
   .compact .game .gscore.two { font-size: 10px; padding: 1px 3px; bottom: 3%; letter-spacing: -.3px; }
-  .compact .game.dig .gl { left: 1.5%; }
-  .compact .game.dig .gr { right: 1.5%; }
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
   .screen.show-status .flash, .screen.show-status .speck, .screen.show-status .lcd, .screen.show-status .glow,
   .screen.show-status .bondhearts, .screen.show-status .linkhearts, .screen.show-status .carehearts,
@@ -1713,7 +1730,6 @@ const STYLE = `
   /* Big text reaches the game (UX fix 6, F10): the score, the guess labels and the picker. */
   ha-card.bigtext .game .gscore { font-size: 14px; }
   ha-card.bigtext.compact .game .gscore.two { font-size: 12px; }
-  ha-card.bigtext .game .hl { font-size: 16px; }
   ha-card.bigtext .game .gpick.wrap button { font-size: 14px; }
   ha-card.bigtext .game .gpick.wrap.tight button { font-size: 13px; }
   ha-card.bigtext .game .gpick.wrap.snug button { font-size: 12px; }
@@ -1736,6 +1752,26 @@ const STYLE = `
     pointer-events: none; }
   .toy.on .cap { background: #3a2a1a; color: #ffe9a8; }
   .toy[disabled] { opacity: .45; cursor: default; }
+  /* Shell modes (card-mode.js): the eight caps take the mode's tint, one colour for every game (owner
+     decision D5). The rule outranks every finish's cap rule (.finish-* .toy:nth-child(..) .cap, 0,4,0) and
+     the wanted/on rule (.device[class*="finish-"] .toy.on .cap, 0,5,0) at 0,6,0, and comes after them;
+     --cap-tones (the shading) stays, so only the colour changes. tests/js/shell_modes.test.js holds the
+     specificity, the bench (--mode probe) the computed colour on every finish. */
+  .device.moded .buttons > .toy.tinted .cap { background: var(--mode-tint, #c4e2f2); color: #3a2a1a; }
+  /* The swap's one rebound: down a press's depth for 90 ms, then the cap's own release curve (translate,
+     never transform: AGENTS.md's motion rule). Reduced motion never sets the class (calm()). */
+  .toy.swap .cap { translate: 0 calc(var(--px, 2px) * 2); transition-duration: .04s, .2s, .25s; transition-timing-function: ease-out; }
+  /* A slot that stays pressed (its on(s): Hop's armed special) is held down, not the lights' dark .on. */
+  .toy.armed .cap { translate: 0 calc(var(--px, 2px) * 2); clip-path: var(--cap-clip-dn); }
+  .toy.armed .cap::before { clip-path: var(--cap-side-dn); }
+  .toy.armed .cap::after { background-image: var(--cap-tones-dn); height: calc(var(--px, 2px) * (var(--cap-n, 23) + 1)); }
+  /* Blocked (aria-disabled, still focusable) reads dimmer than live; off is native [disabled] above. */
+  .toy[aria-disabled="true"] { opacity: .6; cursor: default; }
+  .toy .cap .glyph { font: 400 20px 'Tiny5', monospace; line-height: 1; }
+  /* A swapped caption stays one line of the cap font: a wrap, or a glyph from a fallback font ("✦2") with a
+     taller line, would make the row taller and move the shell (_mould reads the .toy rects). A caption
+     too long for its column shows as a clip on the bench (--mode probe). */
+  .toy.tinted > :nth-child(2) { white-space: nowrap; height: 1lh; }
   .compact .toy { font-size: 12px; }
   .compact .egg .body { padding: 28px 14px 32px; }
   .warn { padding: 16px; color: var(--error-color, #c00); background: var(--card-background-color); }
