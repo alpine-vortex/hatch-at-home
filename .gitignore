@@ -16,7 +16,7 @@ custom_components/virtual_pet/frontend/hatch-pet-card.js
 src/card/.last-build.sha256
 
 # Private art-generation runs and call log (never committed)
-private-content/
+private-content
 art/seasonal/out/
 
 # Scratch images from image-generation tools (Codex); reviewed assets live under art/.

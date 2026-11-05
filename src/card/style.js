@@ -409,7 +409,6 @@ const STYLE = `
   @keyframes bubblepop { 0% { transform: translateY(0); opacity: 1; } 80% { transform: translateY(-30px) scale(1); opacity: 1; }
     100% { transform: translateY(-30px) scale(0); opacity: 0; } }
   @keyframes pop { from { transform: scale(.3); opacity: 0; } }
-  .awaysign { left: 50%; bottom: 12%; height: 40%; margin-left: -20%; }
   /* The sitter (sitter plan S3a, card-sitter.js): one element beside the pet, behind it, on the pet's
      own 256 px sprite box so the frames sit on the same floor. Its motion is its own: translate
      slides it in and out (a walk), scale -1 1 mirrors the walk out, the picture is a frame swap. Never

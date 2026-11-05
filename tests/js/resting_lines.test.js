@@ -58,7 +58,7 @@ test("the label shows for the resting flag only, up and about", () => {
 
 test("the old sign is never drawn; the resting label wins over the sitter's own", () => {
   const branch = grab(/this\._show\(s, s\.perch, sp\.perch\);[\s\S]*?s\.frames = this\._petFrames/);
-  assert.match(branch, /this\._show\(s, s\.awaysign, null\)/);
+  assert.doesNotMatch(branch, /awaysign/); // S4: the element is gone, not just hidden
   assert.doesNotMatch(branch, /props\?\.away/);
   assert.match(branch, /restLabel\(flags, \{ asleep, egg: s\.egg \}\)/);
   assert.match(branch, /rest \|\| \(sitter \? SITTER_LABEL : ""\)/);

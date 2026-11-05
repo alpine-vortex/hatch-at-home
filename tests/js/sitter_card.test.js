@@ -122,7 +122,7 @@ test("_renderSlide: the sitter and the label are drawn, the sign is not, and eve
   assert.match(sync, /s\.sitterEl\.hidden = !\(sitter \|\| st\.leaving\);/);
   assert.match(sync, /s\.sitterEl\.classList\.toggle\("doze", night\)/);
   assert.match(sync, /const night = scene === "night" \|\| scene === "dim"/);
-  assert.match(render, /this\._show\(s, s\.awaysign, null\)/);
+  assert.doesNotMatch(render, /awaysign/); // S4: the old sign element is gone
   assert.doesNotMatch(render, /props\?\.away|"at the sitter's"|\baway\b[^\n]*\?|!away|\|\| away/);
   assert.doesNotMatch(render, /s\.away\b/);
 });

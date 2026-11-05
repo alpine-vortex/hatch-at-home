@@ -14942,7 +14942,7 @@ async function main() {
     const sitterRun = await card.evaluate(async (el, view) => {
       const s = el._slides[el._index];
       const look = () => ({ mood: el._state(s, "sensor.mood")?.state, asleepEntity: el._state(s, "binary_sensor.asleep")?.state,
-        asleep: !!s.asleep, shown: !s.sitterEl.hidden, leaving: !!s.sit?.leaving, label: s.awaylabel.textContent, sign: s.awaysign.style.display !== "none",
+        asleep: !!s.asleep, shown: !s.sitterEl.hidden, leaving: !!s.sit?.leaving, label: s.awaylabel.textContent, sign: !!s.awaylabel.parentNode.querySelector(".awaysign"),
         feedOn: !s.buttons.feed.disabled, lightsOn: !s.buttons.lights.disabled, shared: localStorage.getItem("hatch-shared-screen") === "on" });
       const push = (sitter) => {
         // Read at once: a real push of the house (the shared screen's own snapshot) may land a few ms later and put sitter: null back.

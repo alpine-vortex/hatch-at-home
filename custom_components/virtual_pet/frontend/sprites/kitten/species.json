@@ -26,7 +26,6 @@
     "medicine": "bird/medicine",
     "blanket": "bird/blanket",
     "attention": "bird/attention",
-    "away": "bird/sitter_sign",
     "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]
   },
   "bowl_rim": 0.438,

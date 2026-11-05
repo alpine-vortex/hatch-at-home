@@ -1,8 +1,11 @@
 # The sitter visits the house
 
 **Date:** 2026-11-04
-**Status:** S1 and S2 built. S3 is split into S3a, S3b and S3c (section 7) after the S3 review
-(section 13). S4 not started.
+**Status (reconciled 2026-11-04):** S1, S2, S3a, S3b and S4 built; S3 was split into S3a, S3b
+and S3c (section 7) after the S3 review (section 13). **Left:** S3c (the six full sitters, each a
+folder drop-in as its art lands: woodland, aqua, grove, celestial, dune, granny with her extra
+poses) and the journal line "The sitter looked after Pip." (section 9), which S3a did not
+ship: it needs a server-side field and is not started.
 **Revised 2026-11-04** after the adversarial review (worker s2883, findings A1-A9, B1-B7,
 C1-C3): section 12 maps each finding to where it is fixed. The tuning in 3.2 and 3.2a is now
 measured (`dev/sitter_sim.py`), not drafted.
@@ -820,6 +823,8 @@ shared-screen card (`shared: true`) shows the sitter with privacy ON. No full ga
 
 ### S3a. The base sitter's life. Tier 1. Needs A1.
 
+**Status: built** (`f95fdb23`, frames `6b110247`; on main). Not in it: the journal line (needs a server field; see Left in the header).
+
 S3 as first written was too big for one tier-1 slice (assets, a state machine, copy, two new
 test families); the S3 review (section 13) split it. S3a is the **base sitter only**.
 
@@ -871,6 +876,8 @@ and `ci-gate`.
 
 ### S3b. Look selection. Tier 1. Needs S3a.
 
+**Status: built** (`ce34f7c7`; on main): 24 looks served, whose sitter by shell, the night chair, `--preset sitter-looks`.
+
 Whose sitter (6.6) and the stand-and-prop fallback (6.2) for the 24 looks of `art/sitter/looks/`
 (`stand_1`, `stand_2`, `wave_1`, `accessory`); the manifest rows; the look contact sheet and
 `--preset sitter-looks`; the `SHELL_FINISHES` coverage test turns on. No copy.
@@ -882,6 +889,8 @@ Woodland, aqua, grove, celestial, dune and the granny land as folder drop-ins
 granny's own poses (6.2) come from her manifest entry.
 
 ### S4. Retire the old sign. Tier 1.
+
+**Status: built** (branch `crew/hatch-at-home-s2899-sitter-s4-retire-the-old-sign`, `ef57df65`): `props.away` gone from all 30 `species.json`, `bird/sitter_sign.png` deleted, the `awaysign` element and its CSS gone (`awaylabel` stays: it is the sitter's label), the `strings.json` `away` label already read "With the sitter" from S1, `lights_before_away` kept. `tests/test_species.py` fails if a species names a sign again. The `art/` cut scripts and `art/README.md` still mention `sitter_sign` as the history of how the sprites were made.
 
 - Drop `props.away` and the `sitter_sign` art from the 30 species' `species.json`, the
   `awaysign` elements and their CSS, `strings.json` "away" mood label as needed (the sensor
