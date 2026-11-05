@@ -652,3 +652,136 @@ test("4A acceptance 7: every table mode quits on slot 8 and on Escape", () => {
     assert.strictEqual(m.exit.slot, 8, `${id} exit.slot`);
   }
 });
+
+// ---- slice 4B: the keys (plan section 6, 4B; owner decisions 2026-11-05) ----
+
+const pad = (keys, over = {}) => {
+  const slots = probe().slots.slice();
+  slots.forEach((slot, i) => { if (slot && i < 7 && keys[i]) slots[i] = { ...slot, keys: keys[i] }; });
+  return probe({ slots, ...over });
+};
+// An event as the browser makes one: the target is what composedPath()[0] names.
+const press = (key, over = {}) => ({ key, ctrlKey: false, metaKey: false, altKey: false, isComposing: false, repeat: false,
+  defaultPrevented: false, target: { tagName: "BUTTON" }, ...over });
+
+test("4B: the key map of the table, as the owner set it (Q1, Q2)", () => {
+  const keys = (id) => Array.from(M.SHELL_MODES[id].slots).map((x) => (x && x.keys ? [...x.keys] : null));
+  assert.deepStrictEqual(keys("left_right"), [["ArrowLeft"], null, null, ["ArrowRight"], null, null, null, null]);
+  assert.deepStrictEqual(keys("higher_lower"), [["ArrowDown", "ArrowLeft"], null, null, ["ArrowUp", "ArrowRight"], null, null, null, null]);
+  assert.deepStrictEqual(keys("dig"), [["ArrowLeft"], null, null, ["ArrowRight"], null, null, null, null]);
+  assert.deepStrictEqual(keys("hop"), [["ArrowLeft"], ["ArrowUp"], ["ArrowDown"], ["ArrowRight"], ["s"], ["z"], ["r"], null]);
+  // no WASD, and no letter at all on the three server games
+  for (const id of ["left_right", "higher_lower", "dig"]) {
+    for (const k of keys(id).flat().filter(Boolean)) assert.match(k, /^Arrow/, `${id} ${k}`);
+  }
+  for (const k of keys("hop").flat().filter(Boolean)) assert.ok(!["w", "a", "d", "W", "A", "D"].includes(k), k);
+  // every key sits on a live slot (not null) and, in every table mode, none is shared
+  for (const [id, m] of Object.entries(M.SHELL_MODES)) {
+    const all = Array.from(m.slots).flatMap((x) => (x && x.keys ? [...x.keys] : []));
+    assert.strictEqual(new Set(all).size, all.length, `${id} shares a key`);
+    Array.from(m.slots).forEach((x, i) => { if (x?.keys) assert.ok(x.act, `${id} slot ${i + 1} has keys but no act`); });
+    assert.deepStrictEqual(entryProblems(m), []);
+  }
+});
+
+test("4B: shellCheck rejects a duplicate key, a non-string, a non-list, Escape off slot 8 and any other key on slot 8", () => {
+  const bad = (m, why) => assert.ok(M.shellCheck(m).some((r) => r.includes(why)), `${why}: ${M.shellCheck(m)}`);
+  assert.deepStrictEqual([...M.shellCheck(pad({ 0: ["a"], 2: ["b", "c"] }))], []);
+  bad(pad({ 0: ["a"], 2: ["a"] }), "share the key a");
+  bad(pad({ 0: ["a", "a"] }), "share the key a");
+  bad(pad({ 0: [7] }), "not a name");
+  bad(pad({ 0: [""] }), "not a name");
+  bad(pad({ 0: "a" }), "not a list");
+  bad(pad({ 0: ["Escape"] }), "slot 8's");
+  const slots8 = (keys) => { const s = probe().slots.slice(); s[7] = { ...s[7], keys }; return probe({ slots: s }); };
+  assert.deepStrictEqual([...M.shellCheck(slots8(["Escape"]))], []);
+  bad(slots8(["q"]), "other than Escape");
+  bad(slots8(["Escape", "q"]), "other than Escape");
+});
+
+test("4B: a key presses its slot through _modeClick: the cap press, modeAt stamped", () => {
+  const { card, s } = shell();
+  const m = pad({ 0: ["ArrowLeft", "a"], 2: ["s"], 3: ["ArrowRight"] });
+  card._modeEnter(s, m);
+  exits.length = 0;
+  card.log = [];
+  s.modeAt = 0;
+  assert.strictEqual(card._modeKey(s, press("ArrowLeft")), true);
+  assert.strictEqual(card._modeKey(s, press("a")), true); // a slot may list several keys
+  assert.strictEqual(card._modeKey(s, press("s")), true);
+  assert.strictEqual(card._modeKey(s, press("ArrowRight")), true);
+  assert.deepStrictEqual(exits, [["act", "back"], ["act", "back"], ["act", "star"], ["act", "next"]]);
+  assert.strictEqual(card.log.filter((x) => x[0] === "tapped").length, 4, "each key is a cap press");
+  assert.ok(s.modeAt > 0);
+  // a key the mode does not list is not handled; neither is the same key's other case (exact match)
+  exits.length = 0;
+  assert.strictEqual(card._modeKey(s, press("ArrowUp")), false);
+  assert.strictEqual(card._modeKey(s, press("S")), false);
+  assert.strictEqual(card._modeKey(s, press("x")), false);
+  assert.deepStrictEqual(exits, []);
+});
+
+test("4B: a blocked slot sends nothing but the key is still the mode's (no scroll); an off slot's key does not exist", () => {
+  const { card, s } = shell();
+  card._modeEnter(s, pad({ 3: ["ArrowRight"] }));
+  s.blocked = true;
+  exits.length = 0;
+  card.log = [];
+  assert.strictEqual(card._modeKey(s, press("ArrowRight")), true);
+  assert.deepStrictEqual([exits, card.log], [[], []], "no act, no cap press");
+  s.blocked = false;
+  card._modeKey(s, press("ArrowRight"));
+  assert.deepStrictEqual(exits, [["act", "next"]]);
+});
+
+test("4B: no mode, Escape, modifiers, composing, a used event, typing targets, the status sheet and the lay sheet: not handled", () => {
+  const { card, s } = shell();
+  assert.strictEqual(card._modeKey(s, press("ArrowLeft")), false, "no mode on");
+  card._modeEnter(s, pad({ 0: ["ArrowLeft"] }));
+  exits.length = 0;
+  const no = (e, why) => assert.strictEqual(card._modeKey(s, e), false, why);
+  no(press("ArrowLeft", { ctrlKey: true }), "ctrl");
+  no(press("ArrowLeft", { metaKey: true }), "meta");
+  no(press("ArrowLeft", { altKey: true }), "alt");
+  no(press("ArrowLeft", { isComposing: true }), "composing");
+  no(press("ArrowLeft", { defaultPrevented: true }), "already used");
+  for (const tagName of ["INPUT", "TEXTAREA", "SELECT"]) no(press("ArrowLeft", { target: { tagName } }), tagName);
+  no(press("ArrowLeft", { target: { tagName: "DIV", isContentEditable: true } }), "contenteditable");
+  no(press("ArrowLeft", { composedPath: () => [{ tagName: "INPUT" }], target: { tagName: "DIV" } }), "the path's first node, through a shadow root");
+  s.statusOpen = true;
+  no(press("ArrowLeft"), "status sheet open");
+  s.statusOpen = false;
+  s.laySheet = {};
+  no(press("ArrowLeft"), "lay sheet");
+  s.laySheet = null;
+  assert.deepStrictEqual(exits, [], "nothing ran");
+  assert.strictEqual(card._modeKey(s, press("ArrowLeft")), true, "and with all of that clear it does");
+  // Escape is _modeEscape's, never this handler's, even if a probe lists it on slot 8
+  const e8 = probe().slots.slice();
+  e8[7] = { ...e8[7], keys: ["Escape"] };
+  card._modeEnter(s, probe({ id: "esc", slots: e8 }));
+  assert.strictEqual(card._modeKey(s, press("Escape")), false);
+});
+
+test("4B: a held key acts once, on the first press, and its repeats are still the mode's (the page does not scroll)", () => {
+  const { card, s } = shell();
+  card._modeEnter(s, pad({ 0: ["ArrowLeft"] }));
+  exits.length = 0;
+  assert.strictEqual(card._modeKey(s, press("ArrowLeft")), true);
+  for (let n = 0; n < 5; n++) assert.strictEqual(card._modeKey(s, press("ArrowLeft", { repeat: true })), true);
+  assert.deepStrictEqual(exits, [["act", "back"]]);
+  // a repeat of a key the mode does not own is not claimed
+  assert.strictEqual(card._modeKey(s, press("ArrowUp", { repeat: true })), false);
+});
+
+test("4B: the engine builds the map from the table and names no key or game; the device handler stops what it handles", () => {
+  assert.ok(!/Arrow|"[a-z]"\s*[,\]]/.test(enginePart.replace(/^\s*\/\/.*$/gm, "")), "card-mode.js holds no key names");
+  for (const word of ["s.game", "_endGame", "GAMES", "_hopKey", "_guess"]) assert.ok(!enginePart.includes(word), `card-mode names ${word}`);
+  const build = read("src/card/card-build.js");
+  const at = build.indexOf("this._modeKey(s, e)");
+  assert.ok(at > 0, "the device listens");
+  assert.match(build.slice(at - 80, at + 160), /device\.addEventListener\("keydown"[\s\S]*preventDefault\(\);[\s\S]*stopPropagation\(\)/);
+  // the device keeps the focus a tap on the screen would drop (plan 4B note #10): focusable, with no ring
+  assert.match(build, /<div class="device" tabindex="-1">/);
+  assert.match(read("src/card/style.js"), /\.device:focus \{ outline: none; \}/);
+});

@@ -6100,6 +6100,276 @@ async function main() {
       return rows;
     }, HOPFX);
     gameRows(hopRows);
+
+    // Slice 4B (plan section 6, 4B acceptance 2-4; the owner's map, 2026-11-05): the keys, pressed for real
+    // (page.keyboard goes to the focused element). A recorder on the device, added after the card's own
+    // listener, sees what the card left of each event (defaultPrevented); one on the document sees only
+    // what the card let through (a handled key is stopped on the device, so a dashboard hotkey never hears it).
+    {
+      await card.evaluate((el) => {
+        const sm = el.__sm;
+        sm.seen = [];
+        sm.docSeen = [];
+        sm.onDoc = (e) => sm.docSeen.push(e.key);
+        document.addEventListener("keydown", sm.onDoc);
+        sm.watch = (s) => {
+          if (s.__kw) return;
+          s.__kw = true;
+          s.device.addEventListener("keydown", (e) => sm.seen.push({ key: e.key, dp: e.defaultPrevented, repeat: e.repeat }));
+        };
+        // The server stub of this block (the hop rows above put back one that ignores the queue): a reply from
+        // sm.queue, held by sm.hold, as the slice 2 rows have it.
+        el._playCall = async (x, data) => {
+          sm.sent.push(data);
+          await (sm.hold || null);
+          const info = sm.queue.length ? sm.queue.shift() : sm.info(data.game);
+          if (x.game && info.result !== "ok") {
+            el._endGame(x, "not now");
+            return null;
+          }
+          return x.game ? info : null;
+        };
+        sm.reset = () => { sm.seen.length = sm.docSeen.length = sm.sent.length = sm.calls.length = 0; };
+        sm.guesses = () => sm.sent.filter((x) => x.guess).map((x) => x.guess);
+        sm.sendOk = (kind) => sm.queue.push(sm.info(kind, kind === "dig" ? { found: "berry", round: 0, wins: 0, basket: 1, leaves: 7 } : { round: 1, wins: 1, correct: true, went: "left", number: 7 }));
+        // A game open on a swapped cap, a reply queued.
+        sm.kopen = async (kind, basket = 0) => {
+          const s = await sm.start(kind);
+          sm.watch(s);
+          if (basket) s.game.basket = basket;
+          el._modeSync(s);
+          sm.reset();
+          sm.sendOk(kind);
+          return s;
+        };
+        sm.kdone = async (s) => {
+          if (s.mode) el._modeClick(s, 7);
+          await sm.sleep(80);
+          sm.queue.length = 0;
+          sm.hold = null;
+        };
+      });
+      const kcheck = (label, ok, detail) => check(`keys on the shell: ${label}`, ok, JSON.stringify(detail));
+      const kp = async (key) => { await page.keyboard.press(key); await page.waitForTimeout(70); };
+      const read = () => card.evaluate((el) => ({ guesses: el.__sm.guesses(), seen: [...el.__sm.seen], doc: [...el.__sm.docSeen],
+        press: el.__sm.calls.filter((c) => c === "button.press").length, mode: el.__sm.s().mode?.id || null }));
+      const done = () => card.evaluate((el) => el.__sm.kdone(el.__sm.s()));
+
+      // The three server games: the owner's map, with the focus on a swapped cap.
+      const MAP = {
+        left_right: [["ArrowLeft", "left"], ["ArrowRight", "right"]],
+        higher_lower: [["ArrowDown", "lower"], ["ArrowLeft", "lower"], ["ArrowUp", "higher"], ["ArrowRight", "higher"]],
+        dig: [["ArrowRight", "dig"]],
+      };
+      for (const [kind, pairs] of Object.entries(MAP)) {
+        const out = [];
+        for (const [key, guess] of pairs) {
+          await card.evaluate((el, k) => el.__sm.kopen(k), kind);
+          const focusCap = await card.evaluate((el) => el.__sm.focus());
+          await kp(key);
+          out.push({ key, guess, focusCap, ...(await read()) });
+          await done();
+        }
+        kcheck(`${kind}: ${pairs.map(([k, g]) => `${k} guesses ${g}`).join(", ")} (focus on a swapped cap): one call, handled (defaultPrevented), not passed to the page, no care press`,
+          out.every((o) => o.focusCap >= 0 && o.guesses.join() === o.guess && o.seen.length === 1 && o.seen[0].dp && o.doc.length === 0 && o.press === 0), out);
+      }
+      {
+        // dig's keep: blocked on an empty basket (nothing sent, the key still handled), live with a berry in it
+        await card.evaluate((el) => el.__sm.kopen("dig"));
+        await kp("ArrowLeft");
+        const empty = await read();
+        await done();
+        await card.evaluate((el) => el.__sm.kopen("dig", 1));
+        await kp("ArrowLeft");
+        const full = await read();
+        await done();
+        kcheck("dig: ArrowLeft keeps the basket only when there is one (blocked: nothing sent, still handled)",
+          empty.guesses.length === 0 && empty.seen[0]?.dp && full.guesses.join() === "keep" && full.seen[0]?.dp, { empty, full });
+      }
+      {
+        // a key the mode does not list (a letter, WASD, an arrow the game has no use for) is left alone: the page hears it
+        await card.evaluate((el) => el.__sm.kopen("left_right"));
+        for (const key of ["ArrowUp", "ArrowDown", "w", "x", "k"]) await kp(key); // not a, s or d: HA binds those on the page (Assist and the like), which moves the focus
+        const r = await read();
+        await done();
+        kcheck("left_right: ArrowUp/Down, w, x and k do nothing and are not stopped (no WASD, no letters on the server games)",
+          r.guesses.length === 0 && r.seen.length === 5 && r.seen.every((x) => !x.dp) && r.doc.length === 5, r);
+      }
+      {
+        // after a tap on the board's background (the device takes the focus): the keys still work; modifiers do not
+        await card.evaluate((el) => { el.__sm.s().gameBox.scrollIntoView({ block: "center" }); return el.__sm.kopen("left_right"); });
+        const box = await card.evaluate((el) => { const r = el.__sm.s().gameBox.getBoundingClientRect(); return { x: r.left + 3, y: r.top + 3 }; });
+        await page.mouse.click(box.x, box.y);
+        await page.waitForTimeout(80);
+        const where = await card.evaluate((el) => { const s = el.__sm.s(); return { device: el.shadowRoot.activeElement === s.device, status: s.screen.classList.contains("show-status"), mode: s.mode?.id }; });
+        await kp("ArrowRight");
+        const tapped = await read();
+        await page.keyboard.press("Control+ArrowLeft");
+        await page.keyboard.press("Alt+ArrowLeft");
+        await page.keyboard.press("Meta+ArrowLeft");
+        await page.waitForTimeout(70);
+        const mods = await read();
+        await done();
+        kcheck("left_right: after a tap on the board's background the keys still work (the device holds the focus); ctrl, alt or meta with an arrow does nothing",
+          where.device && !where.status && where.mode === "left_right" && tapped.guesses.join() === "right" && mods.guesses.join() === "right", { where, tapped, mods });
+      }
+      {
+        // g.busy: a second key while the first call is out sends nothing; a held key acts once
+        await card.evaluate(async (el) => {
+          await el.__sm.kopen("left_right");
+          el.__sm.hold = new Promise((resolve) => { el.__sm.release = resolve; });
+        });
+        await kp("ArrowLeft");
+        await kp("ArrowRight");
+        const busy = await read();
+        await card.evaluate((el) => el.__sm.release());
+        await page.waitForTimeout(100);
+        await done();
+        await card.evaluate((el) => el.__sm.kopen("higher_lower"));
+        for (let i = 0; i < 5; i++) await page.keyboard.down("ArrowUp"); // a held key: the first press, then repeats
+        await page.keyboard.up("ArrowUp");
+        await page.waitForTimeout(100);
+        const held = await read();
+        await done();
+        kcheck("a key while the call is out sends nothing (g.busy); a held key acts once and its repeats are handled too (no scroll)",
+          busy.guesses.join() === "left" && busy.seen.length === 2 && busy.seen.every((x) => x.dp) &&
+          held.guesses.join() === "higher" && held.seen.length === 5 && held.seen.slice(1).every((x) => x.repeat && x.dp) && held.doc.length === 0, { busy, held });
+      }
+      {
+        // focus outside the card: a sibling input on the page, then nothing focused
+        await card.evaluate((el) => el.__sm.kopen("left_right"));
+        await card.evaluate(() => {
+          const input = document.createElement("input");
+          input.id = "kc-outside";
+          document.body.append(input);
+          input.focus();
+        });
+        await kp("ArrowLeft");
+        await kp("ArrowRight");
+        const outside = await read();
+        await card.evaluate((el) => {
+          document.getElementById("kc-outside").remove();
+          document.activeElement?.blur?.();
+          el.shadowRoot.activeElement?.blur?.();
+        });
+        await kp("ArrowLeft");
+        const blurred = await read();
+        await done();
+        kcheck("focus on an input outside the card, or nowhere: the arrows do nothing (the mode stays on)",
+          outside.guesses.length === 0 && outside.seen.length === 0 && outside.doc.length === 2 && outside.mode === "left_right" &&
+          blurred.guesses.length === 0 && blurred.seen.length === 0 && blurred.mode === "left_right", { outside, blurred });
+      }
+      {
+        // the status sheet open over a mode that keeps going (a probe with exit.status keep): nothing
+        await card.evaluate((el) => {
+          const sm = el.__sm;
+          const s = sm.s();
+          sm.watch(s);
+          const m = sm.probe({ exit: { status: "keep" } });
+          m.slots[0] = { ...m.slots[0], keys: ["ArrowLeft"] };
+          s.buttons.play.focus({ preventScroll: true });
+          el._modeEnter(s, m, { from: s.buttons.play });
+          sm.acts.length = 0;
+          sm.reset();
+        });
+        await kp("ArrowLeft");
+        const open = await card.evaluate((el) => ({ acts: [...el.__sm.acts], mode: !!el.__sm.s().mode }));
+        await card.evaluate((el) => { el._toggleStatus(el.__sm.s()); el.__sm.acts.length = 0; el.__sm.reset(); });
+        await kp("ArrowLeft");
+        const sheet = await card.evaluate((el) => {
+          const sm = el.__sm;
+          const s = sm.s();
+          return { acts: [...sm.acts], mode: !!s.mode, shown: s.screen.classList.contains("show-status"), seen: [...sm.seen] };
+        });
+        await card.evaluate((el) => { el._toggleStatus(el.__sm.s()); el._modeExit(el.__sm.s(), "cleanup"); });
+        kcheck("a probe mode with the status sheet open: its key does nothing and is not stopped; with the sheet shut, the same key acts once",
+          open.acts.join() === "1" && open.mode && sheet.shown && sheet.mode && sheet.acts.length === 0 && sheet.seen.every((x) => !x.dp), { open, sheet });
+      }
+
+      // Hop: each key, with the focus on a swapped cap and on the grid; a tap on the board; Escape (built) still quits.
+      {
+        await card.evaluate((el, fx) => {
+          const sm = el.__sm;
+          const wipe = () => { for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-hop|")) localStorage.removeItem(k); };
+          wipe();
+          el._hopFetch = async () => ({ ...fx.reply, day: "2026-11-03", done: false, tidy: false });
+          el._hopSettle = async () => ({ result: "ok", won: true, tidy: false, paid: true, found: false, already: false });
+          sm.hopWipe = wipe;
+          sm.hopOpen = async (where) => {
+            wipe();
+            const s = sm.s();
+            s.hopSeen = null;
+            s.buttons.play.focus({ preventScroll: true });
+            s.game = { picking: true };
+            await el._hopOpen(s);
+            sm.watch(s);
+            if (where === "grid") s.game.el.grid.focus({ preventScroll: true });
+            sm.reset();
+            return s;
+          };
+          sm.hopSnap = () => { const s = sm.s(); return { moves: s.game?.moves.length ?? null, special: !!s.game?.special, mode: s.mode?.id || null }; };
+          sm.hopLive = () => sm.eight(sm.s()).slice(0, 4).map((b, i) => (b.getAttribute("aria-disabled") === "true" ? null : i)).filter((i) => i !== null);
+        }, HOPFX);
+        const snap = () => card.evaluate((el) => el.__sm.hopSnap());
+        const dirKeys = ["ArrowLeft", "ArrowUp", "ArrowDown", "ArrowRight"];
+        for (const where of ["cap", "grid"]) {
+          await card.evaluate((el, w) => el.__sm.hopOpen(w), where);
+          const live = await card.evaluate((el) => el.__sm.hopLive());
+          const blocked = [0, 1, 2, 3].filter((i) => !live.includes(i));
+          const r = { where, live, blocked };
+          await kp(dirKeys[live[0]]);
+          r.moved = await snap();
+          await kp("s");
+          r.special = await snap();
+          await kp("s");
+          r.unspecial = await snap();
+          await kp("S"); // shift-s: matched exactly, so no toggle (and not handled)
+          r.upper = await snap();
+          await kp("z");
+          r.undone = await snap();
+          await kp(dirKeys[live[0]]);
+          await kp("r");
+          r.restarted = await snap();
+          if (blocked.length) {
+            await card.evaluate((el) => el.__sm.reset());
+            await kp(dirKeys[blocked[0]]);
+            r.blockedKey = { snap: await snap(), seen: (await read()).seen };
+          }
+          r.seenAll = (await read()).seen;
+          await card.evaluate((el) => { const s = el.__sm.s(); if (s.mode) el._modeClick(s, 7); });
+          kcheck(`hop, focus on ${where === "cap" ? "a swapped cap" : "the grid"}: an arrow moves, s toggles the special, z undoes, r restarts; S (shift) and a blocked arrow do nothing; the keys are handled`,
+            r.moved.moves === 1 && r.special.special && !r.unspecial.special && !r.upper.special && r.undone.moves === 0 && r.restarted.moves === 0 &&
+            (!blocked.length || (r.blockedKey.snap.moves === 0 && r.blockedKey.seen[0]?.dp)) &&
+            r.seenAll.filter((x) => x.key !== "S").every((x) => x.dp) && r.seenAll.filter((x) => x.key === "S").every((x) => !x.dp), r);
+        }
+        // a tap on the board's background keeps the focus in the card; then a key moves; Escape quits
+        const tail = await card.evaluate(async (el) => {
+          const sm = el.__sm;
+          const s = await sm.hopOpen("cap");
+          s.gameBox.scrollIntoView({ block: "center" });
+          const r = s.gameBox.getBoundingClientRect();
+          return { d: sm.hopLive(), box: { x: r.left + 3, y: r.top + 3 } };
+        });
+        await page.mouse.click(tail.box.x, tail.box.y);
+        await page.waitForTimeout(80);
+        const focus = await card.evaluate((el) => { const s = el.__sm.s(); const a = el.shadowRoot.activeElement; return { inside: a === s.device || s.device.contains(a), mode: s.mode?.id || null }; });
+        await kp(dirKeys[tail.d[0]]);
+        const after = await snap();
+        await kp("Escape");
+        const esc = await card.evaluate((el) => ({ mode: el.__sm.s().mode?.id || null, game: !!el.__sm.s().game }));
+        kcheck("hop: after a tap on the board's background the keys still work; Escape (built) still quits and the care buttons come back",
+          focus.inside && focus.mode === "hop" && after.moves === 1 && esc.mode === null && !esc.game, { tail, focus, after, esc });
+        await card.evaluate((el) => {
+          delete el._hopFetch;
+          delete el._hopSettle;
+          el.__sm.hopWipe();
+        });
+      }
+      await card.evaluate((el) => {
+        document.removeEventListener("keydown", el.__sm.onDoc);
+        for (const s of el._slides) if (s.mode) el._modeExit(s, "cleanup");
+      });
+    }
     await card.evaluate((el) => {
       delete el._playCall;
       el.__sm.over = {};

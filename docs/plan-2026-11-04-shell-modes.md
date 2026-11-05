@@ -5,8 +5,8 @@
 folded in here and cited as "review P#"). Four slices; **slices 1 (the engine), 2 (the three
 server games) and 3 (Hop) are built and on main** (slice 1 `a698d6d7`). **Slice 4 is split
 (2026-11-05, from the s2907 review, cited "review S4 #n"): 4A, the pixel icons, is BUILT and on
-main (`7af36efd`, s2911; its deviations are in section 6); 4B, the keys, is PARKED** (owner
-2026-11-05: later, behind the Hop art; the icon wiring it waited on is done).
+main (`7af36efd`, s2911; its deviations are in section 6); 4B, the keys, is built** (s2919, owner
+answers of 2026-11-05 in section 6; it was parked, D11, until the Hop art and the icon wiring were done).
 **Basis:** `5e7616c0` (`fm-hop-exp`) for sections 2 and 4 (the "as it was" tree). Where a ref in
 sections 3.5-3.6 and 6 names a line that slice 1 moved, it has been re-pointed to main
 (`a75f00e1`, 2026-11-04); recheck when a slice starts (the card parts move often).
@@ -82,7 +82,7 @@ All six are the owner's, 2026-11-04. Cite them as "owner decision D#".
 | D8 | **Opening the status sheet keeps ending a game** (`card-layout.js:786`, as built). A non-game mode chooses per mode (`exit.status`). (Owner 2026-11-04, review Q2.) |
 | D9 | **Hop's future hint goes on the board** (a tap on the nest or a long-press), never a ninth key; the 8 slots stay. (Owner 2026-11-04, review Q3.) |
 | D10 | **An integration reload (`s.reloading`) ends the mode.** Modes are not saved across a reload. (Owner 2026-11-04, review Q4.) |
-| D11 | **Slice 4B (keys) is parked**: later, behind the Hop art (s2874) and the icon wiring (4A). (Owner 2026-11-05.) |
+| D11 | ~~Slice 4B (keys) is parked~~ **Lifted 2026-11-05** (owner): the Hop art (s2874) and the icon wiring (4A) are done; 4B is built (s2919). |
 | FM2 | **Q3 (2026-11-05):** Hop's special cap is the **bare count** once it has a pixel icon (the "✦2" goes); its `aria-label` keeps the word "special". For 4B: **S = special, R = restart**. First mate. |
 | FM3 | **Q4 (2026-11-05):** the mode icons are drawn for the pale-blue `#c4e2f2` face only (D5 gives one game tint); **the owner signs the art** before merge. First mate. |
 | FM | Server games enter the mode at `_gameView` (before the server answers) and accept a one-beat swap-and-restore on a refusal (review P11). First mate, 2026-11-04. |
@@ -347,7 +347,7 @@ Escape. The `gameBox` listener goes in the same slice so Escape never fires twic
 - **Keyboard.** Today only Tab and Escape work (no arrow handler on the board). Escape is
   **built** (slice 1): it works from the moment the handler is on the device, including with
   focus on a swapped cap, and the table modes all set `escape: true` on slot 8. The arrow and
-  letter keys are **slice 4B, parked** (section 6): a `keys` array on each slot, routed through
+  letter keys are **slice 4B, built** (section 6): a `keys` array on each slot, routed through
   `_modeClick`, with the design notes and acceptance recorded there.
 
 ### 3.7 Who owns the screen (review P3, D6)
@@ -440,7 +440,7 @@ not a branch in the engine.
 
 ## 6. The slices
 
-Order: 1 → 2 → 3 → 4A; 4B is parked (D11). Slices 1-3 and 4A are built. Each slice states what card-check, the
+Order: 1 → 2 → 3 → 4A → 4B. Slices 1-3, 4A and 4B are built. Each slice states what card-check, the
 bench and node tests must show; every acceptance line below is one of those three. A slice that
 changes card methods runs `scripts/gate --auto`, but slices 1-3 change methods every slide
 calls, so `scripts/pick-sections` will likely pick `all`: budget `scripts/ci-gate` (review P17);
@@ -650,12 +650,12 @@ Acceptance:
    change is listed in the commit.
 9. Hop is still behind `experimental_hop` (a flag-off card has no Hop row and no Hop mode).
 
-### Slice 4: the pixel icons (4A, built) and the keys (4B, parked)
+### Slice 4: the pixel icons (4A, built) and the keys (4B, built)
 
 Optional and last. Folded in from the s2907 review (2026-11-05; cited "review S4 #n"). It is two
 ships with no code in common: **4A** swaps the stopgap glyphs for pixel icons (an art job, then
-a small code ship) and is **BUILT, on main `7af36efd`** (s2911; deviations below); **4B** adds keyboard keys and is **PARKED** (owner
-2026-11-05: later, behind the Hop art and the icon wiring, D11). 4B does not need 4A, nor 4A 4B.
+a small code ship) and is **BUILT, on main `7af36efd`** (s2911; deviations below); **4B** adds keyboard keys and is **BUILT** (s2919; it was
+parked, D11, lifted by the owner 2026-11-05). 4B does not need 4A, nor 4A 4B.
 Escape needs neither: it is built (3.5, 3.6).
 
 #### 4A: the pixel icons - BUILT, merged `7af36efd` (s2911, 2026-11-05)
@@ -794,24 +794,22 @@ Acceptance (review S4 #3, #5, #6):
 8. `motion_rule` and `owned_reads` still pass; `scripts/ci-gate` on the ship branch, as for any
    card change.
 
-#### 4B: the keys (PARKED, owner 2026-11-05)
+#### 4B: the keys (BUILT, s2919)
 
-**Parked: later, behind the Hop art (s2874); 4A (the icon wiring) is built.** Nothing below is briefed. The design
-notes and acceptance are the review's defects 7-10, kept so the ship can start from them. Keys
-help desktop dashboards only; wall tablets (D7's case) have no keys (review Q5).
+The park (D11) is lifted: the Hop art (s2874) and 4A (the icon wiring) are done. The design notes
+and acceptance are the review's defects 7-10. Keys help desktop dashboards only; wall tablets (D7's
+case) have no keys (review Q5).
 
-**Open for the owner, still open:**
-- **Q1, keys for the other three games.** left_right on Left/Right is obvious. higher_lower:
-  by position (Left = lo, Right = hi) or by meaning (Down = lo, Up = hi)? dig: any keys, or
-  none (`keep`/`dig` have no natural arrow; `k`/`d` was the review's guess)?
-- **Q2, WASD.** Keep it, or arrows only? Home Assistant binds single letters on the document
-  (the review recalled `a` Assist, `e` entity search, `c` command palette, `d` device search,
-  `m` my link; **not verified**, to be checked on a real HA before choosing). Recommended:
-  arrows, Z, S and R for the first ship; WASD only if the owner wants it and a real-HA row proves
-  HA does not steal `a`/`d`.
+**Answered 2026-11-05 (owner):**
+- **Q1, keys for the other three games.** left_right: slot 1 `ArrowLeft`, slot 4 `ArrowRight`.
+  higher_lower: lo (slot 1) is `ArrowDown` and `ArrowLeft`, hi (slot 4) is `ArrowUp` and
+  `ArrowRight`. dig: keep (slot 1) is `ArrowLeft`, dig (slot 4) is `ArrowRight`. No letter keys for
+  these three.
+- **Q2, WASD.** No WASD. Hop: the four arrows on slots 1-4, `s` = special, `z` = undo, `r` =
+  restart (FM2), `Escape` = quit (built). So the real-HA check of `a`/`d` is not needed.
 
-**Decided (FM2, 2026-11-05):** S = special, R = restart. With Z = undo (the review's), the arrow
-keys on Hop's four directions, and Esc = quit (built).
+Letter keys are matched exactly on `event.key`: lower-case only, so Shift+S or Caps Lock does not
+act (and is not handled).
 
 **Design notes** (review S4 #7-#10):
 - **#7, where the map lives.** A `keys: [event.key names]` array on each slot in the table (e.g.
@@ -916,10 +914,11 @@ Answered 2026-11-04 (the first mate adds them to the section 1 table as D7-D10):
 | D9 | **Hop's future hint goes on the board (a tap on the nest, or a long-press), never a ninth key; the 8 slots stay.** | 3.4 |
 | D10 | **An integration reload (`s.reloading`) ends the mode.** | 3.5 reload row, slice 1 acceptance 7, slice 2 acceptance 4 |
 
-Answered 2026-11-05 (owner and first mate): slice 4B parked (D11); Q3 the special's bare count, S and
-R for 4B (FM2); Q4 icons drawn for `#c4e2f2` only, the owner signs the art (FM3). Slice 1's Q-A and Q-B
-were answered 2026-11-04 (top of this document). **Open for the owner: Q1 (keys for the other three
-games) and Q2 (WASD), both in slice 4B, parked.** The two small things the slices settle on their own: the final
+Answered 2026-11-05 (owner and first mate): slice 4B parked, then unparked (D11); Q3 the special's bare
+count, S and R for 4B (FM2); Q4 icons drawn for `#c4e2f2` only, the owner signs the art (FM3); **Q1 and
+Q2 (owner, 2026-11-05): the arrow map of slice 4B, no letters on the three server games, no WASD
+(section 6, 4B).** Slice 1's Q-A and Q-B were answered 2026-11-04 (top of this document). Nothing is
+open for the owner. The two small things the slices settle on their own: the final
 manifest position of the two new parts (slice 1 finds it with card-check), and whether the
 `.moded` tint is a custom property or a class (slice 1 settled both: the parts sit after `ui-copy`
 and after `card-actions`, and the tint is a class, `.device.moded .buttons > .toy.tinted .cap`,

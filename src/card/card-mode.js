@@ -186,6 +186,26 @@ class HatchPetCardMode extends HatchPetCardActions {
     return true;
   }
 
+  // The keyboard (slice 4B; bound on the device beside Escape): an event.key a slot lists in `keys`
+  // presses that slot as a tap does, through _modeClick (a blocked slot sends nothing, an open status
+  // sheet is closed first, the cap presses). Returns whether the key belonged to the mode, and the
+  // caller then stops it (an arrow must not scroll the dashboard). A held key (`repeat`) is that
+  // too, but acts once, on the first press. Not ours: no mode; Escape (_modeEscape); a modifier, a
+  // composition, an event a handler already used; a field or other control that types (the focus
+  // may be inside the card, in the status sheet's inputs); the status sheet or the lay sheet up.
+  _modeKey(s, e) {
+    const m = s.mode;
+    if (!m || e.key === "Escape" || e.defaultPrevented || e.isComposing) return false;
+    if (e.ctrlKey || e.metaKey || e.altKey) return false;
+    if (s.laySheet || s.screen.classList.contains("show-status")) return false;
+    const at = (e.composedPath ? e.composedPath()[0] : null) || e.target;
+    if (at && (/^(input|textarea|select)$/i.test(at.tagName || "") || at.isContentEditable)) return false;
+    const i = m.slots.findIndex((slot, n) => n < SHELL_SLOTS - 1 && slot?.keys?.includes(e.key));
+    if (i < 0) return false;
+    if (!e.repeat) this._modeClick(s, i);
+    return true;
+  }
+
   // The engine's own reasons to end a mode: idle (exit.idleMs since idleAt(s), default the last accepted
   // press, unless idleHold(s)), and asleep and egg when exit.on lists them. From _update (the care
   // flags are fresh there) and _tick (idle must not wait for a hass push).

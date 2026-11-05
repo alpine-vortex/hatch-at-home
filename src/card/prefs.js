@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.46.3";
+const VERSION = "0.46.4";
 // scripts/build-card.js swaps this for the card's content id (7 hex of its own sha256): Settings shows it.
 const BUILD = "__BUILD_ID__";
 const BASE = "/virtual_pet/frontend";

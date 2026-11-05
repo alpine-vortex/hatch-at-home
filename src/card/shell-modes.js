@@ -13,8 +13,11 @@
 //                //   idleMs, idleAt(s), idleHold(s), on: ["asleep" | "egg"] }
 //     announce,  // the lead of the one announcement when the buttons swap
 //     onExit }   // optional (card, s, reason): ends whatever the mode started
-// A slot: { icon, cap, aria, title, act, enabled, on }. `cap`, `aria` and `title` are a string or a
+// A slot: { icon, cap, aria, title, act, enabled, on, keys }. `cap`, `aria` and `title` are a string or a
 // pure function of the slide; `enabled(s)` and `on(s)` are pure; `act(card, s)` is all a press does.
+// `keys` (slice 4B) is the keyboard: event.key names, matched exactly (so "s", not "S"), that press the
+// slot as a tap does (the engine's _modeKey routes them through _modeClick). Escape is not listed on the
+// table's slots: exit.escape runs the exit slot. shellCheck rejects a duplicate key within a mode.
 // Captions and labels are table copy: a mode never shows a household's free text (AGENTS.md privacy).
 
 const SHELL_SLOTS = 8;
@@ -63,8 +66,8 @@ function shellGame(id, left, right, idleLine) {
 // The special's cap is its bare count (the icon carries the word; "special 2" clipped at narrow widths, plan
 // 3.6, FM2) and its aria-label still says "special". Any other exit ends the board with no line; it is resumable from the parked list.
 function shellHop() {
-  const key = (name, icon, cap) => ({
-    icon, cap,
+  const key = (name, icon, cap, keys) => ({
+    icon, cap, keys,
     aria: (s) => s.game?.keys?.[name]?.label || name,
     enabled: (s) => !!s.game?.keys?.[name]?.enabled,
     act: (card, s) => card._hopKey(s, name),
@@ -72,10 +75,10 @@ function shellHop() {
   return {
     id: "hop",
     slots: [
-      key("left", "icon_mode_left", "left"), key("up", "icon_mode_up", "up"), key("down", "icon_mode_down", "down"),
-      key("right", "icon_mode_right", "right"),
-      { ...key("special", "icon_mode_special", (s) => `${s.game?.keys?.special?.count ?? 0}`), on: (s) => !!s.game?.special },
-      key("undo", "icon_mode_undo", "undo"), key("restart", "icon_mode_restart", "restart"),
+      key("left", "icon_mode_left", "left", ["ArrowLeft"]), key("up", "icon_mode_up", "up", ["ArrowUp"]),
+      key("down", "icon_mode_down", "down", ["ArrowDown"]), key("right", "icon_mode_right", "right", ["ArrowRight"]),
+      { ...key("special", "icon_mode_special", (s) => `${s.game?.keys?.special?.count ?? 0}`, ["s"]), on: (s) => !!s.game?.special },
+      key("undo", "icon_mode_undo", "undo", ["z"]), key("restart", "icon_mode_restart", "restart", ["r"]),
       { icon: "icon_mode_quit", cap: "quit", aria: "Stop the game", act: (card, s) => card._quitGame(s, card._quitLine(s)) },
     ],
     tint: "game",
@@ -96,14 +99,14 @@ function shellHop() {
 // object passed to _modeEnter, not an entry.
 const SHELL_MODES = Object.freeze({
   left_right: shellFreeze(shellGame("left_right",
-    { icon: "icon_mode_left", cap: "left", aria: "Guess left" },
-    { icon: "icon_mode_right", cap: "right", aria: "Guess right" }, null)),
+    { icon: "icon_mode_left", cap: "left", aria: "Guess left", keys: ["ArrowLeft"] },
+    { icon: "icon_mode_right", cap: "right", aria: "Guess right", keys: ["ArrowRight"] }, null)),
   higher_lower: shellFreeze(shellGame("higher_lower",
-    { icon: "icon_mode_down", cap: "lo", aria: "Guess lower" },
-    { icon: "icon_mode_up", cap: "hi", aria: "Guess higher" }, null)),
+    { icon: "icon_mode_down", cap: "lo", aria: "Guess lower", keys: ["ArrowDown", "ArrowLeft"] },
+    { icon: "icon_mode_up", cap: "hi", aria: "Guess higher", keys: ["ArrowUp", "ArrowRight"] }, null)),
   dig: shellFreeze(shellGame("dig",
-    { icon: "icon_mode_keep", cap: "keep", aria: "Keep the basket", enabled: (s) => !s.game?.busy && !!s.game?.basket },
-    { icon: "icon_mode_dig", cap: "dig", aria: "Dig a leaf" }, GAME_COPY.idle)),
+    { icon: "icon_mode_keep", cap: "keep", aria: "Keep the basket", keys: ["ArrowLeft"], enabled: (s) => !s.game?.busy && !!s.game?.basket },
+    { icon: "icon_mode_dig", cap: "dig", aria: "Dig a leaf", keys: ["ArrowRight"] }, GAME_COPY.idle)),
   hop: shellFreeze(shellHop()),
 });
 
@@ -133,6 +136,7 @@ function shellCheck(m) {
   if (!Array.isArray(m.slots) || m.slots.length !== SHELL_SLOTS) return [...bad, `slots is not ${SHELL_SLOTS} long`];
   if (!Object.hasOwn(SHELL_TINTS, m.tint)) bad.push(`tint ${m.tint} is not in SHELL_TINTS`);
   const caps = [];
+  const keyed = new Set();
   m.slots.forEach((slot, i) => {
     if (slot === null) return;
     const at = `slot ${i + 1}`;
@@ -142,6 +146,18 @@ function shellCheck(m) {
     if (!fn(slot.on)) bad.push(`${at} on is not a function`);
     for (const k of ["cap", "aria", "title"]) {
       if (slot[k] !== undefined && typeof slot[k] !== "string" && typeof slot[k] !== "function") bad.push(`${at} ${k} is neither copy nor a function`);
+    }
+    if (slot.keys !== undefined) {
+      if (!Array.isArray(slot.keys)) bad.push(`${at} keys is not a list`);
+      else {
+        for (const k of slot.keys) {
+          if (typeof k !== "string" || !k) bad.push(`${at} has a key that is not a name`);
+          else if (keyed.has(k)) bad.push(`two slots share the key ${k}`);
+          else keyed.add(k);
+          if (typeof k === "string" && k === "Escape" && i !== SHELL_SLOTS - 1) bad.push(`${at} takes Escape, which is slot 8's`);
+        }
+        if (i === SHELL_SLOTS - 1 && slot.keys.some((k) => k !== "Escape")) bad.push(`${at} takes a key other than Escape`);
+      }
     }
     if (typeof slot.aria !== "function" && !shellText(slot.aria).trim()) bad.push(`${at} has no aria label`);
     if (typeof slot.cap === "string") caps.push(slot.cap.trim());

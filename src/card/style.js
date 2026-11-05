@@ -110,6 +110,7 @@ const STYLE = `
 
   /* One device */
   .device { display: flex; flex-direction: column; align-items: center; font-family: 'Tiny5', monospace; }
+  .device:focus { outline: none; } /* focused by a tap on the shell, so a shell mode's keys keep working (slice 4B) */
   /* The moulded shell (_mould): each part's plastic is a .mould cut on the grid
      (--px a cell), its own colour in CSS with the cut light and shade (--tones) over
      it. The parts themselves only give the size and shape. */

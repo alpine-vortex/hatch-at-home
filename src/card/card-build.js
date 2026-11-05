@@ -130,7 +130,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     const slide = document.createElement("div");
     slide.className = "slide";
     slide.innerHTML = `
-      <div class="device">
+      <div class="device" tabindex="-1">
         <div class="roof"><i class="mould"></i></div><div class="crescent"><i class="mould"></i></div><div class="loop"><i class="mould"></i></div><div class="lid"><i class="mould"></i><span></span><span></span><span></span></div>
         <div class="body"><i class="mould"></i>
           <i class="hw screws"></i><i class="hw glare"></i>
@@ -272,6 +272,15 @@ class HatchPetCardBuild extends HatchPetCardBase {
       if (e.key !== "Escape" || e.defaultPrevented || s.screen.classList.contains("show-status")) return;
       if (this._modeEscape(s)) e.preventDefault();
       else if (s.game) this._quitGame(s, this._quitLine(s));
+    });
+    // The mode's keys (slice 4B). The device is focusable (tabindex -1, no outline) so a tap on the screen
+    // or the board's background keeps the focus inside the card, where this listener is; a key is only
+    // handled while the focus is in the card (a sibling input in the dashboard never reaches it).
+    s.device.addEventListener("keydown", (e) => {
+      if (this._modeKey(s, e)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
     });
     // The settings sheet and its picker keep the player's place (UX fix 1, F1/F2): a tap
     // that misses a button (a label, a gap, a note) must not fall through to the screen's
