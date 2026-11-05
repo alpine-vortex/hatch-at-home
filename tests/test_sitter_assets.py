@@ -65,7 +65,7 @@ def test_served_copy_matches_the_source():
         assert dest.exists(), (
             f"{dest.relative_to(ROOT)} missing: run scripts/sync-sitter.py"
         )
-        assert dest.read_bytes() == src.read_bytes(), (
+        assert dest.read_bytes() == sync.served_bytes(str(src)), (
             f"{dest.relative_to(ROOT)} differs from art/sitter"
         )
 
