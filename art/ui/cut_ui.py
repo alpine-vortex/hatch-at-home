@@ -219,9 +219,7 @@ A_SHIPS = {
     "icon_mode_undo",
     "icon_mode_restart",
     "icon_mode_quit",
-    "icon_mode_lo",
-    "icon_mode_hi",
-}
+}  # the plan's ten (docs/plan-2026-11-04-shell-modes.md, 4A): lo and hi reuse down and up, so A2's lo/hi wait in the library
 # Hand recolours after the cut, on the icon's own art-pixel rows (before centring): name -> [((row0, row1), from, to)].
 FIX = {
     "glyph_rain": [
@@ -236,6 +234,25 @@ def lib_dest(repo, s, name):
     if s == "a" and name in A_SHIPS:
         return repo / SHIP / f"{name}.png"
     return repo / LIBDIR / SETDIR[s] / f"{name}.png"
+
+
+def save4(im, dest):
+    """A 4-bit palette PNG, index 0 transparent: the format of every live frontend/ui icon (4A: 16 colours at most)."""
+    import numpy as np
+
+    a = np.asarray(im.convert("RGBA"))
+    op = a[..., 3] > 0
+    cols = np.unique(a[op][:, :3], axis=0)
+    if len(cols) > 15:
+        raise SystemExit(f"{dest.name}: {len(cols)} colours, more than 15")
+    idx = np.zeros(a.shape[:2], np.uint8)
+    for k, c in enumerate(cols, 1):
+        idx[op & (a[..., :3] == c).all(-1)] = k
+    out = Image.fromarray(idx, "P")
+    out.putpalette(
+        [0, 0, 0] + [int(v) for c in cols for v in c] + [0, 0, 0] * (15 - len(cols))
+    )
+    out.save(dest, transparency=0, bits=4, optimize=True)
 
 
 def lib_cut(s, src, repo):
@@ -363,7 +380,7 @@ def lib_cut(s, src, repo):
             dest.parent.mkdir(parents=True, exist_ok=True)
             if dest.exists() and dest.parent == repo / SHIP and name not in A_SHIPS:
                 raise SystemExit(f"refusing to overwrite live {dest}")
-            c.resize((96, 96), Image.NEAREST).save(dest)
+            save4(c.resize((96, 96), Image.NEAREST), dest)
             made.append(name)
         print(f"{sheet}: pitch {pitch:.2f} px")
     print(len(made), "icons;", "shrunk to fit:", ", ".join(shrunk) or "none")
