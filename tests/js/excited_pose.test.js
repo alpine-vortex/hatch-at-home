@@ -13,7 +13,7 @@ const grab = (re) => {
 };
 const method = (name) => grab(new RegExp(`\\n  ${name}\\([^\\n]*\\{\\n[\\s\\S]*?\\n  \\}\\n`));
 
-const env = { now: 1_000_000, calm: false };
+const env = { now: 1_000_000, calm: false, RealDate: Date };
 const ctx = { env };
 vm.runInNewContext([
   grab(/\nconst EXCITED_POSE_MS = [^\n]*\n/),
@@ -102,4 +102,52 @@ test("the layout starts the window on becoming excited; a card loaded into an ex
   assert.match(src, /if \(excitedNow\) s\.excitedSince = s\.moodState === undefined \? Date\.now\(\) - EXCITED_POSE_MS : Date\.now\(\);/);
   assert.match(src, /s\.frames = this\._shownFrames\(s, mood\?\.state\);/);
   assert.match(src, /this\._excitedSettle\(s\);\n\s+const frames = this\._frames\(s\);/);
+});
+
+// The real _tick (every other method a no-op) on a fake clock: under normal motion the excited frames
+// really alternate 1, 2, 1, 2 every tick (700 ms), they are not stuck on frame 1, and the content frames
+// that follow alternate the same way.
+const tickCtx = { env };
+vm.runInNewContext([
+  grab(/\nconst EXCITED_POSE_MS = [^\n]*\n/),
+  grab(/\nconst excitedPosed = [^\n]*\n/),
+  grab(/\nconst POSE_MOODS = [^\n]*\n/),
+  "const POSES = {};",
+  "const calm = () => env.calm;",
+  "const document = { hidden: false };",
+  "const Date = class extends env.RealDate { constructor(...a) { super(...(a.length ? a : [env.now])); } static now() { return env.now; } };",
+  `class Base {${["_tick", "_frames", "_excitedSettle", "_shownFrames", "_petFrames"].map(method).join("")}}`,
+  // Everything else the tick calls is a no-op.
+  "const Card = new Proxy(Base, { construct(T, a) { return new Proxy(new T(...a), { get: (o, k) => (k in o || typeof k !== 'string' || !k.startsWith('_') ? o[k] : () => undefined) }); } });",
+  "this.out = { Card };",
+].join("\n"), tickCtx);
+
+test("under normal motion the excited frames alternate every tick, then the content frames do", () => {
+  env.calm = false;
+  env.now = 6_000_000;
+  const card = new tickCtx.out.Card();
+  const pet = { src: null, getAttribute() { return this.src; }, setAttribute(_, v) { this.src = v; }, style: {} };
+  const s = { excitedSince: env.now, frame: 0, pet, species: sp, speciesId: "bird", scene: null, poseUntil: 0, patPoseUntil: 0, bubble: { textContent: "" }, sayUntil: 1 };
+  s.framesOf = (m) => card._petFrames(sp, "teen", m, false, null, []);
+  s.frames = card._shownFrames(s, "excited");
+  card._show = (_s, el, f) => { el.src = f; };
+  card._slides = [s];
+  card._index = 0;
+  card._visible = true;
+  Object.assign(card, { _director: null, _ticks: 0, _lookDay: new Date().toDateString(), _booting: false });
+  card._show(s, pet, s.frames[0]);
+  const seen = [pet.src];
+  for (let i = 0; i < 20; i++) {
+    env.now += 700;
+    card._tick();
+    seen.push(pet.src);
+  }
+  const at = (n) => seen[n]; // the picture after n ticks, 700 ms each
+  for (let n = 0; n < 14; n++) assert.strictEqual(at(n), `teen_excited_${(n % 2) + 1}`, `tick ${n} (${n * 700} ms)`);
+  assert.ok(new Set(seen.slice(0, 14)).size === 2, "both excited frames were shown");
+  // 14 x 700 = 9.8 s is the last tick inside the window; the redraw comes on the first tick past 10 s.
+  const after = seen.slice(15);
+  assert.ok(after.every((f) => f.startsWith("teen_content_")), after.join());
+  assert.ok(new Set(after).size === 2, "the content frames alternate too: " + after.join());
+  after.forEach((f, i) => i && assert.notStrictEqual(f, after[i - 1], "never the same frame twice running"));
 });
