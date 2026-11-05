@@ -29,6 +29,7 @@ Where things live:
 | hop-engine | `HATCH_HOP`, Hop of the Day's rules (one frozen namespace; hop.py's twin, no `this`) |
 | interaction-director | `HATCH_DIRECTOR`, the device-alive director: track leases, generation tokens, `BUSY_OWNERS` (one frozen namespace, pure, no `this`, no DOM; the card creates one per card in `_build`, device-fx.js is its first adapter) |
 | device-fx | `HATCH_DEVICE_FX`, the adapter for the director (slices 3B, 3C): wire entry to cue, the rain recipe (`dir-*` classes on the slide's `.hw.glass`), ambience paint, `live`, `enter`; and the rim cues (feed, play, clean, the confirmed tuck: `RIM`, `rim`, `dir-*` classes on the slide's `.hw.rim`) (one frozen namespace, no `this`, no DOM beyond the glass and the rim; the card's `_dir*` methods and `_rimCue` in card-visit call it) |
+| sitter-engine | `HATCH_SITTER`, the sitter's rules (one frozen namespace, pure, no `this`, no DOM, no clock; sitter plan S3a: whose sitter, the cue plan, the first-snapshot rule, idles, the hold pose, the beats; `card-sitter` is its adapter) |
 | lines | poses, wishes, BABY, PERSONA |
 | lines-fresh | the fresh-expand copy block (scripts/copy-scan.js's COPY_TABLES) |
 | ui-copy | screen copy, kindred, follow text, QUESTIONS, notes, dreams, moment consts, helpers |
@@ -38,6 +39,7 @@ Where things live:
 | card-base | setConfig, hass, connect, channel, finding pets |
 | card-build | `_build`, `_buildSlide`, low battery, power-on, `_update`, `_forget`, `_go` |
 | card-layout | `_layout`, `_mould`, `_renderShelf`, `_dress`, `_renderSlide`, `_say`, frames |
+| card-sitter | the sitter's life (`HatchPetCardSitter`): the art load (`frontend/sitter/`, `sitters.json`), `_sitterSync` (drawn by `_renderSlide`), beats, cues, idles, the one timer is `_sitterTick` (called by `_tick`), `_sitterAt` (the bench) |
 | card-tick | `_tick`, ghosting, idle, tricks, promise, `_speak`, `_pat`, `_sayLine` |
 | card-looks | `_firstLook`, follow-ups, gifts, welcome, wishes |
 | card-visit | `_catchUp`, greet, `_visit`, `_ask`, hearts, chirp, fx |

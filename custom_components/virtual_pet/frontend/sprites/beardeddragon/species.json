@@ -51,7 +51,6 @@
     "blanket": "bird/blanket",
     "heat": "gecko/heat_glow",
     "attention": "bird/attention",
-    "away": "bird/sitter_sign",
     "poop": [
       "bird/poop_1",
       "bird/poop_2",

@@ -140,8 +140,8 @@ class HatchPetCardBuild extends HatchPetCardBase {
           <span class="label"></span>
           <div class="bezel"><i class="hw guts"></i><i class="mould"></i><i class="hw stripes"></i><i class="hw light"></i><i class="hw rim" aria-hidden="true"><b></b><b></b><b></b></i><div class="screen">
             <img class="bg" alt="">
-            <img class="awaysign" alt=""><div class="awaylabel"></div>
-            <div class="sitter" hidden aria-hidden="true"><i class="sit-head"></i><i class="sit-body"></i><i class="sit-chair"></i></div>
+            <div class="awaylabel"></div>
+            <div class="sitter" hidden aria-hidden="true"><img class="sit-seat" alt=""><img class="sit-img" alt=""><i class="sit-head"></i><i class="sit-body"></i><i class="sit-chair"></i></div>
             <div class="season"></div>
             <img class="poop p0" alt="mess"><img class="poop p1" alt="mess"><img class="poop p2" alt="mess">
             <img class="perch" alt="">
@@ -181,7 +181,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     const q = (sel) => slide.querySelector(sel);
     const s = {
       el: slide, device: q(".device"), label: q(".label"), screen: q(".screen"), bg: q(".bg"),
-      awaysign: q(".awaysign"), awaylabel: q(".awaylabel"), sitterEl: q(".sitter"), pet: q(".pet"), prop: q(".prop"),
+      awaylabel: q(".awaylabel"), sitterEl: q(".sitter"), pet: q(".pet"), prop: q(".prop"),
       perch: q(".perch"), drape: q(".drape"), drapeImg: q(".drape img"), ghost: q(".ghost"), monoGrid: q(".mono-grid"), pat: q(".pat"),
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
@@ -769,6 +769,8 @@ class HatchPetCardBuild extends HatchPetCardBase {
     this._powerEnd(s);
     s.powerPending = null;
     this._stopTyping(s);
+    this._sitterReset(s); // another pet's sitter: no beat carries over
+    s.sit = null;
     s.voicedAt = 0;
     s.confirm = null;
     clearTimeout(s.confirmTimer);

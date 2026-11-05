@@ -24,7 +24,6 @@
     "medicine": "bird/medicine",
     "blanket": "bird/blanket",
     "attention": "bird/attention",
-    "away": "bird/sitter_sign",
     "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]
   },
   "backgrounds": { "day": "bird/bg_day", "night": "bird/bg_night", "rain": "bird/bg_rain", "dim": "bird/bg_dim" },

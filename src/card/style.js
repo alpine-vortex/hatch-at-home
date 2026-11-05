@@ -409,21 +409,39 @@ const STYLE = `
   @keyframes bubblepop { 0% { transform: translateY(0); opacity: 1; } 80% { transform: translateY(-30px) scale(1); opacity: 1; }
     100% { transform: translateY(-30px) scale(0); opacity: 0; } }
   @keyframes pop { from { transform: scale(.3); opacity: 0; } }
-  .awaysign { left: 50%; bottom: 12%; height: 40%; margin-left: -20%; }
-  /* The placeholder sitter (sitter plan S2; the art is A1, S3 swaps this for it): a plain figure
-     beside the pet, behind it. Standing by day; at night it dozes in a chair (D4). Still: no motion. */
-  .sitter { position: absolute; right: 5%; bottom: 10%; width: 17%; height: 36%; pointer-events: none; }
+  /* The sitter (sitter plan S3a, card-sitter.js): one element beside the pet, behind it, on the pet's
+     own 256 px sprite box so the frames sit on the same floor. Its motion is its own: translate
+     slides it in and out (a walk), scale -1 1 mirrors the walk out, the picture is a frame swap. Never
+     .pet's transform (AGENTS.md). Until the first frame decodes, or if one fails, the plain figure of S2
+     stands in (no .art). Every animation and transition here is one-shot and stilled by the
+     reduced-motion rule at the top of this sheet. */
+  .sitter { position: absolute; left: -5%; bottom: 4%; height: 58%; aspect-ratio: 1; pointer-events: none;
+    transition: translate 1.4s linear; }
   .sitter[hidden] { display: none; }
+  .sitter .sit-img { display: none; position: relative; z-index: 1; inset: 0; width: 100%; height: 100%; }
+  .sitter.art .sit-img { display: block; }
+  /* A look has no doze frames (6.2): at night it stands still before the base art's empty chair
+     (.sit-seat, behind it), leaning a little: a static rotate, never an animation, never .pet. */
+  .sitter .sit-seat { display: none; position: absolute; inset: 0; width: 100%; height: 100%; }
+  .sitter.art.seat .sit-seat { display: block; }
+  .sitter.art.seat.doze .sit-img { rotate: 4deg; transform-origin: 50% 88%; }
+  .sitter.art i { display: none; }
+  .sitter:not(.art) { left: auto; right: 5%; bottom: 10%; width: 17%; height: 36%; aspect-ratio: auto; }
   .sitter i { position: absolute; display: block; }
   .sitter .sit-head { left: 24%; top: 0; width: 52%; aspect-ratio: 1; border-radius: 50%; background: #e8c9a4;
     box-shadow: inset 0 -4px 0 #3a2a1a; }
   .sitter .sit-body { left: 8%; top: 36%; width: 84%; bottom: 0; border-radius: 40% 40% 12% 12%; background: #5b7fa6; }
   .sitter .sit-chair { display: none; left: -18%; right: -18%; bottom: -6%; height: 46%; border-radius: 6px;
     background: #8a5a35; box-shadow: inset 0 -6px 0 #5e3b20; }
-  .sitter.doze { height: 30%; bottom: 8%; }
-  .sitter.doze .sit-chair { display: block; }
-  .sitter.doze .sit-head { top: 8%; rotate: 18deg; }
-  .sitter.doze .sit-body { top: 42%; bottom: 14%; }
+  .sitter.doze:not(.art) { height: 30%; bottom: 8%; }
+  .sitter.doze:not(.art) .sit-chair { display: block; }
+  .sitter.doze:not(.art) .sit-head { top: 8%; rotate: 18deg; }
+  .sitter.doze:not(.art) .sit-body { top: 42%; bottom: 14%; }
+  /* Night to day: no frames stand it up, so a 200 ms cross-fade; at night it leaves by fading out. */
+  .sitter.fade { animation: sitter-fade .2s linear 1; }
+  .sitter.fade-out { animation: sitter-fade-out .4s linear 1 forwards; }
+  @keyframes sitter-fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes sitter-fade-out { from { opacity: 1; } to { opacity: 0; } }
   .awaylabel { position: absolute; left: 0; right: 0; bottom: 5%; text-align: center;
     color: #fff; font-size: 15px; text-shadow: 0 1px 3px #000; }
   .bubble .untyped { visibility: hidden; } /* laid out whole, so it never grows */

@@ -545,6 +545,13 @@ const MOMENT_CLASS = {
 // egg poses win (the sitter's own label gives way to it, card-layout).
 const REST_LABEL = "resting ☁";
 const SITTER_LABEL = "sitter's here"; // the small label while the sitter is in (approved copy, sitter plan 9)
+// The away note's sitter sentences (sitter plan 6.5, F9; approved 2026-11-04): a `sitter_*` log row's bit,
+// and the whole sentence the note says when the newest two bits are all the sitter's.
+const SITTER_ROWS = Object.freeze({ sitter_feed: "sitter:fed", sitter_play: "sitter:played", sitter_clean: null, sitter_medicine: null });
+const SITTER_NOTE = Object.freeze({
+  "sitter:fed": "while you were out, the sitter fed me!",
+  "sitter:played": "while you were out, the sitter and I played!",
+});
 // A card that knows the sitter is in but not how Pip is (no channel, privacy off: the mood sensor says "away").
 const SITTER_BLIND = Object.freeze({ blind: true });
 const REST_DAYDREAM_ODDS = 0.25; // a resting pet's hello is "i was just daydreaming" this often

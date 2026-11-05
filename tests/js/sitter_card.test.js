@@ -117,9 +117,12 @@ test("a care scene's held copy is the view's (the tap's pet), and the lights' li
 test("_renderSlide: the sitter and the label are drawn, the sign is not, and every away term is gone", () => {
   const render = grab(/\n  _renderSlide\(s\) \{[\s\S]*?\n  \}\n/);
   assert.match(render, /const sitter = this\._sitter\(s\);/);
-  assert.match(render, /s\.sitterEl\.hidden = !sitter;/);
-  assert.match(render, /s\.sitterEl\.classList\.toggle\("doze", scene === "night" \|\| scene === "dim"\)/);
-  assert.match(render, /this\._show\(s, s\.awaysign, null\)/);
+  assert.match(render, /this\._sitterSync\(s, sitter, scene\);/); // S3a: card-sitter.js draws it
+  const sync = method("_sitterSync");
+  assert.match(sync, /s\.sitterEl\.hidden = !\(sitter \|\| st\.leaving\);/);
+  assert.match(sync, /s\.sitterEl\.classList\.toggle\("doze", night\)/);
+  assert.match(sync, /const night = scene === "night" \|\| scene === "dim"/);
+  assert.doesNotMatch(render, /awaysign/); // S4: the old sign element is gone
   assert.doesNotMatch(render, /props\?\.away|"at the sitter's"|\baway\b[^\n]*\?|!away|\|\| away/);
   assert.doesNotMatch(render, /s\.away\b/);
 });

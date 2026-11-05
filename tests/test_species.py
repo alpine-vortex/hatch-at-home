@@ -31,6 +31,17 @@ def png(species: str, name: str) -> Path:
     return SPRITES / f"{path}.png"
 
 
+@pytest.mark.parametrize(
+    "species", sorted(p.parent.name for p in SPRITES.glob("*/species.json"))
+)
+def test_the_old_sitter_sign_is_retired(species: str) -> None:
+    # Sitter S4 (owner decision D5): the drawn sitter replaced the sign; no species
+    # names a sign prop, and the art is gone.
+    sp = json.loads((SPRITES / species / "species.json").read_text())
+    assert "away" not in (sp.get("props") or {})
+    assert not (SPRITES / species / "sitter_sign.png").exists()
+
+
 @pytest.mark.parametrize("species", READY)
 def test_every_referenced_sprite_exists(species: str) -> None:
     sp = json.loads((SPRITES / species / "species.json").read_text())

@@ -24,7 +24,6 @@
     "medicine": "medicine",
     "blanket": "blanket",
     "attention": "attention",
-    "away": "sitter_sign",
     "poop": ["poop_1", "poop_2", "poop_3"]
   },
   "backgrounds": { "day": "bg_day", "night": "bg_night", "rain": "bg_rain", "dim": "bg_dim" },

@@ -77,6 +77,7 @@ const COPY_TABLES = {
   SNACK_LINES: {}, // care reactions B2
   LIGHTS_LINES: {}, // care reactions D: the tuck and the wake
   SPECIES_LINES: { fill: "home" }, // species nature N2: the habit action lines
+  SITTER_LINES: {}, // sitter plan 9 (S3a): Pip's lines about the sitter
 };
 
 function lines(value, path, out) {

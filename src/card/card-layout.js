@@ -503,7 +503,6 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     if (s.empty) { // the empty card's toy (F5): the room and the egg, flat and still
       this._show(s, s.bg, sp.backgrounds?.day || Object.values(sp.backgrounds || {})[0]);
       this._show(s, s.perch, null);
-      this._show(s, s.awaysign, null);
       s.sitterEl.hidden = true;
       for (const img of [...s.poops, s.murk, s.attention, s.prop]) this._show(s, img, null);
       s.frames = [];
@@ -568,15 +567,14 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     this._renderSeason(s);
 
     this._show(s, s.perch, sp.perch);
-    this._show(s, s.awaysign, null); // the old sign is retired (owner decision D5; S4 deletes its art)
     // Resting (R1): a quiet label, and slow breathing on the idle pose; asleep, sick and the egg
     // win (restLabel). The sitter's own label shows where it has none: the resting label wins (3.1).
     const rest = restLabel(flags, { asleep, egg: s.egg });
     s.awaylabel.textContent = rest || (sitter ? SITTER_LABEL : "");
-    // The placeholder sitter (S2; the art is A1): beside the pet, standing by day, dozing in a chair at
-    // night (D4, the night and the dim scenes). Its own element: Pip's transform is not touched.
-    s.sitterEl.hidden = !sitter; // an egg gets no round, but the sitter is still in the house
-    s.sitterEl.classList.toggle("doze", scene === "night" || scene === "dim");
+    // The sitter (card-sitter.js): beside the pet, standing by day, dozing in a chair at night (D4, the
+    // night and the dim scenes), its beats and cues. Its own element: Pip's transform is not touched. An
+    // egg gets no round, but the sitter is still in the house.
+    this._sitterSync(s, sitter, scene);
     s.pet.classList.toggle("resting", !!rest && !lightsScene); // not breathing through a tuck or a wake
     s.frames = this._petFrames(sp, stage, mood?.state, calling, this._eggMinutes(stageState), flags);
     const key = s.frames.join(",");

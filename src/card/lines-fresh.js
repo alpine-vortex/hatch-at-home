@@ -587,4 +587,15 @@ const SPECIES_LINES = {
     lunamoth: { idle: [{ text: "*glows a little brighter*", move: "perk" }, { text: "*flickers in a tiny loop*" }] },
   },
 };
+// SITTER_LINES (sitter plan 9, S3a; APPROVED 2026-11-04 by the first mate): Pip's lines about the
+// sitter. arrive: "the sitter's here!" on an even minute, "hi, sitter!" otherwise (HATCH_SITTER.arriveLine);
+// one for each care of a round; leave: said as the sitter waves goodbye.
+const SITTER_LINES = {
+  arrive: ["the sitter's here!", "hi, sitter!"],
+  feed: ["yum! thank you, sitter"],
+  play: ["that was fun!"],
+  clean: ["all tidy!"],
+  medicine: ["i feel better"],
+  leave: ["bye, sitter!"],
+};
 // --- end fresh-expand copy ---

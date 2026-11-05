@@ -1,7 +1,11 @@
 # The sitter visits the house
 
 **Date:** 2026-11-04
-**Status:** Plan only. No code in this document's commit. Four slices, none started.
+**Status (reconciled 2026-11-04):** S1, S2, S3a, S3b and S4 built; S3 was split into S3a, S3b
+and S3c (section 7) after the S3 review (section 13). **Left:** S3c (the six full sitters, each a
+folder drop-in as its art lands: woodland, aqua, grove, celestial, dune, granny with her extra
+poses) and the journal line "The sitter looked after Pip." (section 9), which S3a did not
+ship: it needs a server-side field and is not started.
 **Revised 2026-11-04** after the adversarial review (worker s2883, findings A1-A9, B1-B7,
 C1-C3): section 12 maps each finding to where it is fixed. The tuning in 3.2 and 3.2a is now
 measured (`dev/sitter_sim.py`), not drafted.
@@ -579,40 +583,108 @@ card. S2 draws and tests both.
 - The old sign: not drawn (D5). `props.away` is retired in slice S4.
 - Buttons, lights, games, the request chip, `_say`, the first look and the gift moments all
   work as at home.
+- **A sitter is shown only in poses of its own set** (S3 review F3). For a pose it lacks, it
+  stays in `stand_1`/`stand_2` and **the prop does the work**: the card draws the care prop
+  (bowl, ball, sponge, medicine) beside its hands with the existing care props. Walk in and
+  walk out are the look's `stand` frames translating across the screen (no walk cycle); wave is
+  `wave_1` alternating with `stand_1`; leave is a wave, then a slide out. Night, with no
+  `doze`: the look sitter stands (`stand_2`) still with the empty `chair` drawn behind (`chair`
+  is base art, not a person), and the `.doze` lean is a CSS `rotate` on the sitter element; it
+  never swaps to the base sitter. A base sitter uses every pose. A full-set sitter (the later
+  batch: woodland, aqua, grove, celestial, dune, and the granny) uses every pose its folder
+  holds; poses only it owns (a slow walk, knitting) come from its manifest entry (6.6, S3a's
+  `sitters.json`), not from the pose table. A manifest-driven idle list: knit is an idle only
+  the granny has, and her slow `walk` replaces `walk` by the same name in her folder.
+  *Owner 2026-11-04: looks without a pose stand and let the prop do the work; slide in/out;
+  every shell gets its own sitter now.* (This is the review's F3 option 1.)
 
-### 6.3 Cues (slice 3)
+### 6.3 Cues (slice S3a)
 
-On `house.sitter.last` changing: the sitter performs the round's items (feed, play, clean,
-medicine) with the existing care props, once, if the card is on screen and `calm()` is false;
-otherwise no motion. A person's own care while the sitter is here plays the existing care
-scene with the sitter standing by (no extra animation in the scene frame). Arrival and leaving
-are beats (6.4). The pet's `transform` stays as in AGENTS.md "Motion on the card": the sitter is
-its own element with its own animations; Pip's classes are not reused. Any new `.pet.<cls>` rule
-with an `animation` goes on `tests/js/motion_rule.test.js`'s list.
+**When a cue plays** (F7). A cue plays when `house.sitter.last.at` is greater than the
+`last.at` the card had **after its first snapshot** (never on the first snapshot, never on a
+reload), if the card is on screen, `calm()` is false and the pet is not an egg (no cue while
+`s.egg`: the care props on an egg are wrong). A cue is one pose group (`did[0]` first, then the
+next, at most 2 per round); a new `last` during a cue is queued, one deep, newest wins. A round
+with `did == ["clean"]` alone (the tidy, 3.3, which also returns a `sitter_round`) plays the
+2-frame clean cue at half length, with no bubble. Bubbles (9) play only for a round, not a
+tidy, and not while Pip is asleep.
+
+A person's own care while the sitter is here plays the existing care scene with the sitter
+standing by (`stand`, behind the scene layer; no extra animation in the scene frame). Arrival
+and leaving are beats (6.4). The pet's `transform` stays as in AGENTS.md "Motion on the card":
+the sitter is its own element with its own animations; Pip's classes are not reused. The
+sitter's walk and slide use `translate`, its flip uses `scale` or `rotate`, never `transform`
+(F10). Any new `.pet.<cls>` rule with an `animation` goes on `tests/js/motion_rule.test.js`'s
+list; the sitter's own rules are covered by `tests/js/sitter_motion.test.js` (S3a).
+
+**The pose table** (F5, with the first mate's picks of 2026-11-04):
+
+| pose | when |
+|---|---|
+| `walk`, `wave` | arrive and leave (6.4); leaving is the walk mirrored |
+| `feed`, `play`, `clean`, `medicine` | the round cues and the tidy |
+| `doze` | night (D4) |
+| `stand` | the default; also during a care scene or a game, behind the scene layer |
+| `read` | awake in the chair when Pip is asleep before bedtime, or after 20 minutes without care; at most one change per 90 s |
+| `stretch tea laugh water window tidy pat` | the idles: one at random, seeded by the card's day-seed, every 2-4 min while the sitter stands and Pip is not in a scene; never during a scene, a game or a beat |
+| `cheer` | a game is won while the sitter is in |
+| `tuck` | **not used: the sitter stands** during a person's tuck-in (FM) |
+| `shoo` | **not used**: no refusals during a visit (S1); the art stays for later (FM) |
+| `chair` | the empty chair behind a standing night sitter (6.2); also with `read` and `doze` |
 
 ### 6.4 Arriving and leaving
 
-- **Arrival:** the channel's `sitter` goes from `None` to a view: the sitter walks in (2 frames),
-  stops beside Pip, waves; Pip looks over (the existing `look` rotate). If the card was not open
-  it just draws the sitter standing.
-- **Leaving:** `sitter` goes back to `None` while the card is on screen: the sitter waves, walks
-  out (2 frames), then the existing greeting runs (`greeting` flag, `home.py:362-369`). Not on
-  screen: nothing, the sitter is gone.
-- A reduced-motion user gets no walk: the sitter is simply there or not.
+- **Arrival** (F8): the walk-in plays only if the card was visible and saw `sitter == None` in
+  an earlier snapshot of this page load. A card built during a visit, a reload or a hidden tab
+  just draws the sitter standing. The sitter walks in, stops beside Pip and waves; Pip looks
+  over (the existing `look` rotate). The arrival bubble is Pip's, once per visit per card,
+  "the sitter's here!" on even `last_arrived` minutes and "hi, sitter!" otherwise (a pure
+  function of the visit's start time); not when Pip is asleep.
+- **Leaving:** `sitter` goes back to `None` while the card is on screen: the sitter waves, then
+  walks out. **Walk out = the walk frames mirrored with `scale: -1 1` on the sitter element; no
+  separate frames** (F10). The existing greeting (`greeting` flag, `home.py:362-369`) waits for
+  the end of the walk-out (2.5 s at most) and then runs. Not on screen: nothing, the sitter is
+  gone.
+- **At night** (F6; the `night` or `dim` scene) the sitter is already in the chair when it
+  appears and just fades out when it leaves, with no walk and no wave; the greeting still runs.
+  The day beats (walk in, wave, wave and walk out) apply to the `day` and `rain` scenes. When
+  the scene goes from night to day the sitter changes from `doze` to `stand` with a 200 ms
+  cross-fade (no frames exist for standing up). Pip awake at night beside a dozing sitter is
+  fine and says nothing.
+- A reduced-motion user gets no walk and no wave: the sitter is simply there or not, and the
+  night-to-day change is an instant swap.
 
 ### 6.5 The away note
 
 `_awayNote` (`card-visit.js:54`) builds "while you were out, I ..." from the log and moments
-(`_dayBits`, `:81`). `CARE_BITS` gains `sitter_feed`, `sitter_play`, `sitter_clean`,
-`sitter_medicine`. With the privacy mapping of 5.1 the plain actions are already covered for
-privacy-on sensors, but the card reads `sensor.last_care.log` too, so it sees `feed` rows with
-`by: null` and says "had a meal" as it would for a chore treat. With privacy off it can name the
-sitter (9). **With privacy ON the card cannot name the sitter in the note** (B6): the
-rows are mapped to plain `feed` / `play` (5.1), so the note says "had a meal" while the card on
-screen shows the sitter. Whether to carry the visit's tallies on the channel so the note can say
-"the sitter fed me" with privacy ON is Q-E, section 10; until it is answered S3 builds the plain
-wording. The note is the card's own, on a card inside the household, so the "echoes" of the
-visit are fair game.
+(`_dayBits`, `:81`). `CARE_BITS` there is a local const in `_dayBits` with the template
+`while you were out, I ${list.join(" and ")}!`; the approved sitter lines (9) are whole
+sentences in another voice, so they do not fit it (F9). The rules, approved by the first mate
+2026-11-04:
+
+- `_awayNote` special-cases the sitter. If the newest two bits are all from `sitter_*` rows it
+  returns exactly one approved sentence: for `sitter_play` (alone or first), "while you were
+  out, the sitter and I played!"; for `sitter_feed`, "while you were out, the sitter fed me!".
+- `sitter_clean` and `sitter_medicine` add **no bit** (no copy for them is approved): a clean or
+  medicine round shows nothing in the note.
+- Mixed with a person's or a moment's bits, the existing template applies with only the
+  non-sitter bits.
+- With privacy ON the rows reach the card as plain `feed` / `play` (5.1, Q-E) and the existing
+  wording stays ("had a meal"); the card cannot name the sitter in the note then.
+- Tests: one each of these four cases, and `copy-scan` passes.
+
+Anything beyond those two sentences is unapproved copy (D6). If the first mate later wants "the
+sitter gave me my medicine" or "tidied up", it needs approval first. The note is the card's own,
+on a card inside the household, so the "echoes" of the visit are fair game.
+
+### 6.6 Whose sitter (F2)
+
+The sitter's look is the pet's own shell: `this._shellChoice(s) ?? s.world.shell?.finish`
+(card-layout), read at each draw. The picker's preview (`s.previewFinish`) does not change it.
+A key the card does not draw, or a finish with no look folder, gives the base sitter. If the
+shell changes during a visit the sitter swaps at the next pose change, with no beat. Every card
+of the same pet (shared screens too) shows the same sitter; nothing about the look goes on the
+channel or a sensor (the shell is already on `sensor.life_stage`).
 
 ## 7. The slices
 
@@ -622,11 +694,13 @@ Each is shippable alone. After each one the card and the server agree.
 |---|---|---|---|
 | **S1** | The visit in the model and coordinator: the rounds, no refusals, the front doors, the docs for the server | **2** | nothing |
 | **S2** | The card shows the sitter beside Pip and works as at home (placeholder art) | 1 | S1 |
-| **S3** | The sitter's life: arrive, leave, cues, doze, away note | 1 | S2 and art A1 |
-| **S4** | Retire the old sign and tidy | 1 | S3 |
+| **S3a** | The base sitter's life: assets in `frontend/sitter/`, manifest, arrive, leave, cues, doze, idles, away note, journal, Pip's lines, bench flags, motion test | 1 | S2 and art A1 |
+| **S3b** | Look selection (6.6) with the stand-and-prop fallback (6.2) for the 24 looks; the look contact sheet; no copy | 1 | S3a |
+| **S3c** | The full sitters as they land (woodland, aqua, grove, celestial, dune, granny): folder drop-ins plus manifest rows, granny's extra poses; no code if S3a's manifest is right | 1 | S3b and each art batch |
+| **S4** | Retire the old sign and tidy | 1 | S3a (S3c does not block it) |
 | **A1** | The sitter's art (parallel, no code) | n/a | nothing |
 
-Order: S1, S2, S3, S4. A1 starts at once. A review tier of 2 means the adversarial review before
+Order: S1, S2, S3a, S3b, S3c, S4. A1 starts at once. A review tier of 2 means the adversarial review before
 the merge.
 
 ### S1. The visit (server). Tier 2.
@@ -747,19 +821,76 @@ the sections to add by hand with `--only` are `care,react,pat,channel,restart` (
 `away` section; `node scripts/card-check.js --list` prints the names), and one check that a
 shared-screen card (`shared: true`) shows the sitter with privacy ON. No full gate.
 
-### S3. The sitter's life. Tier 1. Needs A1.
+### S3a. The base sitter's life. Tier 1. Needs A1.
 
-- The sitter art in (the poses in section 8); arrive and leave beats (6.4), the round's cue
-  (6.3), the doze in a chair at night (D4), the idle (read, look around), the care-scene
-  companion pose; the away note and the journal line (9).
-- Lines for Pip about the sitter (9); `copy-scan.js` `COPY_TABLES` updated.
-- `CARE_BITS` for the four actions (6.5).
+**Status: built** (`f95fdb23`, frames `6b110247`; on main). Not in it: the journal line (needs a server field; see Left in the header).
 
-**Device queue (S3):** bench shot per pose and per beat (a frame-by-frame `petAt` pause), reduced
-motion on and off, a long-run idle check, a partial card-check (`scripts/gate --auto`) and a
-full `ci-gate` at the batch's end because the art lands in `frontend/`.
+S3 as first written was too big for one tier-1 slice (assets, a state machine, copy, two new
+test families); the S3 review (section 13) split it. S3a is the **base sitter only**.
+
+- **Frames reach the browser** (F4). They are committed to
+  `custom_components/virtual_pet/frontend/sitter/base/<pose>_<n>.png` (and, for S3b and S3c,
+  `.../looks/<finish>/<name>.png` and `.../full/<finish>/<pose>_<n>.png`): a copy of
+  `art/sitter/`, which stays the source and the review page. A generated
+  `frontend/sitter/sitters.json` lists, per sitter, its poses and frame counts and which
+  finishes have a look or a full set. `scripts/sync-sitter.py` writes both the copy and the
+  manifest, and `tests/test_sitter_assets.py` fails when `art/sitter` and `frontend/sitter`
+  differ, when a pose in the manifest lacks its files, or when a `SHELL_FINISHES` key lacks a
+  look (the last check turns on with S3b). The card reads the manifest once (`loadJson`), never
+  requests a file the manifest does not list (a 404 is a card-check failure), loads only the
+  active sitter's frames, and shows the S2 CSS placeholder until the first frame decodes, or if
+  one fails. **Budget: `frontend/sitter/` stays under 8 MB**; a test asserts it. The manifest is
+  built so S3b and S3c are folder drop-ins.
+- Because the PNGs sit under `frontend/`, the commit gates at its commit (AGENTS.md).
+- The base sitter replaces the S2 placeholder; arrive and leave beats (6.4); the round's cue
+  (6.3, with the first-snapshot rule); the doze in a chair at night (D4, 6.4); the idles per the
+  pose table (6.3); the away note per 6.5; the journal line (9). A person's tuck-in leaves the
+  sitter standing (6.3).
+- Lines for Pip about the sitter (9); `copy-scan.js` `COPY_TABLES` updated (`SITTER_LABEL` is a
+  lone const in `ui-copy.js`: check it is scanned). No copy beyond section 9; a missing line is a
+  question, unshipped.
+- `tests/js/sitter_motion.test.js` (F10): every `animation` / `transition` on `.sitter*` is
+  inside the reduced-motion rule at the top of `style.js` (or JS-started behind `calm()`), none
+  is an infinite loop, none targets `.pet`; frame changes of the sitter go through one timer
+  owned by `_tick`, cleared in `_forget`; the sitter never sets `transform` on `.pet`; walk and
+  slide use `translate`, flip uses `scale` or `rotate`.
+
+**Verification, no device** (F11): everything is checkable with pytest, node tests, the bench
+and `ci-gate`.
+
+- Bench flags in `scripts/bench.js`: `--sitter-pose <pose>[:frame]`, `--sitter-look
+  <finish|base>` and `--sitter-beat arrive|leave|round-feed|...:<ms>`, pinning the sitter
+  element; the beat pauses on a fixed clock, not `petAt` (the sitter is not a pet).
+- Shots: every pose of the base sitter beside three species; a night shot (chair, doze); reduced
+  motion on and off for arrive and leave. (S3b adds `--preset sitter-looks`: every
+  `SHELL_FINISHES` look in `stand` and `wave`, one night shot per look; S3c the six full
+  sitters in every pose they own.)
+- Node tests: manifest vs files (F4), the cue first-snapshot rule (F7), the arrival rule (F8),
+  the away-note cases (F9), motion (F10), `copy-scan`. Idle: a 10-minute fake-clock run asserts
+  at most one idle per 2 minutes and no overlap with a beat or a scene.
+- Real HA: `scripts/gate --auto` plus `--only care,react,pat,channel,restart,sitter` (add a
+  `sitter` section: no 404 on `sitter/` files; a hidden-then-shown card does not replay
+  arrival).
+- `scripts/ci-gate` on the branch before reporting done, and after every fix; report the run
+  link.
+
+### S3b. Look selection. Tier 1. Needs S3a.
+
+**Status: built** (`ce34f7c7`; on main): 24 looks served, whose sitter by shell, the night chair, `--preset sitter-looks`.
+
+Whose sitter (6.6) and the stand-and-prop fallback (6.2) for the 24 looks of `art/sitter/looks/`
+(`stand_1`, `stand_2`, `wave_1`, `accessory`); the manifest rows; the look contact sheet and
+`--preset sitter-looks`; the `SHELL_FINISHES` coverage test turns on. No copy.
+
+### S3c. The full sitters. Tier 1. Needs S3b and each art batch.
+
+Woodland, aqua, grove, celestial, dune and the granny land as folder drop-ins
+(`frontend/sitter/full/<finish>/`) plus manifest rows, no code if S3a's manifest is right. The
+granny's own poses (6.2) come from her manifest entry.
 
 ### S4. Retire the old sign. Tier 1.
+
+**Status: built** (branch `crew/hatch-at-home-s2899-sitter-s4-retire-the-old-sign`, `ef57df65`): `props.away` gone from all 30 `species.json`, `bird/sitter_sign.png` deleted, the `awaysign` element and its CSS gone (`awaylabel` stays: it is the sitter's label), the `strings.json` `away` label already read "With the sitter" from S1, `lights_before_away` kept. `tests/test_species.py` fails if a species names a sign again. The `art/` cut scripts and `art/README.md` still mention `sitter_sign` as the history of how the sprites were made.
 
 - Drop `props.away` and the `sitter_sign` art from the 30 species' `species.json`, the
   `awaysign` elements and their CSS, `strings.json` "away" mood label as needed (the sensor
@@ -783,22 +914,31 @@ pet scale beside any species (the size is taken from the existing prop frames; t
 settles it). Two frames per pose unless marked. Reuse the existing care props (`bowl_food`,
 `play`, `bird/medicine`) so only the sitter's body and hands are new.
 
+**Built (A1, 809bf912)** (F1): `art/sitter/frames/` is the **base sitter**, 39 frames, every
+pose. `art/sitter/looks/<finish>/` holds, for each of the 24 `SHELL_FINISHES`, only `stand_1`,
+`stand_2`, `wave_1` and `accessory`; a look is a different drawn person, not a recolour (a
+palette transfer breaks, `art/sitter/README.md`). `art/sitter/sitters/<finish>/frames/` (a later
+batch) will hold a **full sitter** for woodland, aqua, grove, celestial, dune and gingham
+(granny), same pose names. A sitter's frames are whatever its folder holds; the card never
+assumes a pose exists (6.2). The table below is the plan's original list; the built set and the
+pose table (6.3) govern.
+
 | # | pose | frames | used by |
 |---|---|---|---|
 | 1 | walk in | 2 | arrival (6.4) |
 | 2 | stand / idle | 2 | S2 placeholder replaced; the default |
 | 3 | idle: reading, sitting up (chair, awake) | 2 | long stays, a quiet day |
 | 4 | wave (hello and goodbye) | 2 | arrival, leaving |
-| 5 | walk out | 2 | leaving |
+| 5 | walk out | 0 | leaving: the walk, mirrored by the card (6.4) |
 | 6 | feed (bowl) | 2 | the round, 3.2 |
 | 7 | play (ball) | 2 | the round |
 | 8 | clean (sponge) | 2 | the round and the tidy |
 | 9 | medicine | 2 | the round |
-| 10 | tuck in (blanket) | 2 | a person's tuck-in, the sitter by |
+| 10 | tuck in (blanket) | 2 | not used; the sitter stands (6.3) |
 | 11 | pat | 2 | now and then, idle |
 | 12 | **dozing in a chair** | 2 | **night (owner decision D4)** |
 | 13 | cheer (a win) | 2 | a game won |
-| 14 | shoo / "not now" | 2 | a refused care |
+| 14 | shoo / "not now" | 2 | not used; no refusals (6.3) |
 | + | the chair (a prop) | 1 (2 with a doze nod) | 3 and 12 |
 
 About 14 poses, about 28 frames, plus the chair. The chair sits at the bottom edge of the
@@ -809,9 +949,9 @@ each (stretching, sipping tea, knitting or reading a book, watering a plant, loo
 the window, tidying a shelf, phone or notebook, laughing), drawn after the core poses.
 
 Owner 2026-11-04: a different sitter for each of the 24 shell finishes
-(`rates.py` `SHELL_FINISHES`). One base body serves every pose, built so a look layer (hair,
-skin tone, outfit, colours, one shell-themed accessory) swaps over the same poses; 24 look
-sheets, one per finish, each a distinct person.
+(`rates.py` `SHELL_FINISHES`), each a distinct person (hair, skin tone, outfit, colours, one
+shell-themed accessory). The first idea, one base body with a look layer over the same poses,
+did not survive A1: see "Built" above.
 
 Owner 2026-11-04: an old granny sitter, as the gingham shell's look (cosy fit): grey hair in a
 bun, round glasses, a cardigan, a warm smile; a slightly shorter, rounder silhouette if the look
@@ -917,6 +1057,11 @@ its behaviour, so they are asked before it starts)
 - The review's fixes (section 12) change numbers, rules and file lists only. They add **no copy**;
   Q-E: **accept the plain wording** with privacy on (FM, as recommended, 2026-11-04). No open items.
 
+**Recorded 2026-11-04 for S3a:** Owner 2026-11-04: looks without a pose stand and let the prop
+do the work; slide in/out; every shell gets its own sitter now (F3 option 1). FM 2026-11-04:
+shoo unused, tuck stands, F9 away-note rules approved, sitter PNGs committed under
+`frontend/sitter/`.
+
 ## 11. What the scout got wrong (checked against the code)
 
 The scout's file and line claims were checked one by one. Right: the `model.py` lines for
@@ -988,3 +1133,25 @@ S1 audit 2026-11-04: player-impact 2 (fixed in this branch), save 0, nits 7.
   ends each evening near zero and Pip may fall asleep where it is; no health cost seen. N5 a wake
   time inside a spring-forward gap puts breakfast an hour late. N6 until S2 the card still draws
   the old away look and disables the buttons, so S1 should not ship alone in a release.
+
+## 13. The S3 review (adversarial plan review, 2026-11-04)
+
+The review (findings F1-F12) found S3 as written unbuildable against the art that landed. Where
+each is folded in:
+
+| finding | what | where |
+|---|---|---|
+| F1 | §8 promised a look layer; A1 shipped separate drawn poses | 8 ("Built") |
+| F2 | which shell picks the sitter | 6.6 |
+| F3 | fallback for poses a look does not have | 6.2 (owner: stand and let the prop work) |
+| F4 | no frame path, manifest or budget | S3a (`frontend/sitter/`, `sitters.json`, `sync-sitter.py`, 8 MB) |
+| F5 | poses with no consumer | 6.3 pose table (`shoo` unused, `tuck` stands: FM) |
+| F6 | day and night beats | 6.4 |
+| F7 | cue spam, first render, the tidy, egg | 6.3 |
+| F8 | when is it an "arrival", the bubble choice, the greeting wait | 6.4 |
+| F9 | away-note lines do not fit `CARE_BITS` | 6.5 (rules approved by FM) |
+| F10 | negative claims with no test; walk out is mirrored | 6.3, 6.4, S3a (`sitter_motion.test.js`) |
+| F11 | verification | S3a (bench flags, node tests, gate) |
+| F12 | egg, aria, granny's poses, copy-scan | 6.3, 6.2, S3a |
+
+The split into S3a, S3b and S3c is in section 7.
