@@ -737,18 +737,27 @@ const STYLE = `
     animation: s-mist 9s ease-in-out infinite alternate; }
   .screen.night .season .mist, .screen.dim .season .mist { display: block; }
   @keyframes s-mist { to { transform: translateX(6%); opacity: .7; } }
+  /* A leaf falls with the compositor only: its lane (full height) slides down by translate, the leaf
+     inside drifts, turns and fades. The lane's percent is the screen's height, which a top: % was. */
+  .season .leafwrap { position: absolute; inset: 0; pointer-events: none;
+    animation: s-fall var(--leaf-ms, 9s) linear var(--leaf-delay, 0s) infinite; }
   .season .leaf { top: -6%; width: 3.5%; opacity: 0;
     animation: s-leaf var(--leaf-ms, 9s) linear var(--leaf-delay, 0s) infinite; }
-  @keyframes s-leaf { 0% { top: -6%; opacity: 0; translate: 0 0; rotate: 0deg; } 8% { opacity: 1; }
+  @keyframes s-fall { from { translate: 0 0; } to { translate: 0 106%; } }
+  @keyframes s-leaf { 0% { opacity: 0; translate: 0 0; rotate: 0deg; } 8% { opacity: 1; }
     35% { translate: -140% 0; rotate: 90deg; } 70% { translate: 120% 0; rotate: 200deg; }
-    90% { opacity: 1; } 100% { top: 100%; opacity: 0; translate: -60% 0; rotate: 300deg; } }
+    90% { opacity: 1; } 100% { opacity: 0; translate: -60% 0; rotate: 300deg; } }
   .costume .fx.hat { transform: translate(-50%, -100%); }
   .confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
-  .confetti i { position: absolute; top: -6%; left: var(--x); width: 5px; height: 8px; background: var(--c);
-    animation: confetti 2.6s linear var(--d) forwards; }
-  @keyframes confetti { to { top: 106%; rotate: 540deg; } }
+  /* A bit is a full-height lane that slides down (translate) with the chip turning inside it. */
+  .confetti i { position: absolute; top: 0; bottom: 0; left: var(--x); width: 5px;
+    animation: confetti 2.6s linear var(--d) both; }
+  .confetti i::before { content: ""; position: absolute; top: -6%; left: 0; width: 5px; height: 8px; background: var(--c);
+    animation: confetti-turn 2.6s linear var(--d) forwards; }
+  @keyframes confetti { from { translate: 0 0; } to { translate: 0 112%; } }
+  @keyframes confetti-turn { to { rotate: 540deg; } }
   .game .gprop { position: absolute; bottom: 10%; width: 16%; image-rendering: pixelated;
-    pointer-events: none; will-change: left, transform; }
+    pointer-events: none; will-change: transform; }
   .game .gprop[hidden] { display: none; }
   .game .gscore { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%);
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
@@ -939,13 +948,16 @@ const STYLE = `
         linear-gradient(112deg, rgba(214,232,255,.2), rgba(214,232,255,0) 42%, rgba(214,232,255,.12)); }
     .hw.glass.dir-wet::before { opacity: .8; }
     /* The onset: a drop runs down the glass in steps (a pixel toy), or the sheen dries off. */
-    .hw.glass.dir-drop::after { left: 63%; top: -8%; width: calc(var(--b) * 3); height: calc(var(--b) * 7);
-      border-radius: 40% 40% 50% 50%; background: linear-gradient(180deg, rgba(240,248,255,0), rgba(240,248,255,.95) 45%, rgba(200,224,255,.85));
+    /* The drop is a full-height lane that slides down by translate (top: % was layout every frame); the
+       drop itself is its top 7 cells, shaped by a clip. */
+    .hw.glass.dir-drop::after { left: 63%; top: 0; bottom: 0; width: calc(var(--b) * 3);
+      background: linear-gradient(180deg, rgba(240,248,255,0), rgba(240,248,255,.95) 45%, rgba(200,224,255,.85)) 0 0 / 100% calc(var(--b) * 7) no-repeat;
+      clip-path: inset(0 0 calc(100% - var(--b) * 7) 0 round 40% 40% 50% 50%);
       animation: dir-run 1.8s steps(18) both; }
     .hw.glass.dir-clear::before { animation: dir-dry 1.2s ease-in both; }
     .hw.glass.dir-echo.dir-drop::after { animation-duration: .9s; }
     .hw.glass.dir-echo.dir-clear::before { animation-duration: .6s; }
-    @keyframes dir-run { 0% { top: -8%; opacity: 0; } 10%, 80% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+    @keyframes dir-run { 0% { translate: 0 -8%; opacity: 0; } 10%, 80% { opacity: 1; } 100% { translate: 0 100%; opacity: 0; } }
     @keyframes dir-dry { from { opacity: .8; } to { opacity: 0; } }
     /* The other layers (slice 4B, plan 6.6b): five <b> in the glass, one per look, each at rest by a
        transition on opacity. 1 frost (snow), 2 fog, 3 storm, 4 wind, 5 the moon (client-computed, off the
@@ -1293,19 +1305,28 @@ const STYLE = `
   .screen.linking .perch { display: none; }
   .pet.linking { translate: -43% 0; transition-duration: .5s; }
   .screen.linkleft .pet.linking { translate: 43% 0; }
-  .speck { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #fff6c9;
-    box-shadow: 0 0 6px 2px rgba(255,240,170,.8); top: 45%; z-index: 2; pointer-events: none;
-    animation: speck 2.6s ease-in-out forwards; }
-  .speck.rtl { animation-name: speck-rtl; }
-  @keyframes speck { from { left: 8%; top: 30%; } 50% { top: 55%; } to { left: 88%; top: 38%; opacity: .2; } }
-  @keyframes speck-rtl { from { left: 88%; top: 35%; } 50% { top: 58%; } to { left: 8%; top: 30%; opacity: .2; } }
+  /* A speck is a full-screen lane that moves by translate (x and y on their own clocks, as left and top
+     were); the glowing dot sits in its top-left corner. */
+  .speck { position: absolute; inset: 0; z-index: 2; pointer-events: none;
+    animation: speck-x 2.6s ease-in-out forwards, speck-y 2.6s ease-in-out forwards; }
+  .speck::before { content: ""; position: absolute; left: 0; top: 0; width: 6px; height: 6px; border-radius: 50%;
+    background: #fff6c9; box-shadow: 0 0 6px 2px rgba(255,240,170,.8); }
+  .speck.rtl { animation-name: speck-rx, speck-ry; }
+  @keyframes speck-x { from { transform: translateX(8%); } to { transform: translateX(88%); opacity: .2; } }
+  @keyframes speck-y { from { translate: 0 30%; } 50% { translate: 0 55%; } to { translate: 0 38%; } }
+  @keyframes speck-rx { from { transform: translateX(88%); } to { transform: translateX(8%); opacity: .2; } }
+  @keyframes speck-ry { from { translate: 0 35%; } 50% { translate: 0 58%; } to { translate: 0 30%; } }
   /* Rain for species with no rain scene of their own. */
   .rain { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 1;
+    overflow: hidden; }
+  /* The streaks are a tile larger than the screen that slides by translate (a background-position
+     animation repainted the whole screen). The extra 40 px keeps the tile's phase and covers the slide. */
+  .rain::before { content: ""; position: absolute; inset: -40px -40px 0 -40px;
     background: repeating-linear-gradient(105deg, transparent 0 13px, rgba(215,230,255,.5) 13px 15px);
     background-size: 40px 40px; animation: rainfall .45s linear infinite; }
   .screen.raining .rain { display: block; }
   .screen.raining .bg { filter: brightness(.82) saturate(.75); }
-  @keyframes rainfall { to { background-position: -10px 40px; } }
+  @keyframes rainfall { to { translate: -10px 40px; } }
   /* The house answers (H3): a warm glow rising from the floor (heat) or a pale frost in the top
      corners (cool) for 2.5 s. A stand-in for the art. Neither crosses the pet's face (UX7 F3); under
      reduced motion the same tint just stays for the 2.5 s: an edge glow doesn't read as a flash. */
