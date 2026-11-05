@@ -283,11 +283,3 @@ the settings' version line: the guide now describes them.
    `virtual_pet.hop` service) is in none of the guide, README or how-to. That is deliberate
    while it is experimental; the service is live without the flag, so it is reachable from
    Developer tools.
-9. **Games on the shell's buttons.** The guide still says "✕ stops a game", "✕ puts a dig
-   aside" and calls `end: true` "the card's ✕". The card has no
-   ✕: a game puts its keys on the eight round buttons (quit is the eighth), Escape quits,
-   and the arrow keys and others press the keys. The guide has no word on these buttons or
-   the keyboard, nor on the picker closing with Play or a tap outside its list.
-10. **The sitter's looks.** The guide says the sitter is "a drawn person, the same for every
-    pet for now". The card picks the art by the pet's shell: 24 finishes have a sitter of
-    their own and the rest get the base one.
