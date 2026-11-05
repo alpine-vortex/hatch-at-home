@@ -785,6 +785,19 @@ async def test_the_privacy_table(
     sitter = (await subscribe(client, shared=True))["house"]["sitter"]
     assert sitter is not None and sitter["mood"] != "away"
     assert pet_of(hass).share_news("hi") == ("asleep" if private else "away")
+    # The journal line (§9) is written either way: the day, the name, no time.
+    line = [m for m in pet_of(hass).state.memories if m["kind"] == "sitter_visit"]
+    assert (
+        len(line) == 1
+        and line[0]["name"] == "Pip"
+        and set(line[0])
+        == {
+            "kind",
+            "at",
+            "name",
+        }
+    )
+    assert fired.count(f"{DOMAIN}_sitter_visit") == 0
 
 
 def test_the_sitters_constants_are_the_planned_ones() -> None:
@@ -803,3 +816,121 @@ def test_the_sitters_constants_are_the_planned_ones() -> None:
     )
     assert R.SITTER_LOG_ROWS == 8
     assert timedelta(hours=R.SITTER_ROUNDS_HOURS[-1]) == timedelta(hours=13)
+
+
+# --- The journal line: a memories row per day (plan sitter §9, 2026-11-05) -------
+
+
+def visits(pet: model.PetState) -> list[dict[str, Any]]:
+    return [m for m in pet.memories if m["kind"] == "sitter_visit"]
+
+
+def test_a_round_writes_the_days_line_at_local_noon_with_the_name() -> None:
+    """Near midnight in a non-UTC zone the row still sits on that local day: noon,
+    so a browser in any zone shows the same date. Nothing but kind, at, name."""
+    settings = model.Settings(tz=LA)
+    now = local(LA, 2026, 10, 2, 23, 50)
+    pet = away(now)
+    model.sitter_round(pet, now, settings)
+    assert visits(pet) == [
+        {"kind": "sitter_visit", "at": local(LA, 2026, 10, 2, 12), "name": "Pip"}
+    ]
+    stamp = datetime.fromtimestamp(visits(pet)[0]["at"], LA)
+    assert (stamp.day, stamp.hour, stamp.minute) == (2, 12, 0)
+    # Just after midnight is the next local day, its own row.
+    after = local(LA, 2026, 10, 3, 0, 10)
+    model.sitter_round(pet, after, settings)
+    assert [datetime.fromtimestamp(v["at"], LA).day for v in visits(pet)] == [2, 3]
+
+
+def test_the_line_is_written_with_no_event_and_a_fine_pet() -> None:
+    pet = away(at(12, 5))
+    events = model.sitter_round(pet, at(12, 5), SETTINGS)
+    assert events == [] and len(visits(pet)) == 1  # nothing to do, still a visit
+    assert visits(pet)[0]["at"] == at(12)
+
+
+def test_the_arrival_writes_it_and_a_restart_the_same_day_adds_none() -> None:
+    pet = away(at(10, 30))
+    model.sitter_arrives(pet, at(10, 30), SETTINGS, settles=True)
+    assert len(visits(pet)) == 1
+    # A restart mid-visit: an old save (no sitter_served) reaches the writer again.
+    pet.sitter_served = 0.0
+    model.settle_legacy_lights(pet, at(10, 40), SETTINGS, settles=True)
+    # A due slot at the load does too.
+    model.settle_legacy_lights(pet, at(12, 5), SETTINGS, settles=True)
+    model.settle_legacy_lights(pet, at(12, 6), SETTINGS, settles=True)
+    assert len(visits(pet)) == 1
+
+
+def test_the_dedupe_scans_past_a_later_row() -> None:
+    pet = away(at(9))
+    model.sitter_round(pet, at(9), SETTINGS)
+    model.season_first(pet, "snow", at(10), UTC)  # after the visit row
+    model.sitter_round(pet, at(12, 5), SETTINGS)
+    assert [m["kind"] for m in pet.memories] == ["sitter_visit", "first_snow"]
+
+
+def test_the_next_day_adds_one_and_a_trip_is_a_row_a_day() -> None:
+    pet = away(at(9))
+    for day in (2, 3, 4):
+        model.sitter_round(pet, at(9, day=day), SETTINGS)
+        model.sitter_round(pet, at(13, day=day), SETTINGS)
+    assert [v["at"] for v in visits(pet)] == [at(12, day=d) for d in (2, 3, 4)]
+
+
+def test_an_egg_an_asleep_or_a_resting_pet_gets_none_until_the_round_serves() -> None:
+    for key in ("asleep", "resting", "egg"):
+        stats = {"age_hours": 0.1} if key == "egg" else {key: True}
+        pet = away(at(9), **stats)
+        model.sitter_arrives(pet, at(9), SETTINGS, settles=True)
+        assert visits(pet) == [], key
+        # It wakes (or hatches); the first round that can serve writes the line.
+        for k in stats:
+            setattr(pet, k, False if k != "age_hours" else 400.0)
+        pet.species = "bird"
+        pet.hatched_on = "2025-12-01"
+        model.sitter_round(pet, at(12, 5), SETTINGS)
+        assert len(visits(pet)) == 1, key
+
+
+def test_only_three_visit_rows_are_kept_and_the_firsts_stay() -> None:
+    pet = away(at(9))
+    model.season_first(pet, "snow", at(9), UTC)
+    model.season_start(pet, "spring-2027", "spring", at(9))
+    for day in range(2, 8):
+        model.sitter_round(pet, at(9, day=day), SETTINGS)
+    assert [v["at"] for v in visits(pet)] == [at(12, day=d) for d in (5, 6, 7)]
+    kinds = [m["kind"] for m in pet.memories]
+    assert kinds.count("first_snow") == 1 and kinds.count("season_spring") == 1
+    assert len(pet.memories) == 5
+
+
+def test_the_thirty_cap_still_applies_after_the_visit_cap() -> None:
+    pet = away(at(9))
+    pet.memories = [{"kind": f"season_{i}", "at": at(8)} for i in range(30)]
+    model.sitter_round(pet, at(9), SETTINGS)
+    assert len(pet.memories) == 30 and pet.memories[-1]["kind"] == "sitter_visit"
+    assert pet.memories[0]["kind"] == "season_1"
+
+
+def test_an_old_generations_line_keeps_its_pets_name_and_lay_egg_carries_it() -> None:
+    pet = away(at(9), age_hours=14 * 24 + 7 * 24 + 1.0)
+    model.sitter_round(pet, at(9), SETTINGS)
+    egg, _ = model.lay_egg(pet, at(12), random.Random(1))
+    egg.name = "Mochi"
+    assert visits(egg) == visits(pet) and visits(egg)[0]["name"] == "Pip"
+
+
+def test_the_line_round_trips_and_a_damaged_row_is_not_today() -> None:
+    pet = away(at(9))
+    model.sitter_round(pet, at(9), SETTINGS)
+    data = pet.to_dict()
+    assert model.PetState.from_dict(data).to_dict() == data
+    assert data["memories"] == [{"kind": "sitter_visit", "at": at(12), "name": "Pip"}]
+    # A row with an absurd stamp is dropped by the loader or ignored by the dedupe.
+    data["memories"] = [{"kind": "sitter_visit", "at": 1e30, "name": "Pip"}]
+    loaded = model.PetState.from_dict(data)
+    loaded.away = True
+    model.sitter_round(loaded, at(9), SETTINGS)
+    assert [v["at"] for v in visits(loaded)][-1] == at(12)

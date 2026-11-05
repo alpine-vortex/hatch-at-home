@@ -268,7 +268,10 @@ async def test_what_matters_is_salvaged_when_loading_fails(
         species="deer",
         raised=["bird", "deer"],
         journal=journal,
-        memories=[{"kind": "first_snow", "at": now}],
+        memories=[
+            {"kind": "first_snow", "at": now},
+            {"kind": "sitter_visit", "at": now, "name": "Old"},
+        ],
         bonds={"u1": {"points": 40, "nickname": "bean", "photos": {"1": photo}}},
     )
     with patch.object(
@@ -283,6 +286,7 @@ async def test_what_matters_is_salvaged_when_loading_fails(
     assert state.raised == ["bird", "deer"]
     assert state.journal[0]["name"] == "Old"
     assert state.memories[0]["kind"] == "first_snow"
+    assert state.memories[1] == {"kind": "sitter_visit", "at": now, "name": "Old"}
     assert state.bonds["u1"]["photos"]["1"]["name"] == "Old"
     assert state.hunger == 80.0  # the rest starts fresh
     assert issue(hass).translation_key == "save_damaged"
