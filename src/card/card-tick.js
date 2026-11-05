@@ -1,4 +1,13 @@
 class HatchPetCardTick extends HatchPetCardSitter {
+  // The excited celebration ended (EXCITED_POSE_MS): the mood stays, the frames go to content. _update only
+  // runs on a hass push, so the tick does the redraw.
+  _excitedSettle(s) {
+    if (!s.excitedPosed || (!calm() && excitedPosed(s.excitedSince, Date.now()))) return;
+    s.frames = this._shownFrames(s, "excited");
+    s.framesKey = s.frames.join(",");
+    s.frame = 0;
+  }
+
   _tick() {
     if (!this._slides || !this._visible || document.hidden) return;
     this._ticks = (this._ticks || 0) + 1;
@@ -12,6 +21,7 @@ class HatchPetCardTick extends HatchPetCardSitter {
     this._slides.forEach((s, i) => {
       if (s.poseUntil && Date.now() > s.poseUntil) s.poseUntil = 0;
       if (s.patPoseUntil && Date.now() > s.patPoseUntil) s.patPoseUntil = 0;
+      this._excitedSettle(s);
       const frames = this._frames(s);
       const seen = Math.abs(i - this._index) <= 1; // the pet on show and the peeking ones
       if (seen && frames.length && !s.scene && !(s.asleep && this._ticks % 2) && !(s.turnUntil > Date.now())) {
