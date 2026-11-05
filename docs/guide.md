@@ -89,8 +89,14 @@ download, restart. HACS replaces the folder you copied.
   switch only hides it from sensors and Assist). The old "at the sitter's" sign is gone.
   A card that can't reach the private channel (an older integration, or it hasn't connected
   yet) draws the sitter beside a calmly content pet when presence is not private; with it
-  private such a card can only see a napping pet and no sitter. The sitter here is a
-  placeholder figure until its art arrives.
+  private such a card can only see a napping pet and no sitter. The sitter is a drawn
+  person, the same for every pet for now. A card that is open when the sitter comes sees it
+  walk in and wave, and sees it wave and leave when someone is home again (a card opened or
+  reloaded mid-visit just shows it standing, and so does reduced motion). Each care round the
+  sitter does plays on the card too, and now and then it stretches, has tea or looks out of
+  the window; at night it dozes in the chair. When you have been out, the note says "the sitter
+  fed me" or "the sitter and I played" for what the sitter did (with "Keep presence private" on
+  it says "had a meal" and "played" as before).
 - **Power-on:** the first time a browser shows the card, the screen starts like a
   new toy: a pale-green screen with the HATCH logo and a blinking "▶ tap to start".
   A tap fills in the logo and cuts to the pet (with a rising beep if you turned

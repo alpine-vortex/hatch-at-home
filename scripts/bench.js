@@ -322,6 +322,35 @@ const PRESETS = {
   // Sitter visits S2 (docs/plan-2026-11-04-sitter-visits.md 6.2, S2 acceptance): Pip drawn as at home with a
   // placeholder sitter beside it and the "sitter's here" label, never the old sign. `--sitter day|night`,
   // `--privacy on` (the sensors' mask), `--no-channel` (the degraded card).
+  // Sitter S3a (plan 6.3, 6.4, S3a verification): every pose of the base sitter beside three species, the
+  // beats at fixed times (a fixed clock, not petAt: the sitter is not a pet), night, reduced motion.
+  "sitter-life"() {
+    const out = [];
+    const POSES = ["stand", "walk", "wave", "read", "doze", "feed", "play", "clean", "medicine", "tuck", "pat", "cheer", "shoo",
+      "stretch", "tea", "laugh", "water", "window", "tidy"];
+    const base = { group: "sitter-life", world: "woodland", width: 330, clip: "screen", sitter: "day" };
+    for (const [species, world] of [["fox", "woodland"], ["otter", "tidepool"], ["hamster", "woodland"]]) {
+      for (const pose of POSES) {
+        for (const frame of [1, 2]) {
+          out.push({ ...base, name: `sitter-life/pose-${pose}-${frame}-${species}`, label: `${pose} ${frame}, ${species}`, species, world,
+            sitterPose: `${pose}:${frame}`, ...(pose === "doze" ? { scene: "night" } : {}) });
+        }
+      }
+    }
+    for (const ms of [0, 700, 1400, 2100]) {
+      out.push({ ...base, name: `sitter-life/arrive-${ms}`, label: `arrive ${ms} ms`, sitterBeat: `arrive:${ms}` });
+    }
+    for (const ms of [0, 1400, 2100]) out.push({ ...base, name: `sitter-life/leave-${ms}`, label: `leave ${ms} ms`, sitterBeat: `leave:${ms}` });
+    for (const cue of ["feed", "play", "clean", "medicine"]) {
+      out.push({ ...base, name: `sitter-life/round-${cue}`, label: `round: ${cue}`, sitterBeat: `round-${cue}:700` });
+    }
+    out.push({ ...base, name: "sitter-life/night", label: "night: in the chair", sitter: "night" });
+    out.push({ ...base, name: "sitter-life/night-asleep", label: "night: Pip asleep", sitter: "night", scene: "dim", mood: "asleep" });
+    for (const kind of ["arrive", "leave"]) {
+      out.push({ ...base, name: `sitter-life/${kind}-reduce`, label: `${kind}, reduced motion`, sitterBeat: `${kind}:700`, motion: "reduce" });
+    }
+    return out;
+  },
   sitter() {
     const out = [];
     const shot = (name, label, extra) => out.push({ name: `sitter/${name}`, group: "sitter", label, world: "woodland", width: 330,
@@ -1340,6 +1369,11 @@ function normalize(raw) {
     shot.pets.push({ species: roster[i % roster.length], stage: "child", mood: "content", world: shot.world, ...(extra[i] || {}) });
   }
   if (shot.sitter !== undefined && !["day", "night"].includes(shot.sitter)) throw new Error(`--sitter wants day or night, not ${shot.sitter}`);
+  if (shot.sitterPose !== undefined && !/^[a-z]+(:\d+)?$/.test(shot.sitterPose)) throw new Error(`--sitter-pose wants <pose>[:frame], not ${shot.sitterPose}`);
+  if (shot.sitterBeat !== undefined && !/^(arrive|leave|round-(feed|play|clean|medicine)):\d+$/.test(shot.sitterBeat)) {
+    throw new Error(`--sitter-beat wants arrive|leave|round-feed|round-play|round-clean|round-medicine:<ms>, not ${shot.sitterBeat}`);
+  }
+  if (shot.sitterLook !== undefined && !/^[a-z0-9_]+$/.test(shot.sitterLook)) throw new Error(`--sitter-look wants a finish or base, not ${shot.sitterLook}`);
   if (shot.sitter === "night" && !raw.scene) shot.scene = "night"; // the sitter dozes in a chair at night (D4)
   shot.name ||= `shot-${shot.species || "x"}-${shot.stage}-${shot.mood}`;
   if (shot.lcd !== undefined || shot.booted || shot.mono || shot.bigText) {
@@ -1369,6 +1403,9 @@ function parseArgs(argv) {
     else if (key === "big-text") opts.shot.bigText = true; // the "big text" switch on (top10 4b)
     else if (key === "boot") opts.shot.booted = false;
     else if (key === "mine") opts.shot.mine = true;
+    else if (key === "sitter-pose") (opts.shot.sitter ||= "day", opts.shot.sitterPose = val()); // <pose>[:frame], the sitter pinned in a pose
+    else if (key === "sitter-look") (opts.shot.sitter ||= "day", opts.shot.sitterLook = val()); // <finish|base>; S3b reads it, S3a draws the base sitter
+    else if (key === "sitter-beat") (opts.shot.sitter ||= "day", opts.shot.sitterBeat = val()); // arrive|leave|round-<care>:<ms>, a beat pinned at ms
     else if (key === "no-channel") opts.shot.noChannel = true; // with --sitter: the card has no channel (the degraded fallback)
     else if (key === "finds-shown") opts.shot.findsShown = true; // FINDS_SHOWN on
     else if (key === "gift") { const [world, id] = val().split("/"); opts.shot.gift = { id, world }; } // --gift woodland/pinecone

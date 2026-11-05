@@ -989,7 +989,27 @@
     if (shot.sitterView && !shot.noChannel) {
       const s = slides[0];
       s.house = { ...(s.house || {}), sitter: shot.sitterView };
+      card._sitterLook = shot.sitterLook ?? null; // --sitter-look (read by S3b; S3a has the base sitter only)
       card._redraw(s);
+      // The art loads on the first sitter shown (card-sitter.js): wait for it, as a person's eye would.
+      for (let i = 0; i < 200 && card._sitArt?.state === "loading"; i++) await new Promise((r) => setTimeout(r, 25));
+      // `sitterPose` "<pose>[:frame]" pins the sitter in a pose; `sitterBeat` "<kind>:<ms>" pins a beat at ms
+      // (arrive, leave, round-feed, ...) on a fixed clock: no timer runs, so the shot is the same every run.
+      if (shot.sitterPose) {
+        const [pose, frame = "1"] = shot.sitterPose.split(":");
+        const st = card._sit(s);
+        st.step = { pose, ms: Infinity, kind: "pose" };
+        st.until = Infinity;
+        st.frame = Math.max(0, Number(frame) - 1);
+        s.sitterEl.hidden = false;
+      }
+      if (shot.sitterBeat) {
+        const [kind, ms = "0"] = shot.sitterBeat.split(":");
+        card._sitterAt(s, kind, Number(ms));
+      }
+      card._sitterPaint(s);
+      const img = s.sitterEl.querySelector(".sit-img");
+      for (let i = 0; i < 200 && s.sitterEl.classList.contains("art") && !(img.complete && img.naturalWidth); i++) await new Promise((r) => setTimeout(r, 25));
     }
     // The house view the channel would send (`house`, an object over it), and `basket`:
     // how many finds wait (house.basket, 0-3), so the basket shows through _basketSync.

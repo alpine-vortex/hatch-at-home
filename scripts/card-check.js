@@ -14932,10 +14932,17 @@ async function main() {
     // The shared-screen switch makes the card ask its channel again (a new snapshot): turn it on and let that settle first.
     await card.evaluate((el) => localStorage.setItem("hatch-shared-screen", "on"));
     await page.waitForTimeout(2500);
+    // Sitter S3a (plan sitter-visits 6.4, F4, F8): every file asked of frontend/sitter/ must answer 200 (the manifest lists
+    // what the card may ask for), and a card shown after a hidden tab does not replay the arrival.
+    const sitterFiles = [];
+    const sitterOnResponse = (r) => {
+      if (/\/virtual_pet\/frontend\/sitter\//.test(r.url())) sitterFiles.push([r.url().split("/frontend/")[1].split("?")[0], r.status()]);
+    };
+    page.on("response", sitterOnResponse);
     const sitterRun = await card.evaluate(async (el, view) => {
       const s = el._slides[el._index];
       const look = () => ({ mood: el._state(s, "sensor.mood")?.state, asleepEntity: el._state(s, "binary_sensor.asleep")?.state,
-        asleep: !!s.asleep, shown: !s.sitterEl.hidden, label: s.awaylabel.textContent, sign: s.awaysign.style.display !== "none",
+        asleep: !!s.asleep, shown: !s.sitterEl.hidden, leaving: !!s.sit?.leaving, label: s.awaylabel.textContent, sign: s.awaysign.style.display !== "none",
         feedOn: !s.buttons.feed.disabled, lightsOn: !s.buttons.lights.disabled, shared: localStorage.getItem("hatch-shared-screen") === "on" });
       const push = (sitter) => {
         // Read at once: a real push of the house (the shared screen's own snapshot) may land a few ms later and put sitter: null back.
@@ -14946,17 +14953,40 @@ async function main() {
       const before = look();
       const inn = push(view);
       const out = push(null);
-      return { before, inn, out };
+      // F8: gone and back while the tab is hidden, then shown: it stands, no walk-in is played.
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+      let quiet;
+      try {
+        push(null);
+        push(view);
+        const idle = () => !s.sit.step && !s.sit.steps.length;
+        const hiddenArrival = { shown: !s.sitterEl.hidden, idle: idle() };
+        Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
+        el._renderSlide(s);
+        quiet = { ...hiddenArrival, afterShown: idle() };
+      } finally {
+        delete document.hidden;
+      }
+      push(null);
+      return { before, inn, out, quiet };
     }, sitterView);
     await card.evaluate((el) => localStorage.setItem("hatch-shared-screen", "off"));
     await page.waitForTimeout(1500);
-    const { before: sitterBefore, inn: sitterIn, out: sitterOut } = sitterRun;
+    const { before: sitterBefore, inn: sitterIn, out: sitterOut, quiet: sitterQuiet } = sitterRun;
+    await page.waitForTimeout(3500); // the walk-out ends (2.8 s)
+    page.off("response", sitterOnResponse);
+    const sitterGone = await card.evaluate((el) => { const s = el._slides[el._index]; return { hidden: s.sitterEl.hidden, leaving: !!s.sit?.leaving }; });
     check("sitter S2 (D1): a shared-screen card with privacy on shows the sitter and the real mood from the channel, no sign, care on; sitter: null takes it away",
       sitterBefore.shared && !sitterBefore.shown &&
       sitterIn.shared && sitterIn.mood === "hungry" && sitterIn.asleepEntity === "off" && !sitterIn.asleep && sitterIn.shown &&
       sitterIn.label === "sitter's here" && !sitterIn.sign && sitterIn.feedOn && sitterIn.lightsOn &&
-      !sitterOut.shown && sitterOut.label === "",
-      JSON.stringify({ sitterBefore, sitterIn, sitterOut }));
+      sitterOut.label === "" && (!sitterOut.shown || sitterOut.leaving) && sitterGone.hidden && !sitterGone.leaving,
+      JSON.stringify({ sitterBefore, sitterIn, sitterOut, sitterGone }));
+    check("sitter S3a (F4): the art files asked of frontend/sitter/ all answer 200 (the manifest, then the frames), none is missing",
+      sitterFiles.length > 1 && sitterFiles.some(([f]) => f === "sitter/sitters.json") && sitterFiles.every(([, status]) => status === 200),
+      JSON.stringify(sitterFiles.filter(([, status]) => status !== 200).concat([[`${sitterFiles.length} files`, 0]])));
+    check("sitter S3a (F8): gone and back while the tab is hidden, then shown: it stands where it is, no walk-in is replayed",
+      sitterQuiet.shown && sitterQuiet.idle && sitterQuiet.afterShown, JSON.stringify(sitterQuiet));
     // No reply: it holds at the gate, gives up 2 s on, and a late reply plays the floor (pose, prop, line).
     await feedState(pet);
     await feedTap();

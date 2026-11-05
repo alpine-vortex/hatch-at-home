@@ -471,6 +471,7 @@ class HatchPetCardGames extends HatchPetCardCare {
 
   // G-c: the count line stays; half the time a teen or adult's own line 4 s later.
   _gameEndType(s, won) {
+    if (won) this._sitterCheer(s); // the sitter, if it's in, cheers (sitter plan 6.3)
     const key = won ? "game_win" : "game_lose";
     const own = this._persona(s)?.[key];
     if (!own || Math.random() >= GAME_TYPE_ODDS) return;

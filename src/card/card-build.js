@@ -141,7 +141,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
           <div class="bezel"><i class="hw guts"></i><i class="mould"></i><i class="hw stripes"></i><i class="hw light"></i><i class="hw rim" aria-hidden="true"><b></b><b></b><b></b></i><div class="screen">
             <img class="bg" alt="">
             <img class="awaysign" alt=""><div class="awaylabel"></div>
-            <div class="sitter" hidden aria-hidden="true"><i class="sit-head"></i><i class="sit-body"></i><i class="sit-chair"></i></div>
+            <div class="sitter" hidden aria-hidden="true"><img class="sit-img" alt=""><i class="sit-head"></i><i class="sit-body"></i><i class="sit-chair"></i></div>
             <div class="season"></div>
             <img class="poop p0" alt="mess"><img class="poop p1" alt="mess"><img class="poop p2" alt="mess">
             <img class="perch" alt="">
@@ -769,6 +769,8 @@ class HatchPetCardBuild extends HatchPetCardBase {
     this._powerEnd(s);
     s.powerPending = null;
     this._stopTyping(s);
+    this._sitterReset(s); // another pet's sitter: no beat carries over
+    s.sit = null;
     s.voicedAt = 0;
     s.confirm = null;
     clearTimeout(s.confirmTimer);

@@ -1,4 +1,4 @@
-class HatchPetCardTick extends HatchPetCardLayout {
+class HatchPetCardTick extends HatchPetCardSitter {
   _tick() {
     if (!this._slides || !this._visible || document.hidden) return;
     this._ticks = (this._ticks || 0) + 1;
@@ -30,6 +30,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
         this._askTextEnd(s);
       }
       this._modeGuard(s); // a shell mode's idle exit, which must not wait for a hass push
+      if (seen) this._sitterTick(s); // the sitter's frame, step and idle: the one timer (sitter plan S3a)
       this._patSync(s);
       this._basketSync(s);
       if (s === this._slides[this._index] && !s.reloading && !s.empty) { // a reloading pet greets and asks nothing

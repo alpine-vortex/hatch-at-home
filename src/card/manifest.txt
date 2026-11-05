@@ -3,6 +3,7 @@ world.js
 hop-engine.js
 interaction-director.js
 device-fx.js
+sitter-engine.js
 lines.js
 lines-fresh.js
 ui-copy.js
@@ -12,6 +13,7 @@ style.js
 card-base.js
 card-build.js
 card-layout.js
+card-sitter.js
 card-tick.js
 card-looks.js
 card-visit.js
