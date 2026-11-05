@@ -30,7 +30,7 @@ can swap a sitter per shell by folder. Nothing is wired in yet.
 
 - `gingham`: the granny (grey bun, round glasses, cardigan). Shorter and rounder: 168 px tall
   standing, the others 188-192. Her own variants: a slow short-step `walk`, and `read` is
-  knitting in the chair (doze has the knitting in her lap).
+  her reading a book in the chair (s2913; doze has the knitting in her lap).
 - `woodland`, `aqua`, `grove`, `celestial`, `dune`: themed to their world shell, starting from
   `looks/<finish>/` of A1.
 - Cut with `cut_sheet.py`, one scale per sitter. `review.py` has a section per sitter.
@@ -80,5 +80,6 @@ knows the four new pose names; a sitter without them is not "missing" them.
 Polish (s2910): `nap_1`, `nap_2` gain a hand-placed "Z" (4 px grid, her outline colour, cream fill) that grows and
 drifts up-right between the two frames; the figure is unchanged. `knitread_1`, `knitread_2` are the in-between of
 `knit` and `read` (frame 1 lowers the knitting into her lap, frame 2 lifts the book with the knitting left on her lap),
-Sol-drawn on the same chair at `knit`'s x. They are served (the manifest lists them) but nothing plays them yet; they
-are not in her `idles`.
+Sol-drawn on the same chair at `knit`'s x. The idle `knit` now plays on into
+them (s2913): knit, then `knitread`, then `read`, as steps of one idle (`HATCH_SITTER.chain`); `read` is a real
+reading pose, the Sol "reading a book" frames (owner, via the first mate, 2026-11-05), no longer knitting.

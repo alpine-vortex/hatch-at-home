@@ -278,7 +278,7 @@ class HatchPetCardSitter extends HatchPetCardLayout {
     st.ticks++;
     const busy = !!s.scene || this._owned(s);
     if (st.step && now >= st.until) this._sitterNext(s, now);
-    if (st.step?.kind === "idle" && busy) st.step = null; // a scene or a game: it stands (6.3)
+    if (st.step?.kind === "idle" && busy) { st.step = null; st.steps = st.steps.filter((x) => x.kind !== "idle"); } // a scene or a game: it stands (6.3)
     const pose = this._sitterPose(s, now);
     const row = this._sitterRow(s);
     const frames = this._sitterFrames(row, pose);
@@ -289,10 +289,11 @@ class HatchPetCardSitter extends HatchPetCardLayout {
       if (next && !st.nextIdle) st.nextIdle = now + next.wait;
       if (next && now >= st.nextIdle) {
         st.step = { pose: next.pose, ms: HATCH_SITTER.MS.idle, kind: "idle" };
+        st.steps = HATCH_SITTER.chain(row, next.pose).map((x) => ({ ...x, kind: "idle" })); // knit goes on to knitread, read
         st.until = now + st.step.ms;
         st.frame = 0;
         st.idleN++;
-        st.nextIdle = st.until + HATCH_SITTER.idle(seed, st.idleN, row).wait;
+        st.nextIdle = st.until + st.steps.reduce((a, x) => a + x.ms, 0) + HATCH_SITTER.idle(seed, st.idleN, row).wait;
       }
     }
     this._sitterPaint(s);
