@@ -20,6 +20,8 @@ original share zips.
 Every sprite: transparent PNG, 256×256 (props 128×128, backgrounds 512×384),
 named `{stage}_{mood}_{frame}.png`.
 
+New frontend PNGs go through `scripts/art/palette.py` (exact palette, same pixels); `tests/test_frontend_png_palette.py` enforces it, and `scripts/sync-sitter.py` palettises the sitter copy.
+
 ## Notes from Sol for the card (phase 2)
 
 - `sitter_sign.png`: the text is unreadable at prop size, so the card adds its own label.

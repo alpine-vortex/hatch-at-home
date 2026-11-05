@@ -31,13 +31,11 @@ def palette_png(path: str) -> bytes | None:
     img = Image.open(path)
     rgba = img.convert("RGBA")
     pixels = visible(rgba)
-    colours = np.unique(pixels.reshape(-1, 4), axis=0)
+    # Build the palette by hand so it is exact (no quantizer rounding).
+    colours, idx = np.unique(pixels.reshape(-1, 4), axis=0, return_inverse=True)
     if len(colours) > 256:
         return None
-    # Build the palette by hand so it is exact (no quantizer rounding).
-    index = {tuple(c): i for i, c in enumerate(colours)}
-    flat = pixels.reshape(-1, 4)
-    idx = np.fromiter((index[tuple(c)] for c in flat), np.uint8, len(flat))
+    idx = idx.reshape(-1).astype(np.uint8)
     out = Image.frombytes("P", rgba.size, idx.tobytes())
     out.putpalette(colours[:, :3].flatten().tolist(), rawmode="RGB")
     buf = io.BytesIO()
@@ -46,6 +44,20 @@ def palette_png(path: str) -> bytes | None:
     if not np.array_equal(visible(Image.open(io.BytesIO(data))), pixels):
         return None  # not exact: keep the original
     return data
+
+
+def same_pixels(a: str, b: str) -> bool:
+    """Two PNGs show the same picture (byte equality would depend on the zlib in use)."""
+    with Image.open(a) as x, Image.open(b) as y:
+        return x.size == y.size and np.array_equal(visible(x), visible(y))
+
+
+def served_bytes(path: str) -> bytes:
+    """The bytes to ship for a PNG: its exact palette form if that is smaller, else as is."""
+    with open(path, "rb") as f:
+        raw = f.read()
+    data = palette_png(path)
+    return data if data is not None and len(data) < len(raw) else raw
 
 
 def lossy_png(path: str) -> bytes:

@@ -7,6 +7,9 @@ custom_components/virtual_pet/frontend/sitter/ (docs/plan-2026-11-04-sitter-visi
     python3 scripts/sync-sitter.py          # write the copy and sitters.json
     python3 scripts/sync-sitter.py --check  # write nothing; exit 1 if they differ
 
+The art/ sources stay RGBA; the served copy goes through scripts/art/palette.py (exact palette,
+same pixels, smaller).
+
 A sitter is a folder of PNGs. Its poses are whatever the folder holds, so a new sitter is a
 folder drop-in plus a row in sitters.json, and the card never asks for a file the manifest
 does not list. Three kinds are served (KINDS below): the base sitter, a look per shell finish
@@ -22,10 +25,12 @@ import argparse
 import json
 from pathlib import Path
 import re
-import shutil
 import sys
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts" / "art"))
+from palette import same_pixels, served_bytes  # noqa: E402  (the served copy is stored as an exact palette)
+
 ART = ROOT / "art" / "sitter"
 OUT = ROOT / "custom_components" / "virtual_pet" / "frontend" / "sitter"
 
@@ -139,7 +144,7 @@ def main() -> int:
     ):
         stale.append(OUT / "sitters.json")
     for dest, src in files.items():
-        if not dest.exists() or dest.read_bytes() != src.read_bytes():
+        if not dest.exists() or not same_pixels(str(dest), str(src)):
             stale.append(dest)
     extra = [p for p in OUT.rglob("*.png") if p not in files] if OUT.exists() else []
     if args.check:
@@ -148,7 +153,7 @@ def main() -> int:
         return 1 if stale or extra else 0
     for dest, src in files.items():
         dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(src, dest)
+        dest.write_bytes(served_bytes(str(src)))
     for p in extra:
         p.unlink()
     (OUT / "sitters.json").write_text(text)
