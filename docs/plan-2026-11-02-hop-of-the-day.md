@@ -2049,3 +2049,7 @@ which is built as 4a and 4b. The numbering continues.
    twist with its states, as `ui/hop_<world>_<tile>.png` drawn by style.js's `HOP_ART`. The pet's
    own frames are unchanged. Woodland first, signed off by the owner before the other five worlds
    (s2874's style test, then s2918's woodland v2 at 20 x 20 art px).
+2. **Woodland v2 signed off** (owner, 2026-11-05): 20 x 20 art px tiles, a green leaf pad (off
+   the roster's orange, brown and yellow), a dark-outlined gold star on the find and a
+   dark-outlined cream paw on the start. The other five worlds follow at 20 px, each with its
+   own plain set and twist cells, with no further stop.

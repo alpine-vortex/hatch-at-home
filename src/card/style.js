@@ -1,7 +1,7 @@
 // Hop of the Day's cell art (ui/hop_<world>_<tile>.png, 20 x 20 art px): a world listed here draws its cells
 // from these tiles instead of the CSS stand-ins below (a world not listed keeps them). Each tile is one
 // cell's state; the selectors keep the cells' class names, and .legal/.lit stay rings drawn over the art (.legal
-// cream here: the dark ring is lost on a dark tile).
+// cream here, HOP_RING's colour on a pale floor: the dark ring is lost on a dark tile).
 // Later wins on a tie, so a twist's tile follows the plain pad's.
 const HOP_TILES = {
   pad: ".hc.pad:not(.sunk)", find: ".hc.pad.find:not(.sunk)", start: ".hc.pad.start:not(.sunk)", sunk: ".hc.sunk",
@@ -12,12 +12,18 @@ const HOP_TILES = {
   dark: ".hc.pad.dark:not(.sunk)", lantern: ".hc.lantern:not(.sunk)",
 };
 const HOP_PLAIN = ["pad", "find", "start", "sunk", "stone", "water", "wall", "nest", "nest_open"];
-const HOP_ART = { woodland: [...HOP_PLAIN, "stump1", "stump2"] };
+const HOP_ART = {
+  woodland: [...HOP_PLAIN, "stump1", "stump2"], hearth: [...HOP_PLAIN, "rug"],
+  terrarium: [...HOP_PLAIN, "crackle", "crackle_half"], tidepool: [...HOP_PLAIN, "pool_stone", "pool_water"],
+  pond: [...HOP_PLAIN, "ripple"], nightsky: [...HOP_PLAIN, "dark", "lantern"],
+};
+// The .legal ring's colour on a world's art: cream, or dark where the floor is pale (terrarium's sand).
+const HOP_RING = { terrarium: "#3a2a1a" };
 const hopArtStyle = () => Object.entries(HOP_ART).map(([world, tiles]) => {
   const at = `.game .hopb[data-world="${world}"]`;
   return `${at} .hc { border: 1px solid rgba(20, 14, 8, .4); border-radius: 0; image-rendering: pixelated; }
   ${at} .hc.pad.find::after { content: none; }
-  ${at} .hc.legal { box-shadow: inset 0 0 0 2px #fffdf5; }
+  ${at} .hc.legal { box-shadow: inset 0 0 0 2px ${HOP_RING[world] || "#fffdf5"}; }
   ${at} .hc.lit { box-shadow: inset 0 0 0 3px #fffdf5, inset 0 0 0 5px #3a2a1a; }\n` + tiles.map((t) => `  ${at} ${HOP_TILES[t]} { background: ` +
     `url(${BASE}/ui/hop_${world}_${t}.png?v=${VERSION}) 0 0 / 100% 100% no-repeat border-box; }`).join("\n");
 }).join("\n");
