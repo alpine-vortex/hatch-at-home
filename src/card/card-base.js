@@ -113,8 +113,10 @@ class HatchPetCardBase extends HTMLElement {
       (this._slides || []).forEach((x) => this._stopTyping(x));
       this._hiddenAt ??= Date.now();
       this._dirPause();
+      audioPark(); // nobody can hear it
       return;
     }
+    audioWake();
     this._dirView(this._slides?.[this._index]); // back in view: the ambience, and a first view's echo
     // Back after a long while (owner Q1): a new look, as a fresh page would have, a gift
     // waiting too (fresh-moment 1). The look waits for fresh states (RESUME_HOLD_MS at
@@ -130,6 +132,7 @@ class HatchPetCardBase extends HTMLElement {
   };
 
   connectedCallback() {
+    audioJoin(); // the page's AudioContext counts the cards; the last one out suspends it
     followTextSweep(); // M1: no typed words past their day
     this._timer = setInterval(() => this._tick(), 700);
     if (this._card) document.addEventListener("visibilitychange", this._onHidden);
@@ -174,6 +177,7 @@ class HatchPetCardBase extends HTMLElement {
   }
 
   disconnectedCallback() {
+    audioLeave();
     clearInterval(this._timer);
     clearTimeout(this._headTimer);
     this._headTimer = 0;

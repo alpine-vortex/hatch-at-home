@@ -430,7 +430,7 @@ class HatchPetCardStatus extends HatchPetCardMoment {
           unlockAudio(); // inside the tap: phones need it even when the sample is skipped
           skipped = this._maySample(s);
           if (skipped === null) playChirp("win"); // a sample
-        }
+        } else audioPark(); // turned off: a running context has nothing left to do
       } catch (err) {
         // no WebAudio: the setting stays, and stays quiet
       }

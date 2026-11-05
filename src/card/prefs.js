@@ -145,6 +145,12 @@ const CHIRPS = { // [frequency Hz, length s] notes, played one after another
   buzz: [[330, 0.06], [262, 0.1]], // a bee, a wrong guess (UX fix 6, F14)
 };
 let audio = null; // one AudioContext for every card on the page
+// A running AudioContext keeps an audio thread and session alive (on a phone's WebView, for the
+// life of the page), so it is suspended while nobody can hear it: the last card leaving the page,
+// or the page hidden. The next sound resumes it (unlockAudio, playChirp), and a return to the page
+// wakes it only if this code suspended it, so sound works as before.
+let audioCards = 0; // hatch cards on the page right now
+let audioParked = false; // this code suspended it (a return wakes it)
 
 // Power-on: the first time this browser shows the card (and again after a card
 // update that bumps BOOT_VERSION, only when a release should "power on"), the
@@ -201,7 +207,40 @@ function babbleOn() {
 
 function unlockAudio() {
   audio ||= new (window.AudioContext || window.webkitAudioContext)();
+  audioParked = false;
   if (audio.state === "suspended") audio.resume();
+}
+
+// Suspend the context (nothing to hear). Safe with none made yet, or one already suspended.
+function audioPark() {
+  if (audio?.state !== "running") return;
+  audioParked = true;
+  try {
+    audio.suspend()?.catch?.(() => {});
+  } catch (err) {
+    // a context that cannot suspend stays as it was
+  }
+}
+
+// Undo audioPark when a card is on a visible page again. Not a first unlock: that is a tap.
+function audioWake() {
+  if (!audioParked || !audio || document.hidden || !soundsOn()) return; // sounds turned off meanwhile: stay asleep
+  audioParked = false;
+  try {
+    if (audio.state === "suspended") audio.resume()?.catch?.(() => {});
+  } catch (err) {
+    // the next tap unlocks it
+  }
+}
+
+function audioJoin() {
+  audioCards++;
+  audioWake();
+}
+
+function audioLeave() {
+  audioCards = Math.max(0, audioCards - 1);
+  if (!audioCards) audioPark();
 }
 
 // Stop one babble (its oscillators, from babble()).
@@ -416,8 +455,7 @@ function chirpOut() {
 function playChirp(name) {
   const notes = CHIRPS[name];
   if (!notes) return;
-  audio ||= new (window.AudioContext || window.webkitAudioContext)();
-  if (audio.state === "suspended") audio.resume();
+  unlockAudio();
   let t = audio.currentTime + 0.01;
   for (const [freq, len] of notes) {
     if (freq) {

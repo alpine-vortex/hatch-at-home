@@ -513,7 +513,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     clearTimeout(this._bootTimer);
     if (tapped) {
       try {
-        unlockAudio();
+        if (soundsOn()) unlockAudio(); // sounds off here: no AudioContext at all
       } catch (err) {
         // no WebAudio
       }

@@ -78,6 +78,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
       - run: scripts/setup
+      # tests/js/leak_guard.test.js mounts the card in a browser (skipped without Playwright).
+      # The version and cache key are the card job's below.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-1.64.1-${{ runner.os }}
+      - run: npm install --no-save playwright@1.64.1 && npx playwright install --with-deps chromium
       - run: scripts/test
       # Joins src/card/ into the card and checks every part and the result.
       - run: node scripts/build-card.js
