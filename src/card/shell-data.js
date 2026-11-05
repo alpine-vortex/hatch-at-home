@@ -11,18 +11,20 @@ const TONE_PAINT = [
   [TONE.shade, "rgba(24,12,4,.2)"], [TONE.dither, "rgba(24,12,4,.2)"], [TONE.deep, "rgba(24,12,4,.34)"],
   [TONE.seam, "rgba(24,12,4,.24)"],
 ];
+const NEAR8 = [[0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]];
 const MOULDS = new Map(); // cut parts, by kind and size
 
 // Inside a w x h box with CSS corner radii ([h, v] per corner, top-left first).
+function cornerIn(x, y, cx, cy, a, b, sx, sy) {
+  return !a || !b || sx * (x - cx) < 0 || sy * (y - cy) < 0 || ((x - cx) / a) ** 2 + ((y - cy) / b) ** 2 <= 1;
+}
 function inRound(x, y, w, h, rad) {
   if (x < 0 || y < 0 || x > w || y > h) return false;
-  const f = Math.min(1, w / (rad[0][0] + rad[1][0] || 1), w / (rad[3][0] + rad[2][0] || 1),
-    h / (rad[0][1] + rad[3][1] || 1), h / (rad[1][1] + rad[2][1] || 1));
-  const c = rad.map(([a, b]) => [a * f, b * f]);
-  const corner = (cx, cy, [a, b], sx, sy) => !a || !b || sx * (x - cx) < 0 || sy * (y - cy) < 0 ||
-    ((x - cx) / a) ** 2 + ((y - cy) / b) ** 2 <= 1;
-  return corner(c[0][0], c[0][1], c[0], -1, -1) && corner(w - c[1][0], c[1][1], c[1], 1, -1) &&
-    corner(w - c[2][0], h - c[2][1], c[2], 1, 1) && corner(c[3][0], h - c[3][1], c[3], -1, 1);
+  const r0 = rad[0], r1 = rad[1], r2 = rad[2], r3 = rad[3];
+  const f = Math.min(1, w / (r0[0] + r1[0] || 1), w / (r3[0] + r2[0] || 1), h / (r0[1] + r3[1] || 1), h / (r1[1] + r2[1] || 1));
+  const a0 = r0[0] * f, b0 = r0[1] * f, a1 = r1[0] * f, b1 = r1[1] * f, a2 = r2[0] * f, b2 = r2[1] * f, a3 = r3[0] * f, b3 = r3[1] * f;
+  return cornerIn(x, y, a0, b0, a0, b0, -1, -1) && cornerIn(x, y, w - a1, b1, a1, b1, 1, -1) &&
+    cornerIn(x, y, w - a2, h - b2, a2, b2, 1, 1) && cornerIn(x, y, a3, h - b3, a3, b3, -1, 1);
 }
 
 // An element's corner radii, in cells of size g.

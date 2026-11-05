@@ -134,11 +134,13 @@ class HatchPetCardLayout extends HatchPetCardBuild {
             };
           }
         } else if (kind === "bezel") {
-          inside = (x, y) => inRound(x, y, W, H, rad.map(([a, b]) => [a + lip, b + lip]));
+          const lipRad = rad.map(([a, b]) => [a + lip, b + lip]);
+          inside = (x, y) => inRound(x, y, W, H, lipRad);
           opts = { sunk: true, core: (x, y) => inRound(x - lip, y - lip, w0, h0, rad) };
         } else if (kind === "loop") {
           const t = Math.round(6 / g);
-          inside = (x, y) => inRound(x, y, W, H, rad) && !inRound(x - t, y - t, W - t * 2, H, rad.map(([a, b]) => [a - t, b - t]));
+          const tRad = rad.map(([a, b]) => [a - t, b - t]);
+          inside = (x, y) => inRound(x, y, W, H, rad) && !inRound(x - t, y - t, W - t * 2, H, tRad);
         } else if (kind === "roof") {
           const cw = 22 / g, cx = W * 0.8;
           inside = (x, y) => Math.abs(x - W / 2) <= (y / H) * (W / 2) ||
@@ -160,8 +162,8 @@ class HatchPetCardLayout extends HatchPetCardBuild {
           for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
             const i = y * W + x;
             if (cells[i] !== TONE.plain || inScreen(x + 0.5, y + 0.5)) continue;
-            const near = [[0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]]
-              .find(([dx, dy]) => inScreen(x + 0.5 + dx, y + 0.5 + dy));
+            let near = false;
+            for (let k = 0; k < NEAR8.length; k++) if (inScreen(x + 0.5 + NEAR8[k][0], y + 0.5 + NEAR8[k][1])) { near = true; break; }
             if (near) cells[i] = (x + 0.5 - sx) / sw + (y + 0.5 - sy) / sh < 1 ? TONE.deep : TONE.lit;
           }
         }
@@ -178,8 +180,14 @@ class HatchPetCardLayout extends HatchPetCardBuild {
           }
         }
         // A recess's lip is the shell's own plastic, in light and shade: only the core is filled.
-        const core = lip ? cells.map((v, i) => (v && inside((i % W) + 0.5, Math.floor(i / W) + 0.5) &&
-          opts.core((i % W) + 0.5, Math.floor(i / W) + 0.5) ? 1 : 0)) : null;
+        let core = null;
+        if (lip) {
+          core = new Array(cells.length);
+          for (let i = 0; i < cells.length; i++) {
+            const cx = (i % W) + 0.5, cy = Math.floor(i / W) + 0.5;
+            core[i] = cells[i] && inside(cx, cy) && opts.core(cx, cy) ? 1 : 0;
+          }
+        }
         return { clip: clipPath(cellsPath(cells, W, H, (v) => v > 0, g)), tones: toneImage(cells, W, H),
           core: core ? clipPath(cellsPath(core, W, H, (v) => v > 0, g)) : "none" };
       });
