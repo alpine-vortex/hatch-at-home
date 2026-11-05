@@ -60,7 +60,7 @@ class HatchPetCardSitter extends HatchPetCardLayout {
         pend.add(key);
         const img = new Image();
         img.onload = () => { pend.delete(key); have.add(key); this._slides?.forEach((s) => this._sitterPaint(s)); };
-        img.onerror = () => pend.delete(key); // a lost frame: the last one stays, no retry loop
+        img.onerror = () => {}; // a lost frame stays in `pend`: never asked for again this page, the last frame stays
         img.src = this._sitterSrc(row, stem);
       }
     }

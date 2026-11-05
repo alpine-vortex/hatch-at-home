@@ -543,3 +543,24 @@ test("perf: a sitter's frames come lazily: stand first, the first beat behind it
     pending.filter((p) => /feed_/.test(p.src ?? "")).forEach(() => {});
   } finally { sandbox.Image = keep; }
 });
+
+test("perf: a frame that fails to load is requested once, not on every paint", () => {
+  reset();
+  const asked = [];
+  const keep = sandbox.Image;
+  sandbox.Image = class { set src(v) { asked.push(v); this.onerror?.(); } decode() { return Promise.resolve(); } };
+  try {
+    const { card, s } = make();
+    card._sitArt = { state: "ready", manifest, rows: {}, have: new Set() };
+    const img = { v: "x.png", getAttribute() { return this.v; }, setAttribute(_k, v) { this.v = v; } };
+    s.sitterEl.querySelector = () => img;
+    s.sitterEl.hidden = false;
+    s.sit = { step: { pose: "feed" }, frame: 0, ticks: 0 };
+    s.sitter = view();
+    card._sitterPaint(s);
+    card._sitterPaint(s);
+    card._sitterTick(s);
+    assert.strictEqual(asked.filter((u) => /feed_1/.test(u)).length, 1);
+    assert.strictEqual(img.v, "x.png");
+  } finally { sandbox.Image = keep; }
+});
