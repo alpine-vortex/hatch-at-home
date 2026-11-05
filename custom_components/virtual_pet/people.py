@@ -31,10 +31,10 @@ from homeassistant.util import dt as dt_util
 from . import model, rates as R
 from .backup import NOTHING, async_backup, async_clear_if_restored
 from .const import CONF_MEMORY, DOMAIN, LOGGER
+from .saving import CappedSave
 
 STORE_KEY = f"{DOMAIN}.people"
 STORE_VERSION = 1
-SAVE_DELAY = 60
 
 # Questions a pet may ask, and the answers that are remembered (the rest are
 # answered on the card and kept nowhere).
@@ -209,6 +209,7 @@ class People:
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
         self._store: Store[dict[str, Any]] = Store(hass, STORE_VERSION, STORE_KEY)
+        self._saver = CappedSave(hass, self._store, lambda: self.data)
         self.data: dict[str, Any] = {"people": {}, "weather": {}}
         self._locks: dict[str, asyncio.Lock] = {}
         # Memory only, never in self.data (so never on disk, in a backup or a
@@ -288,7 +289,7 @@ class People:
         await self.async_save_now()  # an empty store from now on, over the damage
 
     def save(self) -> None:
-        self._store.async_delay_save(lambda: self.data, SAVE_DELAY)
+        self._saver.save()
 
     async def async_save_now(self) -> None:
         await self._store.async_save(self.data)

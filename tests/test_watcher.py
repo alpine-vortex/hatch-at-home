@@ -9,9 +9,11 @@ from custom_components.virtual_pet import rates as R
 from custom_components.virtual_pet.const import CONF_ZONE
 from custom_components.virtual_pet.home import DayForecast
 from custom_components.virtual_pet.watcher import (
+    Signature,
     Watcher,
     appliance_kind,
     daily_forecast,
+    moved,
 )
 
 
@@ -436,3 +438,161 @@ async def test_known_is_for_the_five_plain_bool_readings_only(
     assert watcher._good == {}  # asking about them reads no entity
     hass.states.async_set("media_player.tv", "off")
     assert watcher.known("tv", 0)
+
+
+def _sig(options: dict, entity_id: str, value: str, **attrs) -> Signature:
+    return Watcher(None, options).signature(entity_id, State(entity_id, value, attrs))  # type: ignore[arg-type]
+
+
+def _moves(options: dict, entity_id: str, a: tuple, b: tuple) -> bool:
+    return moved(
+        _sig(options, entity_id, a[0], **a[1]), _sig(options, entity_id, b[0], **b[1])
+    )
+
+
+@pytest.mark.parametrize(
+    ("options", "entity_id", "before", "after", "wakes"),
+    [
+        # Lux: the night cutoff wakes; a small drift does not; a big move does.
+        ({"lux": ["sensor.l"]}, "sensor.l", ("99", {}), ("100", {}), True),
+        ({"lux": ["sensor.l"]}, "sensor.l", ("50", {}), ("53", {}), False),
+        ({"lux": ["sensor.l"]}, "sensor.l", ("40", {}), ("60", {}), True),
+        ({"lux": ["sensor.l"]}, "sensor.l", ("2000", {}), ("2400", {}), False),
+        # A dimmer that stays on, and the dim/bright bands.
+        (
+            {"room_lights": ["light.a"]},
+            "light.a",
+            ("on", {"brightness": 50}),
+            ("on", {"brightness": 230}),
+            True,
+        ),
+        (
+            {"room_lights": ["light.a"]},
+            "light.a",
+            ("on", {"brightness": 200}),
+            ("on", {"brightness": 205}),
+            False,
+        ),
+        ({"room_lights": ["light.a"]}, "light.a", ("off", {}), ("on", {}), True),
+        # A thermostat set to heat whose hvac_action flips.
+        (
+            {"heating": ["climate.h"]},
+            "climate.h",
+            ("heat", {"hvac_action": "idle"}),
+            ("heat", {"hvac_action": "heating"}),
+            True,
+        ),
+        (
+            {"heating": ["climate.h"]},
+            "climate.h",
+            ("heat", {"hvac_action": "heating", "current_temperature": 19}),
+            ("heat", {"hvac_action": "heating", "current_temperature": 19.5}),
+            False,
+        ),
+        # Weather: the condition, wind crossing windy, and small temperature moves.
+        ({"weather": "weather.w"}, "weather.w", ("cloudy", {}), ("rainy", {}), True),
+        (
+            {"weather": "weather.w"},
+            "weather.w",
+            ("cloudy", {"wind_speed": 25}),
+            ("cloudy", {"wind_speed": 31}),
+            True,
+        ),
+        (
+            {"weather": "weather.w"},
+            "weather.w",
+            ("cloudy", {"temperature": 12.0, "temperature_unit": "°C"}),
+            ("cloudy", {"temperature": 12.4, "temperature_unit": "°C"}),
+            False,
+        ),
+        # Rain onset, but not a gauge creeping; a fireplace lit.
+        ({"rain": "sensor.r"}, "sensor.r", ("0", {}), ("0.1", {}), True),
+        ({"rain": "sensor.r"}, "sensor.r", ("2.1", {}), ("2.3", {}), False),
+        ({"fireplace": "sensor.f"}, "sensor.f", ("0", {}), ("1", {}), True),
+        # Solar and AQI cutoffs; indoor against the entry's own comfort band.
+        ({"solar": "sensor.s"}, "sensor.s", ("299", {}), ("300", {}), True),
+        ({"aqi": "sensor.q"}, "sensor.q", ("100", {}), ("101", {}), True),
+        ({"aqi": "sensor.q"}, "sensor.q", ("40", {}), ("42", {}), False),
+        (
+            {"indoor_temperature": "sensor.t", "comfort_low": 21.0},
+            "sensor.t",
+            ("21.1", {}),
+            ("20.9", {}),
+            True,
+        ),
+        (
+            {"indoor_temperature": "sensor.t"},
+            "sensor.t",
+            ("21.1", {}),
+            ("21.3", {}),
+            False,
+        ),
+        # The moon rising; the sun setting, but not its elevation alone.
+        ({"moon_altitude": "sensor.m"}, "sensor.m", ("-0.2", {}), ("0.3", {}), True),
+        ({}, "sun.sun", ("above_horizon", {}), ("below_horizon", {}), True),
+        (
+            {},
+            "sun.sun",
+            ("above_horizon", {"elevation": 30}),
+            ("above_horizon", {"elevation": 29.7}),
+            False,
+        ),
+        # Motion, media state and titles.
+        (
+            {"motion": ["binary_sensor.m"]},
+            "binary_sensor.m",
+            ("off", {}),
+            ("on", {}),
+            True,
+        ),
+        (
+            {"tv": ["media_player.t"]},
+            "media_player.t",
+            ("playing", {}),
+            ("paused", {}),
+            True,
+        ),
+        (
+            {"music": ["media_player.r"]},
+            "media_player.r",
+            ("playing", {"media_title": "One"}),
+            ("playing", {"media_title": "Two"}),
+            True,
+        ),
+        (
+            {"music": ["media_player.r"]},
+            "media_player.r",
+            ("playing", {"media_title": "One", "media_position": 10}),
+            ("playing", {"media_title": "One", "media_position": 20}),
+            False,
+        ),
+        # People at home; a power sensor crossing the appliance watts, not below it.
+        ({}, "zone.home", ("1", {}), ("0", {}), True),
+        (
+            {"appliances": ["sensor.wash_power"]},
+            "sensor.wash_power",
+            ("3", {"device_class": "power"}),
+            ("30", {"device_class": "power"}),
+            True,
+        ),
+        (
+            {"appliances": ["sensor.wash_power"]},
+            "sensor.wash_power",
+            ("1", {"device_class": "power"}),
+            ("2", {"device_class": "power"}),
+            False,
+        ),
+    ],
+)
+def test_signature_moves_only_for_what_the_pet_reads(
+    options, entity_id, before, after, wakes
+):
+    assert _moves(options, entity_id, before, after) is wakes
+
+
+def test_moved_compares_with_the_value_last_let_through():
+    """A slow drift adds up: the caller keeps the last signature it woke for."""
+    options = {"lux": ["sensor.l"]}
+    first = _sig(options, "sensor.l", "40")
+    assert not moved(first, _sig(options, "sensor.l", "43"))
+    assert moved(first, _sig(options, "sensor.l", "50"))  # a quarter of 40

@@ -30,6 +30,8 @@ from .const import (
     CONF_APPLIANCES,
     CONF_AQI,
     CONF_BEDTIME_LIGHTS,
+    CONF_COMFORT_HIGH,
+    CONF_COMFORT_LOW,
     CONF_COOLING,
     CONF_FIREPLACE,
     CONF_HEATING,
@@ -50,7 +52,7 @@ from .const import (
     CONF_ZONE,
     DEFAULT_ZONE,
 )
-from .home import DayForecast, Readings, moon_by_date
+from .home import DayForecast, Readings, moon_by_date, moon_phase
 
 BAD = (STATE_UNAVAILABLE, STATE_UNKNOWN)
 VIDEO = {"movie", "tvshow", "video", "episode", "channel"}
@@ -261,6 +263,56 @@ def doorbell_rang(old: State | None, new: State | None, now: float) -> bool:
     return kind == "ring" or "ring" not in (new.attributes.get("event_types") or ())
 
 
+# A level in a Signature: (name, value, share, floor). It has moved when it
+# changed by at least max(floor, share * |the value it is compared with|).
+type Level = tuple[str, float, float, float]
+
+
+@dataclass(frozen=True)
+class Signature:
+    """What the pet can notice of one entity's state: the bands and words the
+    readings use (marks, compared exactly) and the numbers they read (levels,
+    compared with a coarse step). Built from the same extraction as read(),
+    so a change that leaves the signature alone changes nothing the pet sees
+    until the next tick."""
+
+    marks: tuple[Any, ...]
+    levels: tuple[Level, ...] = ()
+
+
+def moved(old: Signature, new: Signature) -> bool:
+    """Whether new differs from old in a way worth waking the pet for."""
+    if old.marks != new.marks or len(old.levels) != len(new.levels):
+        return True
+    for (name, was, share, floor), (other, now, _, _) in zip(
+        old.levels, new.levels, strict=True
+    ):
+        if name != other or abs(now - was) >= max(floor, share * abs(was)):
+            return True
+    return False
+
+
+def _band(value: float, edges: tuple[float, ...]) -> int:
+    """How many of the (ascending) edges value is at or above."""
+    return sum(value >= edge for edge in edges)
+
+
+# Outdoor °C the pet or the card has a word for (snow talk at 0, coming home
+# cold or hot, the first warm day, a hot day, a cold snap).
+OUTDOOR_EDGES = tuple(
+    sorted(
+        {
+            R.HOME_COLD_SNAP_C,
+            0.0,
+            R.HOME_COLD_C,
+            R.HOME_WARM_FIRST_C,
+            R.HOME_HOT_C,
+            R.HOME_HOT_DAY_C,
+        }
+    )
+)
+
+
 @dataclass
 class _Cycle:
     """One appliance entity's cycle so far (memory only; never leaves the watcher)."""
@@ -322,6 +374,114 @@ class Watcher:
         for key in (*MULTI, *SINGLE):
             ids += self._ids(key)
         return sorted(set(ids))
+
+    def signature(self, entity_id: str, state: State) -> Signature:
+        """What the pet can notice of this state of entity_id, for every key it
+        is mapped to (pure: reads nothing else and changes nothing). The caller
+        handles unavailable, unknown and a removed entity itself."""
+        marks: list[Any] = []
+        levels: list[Level] = []
+        if entity_id == self.zone:
+            marks.append(("zone", state.state))
+        if entity_id == "sun.sun" or state.domain == "vacuum":
+            marks.append(("state", state.state))
+        for key in (*MULTI, *SINGLE):
+            if entity_id in self._ids(key):
+                self._sign(key, state, marks, levels)
+        return Signature(tuple(marks), tuple(levels))
+
+    def _sign(
+        self, key: str, state: State, marks: list[Any], levels: list[Level]
+    ) -> None:
+        """One key's share of a signature, from the same reads as read()."""
+        mark = marks.append
+
+        def level(name: str, value: float | None, share: float, floor: float) -> None:
+            if value is not None:
+                levels.append((f"{key}.{name}", value, share, floor))
+
+        share = R.HOME_REACT_SHARE
+        if key == CONF_WEATHER:
+            mark((key, state.state))
+            outdoor = self._outdoor_c(state)
+            mark((key, None if outdoor is None else _band(outdoor, OUTDOOR_EDGES)))
+            level("c", outdoor, 0.0, R.HOME_REACT_OUTDOOR_C)
+            for attr, edge in (
+                ("wind_speed", R.HOME_WINDY_KMH),
+                ("wind_gust_speed", R.HOME_GUSTY_KMH),
+            ):
+                kmh = _kmh(state, attr)
+                mark((attr, None if kmh is None else kmh >= edge))
+                level(attr, kmh, share, R.HOME_REACT_KMH)
+        elif key == CONF_RAIN:
+            rain = self._rain(state)
+            mark((key, None if rain is None else rain > 0))
+            level("rate", rain, share, R.HOME_REACT_RAIN)
+        elif key == CONF_SOLAR:
+            solar = _float(state)
+            mark((key, None if solar is None else solar >= R.HOME_SUNNY_SOLAR))
+            level("w", solar, share, R.HOME_REACT_SOLAR)
+        elif key == CONF_INDOOR_TEMP:
+            indoor = self._celsius(state)
+            low = _number(self.options.get(CONF_COMFORT_LOW))
+            high = _number(self.options.get(CONF_COMFORT_HIGH))
+            low = R.HOME_COMFORT_LOW_C if low is None else low
+            high = R.HOME_COMFORT_HIGH_C if high is None else high
+            mark((key, None if indoor is None else (indoor < low, indoor > high)))
+            level("c", indoor, 0.0, R.HOME_REACT_INDOOR_C)
+        elif key == CONF_AQI:
+            aqi = _float(state)
+            mark((key, None if aqi is None else aqi > R.HOME_BAD_AQI))
+            level("aqi", aqi, share, R.HOME_REACT_AQI)
+        elif key == CONF_FIREPLACE:
+            mark((key, self._lit(state)))
+        elif key == CONF_MOON_PHASE:
+            mark((key, state.state))
+        elif key == CONF_MOON_ILLUMINATION:
+            lit = self._fraction(state)
+            mark((key, None if lit is None else moon_phase(None, lit)))
+            level("lit", lit, 0.0, R.HOME_REACT_MOON)
+        elif key == CONF_MOON_ALTITUDE:
+            alt = _float(state)
+            mark((key, None if alt is None else alt > 0))
+        elif key == CONF_LUX:
+            lux = _float(state)
+            mark((key, None if lux is None else lux >= R.HOME_BRIGHT_LUX_AT_NIGHT))
+            level("lux", lux, share, R.HOME_REACT_LUX)
+        elif key == CONF_ROOM_LIGHTS:
+            light = self._light_level([state]) or 0.0
+            mark(
+                (
+                    key,
+                    light > 0,
+                    light >= R.HOME_BRIGHT_LEVEL,
+                    light <= R.HOME_DIM_LEVEL,
+                )
+            )
+            level("level", light, 0.0, R.HOME_REACT_LIGHT)
+        elif key in (CONF_BEDTIME_LIGHTS, CONF_MOTION):
+            mark((key, state.state == "on"))
+        elif key in (CONF_TV, CONF_MUSIC):
+            mark((key, state.state, state.attributes.get("media_content_type")))
+            mark(
+                tuple(
+                    _title(state, attr, fallback=False)
+                    for attr in ("media_series_title", "media_title", "media_artist")
+                )
+            )
+        elif key == CONF_HEATING:
+            mark((key, heating_on(state)))
+        elif key == CONF_COOLING:
+            mark((key, cooling_on(state)))
+        elif key == CONF_APPLIANCES:
+            watts = _watts(state)
+            if watts is None:
+                mark((key, state.state))
+            else:
+                watts_max = _number(self.options.get(CONF_APPLIANCE_WATTS))
+                if watts_max is None:
+                    watts_max = R.APPLIANCE_WATTS
+                mark((key, watts > watts_max))
 
     def _get(self, entity_id: str, now: float) -> State | None:
         state = self.hass.states.get(entity_id)

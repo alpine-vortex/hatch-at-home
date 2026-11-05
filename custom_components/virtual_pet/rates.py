@@ -16,6 +16,13 @@ MAX_STEP_SECONDS = 300  # the simulation never takes a bigger bite than this
 # downtime is always frozen entirely, so it needs no cap.
 MAX_LIVE_GAP_MINUTES = 30
 NAP_INTO_NIGHT_MINUTES = 60  # a nap this close to bedtime lasts the night
+# Seconds. The pet's and the people's stores save this long after a change; the
+# Store also writes once more on shutdown, so only a crash loses up to this much.
+SAVE_DELAY = 60
+# Seconds. Each new change pushes the Store's delayed write back, so a sensor that
+# changes every few seconds would put it off until shutdown: a store that has
+# waited this long is written at once (saving.CappedSave).
+SAVE_MAX_DELAY = 300
 
 # --- Decay while awake (per hour) ----------------------------------------
 
@@ -318,6 +325,20 @@ HOME_BEDTIME_WINDOW_MINUTES = 60  # dark-and-quiet works this long before bedtim
 HOME_QUIET_MINUTES = 10  # no motion for this long counts as quiet
 HOME_HOLD_MINUTES = 10  # an unavailable sensor keeps its last value this long
 HOME_DEBOUNCE_SECONDS = 10.0
+# A watched entity's change wakes the pet only if it changes what the pet reads
+# (watcher.Signature): a band the pet uses (dark or bright, sunny, comfy) or a
+# reading that moved at least this share of itself, and at least the floor below.
+# Anything smaller waits for the next tick (TICK_MINUTES).
+HOME_REACT_SHARE = 0.25
+HOME_REACT_LUX = 5.0
+HOME_REACT_SOLAR = 25.0  # W/m²
+HOME_REACT_AQI = 10.0
+HOME_REACT_RAIN = 0.5  # in the gauge's unit; any rain at all is a band of its own
+HOME_REACT_KMH = 5.0
+HOME_REACT_INDOOR_C = 0.5  # no share: a fixed step
+HOME_REACT_OUTDOOR_C = 1.0  # no share
+HOME_REACT_LIGHT = 0.1  # a room light's brightness, 0-1; no share
+HOME_REACT_MOON = 0.02  # the lit fraction, 0-1; no share
 HOME_GREETING_MINUTES = 10
 HOME_DOORBELL_COOLDOWN_MINUTES = 30  # between doorbell moments, one per pet (memory)
 HOME_DOORBELL_FRESH_SECONDS = 60  # a press older than this was not just now

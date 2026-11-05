@@ -115,14 +115,11 @@ from .home import (
 from .names import name_taken, pet_name
 from .react import counts as react_counts, is_native as react_native
 from .repairs import missing_entity_ids, placeholders
+from .saving import CappedSave
 from .species import load_catalog
-from .watcher import Watcher, daily_forecast, doorbell_rang
+from .watcher import BAD, Signature, Watcher, daily_forecast, doorbell_rang, moved
 
 type PetConfigEntry = ConfigEntry[PetCoordinator]
-
-# Seconds; the Store also writes once more on shutdown, so only a crash loses
-# up to this much. Every tick and house change saves, so this also caps writes.
-SAVE_DELAY = 60
 
 # Events the card reacts to on screen. The card only sees state, so these are
 # published as a short list (the last_care sensor's "moments").
@@ -258,6 +255,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             f"{DOMAIN}.{entry.entry_id}",
             minor_version=STORE_MINOR_VERSION,
         )
+        # Late-bound: self.state is replaced on load and recovery.
+        self._saver = CappedSave(hass, self.store, lambda: self._state_dict())
         # Filled in by async_load from the files in frontend/.
         self.world: str = entry.data.get(CONF_WORLD, DEFAULT_WORLD)
         self.world_name = self.world
@@ -758,8 +757,26 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._check_mapped_entities()
         ids = self.watcher.entity_ids()
 
+        # Per entity, the signature last let through: the pet wakes only for a
+        # change it can notice, so a chatty sensor (lux every 2 s, the sun's
+        # elevation every minute) waits for the tick. Memory only.
+        seen: dict[str, Signature] = {}
+
         @callback
-        def changed(_: Event[EventStateChangedData]) -> None:
+        def changed(event: Event[EventStateChangedData]) -> None:
+            eid = event.data["entity_id"]
+            old, new = event.data["old_state"], event.data["new_state"]
+            if new is None or new.state in BAD:
+                seen.pop(eid, None)
+                self._home_debouncer.async_schedule_call()
+                return
+            sig = self.watcher.signature(eid, new)
+            last = seen.get(eid)
+            if last is None and old is not None and old.state not in BAD:
+                last = self.watcher.signature(eid, old)
+            if last is not None and not moved(last, sig):
+                return
+            seen[eid] = sig
             self._home_debouncer.async_schedule_call()
 
         self.config_entry.async_on_unload(
@@ -3126,10 +3143,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         for _, _, send, _ in list(self._watchers().values()):
             send({"moment": moment})
 
+    def _state_dict(self) -> dict[str, Any]:
+        assert self.state is not None
+        return self.state.to_dict()
+
     def _save(self) -> None:
-        state = self.state
-        assert state is not None
-        self.store.async_delay_save(state.to_dict, SAVE_DELAY)
+        assert self.state is not None
+        self._saver.save()
 
     def _publish(self) -> None:
         assert self.state is not None
