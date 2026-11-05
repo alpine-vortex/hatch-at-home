@@ -81,6 +81,10 @@ it to 22 as the old cut did. Each set's contact sheet is `art/ui/library/<set di
   is kept as `library/a-modes/icon_mode_special_v1`.
 - **B** (`library/b-v2/`, 18): crisper, but Sol drew them with chunkier pixels, so they are
   about 17-19 art px against the live set's 22 (three takes each; the biggest kept).
+  **The live-size take** (FM, 2026-11-05): `*_v2live` (18, plus `_t2` alternates of health and
+  discipline), drawn four to a 2 x 2 sheet so Sol's natural ~22 px art pixel still gives icons
+  of 16-22 art px, the live icons' own boxes, none shrunk. `contact_live.png` sets them beside
+  the live icons and the first v2 take at 24, 48 and 96 px.
 - **C** (`library/c-games/`, 27): the 22 named plus hop pad, sunk pad, stone, berry, shiny berry.
 - **D** (`library/d-util/`, 36): 19 controls, 10 glyphs, plus umbrella, rainbow, wind, drop,
   flower, paw, gift. `glyph_rain`'s drops are recoloured blue by hand (`FIX` in cut_ui.py).

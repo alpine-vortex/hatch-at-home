@@ -84,6 +84,27 @@ LIB = {
                 "care_miss",
             ]
         ],
+        # the live-size take (FM 2026-11-05): 2 x 2 sheets, so the icons come out 20-22 art px like the live set
+        "k1": [f"icon_{n}_v2live" for n in ["feed", "snack", "play", "clean"]],
+        "k2": [
+            f"icon_{n}_v2live" for n in ["medicine", "scold", "praise", "lights_out"]
+        ],
+        "k3": [
+            "icon_lights_on_v2live",
+            "icon_status_v2live",
+            "icon_journal_v2live",
+            "stat_energy_v2live",
+        ],
+        "k4": [
+            f"stat_{n}_v2live"
+            for n in ["heart_full", "heart_half", "heart_empty", "care_miss"]
+        ],
+        "k5": [
+            "stat_health_v2live",
+            "stat_discipline_v2live",
+            "stat_health_v2live_t2",
+            "stat_discipline_v2live_t2",
+        ],
     },
     "c": {
         "c1": [
@@ -292,6 +313,7 @@ def lib_cut(s, src, repo):
             np.nonzero(sc >= 0.8 * sc.max())[0].max()
         ]  # the largest strong period: its harmonics (p/2, p/3) score high too
         lab, n = ndimage.label(fg)
+        G = 3 if len(names) > 4 else 2  # 3 x 3 sheets, or 2 x 2 (set B at live size)
         cells = {}
         for i, sl in enumerate(ndimage.find_objects(lab), 1):
             m = lab[sl] == i
@@ -299,10 +321,10 @@ def lib_cut(s, src, repo):
                 continue
             cy, cx = ndimage.center_of_mass(lab == i)
             cells.setdefault(
-                (min(int(cy * 3 / h), 2), min(int(cx * 3 / w), 2)), []
+                (min(int(cy * G / h), G - 1), min(int(cx * G / w), G - 1)), []
             ).append(i)
         for k, name in enumerate(names):
-            ids = cells.get((k // 3, k % 3))
+            ids = cells.get((k // G, k % G))
             dest = lib_dest(repo, s, name)
             if not ids:
                 print("empty cell", sheet, k + 1, name)
@@ -456,6 +478,59 @@ def lib_contact(s, repo, out=None):
     print("contact:", dest)
 
 
+def lib_vs_live(repo, out=None):
+    """Set B's live-size take against the live care icons and the first v2 take: 24, 48 and 96 px on cream caps."""
+    from PIL import Image, ImageDraw
+
+    live = repo / "custom_components/virtual_pet/frontend/ui"
+    names = [
+        n[: -len("_v2live")]
+        for n in LIB["b"]["k1"] + LIB["b"]["k2"] + LIB["b"]["k3"] + LIB["b"]["k4"]
+    ]
+    names += ["stat_health", "stat_discipline"]
+    takes = [
+        ("live", lambda n: live / f"{n}.png"),
+        ("v2live", lambda n: lib_dest(repo, "b", f"{n}_v2live")),
+        ("v2", lambda n: lib_dest(repo, "b", f"{n}_v2")),
+    ]
+    rows = [(f"{t} {sz}", f, sz) for sz in (24, 48) for t, f in takes]
+    rows += [(f"{t} 96", f, 96) for t, f in takes[:2]]
+    colw, lab = 108, 70
+    heights = [max(36, sz + 16) for _, _, sz in rows]
+    c = Image.new(
+        "RGBA", (lab + colw * len(names), 30 + sum(heights)), (150, 138, 124, 255)
+    )
+    d = ImageDraw.Draw(c)
+    for i, n in enumerate(names):
+        d.text(
+            (lab + i * colw + 4, 10), n.replace("icon_", "")[:17], fill=(255, 255, 255)
+        )
+    y = 30
+    for (title, f, sz), rh in zip(rows, heights, strict=True):
+        d.text((4, y + rh // 2 - 5), title, fill=(255, 255, 255))
+        for i, n in enumerate(names):
+            if not f(n).exists():
+                continue
+            ic = (
+                Image.open(f(n))
+                .convert("RGBA")
+                .resize((sz, sz), Image.NEAREST if 96 % sz == 0 else Image.BOX)
+            )
+            cw, ch = sz + 10, sz + 8
+            cap = Image.new("RGBA", (cw, ch))
+            ImageDraw.Draw(cap).rounded_rectangle(
+                [0, 0, cw - 1, ch - 1], 5, fill=(255, 247, 236, 255)
+            )
+            cap.alpha_composite(ic, (5, 4))
+            c.alpha_composite(
+                cap, (lab + i * colw + (colw - cw) // 2, y + (rh - ch) // 2)
+            )
+        y += rh
+    dest = out or (repo / LIBDIR / SETDIR["b"] / "contact_live.png")
+    c.save(dest)
+    print("contact:", dest)
+
+
 if len(sys.argv) > 1 and sys.argv[1] == "--lib":
     s, src = sys.argv[2], pathlib.Path(sys.argv[3])
     repo = (
@@ -464,6 +539,8 @@ if len(sys.argv) > 1 and sys.argv[1] == "--lib":
         else pathlib.Path(__file__).resolve().parents[2]
     )
     lib_cut(s, src, repo)
+    if s == "b":
+        lib_vs_live(repo)
     sys.exit(0)
 
 
