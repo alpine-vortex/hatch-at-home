@@ -376,14 +376,14 @@ test("S3b a look draws its own frames, sliding in standing, and a round's pose i
 test("S3b a look never swaps to the base sitter: every frame of a visit is its own, whatever the pose", () => {
   reset();
   const sitterEl = pic();
-  const { card, s } = make({ sitterEl, shell: "glow" });
+  const { card, s } = make({ sitterEl, shell: "twotone" });
   sync(card, s, view());
   for (const pose of ["walk", "wave", "feed", "play", "clean", "medicine", "cheer", "pat", "read", "doze", "tuck", "shoo", "tea"]) {
     s.sit.step = { pose, ms: 1e9 };
     for (const frame of [0, 1, 2]) {
       s.sit.frame = frame;
       card._sitterPaint(s);
-      assert.match(seen(sitterEl), /^looks\/glow\//, `${pose} ${frame}`);
+      assert.match(seen(sitterEl), /^looks\/twotone\//, `${pose} ${frame}`);
     }
   }
 });
@@ -448,8 +448,8 @@ test("S3b the shell changes mid-visit: the sitter swaps once the new one is read
   card._sitterPaint(s);
   assert.match(seen(sitterEl), /^looks\/camo\//);
   assert.strictEqual(s.sit.step, before, "no beat");
-  card._sitArt.rows["look-glow"] = "failed";
-  card._shellChoice = () => "glow";
+  card._sitArt.rows["look-twotone"] = "failed";
+  card._shellChoice = () => "twotone";
   card._sitterPaint(s);
   assert.ok(!sitterEl.classList.contains("art"), "a failed look is the placeholder, not another person");
   assert.ok(card._sitterSettled(s));

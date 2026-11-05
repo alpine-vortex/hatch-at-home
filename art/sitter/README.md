@@ -40,3 +40,11 @@ can swap a sitter per shell by folder. Nothing is wired in yet.
 `glitter`, `hearts`, `rainbow`, `sunset`, `leaves`, `paws`: the same method and contract as A2
 (38 files each, 19 poses x 2, the same file names, 188-192 px standing), each a different person
 themed to its shell, starting from `looks/<finish>/`. `review.py` has a section per sitter.
+
+## Six more redrawn sitters (art A4)
+
+`clear`, `constellation`, `glow`, `scales`, `smoke`, `speckle`: the same method and contract again
+(38 files each, 188-192 px standing), each a different person themed to its shell, starting from
+`looks/<finish>/`. The constellation sitter is a dark-skinned person in a near-black jacket with a
+pale gold constellation drawn across it (long dark hair with gold glints), so she does not read as
+the celestial sitter (lavender hair, navy sweater, moon). `review.py` has a section per sitter.
