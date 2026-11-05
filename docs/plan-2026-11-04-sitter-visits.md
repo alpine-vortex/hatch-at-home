@@ -1,11 +1,10 @@
 # The sitter visits the house
 
 **Date:** 2026-11-04
-**Status (reconciled 2026-11-04):** S1, S2, S3a, S3b and S4 built; S3 was split into S3a, S3b
-and S3c (section 7) after the S3 review (section 13). **Left:** S3c (the six full sitters, each a
-folder drop-in as its art lands: woodland, aqua, grove, celestial, dune, granny with her extra
-poses) and the journal line "The sitter looked after Pip." (section 9), which S3a did not
-ship: it needs a server-side field and is not started.
+**Status (reconciled 2026-11-04):** S1, S2, S3a, S3b, S3c and S4 built; S3 was split into S3a,
+S3b and S3c (section 7) after the S3 review (section 13). **Left:** the journal line "The sitter
+looked after Pip." (section 9), which S3a did not ship: it needs a server-side field and is not
+started (parked).
 **Revised 2026-11-04** after the adversarial review (worker s2883, findings A1-A9, B1-B7,
 C1-C3): section 12 maps each finding to where it is fixed. The tuning in 3.2 and 3.2a is now
 measured (`dev/sitter_sim.py`), not drafted.
@@ -863,8 +862,8 @@ and `ci-gate`.
   element; the beat pauses on a fixed clock, not `petAt` (the sitter is not a pet).
 - Shots: every pose of the base sitter beside three species; a night shot (chair, doze); reduced
   motion on and off for arrive and leave. (S3b adds `--preset sitter-looks`: every
-  `SHELL_FINISHES` look in `stand` and `wave`, one night shot per look; S3c the six full
-  sitters in every pose they own.)
+  `SHELL_FINISHES` look in `stand` and `wave`, one night shot per look; S3c `--preset sitter-full`: each of
+  the 24 full sitters in an arrive, a round, a night doze and an idle, the granny in every pose.)
 - Node tests: manifest vs files (F4), the cue first-snapshot rule (F7), the arrival rule (F8),
   the away-note cases (F9), motion (F10), `copy-scan`. Idle: a 10-minute fake-clock run asserts
   at most one idle per 2 minutes and no overlap with a beat or a scene.
@@ -884,9 +883,22 @@ Whose sitter (6.6) and the stand-and-prop fallback (6.2) for the 24 looks of `ar
 
 ### S3c. The full sitters. Tier 1. Needs S3b and each art batch.
 
+**Status: built** (`f1a81dad`, bench only; the art and manifest rows landed in A2-A5, `edbd2b6c` is the last). All 24 finishes got a full sitter, not six: `frontend/sitter/full/<finish>/`, 38 frames each (19 poses, two frames), 912 frames, and a `full-<finish>` row per finish in `sitters.json`. `scripts/sync-sitter.py --check` passes. No card code changed.
+
 Woodland, aqua, grove, celestial, dune and the granny land as folder drop-ins
 (`frontend/sitter/full/<finish>/`) plus manifest rows, no code if S3a's manifest is right. The
 granny's own poses (6.2) come from her manifest entry.
+
+**What the bench showed** (`--preset sitter-full`, 120 shots: per finish the arrive wave, one round pose rotating feed/play/clean/medicine, the night doze with the chair and one idle; four mirrored walk-outs; the granny in all 19 poses; plus `sitter-looks`, 81 shots, relabelled since its stand/wave/round shots are now the full sitters' own frames):
+
+- All 912 frames are 256x256, none blank, and every sitter's `stand_1` stands on row 224, so the anchor is the same for all 24. The sitter is about 170-190 px of 256 tall (the granny the shortest, 168; woodland and sunset 192), beside a Pip at 330 wide that stands taller.
+- Arrive, round, idle, night and leave drew the sitter's own pose in every shot; none fell back to the base sitter or to stand-and-prop. The night doze sits in the chair at the left for all 24; Pip is clear of it.
+- A round's arm and prop reach to Pip's tail (play, clean, medicine) without covering Pip's face or any control. The walk-out is mirrored (faces left, slides left).
+- The slide in and out is `translate` by 150% of the sitter's own width, so at a third of a walk the sitter is half off the left edge and past the half it is out of the 330 px frame: a walk shot at 700 ms shows no one. Not a bug, noted so the beat shots are pinned at 1050 (in), 1400 (waving) and 1750 (out).
+- Known and accepted: camo is all olive; the waves sitter's top drifts about 4 frames.
+- Finding for a later slice: the granny's manifest row lists the same 19 poses as every other sitter. It has no `idles` and no `knit` pose, so the "knit is an idle only the granny has" and "her slow `walk`" of 6.2 are not in the art or the manifest as built. The card handles a row that has them (`HATCH_SITTER.idle` reads `row.idles`); nothing uses it yet.
+
+Shots and the contact sheet: `dev/bench/out/sitter-full/`, `dev/bench/out/sheets/sitter-full.png` (gitignored; copied to the worker's renders).
 
 ### S4. Retire the old sign. Tier 1.
 
