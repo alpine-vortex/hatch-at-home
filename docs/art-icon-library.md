@@ -74,10 +74,11 @@ it to 22 as the old cut did. Each set's contact sheet is `art/ui/library/<set di
   src): left, right, up, down, keep, dig, special, undo, restart, quit; 4-bit palette PNGs like
   the live icons. lo and hi (double chevrons) wait in `art/ui/library/a-modes/`, since 4A reuses
   down/up for them, with the alternates for the owner's pick: A2's special_star, keep_full,
-  dig_paw, undo_curl, restart_circle, quit_door, and a bolder A3 sheet (special_v2, special_coin,
-  special_twin, special_wand, undo_v2, restart_v2, dig_spade, keep_v2, quit_button). The weakest
-  shipped key at 24 px is `special` (thin rays); `special_v2` or `special_twin` read stronger.
-  The owner signs `art/ui/library/a-modes/contact.png` before merge (plan FM3).
+  dig_paw, undo_curl, restart_circle, quit_door, and a bolder A3 sheet (special_coin,
+  special_twin, special_wand, undo_v2, restart_v2, dig_spade, keep_v2, quit_button).
+  **The owner signed set A (2026-11-05, plan FM3)** with one swap: the shipped `special` is A3's
+  bolder sparkle (drawn as special_v2); A1's first special, whose thin rays were weak at 24 px,
+  is kept as `library/a-modes/icon_mode_special_v1`.
 - **B** (`library/b-v2/`, 18): crisper, but Sol drew them with chunkier pixels, so they are
   about 17-19 art px against the live set's 22 (three takes each; the biggest kept).
 - **C** (`library/c-games/`, 27): the 22 named plus hop pad, sunk pad, stone, berry, shiny berry.

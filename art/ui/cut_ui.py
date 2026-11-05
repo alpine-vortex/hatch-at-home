@@ -29,7 +29,7 @@ LIB = {
             "icon_mode_down",
             "icon_mode_keep",
             "icon_mode_dig",
-            "icon_mode_special",
+            "icon_mode_special_v1",  # the first special; the owner signed special_v2 in its place (2026-11-05)
             "icon_mode_undo",
             "icon_mode_restart",
         ],
@@ -45,7 +45,7 @@ LIB = {
             "icon_mode_quit_door",
         ],
         "a3": [
-            "icon_mode_special_v2",
+            "icon_mode_special",  # drawn as special_v2; the shipped special (owner, 2026-11-05)
             "icon_mode_special_coin",
             "icon_mode_undo_v2",
             "icon_mode_restart_v2",
