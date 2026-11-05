@@ -462,10 +462,16 @@ def test_every_menu_option_and_step_has_its_strings() -> None:
     assert {"comfort_range", "same_times", "fireplace_temperature"} <= set(errors)
 
 
-def test_the_titles_that_name_the_pet_carry_name() -> None:
-    steps = _strings()["options"]["step"]
-    assert steps["bedtime"]["title"] == "{name}'s bedtime"
-    assert steps["room"]["title"] == "{name}'s room"
+def test_step_titles_carry_no_placeholder() -> None:
+    """HA's frontend fills no placeholder in a step title (formatjs error)."""
+    strings = _strings()
+    for flow in ("config", "options"):
+        for key, step in strings[flow]["step"].items():
+            assert "{" not in step["title"], (flow, key)
+    steps = strings["options"]["step"]
+    assert steps["init"]["title"] == "What the pet notices"
+    assert steps["bedtime"]["title"] == "Bedtime"
+    assert steps["room"]["title"] == "The pet's room"
 
 
 async def test_the_missing_entities_repair_names_the_topics(

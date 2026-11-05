@@ -294,7 +294,7 @@ def test_strings_and_english_translation_are_identical() -> None:
     strings = (PACKAGE / "strings.json").read_text()
     assert strings == (PACKAGE / "translations" / "en.json").read_text()
     steps = json.loads(strings)["config"]["step"]
-    assert steps["reconfigure"]["title"] == "Rename {name} or change its world"
+    assert steps["reconfigure"]["title"] == "Rename the pet or change its world"
     assert steps["reconfigure"]["data"]["world"] == "World"
     assert steps["reconfigure_hatched"]["data"]["world"] == "World for the next egg"
     assert (

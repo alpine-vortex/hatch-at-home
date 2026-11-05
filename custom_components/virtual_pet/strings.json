@@ -16,7 +16,7 @@
         }
       },
       "reconfigure": {
-        "title": "Rename {name} or change its world",
+        "title": "Rename the pet or change its world",
         "description": "A new name shows everywhere the pet does; its entity IDs stay the same. A newly laid egg can also be named on the card during its first day. A new world changes the device and which creatures hatch.",
         "data": {
           "name": "Name",
@@ -24,7 +24,7 @@
         }
       },
       "reconfigure_hatched": {
-        "title": "Rename {name} or change its world",
+        "title": "Rename the pet or change its world",
         "description": "A new name shows everywhere the pet does; its entity IDs stay the same. A newly laid egg can also be named on the card during its first day. A new world changes the device and which creatures hatch.",
         "data": {
           "name": "Name",
@@ -46,7 +46,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "What {name} notices",
+        "title": "What the pet notices",
         "description": "Pick what {name} notices. Everything is optional, and the house never hurts the pet: it only changes its mood, its scene and what it asks for.",
         "menu_options": {
           "bedtime": "Bedtime",
@@ -68,7 +68,7 @@
         }
       },
       "bedtime": {
-        "title": "{name}'s bedtime",
+        "title": "Bedtime",
         "description": "Bedtime and wake time are targets: the pet may turn in up to an hour either side, and lights out always wins. It sleeps when the bedtime lights are off and the house is quiet.",
         "data": {
           "bedtime": "Bedtime",
@@ -126,7 +126,7 @@
         }
       },
       "room": {
-        "title": "{name}'s room",
+        "title": "The pet's room",
         "description": "Lights, a fireplace, the TV and music change the pet's scene and mood.",
         "data": {
           "room_lights": "Room lights",
