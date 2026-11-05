@@ -14,7 +14,14 @@ const grab = (re) => {
   return m[0];
 };
 const method = (name) => grab(new RegExp(`\\n  ${name}\\([^\\n]*\\{\\n[\\s\\S]*?\\n  \\}\\n`));
-const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "custom_components/virtual_pet/frontend/sitter/sitters.json"), "utf8"));
+const served = JSON.parse(fs.readFileSync(path.join(ROOT, "custom_components/virtual_pet/frontend/sitter/sitters.json"), "utf8"));
+// A test-local manifest: every shipped finish has a full sitter now, so the look path (a finish with only a
+// look) is covered by mapping these finishes to their look rows (which the served manifest still lists).
+const manifest = JSON.parse(JSON.stringify(served));
+for (const f of ["stars", "stripes", "dots", "twotone", "waves", "camo"]) {
+  assert.ok(manifest.sitters[`look-${f}`], `look row for ${f}`);
+  manifest.by_finish[f] = `look-${f}`;
+}
 
 const world = { calm: false, hidden: false, said: [], props: [], animated: [] };
 const sandbox = {

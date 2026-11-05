@@ -76,9 +76,9 @@ if LK.is_dir():
 SIT = pathlib.Path("sitters")
 if SIT.is_dir():
     h.append(
-        "<h1>Sitters (A2, A3, A4): eighteen redrawn sitters, the full pose set each</h1><p>The granny (gingham) has her own slower walk and knits in the chair; the others are themed to their shell (A2: the world shells; A3: glitter, hearts, rainbow, sunset, leaves, paws; A4: clear, constellation, glow, scales, smoke, speckle). One section per sitter: each pose beside a hamster, a corgi and a deer, the two frames alternating once a second (never both at once). Open a section to see its poses.</p>"
+        "<h1>Sitters (A2-A5): twenty-four redrawn sitters, one per shell finish, the full pose set each</h1><p>The granny (gingham) has her own slower walk and knits in the chair; the others are themed to their shell (A2: the world shells; A3: glitter, hearts, rainbow, sunset, leaves, paws; A4: clear, constellation, glow, scales, smoke, speckle; A5: stars, twotone, stripes, dots, waves, camo). One section per sitter: each pose beside a hamster, a corgi and a deer, the two frames alternating once a second (never both at once). Open a section to see its poses.</p>"
     )
-    for fin in "gingham woodland aqua grove celestial dune glitter hearts rainbow sunset leaves paws clear constellation glow scales smoke speckle".split():
+    for fin in "gingham woodland aqua grove celestial dune glitter hearts rainbow sunset leaves paws clear constellation glow scales smoke speckle stars twotone stripes dots waves camo".split():
         d = SIT / fin / "frames"
         if not d.is_dir():
             continue

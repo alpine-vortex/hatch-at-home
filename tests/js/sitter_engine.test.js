@@ -13,6 +13,13 @@ vm.runInNewContext(`${part}\nthis.S = HATCH_SITTER;`, ctx);
 const S = ctx.S;
 const plain = (x) => JSON.parse(JSON.stringify(x)); // across the vm's realm
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "custom_components/virtual_pet/frontend/sitter/sitters.json"), "utf8"));
+// A test-local manifest: every shipped finish has a full sitter, so the look path is covered by mapping
+// these finishes to their look rows (the served manifest still lists them).
+const looks = JSON.parse(JSON.stringify(manifest));
+for (const f of ["stars", "stripes", "dots", "twotone", "waves", "camo"]) {
+  assert.ok(looks.sitters[`look-${f}`], `look row for ${f}`);
+  looks.by_finish[f] = `look-${f}`;
+}
 const base = manifest.sitters[manifest.base];
 // A look: stand and wave only (the art of looks/<finish>), the shape F3 is about.
 const look = { poses: { stand: ["stand_1", "stand_2"], wave: ["wave_1"] } };
@@ -37,14 +44,14 @@ test("whose sitter (6.6): by_finish names it; a finish with no row, null or base
     assert.strictEqual(S.pick(manifest, finish).id, id);
     assert.strictEqual(S.pick(manifest, finish).row, manifest.sitters[id]);
   }
-  assert.strictEqual(S.pick(manifest, "stripes").id, "look-stripes"); // a finish with no full sitter keeps its look
+  assert.strictEqual(S.pick(looks, "stripes").id, "look-stripes"); // a finish with no full sitter keeps its look
   // A by_finish entry whose row is missing from the manifest is the base, not a crash.
   assert.strictEqual(S.pick({ ...plain(manifest), by_finish: { aqua: "full-nowhere" } }, "aqua").id, manifest.base);
 });
 
 test("a full sitter beats the look of the same finish (S3c drop-in); a finish without one keeps its look", () => {
   const full = { kind: "full", finish: "stripes", poses: { stand: ["stand_1", "stand_2"], doze: ["doze_1", "doze_2"], feed: ["feed_1"] } };
-  const m = plain(manifest);
+  const m = plain(looks);
   m.sitters["full-stripes"] = full;
   m.by_finish.stripes = "full-stripes";
   assert.strictEqual(S.pick(m, "stripes").id, "full-stripes");
@@ -56,8 +63,8 @@ test("a full sitter beats the look of the same finish (S3c drop-in); a finish wi
 });
 
 test("every look in the manifest has stand, wave and its accessory, and the rules play it by F3", () => {
-  for (const [finish, id] of Object.entries(manifest.by_finish)) {
-    const row = manifest.sitters[id];
+  for (const [finish, id] of Object.entries(looks.by_finish)) {
+    const row = looks.sitters[id];
     if (row.kind !== "look") continue; // a finish with a full sitter plays every pose it has (S3c), not the look rules
     assert.ok(S.has(row, "stand") && S.has(row, "wave"), finish);
     assert.deepStrictEqual(plain(S.show(row, "walk")), plain(S.frames(row, "stand")), `${finish}: no walk, so it slides standing`);

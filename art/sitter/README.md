@@ -48,3 +48,14 @@ themed to its shell, starting from `looks/<finish>/`. `review.py` has a section 
 `looks/<finish>/`. The constellation sitter is a dark-skinned person in a near-black jacket with a
 pale gold constellation drawn across it (long dark hair with gold glints), so she does not read as
 the celestial sitter (lavender hair, navy sweater, moon). `review.py` has a section per sitter.
+
+## The last six redrawn sitters (art A5)
+
+`stars`, `twotone`, `stripes`, `dots`, `waves`, `camo`: the same method and contract again (38
+files each, 188-192 px standing), each a different person themed to its shell, starting from
+`looks/<finish>/`. After A5 every one of the 24 finishes has a full sitter (`gingham` is the granny);
+`looks/` stays as the starting look and the card's fallback path. The stars sitter is a blond kid in a
+navy sweater with big yellow stars, grey trousers and yellow shoes, so it does not read as the celestial
+sitter (lavender hair, moon) or the constellation one (near-black jacket); the waves sitter has dark
+navy wavy hair and a cream top fading into rolling blue wave stripes, against aqua's teal hair and
+striped sweater. `review.py` has a section per sitter.
