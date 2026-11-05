@@ -351,9 +351,10 @@ const PRESETS = {
     }
     return out;
   },
-  // Sitter S3b (plan 6.2, 6.6, S3b): every finish's look in stand and wave beside Pip, then the look at
-  // night (standing still, the empty chair behind), then two beats with a look (the slide in, a round's
-  // prop). Finishes come from the served manifest, so a new look or full sitter joins by itself.
+  // Sitter S3b (plan 6.2, 6.6, S3b): every finish's sitter in stand and wave beside Pip, then at night
+  // (the chair), then two beats (the slide in, a round). Finishes come from the served manifest, so a
+  // new look or full sitter joins by itself. Since S3c every finish has a full sitter, so the stand and
+  // wave here are that sitter's own frames; `sitter-full` is the one that walks its other poses.
   "sitter-looks"() {
     const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "sitter", "sitters.json"), "utf8"));
     const finishes = Object.keys(manifest.by_finish).sort();
@@ -364,16 +365,51 @@ const PRESETS = {
       out.push({ ...base, name: `sitter-looks/${finish}-wave`, label: `${finish}: wave`, sitterLook: finish, sitterPose: "wave:1" });
     }
     for (const finish of finishes) {
-      out.push({ ...base, name: `sitter-looks/${finish}-night`, label: `${finish}: night, the chair`, sitterLook: finish, sitter: "night" });
+      out.push({ ...base, name: `sitter-looks/${finish}-night`, label: `${finish}: night, doze in the chair`, sitterLook: finish, sitter: "night" });
     }
     out.push({ ...base, name: "sitter-looks/night-asleep", label: "night: Pip asleep (aqua)", sitterLook: "aqua", sitter: "night", scene: "dim", mood: "asleep" });
     for (const ms of [0, 700, 1400]) {
-      out.push({ ...base, name: `sitter-looks/arrive-${ms}`, label: `gingham arrives ${ms} ms: slides in`, sitterLook: "gingham", sitterBeat: `arrive:${ms}` });
+      out.push({ ...base, name: `sitter-looks/arrive-${ms}`, label: `gingham arrives ${ms} ms`, sitterLook: "gingham", sitterBeat: `arrive:${ms}` });
     }
     for (const cue of ["feed", "play", "clean", "medicine"]) {
-      out.push({ ...base, name: `sitter-looks/round-${cue}`, label: `grove, round: ${cue}: stands, the prop works`, sitterLook: "grove", sitterBeat: `round-${cue}:700` });
+      out.push({ ...base, name: `sitter-looks/round-${cue}`, label: `grove, round: ${cue}: its own pose`, sitterLook: "grove", sitterBeat: `round-${cue}:700` });
     }
     out.push({ ...base, name: "sitter-looks/base-control", label: "the base sitter (control)", sitterLook: "base", sitterPose: "stand:1" });
+    return out;
+  },
+  // Sitter S3c (plan 7 "S3c", 6.2-6.4): each full sitter in the poses its own folder holds. Per finish: the
+  // arrive beat (1400 ms: in, waving), one round pose (feed, play, clean, medicine rotate across the finishes), the night
+  // doze with the chair, and one idle (read and the card's idles rotate, frames 1 and 2 alternate); then the
+  // gingham granny in every pose her manifest row lists. Finishes and poses come from the served manifest.
+  "sitter-full"() {
+    const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "sitter", "sitters.json"), "utf8"));
+    const finishes = Object.keys(manifest.by_finish).sort().filter((f) => manifest.sitters[manifest.by_finish[f]]?.kind === "full");
+    const base = { group: "sitter-full", world: "woodland", species: "fox", width: 330, clip: "screen", sitter: "day" };
+    const CUES = ["feed", "play", "clean", "medicine"];
+    const IDLES = ["read", "tea", "stretch", "laugh", "tidy", "water", "window", "pat"];
+    const out = [];
+    finishes.forEach((finish, i) => {
+      const row = manifest.sitters[manifest.by_finish[finish]];
+      const look = { sitterLook: finish };
+      const cue = CUES[i % CUES.length];
+      const idles = row.idles || IDLES;
+      const idle = idles[i % idles.length];
+      out.push({ ...base, ...look, name: `sitter-full/${finish}-arrive`, label: `${finish}: arrived, wave (1400 ms)`, sitterBeat: "arrive:1400" });
+      out.push({ ...base, ...look, name: `sitter-full/${finish}-round-${cue}`, label: `${finish}: round, ${cue}`, sitterBeat: `round-${cue}:700` });
+      out.push({ ...base, ...look, name: `sitter-full/${finish}-night`, label: `${finish}: night, doze in the chair`, sitter: "night" });
+      out.push({ ...base, ...look, name: `sitter-full/${finish}-idle-${idle}`, label: `${finish}: idle, ${idle}`, sitterPose: `${idle}:${1 + (i % 2)}` });
+      // The mirrored walk-out (leave, 1750 ms: the slide, flipped) for every sixth finish.
+      if (i % 6 === 0) out.push({ ...base, ...look, name: `sitter-full/${finish}-leave`, label: `${finish}: leaves (1750 ms, mirrored, sliding out)`, sitterBeat: "leave:1750" });
+    });
+    // The granny (gingham) in every pose her row lists: frame 1, and both frames of the walk.
+    const granny = manifest.sitters[manifest.by_finish.gingham];
+    for (const [pose, frames] of Object.entries(granny?.poses || {})) {
+      frames.forEach((_, f) => {
+        if (f > 0 && pose !== "walk") return;
+        out.push({ ...base, sitterLook: "gingham", name: `sitter-full/granny-${pose}-${f + 1}`, label: `granny: ${pose} ${f + 1}`,
+          sitterPose: `${pose}:${f + 1}`, ...(pose === "doze" ? { scene: "night" } : {}) });
+      });
+    }
     return out;
   },
   sitter() {
