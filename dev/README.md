@@ -51,6 +51,48 @@ asked, and it asks on Sundays and Mondays, so no API can plant them on other day
 stops HA, adds the entries to `.storage/virtual_pet.people` through the integration's own
 validator (`people._memory_entry_ok`), and starts HA again.
 
+### Fixtures for states a tap cannot reach (`--fixture`)
+
+`.venv/bin/python scripts/dev-seed --keep --fixture egg,stage,refuse,rain` (or `--fixture all`;
+`--lead MIN`, default 10, is how far the egg and stage fixtures are from their line, 6 at
+least). Each adds its own pet (so Pip and Mew stay as above) except `rain`. The proof prints
+every id and one-liner below with the real device ids filled in.
+
+| state | how | what the device sees |
+|---|---|---|
+| Egg a few minutes from hatching | `egg`: pet **Dot**, fast-forwarded 0.1 h steps short of 0.5 h | the egg wobbling, then the hatch and the born pop, `hatched` moment |
+| Live stage change | `stage`: pet **Nib**, baby fast-forwarded to 23.8 h (child at 24 h) | a `stage_changed` moment: a card open on Nib says "i'm a child now!" (stretch, sparkle); one opened later says the catch-up line |
+| A refused action | `refuse`: pet **Gus**, fed until hunger is 95 or more | Feed answers `full`: "i'm full!" and a look or a head shake |
+| Rain | `rain`: `input_number.fake_rain_rate` set to 0.3 in/h | wet glass and the drop; flap the rate (0 to 0.3) for the onset and the 45-55 s hold |
+| A drop-style meal | any pet with hunger under 95 (Pip 77, Nib, Dot after hatch) | feed variant A: the bowl drops in |
+| Long absence | the `hatch-seen-<device>` mark, below | the welcome and the greet hop on the first look |
+
+Why a fast-forward alone never raised `stage_changed` on the card: `coordinator._fire`
+returns before it keeps a moment or sends on the private channel when the events are
+`simulated` (the `fast_forward` service), so only the bus event (flagged `simulated`)
+leaves the server. A stage or hatch the pet lives in real time is a moment. So the fixtures
+stop short of the line and the clock crosses it, at the coordinator's next 5-minute tick after
+it. Allow `--lead` minutes plus up to one tick (checked on a scratch HA: Dot's `hatched` and Nib's `stage_changed`
+were both on their `last_care` moments after the lead and a tick, with no tap on either).
+
+CDP one-liners (the card is behind shadow roots; this prefix finds it as `c`):
+
+    const f = (r) => { for (const e of r.querySelectorAll('*')) { if (e.localName === 'hatch-pet-card') return e; if (e.shadowRoot) { const x = f(e.shadowRoot); if (x) return x; } } }; const c = f(document);
+
+- **Long absence** (before the page loads, on the origin; the device id is the pet's HA device,
+  printed by the seed): `localStorage.setItem('hatch-seen-<device>', JSON.stringify({seen: Date.now() - 3*864e5, said: null}))`.
+  The first look then says a welcome and does the `greethop` (`card-looks.js`, `LONG_AWAY_MS`
+  is 48 h). The mark is rewritten on that look, so set it again for another run.
+- **Pin the drop-in meal**: `c._slides[c._index].pinVariant = {feed: 'A'}`, then tap Feed
+  (`sc.variant` is `A`; B slides in, C gobbles, D savours otherwise at random).
+- **Pin the head shake** on a refusal: `c._slides[c._index].pinVariant = {'refused.full': 'shake'}`
+  (the pool is `look` or `shake` otherwise), then tap Feed on Gus.
+- **A speck crossing now.** The speck is an idle move (one pick in 7 to 9 every 20 to 45 s), not
+  a weather effect: no house state raises its odds, so the rain fixture does not make it more
+  likely. To see one on cue, wait until the pet is idle (no bubble, about 10 s after a tap) and run
+  the printed `c._idle(...)` line (it stubs `Math.random` for one call so `speck` is the pick):
+  `const s = c._slides[c._index], r = Math.random; for (const pose of [false, true]) { const m = c._idleMoves(s, pose, false); s.nextIdle = 1; Math.random = () => (m.indexOf('speck') + .5) / m.length; try { c._idle(s); } finally { Math.random = r; } if (s.screen.querySelector('.speck')) break; }`
+
 ## Wall tablet (shared screen)
 
 The dashboard's second view, `Wall tablet` (`/pet-bench/wall`; the old `dashboard-pet-bench` slug 404s), is a panel view
