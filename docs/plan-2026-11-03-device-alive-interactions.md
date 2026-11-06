@@ -1309,6 +1309,32 @@ from `scripts/dev-seed`; the device rows above that these cover are now seen:
 - [x] The busy sensor: lux +-3 is ignored, indoor temperature reacts. A daytime lamp or motion
   gives no bubble by design (`home.py`: a light matters at bedtime, motion greets once a morning).
 
+**Device Pass 3 (done: s2969, 2026-11-06).** ReDroid WebView, scratch HA, guest clock moved:
+
+- [x] Echo on open: 20 s after the rain flip it plays once; 3 min after it does not.
+- [x] Device clock +10 min and -1 h: the glass stays wet, no echo, no console error.
+- [x] HA restart while raining (wet, no echo) and while dry (bare glass).
+- [x] Moon, full and new, on both finishes. The halo follows the device clock when it is more
+  than 24 h from HA's. Within 24 h it follows the HA clock through the `serverNow` offset.
+
+**Device Pass 4 (done: s2966, 2026-11-06).** Wall tablet (`wm size 1280x800`, density 160),
+shared screen on:
+
+- [x] Storm and lamp on the glass: legible on a light and a dark finish, nothing over the buttons.
+- [x] Status page: no memory link and no "you two" row while shared.
+- [x] Rim cues for feed, play, clean and tuck, on both slides.
+- [x] Fireplace, TV, music and heating looks; rain on and off.
+- [ ] Open: the first tuck gave no rim cue once (Pass 4, tablet, shared flag on). Not reproduced
+  on the phone with the flag off (Pass 5 probe). Recheck on the wall tablet in a later pass.
+
+**Device Pass 5 (done: s2968, 2026-11-06).** Phone, then a 275 px wide phone:
+
+- [x] Memory page: link, confirm tap, page, forget. Cap not reached; the page held 7 items.
+- [x] Narrow phone: page and items fit.
+- [x] Shared flag off shows the link again.
+
+Remaining owed: Pass 1 (press feel) on the owner's phone.
+
 **Slice 3 is three PRs (s2811 review).** Order: **3A, then 3C or 3B, then the other.**
 3B and 3C both need the adapter and neither depends on the other, so whichever lands
 first carries the adapter foundation: the director created per card, `canRender`,

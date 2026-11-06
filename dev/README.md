@@ -53,13 +53,25 @@ validator (`people._memory_entry_ok`), and starts HA again.
 
 ## Wall tablet (shared screen)
 
-The dashboard's second view, `Wall tablet` (`/dashboard-pet-bench/wall`), is a panel view
+The dashboard's second view, `Wall tablet` (`/pet-bench/wall`; the old `dashboard-pet-bench` slug 404s), is a panel view
 with the card alone. "Shared screen" is not a card config key. It is a per-browser switch,
 `localStorage["hatch-shared-screen"] = "on"` (`src/card/prefs.js:373`, `sharedScreen()` at
 `:382`). Turn it on with the shared-screen bell on the status page
 (`src/card/card-status.js:408`), or over CDP:
 `localStorage.setItem("hatch-shared-screen","on")`, then reload. For the tablet size:
-`adb shell wm size 1280x800` (undo with `wm size reset`).
+`adb shell wm size 1280x800` and `adb shell wm density 160`. Size alone gives a 488 px
+phone-like viewport at density 420; with both it is 1280 px wide. Reset both after
+(`wm size reset`, `wm density reset`).
+
+Before any pass, clear a stale `localStorage["hatch-shared-screen"]`. The WebView profile
+keeps it between runs, and it hides the "things you told me" link on the status page.
+
+## Guest clock (ReDroid `--clock` slot)
+
+To move the device clock, run `adb root` first (the shell user cannot set it), then
+`adb shell date MMDDhhmmYYYY.ss`. Only the guest clock moves; HA's host clock does not.
+`adb root` restarts adbd and drops every `adb forward`, so forward the CDP port again.
+Set the guest back to the host time when done.
 
 ## Rain echo helper
 
@@ -73,4 +85,7 @@ Timing: the server refreshes about every 30 s, and the onset reaches the glass 0
 after that, so a flip shows 5-30 s later. The echo window is 20 s. Have two pets, sit on
 the first, flip, and swipe to the second slide within 20 s of the rain appearing on the
 first; check it echoes once and does not replay. A second onset of the same kind inside
-about 90 s plays nothing. Not yet verified end to end on a device.
+about 90 s plays nothing. Verified end to end on a device (Passes 2 and 3).
+
+`fake_rain_rate` has `initial: 0`, so every HA restart comes up dry. Set it again after a
+restart if the pass needs rain.
