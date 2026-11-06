@@ -51,7 +51,7 @@ test("one per tag, in a fixed order, labelled, with no count; forgetting the ent
     assert.ok(html.includes(`aria-label="${t}"`), t);
     assert.ok(html.includes(`icon_sticker_${t}.png`), t);
   }
-  assert.ok(!/\d+ of \d+|\bx\d|streak/i.test(html.replace(/icon_sticker_\w+\.png\?v=v|width="48"|height="48"|\/b\/ui\//g, "")));
+  assert.ok(!/\d+ of \d+|\bx\d|streak/i.test(html.replace(/icon_sticker_\w+\.png\?v=v|width="32"|height="32"|\/b\/ui\//g, "")));
   data.tags = data.tags.filter((e) => e.tag !== "show");
   assert.ok(!card._memoryStickers(data).includes("show"));
 });

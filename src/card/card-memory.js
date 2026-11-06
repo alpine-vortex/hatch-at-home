@@ -187,7 +187,7 @@ class HatchPetCardMemory extends HatchPetCardJournal {
     return `<div class="mstickers" role="list">${tags.map((tag) => {
       const label = MEMORY_TAG_CHIPS.labels[tag];
       return `<span class="msticker" role="listitem" aria-label="${escape(label)}">` +
-        `${pixelIcon(`icon_sticker_${tag}`, 48)}</span>`;
+        `${pixelIcon(`icon_sticker_${tag}`, 32)}</span>`;
     }).join("")}</div>`;
   }
 
