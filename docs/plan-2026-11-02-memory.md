@@ -1,6 +1,6 @@
 # Per-person memory and the ask gaps, 2026-11-02 (build plan)
 
-Status (2026-11-05): M0 (`1cb5971d`, `02611a24`, `bc82a756`, `2246a002`), M1a (`fb5586d4`), M1b (`4ccef2b3`) and M2 (`f9481e1b`, `dc342933`, `76b0065e`, audit `ffe21f56`) are built on main. M3a (the "things you told me" page, `memory_get`/`memory_forget`) and M3b (stickers) are open; nothing for them is in code.
+Status (2026-11-05): M0 (`1cb5971d`, `02611a24`, `bc82a756`, `2246a002`), M1a (`fb5586d4`), M1b (`4ccef2b3`) and M2 (`f9481e1b`, `dc342933`, `76b0065e`, audit `ffe21f56`) are built on main. M3a (the "things you told me" page, `memory_get`/`memory_forget`) and M3b (stickers) are open; nothing for them is in code. **Revised 2026-11-05 (s2947):** the adversarial review of M3a/M3b (s2946; 5 P1, 7 P2, 6 P3, numbered "(M3 P1-1)" and so on) and the owner's four answers (section 1, "Owner, 2026-11-05") are folded in: section 9 is rewritten, "M3a building notes" is at the end of section 8, the page copy is the DRAFT table in section 9a, and the Logs row of section 10 is split. **M3a is ready to build once the first mate approves the copy table in section 9a.** M3b waits on pixel art for the six sticker tags (an art ask, section 9).
 
 **Status: PLAN, docs only (tier 0).** Written by s2716 from the scout report s2714
 (`~/.local/state/crew/archive/hatch-at-home-s2714-20261102-1303/report.md`) and the
@@ -42,8 +42,8 @@ copy.
 | **M1a** | The record and validators, the switch, the admin option and its erase, the WS command rules, the privacy test table, the guide | M | **2** |
 | **M1b** | The one-time ask (with the card's "great" send); doors 2, 4, 5, 6 (weather + season), 12 | M | **2** |
 | **M2** | Tag chips on big day and weekend (inside the text step); doors 3, 1, 11, then 10 as its own commit (door 9 dropped, FM Q4); the tag `test` is now `exam` | M | **2** |
-| **M3a** | "Things you told me" page with per-item forget; the `memory_get` / `memory_forget` commands | M | **2** |
-| **M3b** | Stickers (door 8), the bench preset and the card-check section if not already in M3a | S | **2** |
+| **M3a** | "Things you told me" page with per-item forget; the `memory_get` / `memory_forget` commands; the deleted-user prune (owner Q4) | M | **2** |
+| **M3b** | Stickers (door 8), the bench preset and the card-check section if not already in M3a. **Waits on the owner's pixel-icon art (six tags, section 9)** | S | **2** |
 
 Order: M0 (the four parts are independent and can be four small commits or four ships) ->
 M1a -> M1b -> M2 -> M3a -> M3b. M2 and M3 both need M1a's record and validation; M3b needs
@@ -148,6 +148,32 @@ in sections 4, 5, 6, 8 and 10.
   most recent entry on its weekday must be within the last 8 weeks (56 days,
   `R.MEMORY_DOOR10_STALE_DAYS`); an older pattern (a season of lessons that ended) is
   not remarked on. Like the rest of door 10 it is re-derived from the tags, nothing kept.
+
+### Owner, 2026-11-05 (answers to the M3a review, s2946 Q1-Q4)
+
+- **Q1 = a small pixel-icon set for the six sticker tags** (`exam`, `match`, `show`,
+  `trip`, `party`, `lesson`), through the usual art path. **M3b waits on the art.** This
+  replaces "first pass: existing glyphs and emoji, no new art". It is an **art ask**, not
+  part of this plan's work: no worker makes art here (section 9).
+- **Q2: a sticker appears on and after the tagged day, never when the chip is tapped.**
+  `day <= today`, today from the server clock the card already has.
+- **Q3: "forget this" on a weekday pattern removes all that tag's entries on that
+  weekday within the last-5 window**, by one `memory_forget {list: "pattern", tag,
+  weekday}`. `memory_get` derives the patterns server-side with door 10's own function.
+- **Q4: the daily prune drops the memory of an HA user id that no longer exists**, and
+  the guide says so.
+
+### First mate, 2026-11-05 (defaults on the M3a review, s2946)
+
+- **FM: `picks.great` is shown**, listed with the other picks and forgettable one by
+  one (M3 P1-1). It is a dated mood log, so the page must not hide it.
+- **FM: `memory_forget` works even when this pet's memory option is off** (an erase is
+  exempt, as `ask_again` and `async_set_memory(off)` are, M3 P3-1); `memory_get` is
+  refused then. One rule: **erases are exempt, reads and writes are not.**
+- **FM: the page closes on `document.hidden`, on a slide change and after 2 minutes
+  idle** (M3 P1-4).
+- **FM: the page copy has no BABY variant** (M3 P3-4): it is plain, short words, shown
+  the same to everyone, like the settings sheet (which has none either). Section 9a.
 
 ### Audit tally, 2026-11-02
 
@@ -722,8 +748,8 @@ Because it is the most sensitive door, the plan limits it:
   entry can enter it and start a pattern that was not there. Door 10 is a pure function of
   the remaining `tags` and nothing is stored for it, so it is always consistent with the
   page: forgetting a tag ends the pattern **exactly when fewer than 3 of the then-last 5
-  of that tag share the weekday**. (How the M3a page lets a person forget a pattern item is
-  M3a's call; it can only forget entries, and the pattern follows.) Turning memory off
+  of that tag share the weekday**. (Decided by the owner 2026-11-05, Q3: the M3a page's "forget this" on a pattern removes
+  every entry of that tag on that weekday in the last-5 window, section 9.) Turning memory off
   erases the history it came from.
 - Separate commit so the first mate can drop it from the batch without touching the rest.
 
@@ -963,7 +989,7 @@ dream still comes from B's pick; after a wake with A's pick already turned into
 `state.dream`, forget removes A's id from `state.dream` and the asker note's `yours` is
 false; B's data is untouched.
 
-## 8. M1a, M1b and M2: building notes
+## 8. M1a, M1b, M2 and M3a: building notes
 
 **M1a (tier 2): the record, the switch, the option.**
 - `people.py`: the `memory` key in the person validators (`_ok` table near line 491), a
@@ -1224,60 +1250,359 @@ The visit marks `door1`, `door3` and `door10` through `mark_memory_said`, never
 - **Copy scan:** the real table passes `scripts/copy-scan.js`; the M2 worker adds no
   line that is not in 6a.
 
+**M3a (tier 2): the page, `memory_get`, `memory_forget`, the deleted-user prune.** Read
+section 9 (the design and the teardown paths) and section 9a (the copy) first; this is the
+build list (M3 P1-1 to P1-5). **The ship worker writes no copy** and copies 9a as the first
+mate approved it. M3a stores nothing new: patterns and stickers are derived, `STORE_VERSION`
+stays 1.
+
+*The server.*
+- **Cites checked against `origin/main` 5f1bf792** (names win over line numbers):
+  `People.memory_on`, `People.forget_item` (built, tested at the People level only, no WS
+  yet), `websocket_memory` (`__init__.py`), `_answer_memory` and `memory_allowed`
+  (`coordinator.py`), `_weekday_pattern` and `MEMORY_DOOR10_*` (`people.py`),
+  `R.MEMORY_DOOR10_GAP_DAYS` (28) and `R.MEMORY_DOOR10_STALE_DAYS` (56) (`rates.py`).
+  `memory_get` and `memory_forget` do not exist yet.
+- **Both commands copy `websocket_ask_again` / `websocket_memory`:** `entity_id`
+  (`cv.entity_id`) and `shared` (`object`-typed, required), `shared` checked **before** the
+  pet lookup (a bad `entity_id` with `shared` true gets `shared`, not `no_pet`), then
+  `connection.user.id` only. Both use `@websocket_api.async_response`, are registered in
+  `__init__.py` beside `websocket_memory`, and put nothing on the bus.
+- **`virtual_pet/memory_get`** `{entity_id, shared}`. Refused with `not_asked` when memory
+  is off for the person **or this pet's option is off** (`memory_allowed`). Reply, exactly:
+
+  ```
+  {today, since, tags: [{day, kind, tag}],
+   picks: {dream: [{day, pick}], game: [{day, pick}], guess: [{day, pick}],
+           great: [{day, ask}]},
+   since_told: {fav_weather: day, fav_season: day},
+   patterns: [{tag, weekday}]}
+  ```
+
+  A list with no entries is `[]` (an empty `picks` key is kept so the card does not branch);
+  `since` is omitted when the record has none; `today` is the server's local date (the
+  sticker rule). **No `said`, no `on`, no `memory_chosen_days`, no typed words, no user
+  id.** The reply is built from `people.memory(user)` plus `memory_patterns` (section 9);
+  `memory_get` does not write, does not call `person()`, and creates no record.
+- **`virtual_pet/memory_forget`** `{entity_id, shared, list, day?, kind?, tag?, weekday?}`,
+  **every field after `shared` typed `object`**, validated in the handler (section 5, B1):
+  a `vol.In` or `vol.Range` would let HA's schema failure log echo the value. Shapes:
+  - `list` one of `tags`, `dream`, `game`, `guess`, `great`: needs `day` (a canonical ISO
+    string); `tags` also needs `kind` (`big_day` or `weekend`). Calls `People.forget_item`
+    (already saves at once).
+  - `list: "pattern"`: needs `tag` (one of `match`, `show`, `lesson`) and `weekday` (an int
+    0-6, **not a bool**). Calls a new `People.forget_pattern(user, tag, weekday)`: removes
+    the `big_day` entries of that tag whose day is on that weekday **within the tag's last
+    `MEMORY_PICKS_CAP` (5) entries by day**, saves at once, **no `await` between the pop and
+    the save's start** (the `forget_item` rule).
+  - Reply: `{forgot: <int, entries removed>}`. Nothing to forget is `{forgot: 0}`, **not an
+    error**. Sent through `connection.send_result`.
+  - **Works with this pet's option off** (FM 2026-11-05: erases are exempt); needs the
+    person to have a memory record (none: `{forgot: 0}`). Reads (`memory_get`) are
+    refused, writes (`answer` with a pick) are refused: the rule is "erases are exempt,
+    reads and writes are not" (M3 P3-1).
+- **Error codes** (one fixed text each, no value in any): `shared` ("That is changed on its
+  person's own screen", as `websocket_memory`), `no_pet`, `not_asked` (`memory_get` only,
+  "Not on this pet"), and `invalid` (`memory_forget` only, "Not something to forget": a bad
+  `list`, a missing or ill-typed `day`, `kind`, `tag` or `weekday`). Section 10's "WS shape"
+  row is updated to this list.
+- **The deleted-user prune (owner Q4).** In the daily prune: for each user id in
+  `people["people"]` with a `memory` key, `await hass.auth.async_get_user(id)`; `None`
+  means that record's `memory` is popped (**memory only**; the rest of the record stays,
+  the wider drop was option 3, not chosen), then one `async_save_now`. It runs once per
+  local date, where `prune_daily` is called (`coordinator.py`, the daily tick), because
+  `prune` is sync and `async_get_user` is not: the coordinator passes the missing ids in,
+  or does the pop after `prune_daily`, either way **under `people.lock(user)`** for each pop.
+  It reads nothing from the record but the id and logs nothing. The guide says: "memory of
+  a person whose Home Assistant user has been removed is erased by the next daily clean-up".
+- Files: `people.py` (`memory_patterns`, `forget_pattern`, `memory_view(user, today)` that
+  builds the reply), `__init__.py` (the two commands), `coordinator.py` (the thin
+  `async_memory_get` / `async_memory_forget` that check the pet's option; the prune),
+  `docs/guide.md` ("Privacy: what the pets remember": the page, the forget scope line, queued
+  door lines, deleted users, the debug-log line already there), `docs/features.md` section
+  7, `docs/HANDOFF.md` only if it names the page, `tests/test_memory.py`,
+  `tests/fixtures/memory_get.json` (below).
+
+*The card.*
+- **A new part `src/card/card-memory.js`** (`HatchPetCardMemory`), M3 P3-6: added to
+  `manifest.txt` **after `card-journal`**, and `card-actions.js` becomes `extends
+  HatchPetCardMemory` (the class is one extends chain, one link per part, AGENTS.md); the
+  AGENTS.md table gets the row. Check the order with card-check, not `node --check` (a TDZ
+  shows only there). It holds the page, its link, its fetch and forget calls, its teardown
+  helper `_memoryPageClose(s)` and the idle timer. **It is the only file that names
+  `memory_get` or `memory_forget`** (JS test).
+- The page uses `_pageBand`/`_pageShown` like the finds page, `textContent` only for every
+  value (tag label, pick, key). The copy tables go in the fresh block of `lines-fresh.js`
+  and in `COPY_TABLES` (`scripts/copy-scan.js`): the scan fails on a table it does not
+  know (M3 P1-3). All calls send `shared: false`.
+- Teardown, the five paths of section 9, as code: (1) the channel handler `_channel`
+  (`card-base.js`) calls `_memoryPageClose` after it stores `mine` when
+  `_mineSwitch(s, "memory_on", ...)` or `..."memory_allowed"` is false; (2) `_goShared`
+  adds the page flag and `slide.statusHtml = null` beside `slide.journal = false` and
+  its neighbours; (3) `_toggleStatus` (`card-layout.js`) and the slide-change reset
+  (`card-build.js`, beside `s.journal = false; s.finds = false; s.everyWorld = false`) add
+  the flag and clear `statusHtml`; (4) `memoryEpoch` as above; (5) `_onHidden`
+  (`card-base.js`) calls `_memoryPageClose` when `document.hidden`, and the 2-minute idle
+  timer does.
+- "Stop remembering" reuses `_setMemory` and its two-tap `memory_off` confirm; the page
+  closes through path 1 when the push lands, and at once on the tap.
+
+*Tests (the tests the review should be able to run).*
+- **Key set** (the door-notes test's style, M3 P1-1): `set(reply) <= {"today", "since",
+  "tags", "picks", "since_told", "patterns"}`, each tag's `set(e) <= {"day", "kind",
+  "tag"}`, each pick's `<= {"day", "pick"}` (`{"day", "ask"}` for `great`), and no
+  `said`, `on` or `memory_chosen_days` anywhere in the JSON.
+- **One fixture file** (M3 P2-6), `tests/fixtures/memory_get.json`: a full reply. Pytest
+  asserts `memory_get`'s keys equal the fixture's; a JS test and the bench load it, so a
+  renamed field (`day` vs `date`) fails on one side. The bench's fake `callWS`
+  (`dev/bench/page.js`) gets handlers for `virtual_pet/memory_get` (the fixture or the
+  shot's own reply) and `virtual_pet/memory_forget`.
+- **Pytest, behaviour:** only the asker's items, B sees none of A's; refused with
+  `shared` absent or true **before** the pet lookup; `memory_get` through pet A (option
+  off) is refused and through B works; `memory_forget` through A **works** (FM); per-item
+  forget removes exactly one entry and the store file is written with no delay; a forget of
+  a key that is not there is `{forgot: 0}`; `invalid` for a bad list, bad `day` (not a
+  canonical date), `weekday` `True`, `7`, `"1"`, a `tag` outside `match`/`show`/`lesson`;
+  pattern forget: a pattern of exactly 3 ends; 4 of 5 ends too (**all** its entries go);
+  an older run of 3 revealed by the window sliding appears on the next `memory_get`
+  (asserted, with a comment); `patterns` equals what door 10 would fire for (a parametrized
+  case per tag and weekday); a stale pattern (newest entry over 56 days old) is not listed;
+  the 28-day gap does not hide a listed pattern; `memory_get` creates no record for a
+  person with none and does not write; `great` entries are in the reply and forgettable;
+  forgetting a `dream` entry leaves `dream_picks` alone; the prune drops memory for a user
+  removed with `hass.auth.async_remove_user` and keeps the record's other keys, keeps a
+  live user's memory, and does nothing twice in a day.
+- **The logs row, split (M3 P1-5; section 10).** (a) **At the default level**
+  (`caplog` on the integration only; **no** `set_level` on `websocket_api`): a bad `list`,
+  bad `key` fields with a valid day and tag of a real entry, a wrong type, and a schema
+  failure leave no record that contains the value. (b) **At DEBUG** on
+  `homeassistant.components.websocket_api`: HA logs `Received <whole message>` and
+  `Sending <whole reply>` for every message (`websocket_api/http.py`, when `_debug` is
+  set), so the `memory_get` reply and the `memory_forget` fields **are** in that log by
+  design. A separate test asserts exactly that, with a comment that says so and that the
+  guide's "debug logging" line is the guard there. Tighten the existing check while the file
+  is open: it looks for `'"memory_on"'` in Python reprs with single quotes, so that half
+  can never match.
+- **Storage:** a JS test (and a card-check row) asserts `localStorage` and `sessionStorage`
+  are **byte-identical** before opening the page, while it is open, and after closing, not
+  a key-name check. A source grep that `memory_get` / `memory_forget` appear only in
+  `card-memory.js`. The "nothing in the public journal, photos, every world or finds page"
+  row (§14 item 16, M3 P3-5): a card-check row that those four pages hold none of the
+  page's fixture strings with the page's data loaded.
+- **Card-check `memorypage`** (rows; the stub `callWS` is the fixture): (1) no link and no
+  call on a shared screen; the link only with `memory_on` and `memory_allowed`, absent
+  while `memory_allowed` is unknown; (2) the confirm tap, then the call, then the items;
+  (3) "forget this" sends once with the item's key, the pattern's with `list: "pattern"`;
+  (4) **teardown path 4:** a stub `callWS` that resolves late, then close, then resolve:
+  no text drawn; and again across a slide change and a shared flip; (5) **path 2/3:** open
+  the page, flip the shared flag through `_onSharedStorage`, assert no memory text in the
+  DOM **and `slide.statusHtml` is null**; close the sheet and swipe to another pet, same;
+  (6) **path 1:** the push goes through the real channel handler (`_channel(s, msg, user)`
+  with a `mine` that has `memory_on: false`, then `memory_allowed: false`), **not** by
+  assigning `s.mine` (the `memorytags` habit passes without testing the handler, M3 P2-7);
+  (7) **path 5:** dispatch `visibilitychange` with `document.hidden` true, and let the
+  idle timer fire (a faked clock); (8) **one real call** (M3 P2-6): through the throwaway
+  HA's real WS, turn memory on, call the real `memory_get`, assert the keys the card
+  reads, then turn it off (restore the seeded state: `restart` puts dev's bond back); (9) a
+  tag label with markup renders as text.
+- **Copy scan:** the real tables pass `scripts/copy-scan.js`; `fresh_copy.test.js` passes
+  with the new tables named in `COPY_TABLES`; the worker adds no line that is not in 9a.
+- Run `scripts/gate --auto` while iterating; before reporting done, `scripts/ci-gate`
+  (AGENTS.md).
+
+*Commits, in this order:* (1) `memory_patterns` / `memory_view` / `memory_get` and its tests;
+(2) `memory_forget`, `forget_pattern` and tests, with the split logs tests; (3) the deleted-user
+prune and the guide line; (4) the card part, the copy, the teardown; (5) bench preset and
+card-check section.
+
 ## 9. M3a and M3b: the page and the stickers (tier 2, card-heavy)
 
-M3a is the page, `memory_get`, `memory_forget` and per-item forget. M3b is the stickers, plus the
-bench preset and the card-check section if M3a left them. (Review S12.)
+M3a is the page, `memory_get`, `memory_forget`, per-item forget and the deleted-user prune. M3b
+is the stickers, plus the bench preset and the card-check section if M3a left them. (Review
+S12.) **The build list is "M3a building notes" at the end of section 8; the page copy is the
+DRAFT table in section 9a.** This section is the design the notes build. Marks "(M3 P1-1)"
+are the s2946 review; the owner's and first mate's answers are in section 1 (2026-11-05).
 
 **The page.** A "things you told me" page in the journal's page family
-(`card-journal.js`: `_pageBand`, `_pageShown`, the "journal" and "every world" pages), linked from the
-journal when `mine.memory_on` and the screen is personal. It is fetched **on open** by WS
-`virtual_pet/memory_get` (`shared` required and refused unless `false`, section 5; refused
-too when **this pet's** option is off; returns the asker's items only), shown
-after the one confirm tap (R3), kept in no localStorage and dropped from the DOM and the
-card's fields when the page closes.
+(`card-journal.js`: `_pageBand`, `_pageShown`, the "journal" and "every world" pages), as its
+own card part `card-memory.js` (M3 P3-6, building notes). It is linked from the status sheet
+only on a personal screen when `_mineSwitch(s, "memory_on", this._memoryOn)` **and**
+`_mineSwitch(s, "memory_allowed", s.memoryAllowed)` are both true (M3 P3-2; `_mineSwitch`,
+because with no `mine` yet the fallbacks are the card-wide flag and the slide's field). It
+is fetched **on open** by WS `virtual_pet/memory_get` (`shared` required and refused unless
+`false`, section 5; refused too when **this pet's** option is off; returns the asker's
+items only), shown after the one confirm tap (R3), kept in no localStorage and
+dropped from the DOM and the card's fields when the page closes.
 
-What it lists (all DRAFT wording): the favourites told (weather, season, the visitor of
-each world) with their "since" day and "ask me again"; the tagged big days and trips by
-date; recent picks (dream, game, guess); noticed weekday patterns (door 10) as their own
-items, so a person sees exactly what the pet noticed; and one line saying what is never
-kept (typed words, names). Each item has its own **"forget this"** (WS
-`virtual_pet/memory_forget` `{key, shared}`, key = the entry's own `(list, day[, kind])`
-(section 4), no new id; the schema types it `object` and the handler checks it, review
-B1), a tap-to-confirm, saved at once. The page also has "stop remembering" (the switch
-off, erases).
+**What the page lists, and where each row comes from (M3 P1-1).** Rule: every class
+`_memory` can store is either listed with a per-item forget, or named here as "not shown,
+and why".
 
-**Stickers.** One small sticker per **tagged big day** (kind `big_day`; also `trip`),
-shown on the page only. Cosmetic: no streak, no count shown as a score, nothing lost or
-gained by skipping, never a sticker for `work thing` or `something else`, and a
-per-item forget removes it with the tag. Stickers are derived from `tags`: **nothing new
-is kept.** First pass: the existing card icon glyphs and emoji by tag, no new art. If the
-owner wants painted stickers later it is a separate art job through the usual art path,
-not part of this plan.
+| Row | Source | Forget |
+|---|---|---|
+| Favourites: weather and season, each with its "told" day and "ask me again" | the **value** from the channel's `mine.fav_weather` / `mine.fav_season` (already there, not new); the **day** from `memory_get`'s `since_told` | "ask me again" is M0-c's existing action (a favourite, its `since_told` and its door 6 mark); no "forget this" |
+| Tagged days, by date: `tags` entries (kind `big_day` or `weekend`) | `memory_get` `tags` | "forget this", key `(list "tags", day, kind)` |
+| Recent picks: `picks.dream`, `.game`, `.guess` and **`.great`** (FM 2026-11-05: shown) | `memory_get` `picks` | "forget this", key `(list, day)` |
+| Weekday patterns (door 10) | `memory_get` `patterns`, derived on the server (below) | "forget this", `{list: "pattern", tag, weekday}` (owner Q3) |
+| One line: what is never kept (typed words, names) | fixed copy | none |
+| **Not shown:** `said` (door bookkeeping, no content), `on`, `memory_chosen_days` (the ask's bookkeeping), a visitor's favourite (door 6 is weather and season only; the visitor favourite is in `likes`, and the settings sheet's "ask me again" is its only surface) | | |
+
+Favourites keep their existing settings-sheet row; the page's row is a second view, not a
+second store. `memory_get` does not carry the favourite values (they are in `likes`, not
+`memory`).
+
+**Patterns (owner Q3; M3 P1-2).** `memory_get` derives the page's patterns **with door 10's
+own function**, not a second implementation. M3a splits `_weekday_pattern` (`people.py`)
+in two: a core `memory_patterns(mem, today) -> [(tag, weekday)]` (3 of the last 5 entries of
+`match`, `show` or `lesson` on one weekday, and the newest of them within
+`R.MEMORY_DOOR10_STALE_DAYS`, the 56-day freshness), which the page lists, and the door's
+own extras on top (tomorrow is that weekday, and the 28-day gap `R.MEMORY_DOOR10_GAP_DAYS`).
+The gap is a door rule and **hides no item**. A test asserts that door 10 fires only for a
+pair the core lists. "Forget this" on a pattern is one `memory_forget {list: "pattern", tag,
+weekday}`: it removes **every `big_day` entry of that tag whose day falls on that weekday,
+within that tag's last 5 entries** (the same window the core reads), saved at once. The
+page then refetches, so the item is gone (or, if the window slid onto an older run of 3,
+the page shows that run: this is door 10's own rule and the test says so). `weekday` is
+Python's `date.weekday()`, 0 for Monday.
+
+**What a forget does and does not stop (M3 P2-2).** A per-item forget removes the memory
+entry. The pet's own copies are separate: this morning's `dream["user"]` and
+`state.dream_picks[user]` (16 h), a game pick's `choice` in the open follow event, and a big
+day's open event (date and typed words, until its `until` day) are the pet's, and only
+"forget my data" clears them (M0-d). M3a does not change that; **the page says so in one
+line** (section 9a, `.kept_note`), and the guide has it too. Pytest: forgetting a `dream`
+entry does not touch `dream_picks` (the line is true).
+
+**Door lines already queued (M3 P3-3).** A door line queued on the card (`_note` into
+`s.queue`, `card-visit.js`) lives minutes and goes on reload. A forgotten tag's line can
+still be said once. **Accepted**; the guide says so. The "great" send in flight likewise.
+
+**Stickers (owner Q1, Q2; M3b).** One small sticker per **tagged big day**: a `tags`
+entry of kind `big_day` whose tag is one of `exam`, `match`, `show`, `trip`, `party`,
+`lesson` (`trip` is a **tag**, not a kind; kinds are `big_day` and `weekend`, M3 P2-5).
+**A sticker shows on and after the tagged day, never before** (`day <= today`, the card's
+server clock), so tapping a chip earns nothing and a day that has not happened gets none. A
+`weekend` entry, `work_thing` and `something_else` never get one. Cosmetic: no streak, no
+count shown near stickers, nothing lost or gained by skipping, and a per-item forget removes
+the sticker with the tag. Stickers are derived from `tags`: **nothing new is kept.**
+
+**Art ask (owner Q1): M3b waits on it.** A small pixel-icon set, six icons (one per sticker
+tag), through the usual art path (`private-content/art/`; prompts and runs stay local,
+AGENTS.md). It must read on the card's Tiny5 pixel UI, in the mono LCD mode and in big-text
+mode, and each sticker has a text `aria-label` (the tag's `MEMORY_TAG_CHIPS` label). No
+emoji. **This plan makes no art and no worker does it here;** the first mate queues the art
+job. M3a ships without stickers and lists the tagged days as text.
 
 **Door 7 and `_mine`.** The page's data does not enter `_mine`, the channel snapshot or
-the sensors.
+the sensors. A JS test greps the card source (`tests/js/card-source.js`): `memory_get` and
+`memory_forget` appear only in `card-memory.js` (M3 P3-5).
 
-**Teardown when memory ends elsewhere (review S8).** The page also drops its DOM and
-the card's fields when a push changes `mine.memory_on` or `mine.memory_allowed` to false:
-memory turned off, forgotten, or admin-erased on another device or tab while the page is
-open. (`stop remembering` in the same tab is the easy case.)
+**Teardown: five paths (M3 P1-4; building notes list the lines).** The page drops its DOM
+and its fields on each of these, and each has an acceptance row:
+1. **Memory ends elsewhere.** A channel push (`_channel`, `card-base.js`) changes
+   `memory_on` or `memory_allowed` to false (turned off, forgotten or admin-erased on
+   another tab, or "stop remembering" here). Read through `_mineSwitch`.
+2. **The shared flag flips on while open** (`_goShared`, via `_onSharedStorage`): the page
+   field joins `_goShared`'s per-page list (`slide.journal = false; finds; everyWorld`),
+   **and `slide.statusHtml = null`**: the cached HTML string is a copy of the DOM, and
+   "dropped from the DOM" is untrue while it holds the text.
+3. **The status sheet closes or the slide changes** (`_toggleStatus` and the slide-change
+   list in `card-build.js`): the page's flag joins both lists, and `s.statusHtml` goes.
+4. **A fetch that lands late** (after a close, a shared flip or a slide change): an epoch
+   (`memoryEpoch`, as the finds page's `findsEpoch`) bumped on open and on every close;
+   the `memory_get` callback draws only if the epoch, the pet id and `sharedScreen()` are
+   unchanged. A `memory_forget` that lands late does the same.
+5. **The tab hides or the phone sits unlocked** (FM 2026-11-05): the page closes on
+   `document.hidden` (`_onHidden`, `card-base.js`), on a slide change (path 3) and after
+   **2 minutes idle** (one timer, reset by a tap in the page, cleared on close).
 
 **Acceptance.**
-- Card-check (new section `memorypage`): absent on a shared screen (no `memory_get` call,
-  no link); present on a personal screen only with `memory_on`; the confirm tap guards the
-  content; "forget this" calls the stub once with the item's key; after "stop
-  remembering" the page is gone; a push with `memory_on: false` (or `memory_allowed: false`) while the
-  page is open removes it and its text from the DOM. The page contents are `textContent`
-  only.
-- Bench: a `--memory` preset pinning `mine.memory_on` and a fake `memory_get` reply
-  (the bench's fake `callWS` answers only what it is taught, `dev/bench/README.md`);
-  shots: empty, a few items, all stickers, a long list at the cap. Per AGENTS.md, add
-  this state to the bench rather than falling back to HA.
-- Pytest: `memory_get` returns only the asker's items; user B gets none of A's; per-item
-  forget removes exactly one entry and saves at once. With pets A (option off) and B (on)
-  and the person's memory on, `memory_get` and `memory_forget` through pet A are refused
-  (the server checks the pet's own option, section 5), through B they work.
+- Card-check (new section `memorypage`, listed in `SECTIONS` and `NEEDS`): see the building
+  notes for the rows; absent on a shared screen (no `memory_get` call, no link); present on
+  a personal screen only with `memory_on` **and** `memory_allowed`; the confirm tap guards
+  the content; "forget this" calls the stub once with the item's key; the five teardown
+  paths each leave no memory text in the DOM and none in `statusHtml`; the page contents
+  are `textContent` only.
+- Bench: a `--memory` preset pinning `mine.memory_on` and a fake `memory_get` reply read
+  from the shared fixture (building notes); shots: empty, a few items, a pattern, a long
+  list at the cap. The sticker shots wait for M3b and its art. Per AGENTS.md, add this
+  state to the bench rather than falling back to HA.
+- Pytest: building notes. M3b's own rows are in its notes list below.
+
+**M3b acceptance (M3 P2-5; each is a JS test or a card-check row).** No sticker for
+`work_thing`, `something_else` or any `weekend` tag. No sticker for a tagged day after
+today; one on the day itself and after. No count, no "n of 6" anywhere near the stickers.
+A per-item forget removes the sticker with the tag. A sticker's `aria-label` is the tag's
+text label. Mono and big-text render (the bench at both). The six icons are the art ask's.
+
+## 9a. The page copy (M3 P1-3): DRAFT, for first-mate approval
+
+**Every line in this section is DRAFT** until the first mate approves it (decisions-2026-10-28,
+"How the crew works with the owner"). Written by the plan's author; **the M3a ship worker
+writes no copy** and copies this table as approved, or as the first mate edits it. The table
+goes in the fresh block of `src/card/lines-fresh.js` as `MEMORY_PAGE` and is named in
+`COPY_TABLES` (`scripts/copy-scan.js`; the scan fails on a table it does not know). The
+tag labels are **not** repeated: the page reuses `MEMORY_TAG_CHIPS.labels` (section 6a),
+and "ask me again" is the existing `askAgain` (`ui-copy.js`). "Stop remembering" reuses the
+existing `remember me` row's two-tap `memory_off` confirm text; the page's button label is
+below. Every value goes in as `textContent`.
+
+**Wording rules (door 10's, and the page's).** The pet never "knows" or "has been
+watching"; a pattern is "you often tell me about", never "I noticed", "I've been tracking"
+or a count ("3 times"); no line says a day happened ("you told me about", never "you
+went"); nothing nags; the page speaks as "i" (the pet), about what **you told me**. **No
+BABY variant** (FM 2026-11-05, M3 P3-4): these lines are short and plain, and the page is the
+person's record, not the pet's voice mid-play; the settings sheet has none either.
+`{label}` is a `MEMORY_TAG_CHIPS.labels` entry, `{day}` the card's short date, `{weekday}` a
+name from `.weekdays`.
+
+| Table.key | Line (DRAFT) | Use |
+|---|---|---|
+| `MEMORY_PAGE.link` | things you told me › | the status-sheet link, beside "journal ›" |
+| `.title` | things you told me | the page title (back button is `‹ status`) |
+| `.gate_q` | this page shows what you told me. show it? | the one confirm tap (R3) |
+| `.gate_yes` | show | its button |
+| `.loading` | looking… | while `memory_get` is out |
+| `.failed` | couldn't look just now. try again later | the call failed (one text, no reason) |
+| `.empty` | nothing kept yet | a person on, with no entries |
+| `.since` | i've kept these since {day} | the `since` line, when there is one |
+| `.h_fav` | favourites | section head |
+| `.h_days` | days you told me about | section head |
+| `.h_picks` | things you picked | section head |
+| `.h_pattern` | days you often tell me about | section head |
+| `.fav_weather` | weather: {value} · told {day} | a favourite row (value from `mine`) |
+| `.fav_season` | season: {value} · told {day} | a favourite row |
+| `.day_row` | {label} · {day} | a tagged day or weekend (the label is the chip's; a weekend row says "weekend" with its tag label, or just "weekend" for a no-tag one: **a no-tag day is not listed, nothing was kept**) |
+| `.weekend` | weekend | the kind word on a weekend row |
+| `.pick_dream` | dream · {value} · {day} | a pick row (the value is the fixed list's own label) |
+| `.pick_game` | game · {value} · {day} | |
+| `.pick_guess` | guess · {value} · {day} | |
+| `.pick_great` | a great day · {day} | a `great` entry (no value; it is the answer) |
+| `.pattern` | {weekday}s: you often tell me about a {label} | a pattern row |
+| `.weekdays` | monday, tuesday, wednesday, thursday, friday, saturday, sunday | `weekday` 0-6 |
+| `.forget` | forget this | each item's button |
+| `.forget_sure` | sure? press again to forget | the second tap (a tap-to-confirm, the card's `_confirmed` style) |
+| `.forget_pattern_sure` | sure? this forgets those days | the second tap on a pattern row, because it removes several entries |
+| `.forgot` | forgotten | the line after, spoken once to the live region |
+| `.stop` | stop remembering | the page's switch-off button (opens the existing `memory_off` two-tap confirm) |
+| `.never` | never kept: words you typed, anyone's name | the line saying what is not kept |
+| `.kept_note` | i may still ask about this week's | one line under the list (M3 P2-2): a forget removes the memory, the pet's own copies of this week's answers can still come up |
+| `.aria_forget` | forget this: {row text} | each button's `aria-label` (the row's text, as text; no emoji) |
+
+Notes on the wording, for the first mate:
+- `.gate_q` says **what you told me**, not what "i know": no "knows", no watching.
+- `.pattern` is a statement of what you told, with no number and no "noticed". It lists a
+  pair the server derived with door 10's own rule, so the page shows exactly what the pet
+  may remark on, and "forget this" removes it (owner Q3).
+- `.kept_note` is the honest limit (M3 P2-2): a person who forgets a dream pick may still
+  hear "your idea" for the 16 hours the pet holds it. It is one line, once, under the list,
+  not on every row.
+- `.empty` and `.failed` are neutral: no "oh no", no nag to tag more days.
+- There is no sticker line: stickers are icons with a text `aria-label` (the tag's label)
+  and wait on M3b's art (section 9).
+- **Scan result:** not run by the plan's author for this draft; the ship worker runs
+  `scripts/copy-scan.js` on the real table and `fresh_copy.test.js`, and a line that fails
+  goes back to the first mate, not into a reword by the worker.
 
 ## 10. The privacy test table (every tier-2 ship)
 
@@ -1290,11 +1615,11 @@ adversarial review should be able to run.
 | Sensors and attributes | Never (R4) | Pytest: with memory on and full (caps hit), the JSON of every sensor's attributes, `_house_view`, and `debug` holds none of the memory strings (tags, picks, dates of tags) |
 | `_mine`, `_visit_prefs` and the channel | Only `memory_on` and `memory_allowed` booleans (R3; M1 S7) | Pytest: `_mine(user)`, `_visit_prefs(user)`, the `visit` reply and a channel snapshot hold no dates and no lists (**door notes hold at most one fixed-list pick or one fixed-list tag, nothing dated**, FM M1b Q1 and FM s2782 Q1: a door 4, 5 or 12 note is `kind` and `pick`, a door 1, 3 or 10 note is `kind` and `tag`, door 2's only `kind`), and exactly those two booleans about memory; `memory_get` is the only carrier. A door-6 note adds only the boolean `told` to its favourite's note; **a 12-month `friends_for` note adds only `tag`** (door 11; its `months` is the friendship length, not a memory). The door-notes test in `tests/test_memory.py` asserts `set(note) <= {"kind", "pick", "tag"}` |
 | Bus, logbook, recorder | WS commands, not services | Pytest: a `MATCH_ALL` listener across `memory`, `memory_get`, `memory_forget`, `ask_again`, and the answer with a tag sees no event holding memory or the choice |
-| Logs | No integration log with memory or answers; no schema failure echoing a value (all free-value fields typed `object`, section 5) | Pytest with `caplog` on the integration **and** `homeassistant.components.websocket_api`: a bad tag (a string outside the list, an `object`, a number), a bad `list`, a bad `key` **with a valid day and tag of a real entry**, a wrong type leave no record containing the value; and the handler's own error carries no value. This row can pass only with `object`-typed fields (review B1): with `vol.In` HA logs `humanize_error`'s message |
+| Logs | No integration log with memory or answers; no schema failure echoing a value (all free-value fields typed `object`, section 5). **Split by level (M3 P1-5)** | **(a) At the default level** (`caplog` on the integration, **no** `set_level` on `websocket_api`): a bad tag (a string outside the list, an `object`, a number), a bad `list`, a bad `key` **with a valid day and tag of a real entry**, a wrong type, a bad `weekday` leave no record containing the value; and the handler's own error carries no value. This can pass only with `object`-typed fields (review B1): with `vol.In` HA logs `humanize_error`'s message. **(b) At DEBUG on `homeassistant.components.websocket_api`** (set before the client connects, as `tests/test_memory.py` does): HA logs `Received <whole message>` and `Sending <whole reply>` for every message by design, so `memory_get`'s reply and `memory_forget`'s fields **are** in that log. A test says so in a comment and asserts it; the guide's "debug logging" paragraph is the guard there. The integration's own logger stays free of values at both levels |
 | Shared screens | The card never asks, shows, fetches or adds; the server refuses unless `shared` is `false` (fail closed, R3; a card-honesty guard, not authentication). **Every `remember` path** is covered (M1 B1) | Pytest: each memory command with `shared: true` **and with `shared` absent** is refused and saves nothing. **And an `answer` for dream / guess / game / fav / great / a favourite's `since_told` / a big day or weekend `yes` with a `tag`, with `shared` true or absent, leaves `person["memory"]` unchanged, while the ordinary answer still works** (the pick or like is stored; the `yes` opens its event and keeps the typed words; **no tag, no error**, FM s2782 Q7); the `memory` ask's answer with `shared` not `False` is refused with the generic error, and so is a `tag` outside the fixed list, whatever `shared` is. Card-check `sharedscreen`: no memory WS call, no row, no link, no page. JS test: `_keepAnswer`, `_sendFollow` and the "great" send pass `shared: false`. Doors and the ask come from `visit`, which cannot see `shared`: see "Doors" |
-| WS shape | The memory commands copy `websocket_ask_again` (M1 N2) | Pytest: each command with `shared` absent is refused **before** the pet lookup (a bad `entity_id` with `shared` true gets `shared`, not `no_pet`); the only error codes are `shared`, `no_pet`, `not_asked`, one generic text each; `forget_me` still takes no `shared` |
-| Other people | Only `connection.user.id` | Pytest: B's `memory_get` and `memory_forget` never see or touch A's entries; B turning memory on leaves A's record alone |
-| WS fetch on demand | The page is fetched on open, held in no cache | Card-check: after closing the page, no memory text in the DOM; no `hatch-memory-*` localStorage key ever; `STASHED_QUESTIONS` doesn't include the memory ask |
+| WS shape | The memory commands copy `websocket_ask_again` (M1 N2) | Pytest: each command with `shared` absent is refused **before** the pet lookup (a bad `entity_id` with `shared` true gets `shared`, not `no_pet`); the only error codes are `shared`, `no_pet`, `not_asked` and (`memory_forget` only) `invalid`, one generic text each; `forget_me` still takes no `shared` |
+| Other people | Only `connection.user.id` | Pytest: B's `memory_get` and `memory_forget` never see or touch A's entries; B turning memory on leaves A's record alone. A deleted HA user's memory is dropped by the daily prune (owner Q4), a live user's is not |
+| WS fetch on demand | The page is fetched on open, held in no cache | Card-check: after closing the page, no memory text in the DOM or in `statusHtml`; `localStorage` and `sessionStorage` byte-identical before opening, while open and after closing (not a key-name check, M3 P3-5); `STASHED_QUESTIONS` doesn't include the memory ask |
 | Erase: off | Pops `person["memory"]`, saved at once | Pytest: turn off, then read the store file (`hass_storage`) with no delay: no `memory` key, no entry. (That HA's `Store` flushes on stop is HA's, not tested here; `async_save_now` writing before the command returns is.) |
 | Erase: forget me | `People.forget` takes memory with the record; `memory_asked` survives like `birthday_skipped` | Pytest: forget, then the store has no memory, no tags, no picks; `memory_asked` stays, so the ask isn't repeated; yes then off, and yes then forget-me, never ask again (review S2) |
 | The ask | Counts only on the card's `shown` (M1 S3); asked once; held for baby talk (FM Q-D); `memory` not in `ONCE_KINDS` | Pytest: `_question` for `memory` writes no `likes_asked` and no `once_last` until `shown`; `shown` writes both only under `asked_later(..., "memory")` (a stray `shown` counts for nothing); a card that never sends `shown` is offered the ask on 3 days and gets `how_day` on day 4, and the ask returns after the weeks gap; "not now" and "yes" both set `memory_asked`; "yes" or "not_now" with no ask today, "yes" with the pet's option off, and either with `shared` not `False` are refused; `once_due` skips it after; with `baby_talk` on it is not asked; a saved `later_kind: "memory"` survives a reload; `forget` keeps `memory_asked` **and** `birthday_skipped` together |
@@ -1340,7 +1665,7 @@ phone-width and tablet-width viewport. Per slice, if any:
 | M3a, M3b | One phone and one wall tablet: the page's confirm tap, scrolling a page at the cap, "forget this" confirm; a tablet **shared** screen shows no link and no page. |
 
 If "device queue" means something else (a queue of art or sprite jobs to the codex
-tools), none of these slices needs one: no new art (section 9).
+tools), M3b needs one: the six sticker icons are an art ask (owner Q1, section 9); M3a and the other slices need none.
 
 ## 12. Known remainders and cautions
 
