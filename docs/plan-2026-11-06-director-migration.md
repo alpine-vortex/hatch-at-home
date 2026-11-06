@@ -4,7 +4,8 @@
 **Status:** Plan only (tier 0). The migration it describes is tier 2 in total, tier 1 per slice.
 No code under `src/` changes with this document. **Revised 2026-11-06 (s2977) after the adversarial
 review s2976**, which found the first draft UNSAFE (blockers A1-A4); every finding is resolved below or
-answered in section 10, and "Changes since review" says where.
+answered in section 10, and "Changes since review" says where. **Revised again 2026-11-06 (s2979) after the
+re-check s2978** (SOUND WITH FIXES: 0 blockers, 7 fixes, 5 nits); rows R2-1 to R2-12 of the same table.
 **Basis:** `origin/main` `531cd101`. Every `file:line` below was read on that tree; recheck when a
 slice starts (a line drifts, the site list does not: section 3 has a script that finds a new one).
 **Input:** the scout audit s2973 (`report.md`, findings 1-7). Its table was by group and sampled; this
@@ -14,7 +15,8 @@ code disagree, the code wins and section 3.1 says so.
 `docs/plan-2026-11-03-living-device-interactions.md` section 5) says the director "owns handles
 (timeout, animation, class, CSS var), clears on slide switch, removal, hidden tab and scene/game
 transitions". Today it does that for the glass and the rim only. The owner asked (2026-11-06) for all of
-it, with minimal risk: **the player sees no change except the bug fixes.**
+it, with minimal risk: **the player sees no change except the bug fixes and the disclosed changes listed
+in section 0 (D1-D4).**
 
 ## Changes since review
 
@@ -52,6 +54,28 @@ F here); **N1-N11** its nits. Section 10 lists what was rejected or changed in f
 | **F19** a revert conflicts in the ratchet | A rule: a revert restores its counts by hand | 2 |
 | **N1-N11** | N1 `card-link.js` cites; N2 slice 12 has no B1; N3 R83 once; N4 counts 85 and 8; N5 wrappers; N6 two commits; N7 one test name; N8 `getAnimations` not counted; N9 `finish` dropped; N10 tick-polled state out; N11 leak measured late | 3.7, 5.12, 5.13, 3.12, 3.6, 1.3, 2, 7.2, App. A, G1, 4.8, G9 |
 
+**Second pass (re-check s2978, SOUND WITH FIXES: 0 blockers, 7 fixes, 5 nits).** A1-A4 were confirmed
+fixed. Each finding below was checked against `origin/main` `531cd101` first; all twelve reproduced
+(`_forget` has no `_visitorEnd`/`_seasonVisitEnd` call, `_go` has no `i !== to` guard at `:1020`,
+`card-board.js:174` is a quiet `_sceneEnd`, `_dropFinds` never touches `s.reveal`, `card-layout.js:433`
+is R52's clear). **Nothing was rejected.** Q11 and the "no other visible change" claim now list every
+disclosed change (section 0, D1-D4).
+
+| Finding | What changed | Where |
+|---|---|---|
+| **R2-1** (fix 1, high) a forget mid-visit leaves `s.visitor` set | `_forget` calls `_visitorEnd(s)` (slice 11, in its move commit) and `_seasonVisitEnd(s)` (slice 6) before `detach`; R85, R14 and R50 become "closer"; a rule in 3.14: a "drop" row's `fn` must not be the only thing that clears a `BUSY_OWNERS` flag; slice 11 pins it with a forget trace (`s.visitor === null`, elements gone, `pending(s) === 0`, `_free`), slice 6 with the same for the flyer; B1 row names it | 0 (B1, D2), 3.14, 5.6, 5.11 |
+| **R2-2** (fix 2) R86's disconnect closer `_dropFinds` | Disconnect = keep; `_dropFinds` must not stop group `reveal`; the A2 response row no longer lists `_dropFinds` as a closer | 1.3 G9, 3.14, 5.11, 10 |
+| **R2-3** (fix 3) the swipe drain hits the slide on show | `{ swipe: i !== to }` at `card-build.js:1020`; a one-pet swipe and a dot tap keep `rock2` (trace case); disclosed as D4 | 0 (B4, D4), 5.9, Q12 |
+| **R2-4** (fix 4) the Hop board's quiet `_sceneEnd` | Disclosed (D3, Q11, the B4 row, slice 9 trace case); the explicit-flag alternative is named as the cost of a "no" in Q11 and 5.9 | 0, 5.9, Q11 |
+| **R2-5** (fix 5) G9/5.9/Q11 vs 3.14 on the murk | G9, 5.9 (D-keep case), Q11 and section 10 say `rock2` only; R16 is keep (it fires at +50 ms); a 3.14 row of its own | 1.3 G9, 3.14, 5.9, Q11, 10 |
+| **R2-6** (fix 6) `_hold` cannot express `_wander`, `_wipe` | `_hold` gets `opts.remove` (default `classes`: the list the timer removes and `restart` clears); R28 and R61 written with it | 1.4, 3.11 R61, 3.6 R28 |
+| **R2-7** (fix 7) the ratchet end state misses `card-layout.js:433` | Added to the allowlist with R52 (7.1, App. B end state); R27's cite corrected (the only head cancel is `card-base.js:183`) | 7.1, App. B, R27 |
+| **R2-8** (nit 1) R36 forget closer | "drop; the tick ends it within 700 ms" (`_clearAsk` does not touch `s.textStep`) | 3.14 |
+| **R2-9** (nit 2) `adopt`'s late `done()` | `done()` is per handle, idempotent, and cannot remove a newer entry under the same key | 1.5 L12 |
+| **R2-10** (nit 3) slice 13's test edits | `memory_page.test.js:194,198` added | 5.13, 6.2 |
+| **R2-11** (nit 4) `_animate`'s key namespace | key is `"anim:" + cls` | 5.7 |
+| **R2-12** (nit 5) R19's undo never runs at a forget | R17-R20 row says closer (`_drapeStop` runs first and sets `drapeAnim = false`) | 3.14 |
+
 
 ## 0. The shape of the answer
 
@@ -68,9 +92,22 @@ F here); **N1-N11** its nits. Section 10 lists what was rejected or changed in f
 3. Ten sites stay out for a stated reason (section 4): the five the first draft named plus the five sheet
    waits R51-R55 (review F8). The final allowlist is those ten rows.
 4. Every slice writes its characterization test **first**, against the unmoved code, and the same test
-   passes unchanged after the move (section 6). Timings are identical; the few intentional changes are
-   the four audit bugs, and each is named in its slice.
+   passes unchanged after the move (section 6). Timings are identical; the intentional changes are the four
+   audit bugs and the disclosed list below, and each is named in its slice.
 5. Open questions for the owner are in section 9 (Q1-Q12), each with a recommendation.
+
+### The disclosed changes (the whole list; Q11, Q12 and 7.1 point here)
+
+"The player sees no change" means no change but these four (the murk restore is **not** one: it keeps
+firing at +50 ms, R16 is keep, R2-5). Anything else a trace test shows is a bug in
+the slice (review s2978, fixes 1, 3, 4):
+
+| # | What the player can see | When | Where it is fixed or decided |
+|---|---|---|---|
+| D1 | A second flip inside 200 ms keeps `turn` to its own end (B3) | a double tap on a species change | B3, slice 3 |
+| D2 | A forgotten pet's leftovers no longer land on the next pet (B1): a class a one-shot would strip, an old visitor's art, a flock | `_forget` | B1; 3.14; slice 11 for the visitor (`_forget` ends it, R2-1) |
+| D3 | The clean scene's 1.3 s `rock2` shake-off is cut when the scene ends **quietly**: at a forget, at a disconnect (G9, Q11), and when Hop's board loads over a live clean scene (`card-board.js:174`, behind `experimental_hop`; R2-4) | the scene lives past 1800 ms | B4; slice 9; Q11 |
+| D4 | A swipe away from a care scene on a card with **two or more** pets cuts `rock2` on the slide being left. A one-pet swipe or a tap on the current dot goes `_go(to)` with `to === i`, the visible slide, and keeps `rock2` as now (`{ swipe: i !== to }`, R2-3) | a swipe or a dot tap | B4; slice 9; Q12 |
 
 ### The four audit bugs (named here so the slices can cite them)
 
@@ -79,10 +116,10 @@ against the code:
 
 | # | Bug | Where | Fix | Slice | Test |
 |---|---|---|---|---|---|
-| B1 | A timer survives `_forget` (a slide reused for another pet) and strips a class from the next pet's sprite, or puts the old pet's art on it. Also the lean timers (`card-tick.js:992,1005`) and the `_animate` map are not cleared by `_forget`; the audit said the lean timers were. | `_look`, `_wander`, `_swapFlip`, `_afterTurn`, speck, perk2, yawn, shake, lean, `_animate`, fx boxes, season, looks | everything is created through the ledger; `_forget` calls `detach`, which drains: an end entry's `undo` runs, a drop entry is stopped (3.14) | 1-13 | per-slice trace test, plus the global `forget_drain.test.js` in slice 14 |
+| B1 | A timer survives `_forget` (a slide reused for another pet) and strips a class from the next pet's sprite, or puts the old pet's art on it. Also the lean timers (`card-tick.js:992,1005`) and the `_animate` map are not cleared by `_forget`; the audit said the lean timers were. | `_look`, `_wander`, `_swapFlip`, `_afterTurn`, speck, perk2, yawn, shake, lean, `_animate`, fx boxes, season, looks | everything is created through the ledger; `_forget` calls `detach`, which drains: an end entry's `undo` runs, a drop entry is stopped (3.14). **`_forget` also calls `_visitorEnd` and `_seasonVisitEnd` before `detach`** (they are the only code that clears `s.visitor` and `s.seasonVisit`, and `s.visitor` is a `BUSY_OWNERS` entry: slice 11 owns the first, slice 6 the second; 3.14) | 1-13 | per-slice trace test, plus the global `forget_drain.test.js` in slice 14 |
 | B2 | A hidden tab does not end one-shots: they finish late on return (timers are throttled), so a stale flair, season box, house fx or robot shows for a moment. | flair, season boxes, house fx, robot, hearts, sparkle | the `hidden` policy of the entry (G6); default `keep` everywhere until slice X1 flips the listed ones to `tab` (a hidden tab only, not a scroll-off) | X1 | `hidden_policy.test.js` |
 | B3 | `_swapFlip` does not clear its earlier timers: a second flip inside 200 ms is cut short by the first flip's `remove("turn")`. | `card-tick.js:203-204` | `turn` removal is keyed (a new flip replaces the first removal **silently**, so the class the second flip just added stays to its own end); `put` keeps one timer per flip, in a group drained on forget | 3 | `pet_oneshots_trace.test.js` (two flips 100 ms apart) |
-| B4 | `_sceneEnd` does not clear what the scene started: the `rock2` removal (1.3 s) and the murk transition reset (50 ms) survive a quiet end (a forget, a disconnect) or a swipe away. | `card-care.js:122,169` | `rock2` is in group `scene`, drained by `_sceneEnd` for `quiet` and swipe ends only, **not** a normal end (a normal end keeps the 1.3 s shake-off today, and keeps it), and **before** `entry.clear`; the murk restore is made *by* `entry.clear`, so it is in its own group `scene.murk` and is drained by `detach` only | 9 | `scene_stragglers.test.js` |
+| B4 | `_sceneEnd` does not clear what the scene started: the `rock2` removal (1.3 s) and the murk transition reset (50 ms) survive a quiet end (a forget, a disconnect) or a swipe away. | `card-care.js:122,169` | `rock2` is in group `scene`, drained by `_sceneEnd` for `quiet` and swipe ends only (the quiet callers are `_forget`, the disconnect and **Hop's board load**, `card-board.js:174`; the swipe is `{ swipe: i !== to }` at `card-build.js:1020`), **not** a normal end (a normal end keeps the 1.3 s shake-off today, and keeps it), and **before** `entry.clear`; the murk restore is made *by* `entry.clear`, so it is in its own group `scene.murk`, is **not** drained by `_sceneEnd` (it keeps firing at +50 ms) and is drained by `detach` only | 9 | `scene_stragglers.test.js` |
 
 Two things the audit called "too long" (the robot's 6 s and the season box's 6 s) are **not** bugs and are
 not changed by any slice here: owner question Q3.
@@ -277,11 +314,19 @@ element (a view switch and back, masonry re-columning), the card's `_build` does
   is cleared by the boot fill timer, and the subscribe retries are exactly as today (stopped by
   `_unsubscribe`, started again by `connectedCallback`'s `_subscribe`).
 - An entry is **ended at a disconnect only where today's code ends it**, and only by the closer that does
-  it. The one visible difference: the scene's quiet end drains group `scene` (the clean scene's 1.3 s
-  `rock2` shake-off and the next frame's murk restore end with the scene, which `disconnectedCallback`
-  already closes). A re-attach inside 1.3 s used to see `rock2` for the rest of the second; it now does not.
-  The scene itself is already gone, so this is the same state the forget path reaches (bug B4). Stated in
-  Q11 so the owner can refuse it.
+  it. The one visible difference at a disconnect: the scene's quiet end drains group `scene` (the clean
+  scene's 1.3 s `rock2` shake-off ends with the scene, which `disconnectedCallback` already closes). A
+  re-attach inside 1.3 s used to see `rock2` for the rest of the second; it now does not. The scene itself
+  is already gone, so this is the same state the forget path reaches (bug B4). **The murk restore is not
+  drained:** it is made by `entry.clear` inside that very `_sceneEnd` (group `scene.murk`, R16: keep), so it
+  fires at +50 ms as today; draining it after `clear` would restore `transition` in the same frame and the
+  murk would fade back (F7). Stated in Q11 (D3) so the owner can refuse it.
+- **The reveal is keep at a disconnect** (review s2978 fix 2). `disconnectedCallback` calls `_dropFinds`,
+  which only bumps `findsEpoch` and drops the finds page; it never calls `_revealEnd`, so today the reveal's
+  steps run through a disconnect and `s.reveal` and its box are taken off by the reveal's own last step.
+  `_dropFinds` must not stop group `reveal`: it also runs when the finds page opens (`card-journal.js:524`)
+  and on shared-screen flips (`card-build.js:892,926`), and a stopped reveal leaves `s.reveal` and its box
+  on screen for good (only `_revealEnd` removes them).
 - **Not done, on purpose:** ending decorative one-shots at a disconnect. A disconnect cannot be told from
   a re-attach until it is too late, and "end after N seconds disconnected" needs a timer of the card's
   own, which a disconnected card has none of (`_timer` is cleared). Q11 asks.
@@ -302,7 +347,7 @@ there is no pre-build fallback and no bare timer in them):
 | Method | Does |
 |---|---|
 | `_later(scope, ms, fn, opts)` | `this._director.later(scope, ms, fn, opts)` |
-| `_hold(scope, el, classes, ms, opts)` | `stop` the key (if any); add `classes` to `el`; with `opts.restart` remove, reflow (`void el.offsetWidth`), add; `later(scope, ms, remove, { key, target: el, undo: remove })`. `opts.mirror` is the drape mirror `_animate` keeps |
+| `_hold(scope, el, classes, ms, opts)` | `stop` the key (if any); add `classes` to `el`; with `opts.restart` remove `opts.remove`, reflow (`void el.offsetWidth`), add; `later(scope, ms, remove, { key, target: el, undo: remove })` where `remove` takes off `opts.remove`. **`opts.remove` (default: `classes`) is the list the timer takes off** and the list `restart` clears first: a site whose adds and removes differ passes it (`_wipe` adds one of three `wipe-*` and removes all three; `_wander` adds `look` only for a left wander and removes `look` always). `opts.mirror` is the drape mirror `_animate` keeps |
 | `_waapi(scope, el, frames, timing, opts)` | `const a = el.animate(frames, timing)`, then `adopt(scope, { cancel: () => a.cancel(), ...opts })`; `finish` and `cancel` events call `handle.done()`; returns `a` |
 | `_stop(scope, sel)`, `_drain(scope, sel)`, `_has(scope, sel)` | the director's `stop`, `drain`, `has` |
 
@@ -323,7 +368,10 @@ there is no pre-build fallback and no bare timer in them):
 - **L10** a re-arm inside `fn` with the same key survives.
 - **L11** `every` and `frame` through fake `repeat`/`frame`; drained.
 - **L12** `adopt` calls `cancel` on drain, once; `done()` removes it without `cancel`; a finished animation
-  (the stub fires `finish`) leaves `pending() === 0` (F5).
+  (the stub fires `finish`) leaves `pending() === 0` (F5). **`done()` is per handle and idempotent** (review
+  s2978 nit 2): the WAAPI `cancel` event of a drained ghost and the `finish` of a replaced one arrive after
+  its entry has left, so `done()` on a handle that is gone does nothing, and never removes a newer entry
+  under the same key (a stale handle checks that it is still the entry in the ledger).
 - **L13** `target` indexes (same key on two elements: two entries).
 - **L14** `inspect` and `pending()`; `dueAt` follows `deviceNow`, not `now` (F18).
 - **L15** bad arguments (`scope` undefined or not an object, `fn` not a function) throw `TypeError`; `ms`
@@ -464,8 +512,8 @@ impression.
 | R24 | card-games.js:479 | the pet's game-end flavour line | `GAME_TYPE_MS` 4000 | none (guard `!s.game`) | `_later(s, ...)`, unkeyed | low | uncovered |
 | R25 | card-journal.js:51 | hide the status feedback note | 3500 ms | `clearTimeout` `:50`, `_forget` (`card-build.js:858`) | `_later(s, ..., { key: "status.note", undo })` | low | cc `shelf`, `play`, `photos`, ... (reach) |
 | R26 | card-layout.js:260 | `_mould` one frame after a layout | one frame | none | `frame(s, ...)` (G3) | low | `mould_pin.test.js`; cc `shelf` |
-| R27 | card-layout.js:283 | swap the title and line when the new pet is half there | 250 ms | `clearTimeout(this._headTimer)` `card-base.js:183`, `card-layout.js:433` | `_later(this._dirCard, ..., { key: "head" })`; the flag reads `!this._headTimer` (`card-layout.js:282,289`) become `this._has(this._dirCard, { key: "head" })`; `fn` clears `_headFor` as now | low | cc `shelf` (reach) |
-| R28 | card-layout.js:785 | remove the status page's `wipe-*` classes | 170 / 220 ms | `clearTimeout(s.wipeTimer)` `:784`; an open cancels it | `_hold(s, s.status, [..], ms, { key: "wipe" })` | low | `motion_ship2.test.js`; cc `pat` (`wipe-`, 7) |
+| R27 | card-layout.js:283 | swap the title and line when the new pet is half there | 250 ms | `clearTimeout(this._headTimer)` `card-base.js:183` (the only head cancel; `card-layout.js:433` is R52's `shellPendingTimer` clear in `_shellSettled`, see 7.1) | `_later(this._dirCard, ..., { key: "head" })`; the flag reads `!this._headTimer` (`card-layout.js:282,289`) become `this._has(this._dirCard, { key: "head" })`; `fn` clears `_headFor` as now | low | cc `shelf` (reach) |
+| R28 | card-layout.js:785 | remove the status page's `wipe-*` classes | 170 / 220 ms | `clearTimeout(s.wipeTimer)` `:784`; an open cancels it | `_hold(s, s.status, [`wipe-${kind}`], ms, { key: "wipe", restart: true, remove: ["wipe-side", "wipe-down", "wipe-up"] })` (the code removes all three, reflows, adds one: `restart` with `opts.remove`; a re-arm keeps `wipe-up`, A1) | low | `motion_ship2.test.js`; cc `pat` (`wipe-`, 7) |
 
 ### 3.7 card-link.js
 
@@ -523,7 +571,7 @@ impression.
 | R58 | card-tick.js:112 | ghost trail (WAAPI) | `turn + move + 300` | `getAnimations().forEach(cancel)` `:105` | `adopt` (G4) | med | cc `ghost` |
 | R59 | card-tick.js:123 | remove `lit` from the screen | `BACKLIGHT_MS` 3000 | `clearTimeout` `:120`, `_forget` (`card-build.js:854`) | `_hold(s, s.screen, [lit], 3000, { key: "lit" })` | low | cc `backlight` |
 | R60 | card-tick.js:178 | `_look`: remove `look` | `ms` (200 ms to a few s) | none | `_hold(s, s.pet, [look], ms)`, **unkeyed** (5.3); the class is added without reflow, so `restart` is false | med | cc `react`, `pat`, `visitors`, `infrared` (reach); `touch.test.js` |
-| R61 | card-tick.js:189 | `_wander`: remove the side class and `look` | `ms` | none | `_hold(s, s.pet, [side, look], ms)`, unkeyed | med | cc `ghost`, `pat`; `touch.test.js` |
+| R61 | card-tick.js:189 | `_wander`: remove the side class and `look` | `ms` | none | `_hold(s, s.pet, side === "wander-l" ? [side, "look"] : [side], ms, { remove: [side, "look"] })`, unkeyed (a right wander adds no `look` today and still removes it; the adds stay where they are) | med | cc `ghost`, `pat`; `touch.test.js` |
 | R62 | card-tick.js:203 | `_swapFlip`: `put` the new art | `TURN_MS / 2` 100 | none (B1, B3) | `_later(s, ..., { group: "swapflip" })` | med | cc `pat` (`turn`); `motion_ship2.test.js` |
 | R63 | card-tick.js:204 | `_swapFlip`: remove `turn` | `TURN_MS` 200 | none (B3) | `_hold(s, s.pet, [turn], 200, { key: "turn" })`: a second flip replaces it silently (the one intended change, B3) | med | same |
 | R64 | card-tick.js:210 | `_afterTurn`: run `fn` when the flip is done | the flip's remainder | none | `_later(s, ..., { group: "swapflip" })` | med | cc `moments`, `egg` (reach) |
@@ -578,26 +626,34 @@ it, and it stays stopped by that call), or **n/a** (not in the slide's scope: it
 **keep** (the entry fires on its time, as the bare timer does; `reset()` does not drain) or the **closer**
 that `disconnectedCallback` already calls today. The rule for end or drop: *the timer's job is to take
 something off (a class, a node, a flag) = end; its job is to start something = drop.*
+**A "drop" row's `fn` must not be the only thing that clears a `BUSY_OWNERS` flag or any other field a
+live slide reads** (`s.visitor`, `s.seasonVisit`, `s.reveal`, `s.asking`, ...): `detach` stops the `fn`
+silently, so the field would stick on the slide's next pet (review s2978 fix 1). Such a row is a
+**closer**: `_forget` calls the function that clears the field, before `detach`. A trace in the slice
+checks the field after a forget mid-flight.
 
 | Rows | Forget | Disconnect |
 |---|---|---|
 | R1-R3, R5 button chrome (card scope) | n/a (fires on the button) | keep |
 | R4 perk, R60 look, R61 wander, R21 flair box, R25 status note, R28 wipe, R40 mode swap, R43 breezy, R59 lit, R81 house fx, R82 robot, R63 turn | end (remove the class or hide) | keep |
 | R42 bubble pop, R46 confetti, R47 costume box, R49 flyer, R68 speck, R79 hearts, R84 sparkle, R87 find ring | end (remove the node) | keep |
-| R15 rock2 (group `scene`), R16 murk restore (group `scene.murk`) | end | the scene's quiet end drains `scene` (closer `_sceneEnd`, G9); R16 is keep |
+| R15 rock2 (group `scene`) | end | the scene's quiet end drains `scene` (closer `_sceneEnd`, G9) |
+| R16 murk restore (group `scene.murk`) | end (`detach`) | **keep**: `entry.clear` makes it inside the draining `_sceneEnd`, so it is not in the drained group; it fires at +50 ms (G9) |
 | R74, R75 pat lean | end: one `undo` removes every `lean-*` class directly (A3) | keep |
 | R57, R58 ghost frames (`adopt`) | end (`cancel` the animation) | keep |
 | R62 art put, R64 after-turn, R34/R35 moves, R41 moment flair, R44 smug rock, R45 treat, R48 flock start, R65 perk2, R66 chirp, R67 speck start, R70 yawn, R71 pose end, R72 prop out, R73 shake, R24 flavour line, R23 digit swap, R14 swipe grace | drop | keep |
 | R22 game steps | closer `_endGame` (group `game`) | closer `_endGame` |
 | R11 power gag steps | closer `_powerEnd` | closer `_powerEnd` |
-| R17-R20 drape | closer `_drapeStop` | closer `_drapeStop` |
-| R36 ask text step, R76-R77 ask end | closer `_clearAsk` (drops `s.queue`) | keep: the question stays up through a re-attach and `done` clears `s.asking` at 60 s |
+| R17-R20 drape | closer `_drapeStop` (it runs before `detach` at `card-build.js:795` and already sets `drapeAnim = false`, `card-care.js:969-973`; R19's `undo` never runs at a forget) | closer `_drapeStop` |
+| R36 ask text step | drop: `_clearAsk` (`card-build.js:960-964`) does not touch `s.textStep`; the tick ends it within 700 ms (`card-tick.js:39-41`, on any slide: the step is for a slide that is not on show, or past its `until`) | keep |
+| R76-R77 ask end | closer `_clearAsk` (drops `s.queue`) | keep: the question stays up through a re-attach and `done` clears `s.asking` at 60 s |
 | R37 gift pop | closer `_giftPopEnd` | closer `_giftPopEnd` |
 | R12-R13 boot (card scope) | n/a | keep: the fill timer clears `_booting` |
 | R29-R33 link (card scope) | n/a | closer `_linkEnd` |
-| R50 season visit | drop | keep |
-| R85 visitor steps | drop | keep |
-| R86 reveal steps | closer `_revealEnd` | closer `_dropFinds` |
+| R50 season visit | **closer `_seasonVisitEnd(s)`**, called by `_forget` before `detach` (slice 6): it clears `s.seasonVisit` and takes the flyer away; a "drop" would leave `s.seasonVisit` set (harmless, `_visitorTick:117` tidies it, but cleaner as a closer) | keep |
+| R85 visitor steps | **closer `_visitorEnd(s)`**, called by `_forget` before `detach` (slice 11): it is the only code that sets `s.visitor = null`, and today the visitor's own last step (`card-visitors.js:222`) or the swipe grace (`card-build.js:1023-1025`) does it within `total`. A "drop" would leave `s.visitor` set: a busy owner (`BUSY_OWNERS`, `interaction-director.js:62`) that blocks `_free` (`card-tick.js:138`), idle life (`:448`) and the next visitor (`card-visitors.js:99`), and the old visitor's art stays over the new pet | keep |
+| R14 swipe grace | **closer `_visitorEnd(s)`** (the same call; the grace's guard `x.visitor === V` is moot once `s.visitor` is null; its entry is then dropped by `detach`) | keep |
+| R86 reveal steps | closer `_revealEnd` (`card-build.js:842` already calls it) | **keep**: `disconnectedCallback` calls `_dropFinds`, which never touches `s.reveal` (G9); `_dropFinds` is not a closer for group `reveal` |
 | R8, R9 subscribe wait and retry | closer `_unsubscribe` | closer `_unsubscribe` (then `connectedCallback` subscribes again) |
 | R38 memory idle | closer `_memoryPageClose` | closer `_memoryPageClose` |
 | R39, R56 "sure?" lapse | drop (`_forget` clears `confirmTimer` today) | keep |
@@ -886,11 +942,14 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
 
 ### 5.6 Slice 6: season
 
-- **Moves:** R45-R50. The `.flair` sweep in `_flair` (which removes a costume box too) stays.
+- **Moves:** R45-R50. The `.flair` sweep in `_flair` (which removes a costume box too) stays. **`_forget`
+  calls `this._seasonVisitEnd(s)` before `detach`** (in this slice's move commit; R50 is a closer, 3.14), so
+  `s.seasonVisit` is null and the flyer gone after a forget mid-visit.
 - **Characterization first:** `season_trace.test.js`: a costume then the treat at +1600; the confetti box at
   3600; the costume box at `FLAIR_MS + 1800`; a flock of 5 flyers at `lag * 450`; each flyer removed at
   `ms + 200`; the visit steps at 1400, 3400 and `ms`, with `_seasonVisitEnd` cancelling the rest (the group)
-  and keeping the flyer's picture only when `passed`. Under calm: the same trace (the audit's finding 5:
+  and keeping the flyer's picture only when `passed`. **Forget mid-visit** (at 2000): `s.seasonVisit ===
+  null`, the flyer node gone, `pending(s) === 0`. Under calm: the same trace (the audit's finding 5:
   these sequences run under calm today; pinned, not changed).
 - **Checks:** trace tests; cc `winter` and `moments` carry the season code (`gate --auto` picks them; the
   `winter` section is the largest consumer); `scripts/ci-gate`.
@@ -902,7 +961,10 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
 ### 5.7 Slice 7: the `_animate` helper
 
 - **Moves:** R80. `ANIMATE_TIMERS` goes. `_animate(s, el, cls, ms)` becomes `_hold` with `restart` and the
-  drape mirror; `key = cls`, `target = el`, scope `s ?? this._dirCard` (G8). 85 callers do not change.
+  drape mirror; `key = "anim:" + cls`, `target = el`, scope `s ?? this._dirCard` (G8). The prefix keeps `_animate`'s
+  keys out of the `(scope, target, key)` space of the named keys on the same sprite (`turn` R63, `lit`,
+  `breezy`, ...): no `_animate` call uses one today, but the dynamic classes (`move`, `pose.move`, `jump`,
+  `REACT_POSE.startle.move`) could. 85 callers do not change.
   **This is the slice A1 bites hardest:** a snack's chews 300 ms apart are two `_animate` calls on the same
   class, and the first call's replacement must not run an undo that removes the class the second just
   added. AGENTS.md's motion rule ("`_animate` restarts only the class it is given") is the contract.
@@ -956,11 +1018,21 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
 - **Moves:** R15 rock2 (group `scene`), R16 murk (group `scene.murk`), R17-R20 drape (group `drape`,
   stopped silently by `_drapeStop` as now; R19's `drapeAnim = false` is its `undo` for the forget drain).
   `_sceneEnd` gains `drain(s, { group: "scene" })` **after** the `if (!sc) return` and **before**
-  `entry.clear?.call(...)`, and **only when `quiet` is true or the end is a swipe**: a normal end (the
+  `entry.clear?.call(...)`, and **only when `quiet` is true or the end is a swipe**. Its quiet callers are
+  `_forget` (`card-build.js:791`), the disconnect (`card-base.js:200`) and **Hop's board load**
+  (`card-board.js:174`, behind `experimental_hop`: the board loading over a clean scene past 1800 ms now
+  cuts `rock2`, disclosed as D3, Q11). A normal end (the
   answer arrives, the hold runs out) leaves the group, so the 1.3 s shake-off after the broom still plays
   out, exactly as now. The swipe is not told apart from a press today: every caller is `this._sceneEnd(x)`
   (`card-build.js:1020`, `card-actions.js:86,162,171`, `card-mode.js:120`, `card-flair.js:231`). The slice
-  adds `{ swipe: true }` at `card-build.js:1020` only, so the press paths are untouched (F7). R16 is
+  adds **`{ swipe: i !== to }`** at `card-build.js:1020` only, so the press paths are untouched (F7).
+  `_go` calls `_sceneEnd(x)` for every slide **including `to`** (no `i !== to` guard), and on a one-pet card
+  a sideways swipe is `_go(this._index + 1)` (`card-build.js:113`) and a tap on the current dot is
+  `_go(i)` (`card-layout.js:324`), so `to` is the visible slide: today the scene ends there and the 1.3 s
+  `rock2` plays out on the visible pet, and with a bare `{ swipe: true }` it would be cut at once (review
+  s2978 fix 3). The guard keeps it (D4). If the owner refuses D3 for Hop's board only, the drain moves
+  behind an explicit flag (`_sceneEnd(s, { quiet, drain: true })`, passed at the forget, the disconnect and
+  the leaving swipe) at the cost of one argument. R16 is
   outside the drained group because `entry.clear` (`card-actions.js:262` -> `card-care.js:164-170`) is
   what starts it: a drain after `clear` would restore `transition` in the same frame and the murk would
   fade back instead of snapping.
@@ -969,9 +1041,13 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
   quiet end at 1900 (forget): before, `rock2` is stripped at 3100 from the next pet; after, it goes at 1900.
   Drape: a fall is three frames at 0, 150, 300 and `drapeAnim = false` at 450; `_drapeStop` cancels all
   (the group); a lights-on slide-out hides at 150. **Cases F7:** a press end at 1900 (not quiet, not a
-  swipe) leaves `rock2` to 3100; a swipe end drains it at once but the murk restore still happens at +50
-  (not at 0); **D-keep:** disconnect during a clean scene: the scene is closed by `_sceneEnd({quiet})` and
-  the `rock2` and murk entries end with it (the one disconnect-visible difference, G9/Q11).
+  swipe) leaves `rock2` to 3100; a leaving swipe end (`i !== to`) drains it at once but the murk restore
+  still happens at +50 (not at 0); **one-pet swipe (fix 3):** `_go` to the same slide on a card with one
+  pet keeps `rock2` to +1300 (D4); **Hop board (fix 4):** `_sceneEnd(s, { quiet: true })` at 1900 cuts
+  `rock2` at once (D3), and the scene's murk restore still fires at +50; **D-keep:** disconnect during a
+  clean scene: the scene is closed by `_sceneEnd({quiet})` and the `rock2` entry ends with it (the one
+  disconnect-visible difference, G9/Q11); the murk restore entry is **not** drained and still fires at
+  +50 ms.
 - **Edits outside `src`:** `tests/js/care_reactions.test.js:1249-1268` (the drape: `f.log.timers` is the
   stubbed `setTimeout` list `[150, 300, 450]` and `[150]`; `:1427` reads `f.s.drapeTimers`): they read the
   ledger group `drape` and drop the field.
@@ -981,7 +1057,7 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
   asleep with lights out. `qa_screen`: the clean scene, the lights scene. Look at: the broom shake-off
   after the sweep (still plays to the end), tuck and wake (the blanket's three frames), swipe away from a
   scene mid-way.
-- **Timings:** identical; B4 fixed for forget and disconnect. **Rollback:** revert.
+- **Timings:** identical; B4 fixed for forget, disconnect, the Hop board and a leaving swipe. **Rollback:** revert.
 
 ### 5.10 Slice 10: games
 
@@ -1006,12 +1082,22 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
 ### 5.11 Slice 11: visitors, reveal, swipe grace
 
 - **Moves:** R14 (unkeyed), R85, R86, R87. `_visitorEnd` and `_revealEnd` stop their groups (`V.timers`,
-  `R.timers` go).
+  `R.timers` go). **This slice owns the R85/R14 forget path (review s2978 fix 1):** `_forget` calls
+  `this._visitorEnd(s)` before `detach`, in the move commit (not in slice 14). `_visitorEnd` is the only
+  code that sets `s.visitor = null`; `detach` alone drops the steps silently, and `s.visitor` would stay
+  set (a `BUSY_OWNERS` entry: idle life, `_free` and the next visitor blocked, the old visitor's art left
+  over the new pet). The reveal needs no new call (`card-build.js:842` has `_revealEnd`). R86's disconnect
+  is keep; `_dropFinds` is not touched (G9).
 - **Characterization first:** `visitors_trace.test.js`: a walking visitor's steps at their offsets (the look
   at `inMs`, the pair behind at `PAIR_BEHIND_MS`, greet at `greetAt`, leave at `greetAt + stay`, end at
   `total`); each step re-checks `_visitorLive`; swipe away at +100 and back at +400: the visitor stays; away
   past 600: it goes at +600; the reveal's find *i* at `i * 2500` and the end at `total`.
   Two swipes away inside 600 ms: the visitor still ends at the **first** swipe + 600 (unkeyed, F4).
+  **The forget trace (pins fix 1):** `_forget(s)` at +500 of a walking visitor (and again inside a swipe
+  grace): `s.visitor === null`, the visitor's elements gone, `pending(s) === 0`, `_free(s)` true on the next
+  tick and a new visitor can start, and nothing of the old one fires later (no step on the new pet).
+  Today the same trace ends the visitor at `total` (or the grace), on the new pet's slide.
+  `forget_drain.test.js` (slice 14) carries the visitor case beside the others.
 - **Edits outside `src`:** `dev/bench/page.js:219` (`R.timers.forEach(clearTimeout)`) and `:645`
   (`V.timers.forEach(clearTimeout)`) become `stop(<slide>, { group: "reveal" })` and `{ group: "visitor" }`
   (the bench freezes a beat this way).
@@ -1074,7 +1160,8 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
   `_has(s, { key: "sub.retry" })` through `page.evaluate`; `tests/js/subscribe_silence.test.js:63` counts
   `setTimeout` calls with `ms === 3000` (the wait) and `:86` sets `s.retryTimer = 99` ("what the catch
   sets"): they use the adapter stubs and the ledger; `tests/js/memory_page.test.js:153,171,228,254` call
-  `clearTimeout(s.confirmTimer)`: they `stop` the key.
+  `clearTimeout(s.confirmTimer)`: they `stop` the key; `:194` plants `memoryIdle: setTimeout(...)` and `:198`
+  asserts `s.memoryIdle === null`: both go (the field goes; assert `pending` for key `memory.idle` is 0).
 - **Checks:** trace tests; `subscribe_silence.test.js`, `memory_page.test.js`, `leak_guard.test.js`;
   because `card-base.js` subscribe code changes, **`scripts/ci-gate`** on the slice's branch (the whole
   card-check, five shards) before it merges (as for every slice now); iterate with `gate --auto`
@@ -1162,7 +1249,7 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
 | 2, 3, 4, 7, 9 | `care_reactions.test.js:121,161,633,1249-1268,1427,1433` | `:121` shake (3), `:161` pose end (4), `:633,1433` extract `ANIMATE_TIMERS` (7), `:1249-1268,1427` drape (9) |
 | 3 | `motion_ship1.test.js:25`, `touch.test.js:101` | `_wander` pins the timer; the fake `this` has no `_hold` |
 | 7 | `sitter_life.test.js`, `touch.test.js`, `motion_ship1/2.test.js` | `_animate` is extracted |
-| 13 | `subscribe_silence.test.js:63,86`, `memory_page.test.js:153,171,228,254` | `setTimeout` count; `s.retryTimer = 99`; `clearTimeout(s.confirmTimer)` |
+| 13 | `subscribe_silence.test.js:63,86`, `memory_page.test.js:153,171,194,198,228,254` | `setTimeout` count; `s.retryTimer = 99`; `clearTimeout(s.confirmTimer)` |
 | all | any vm test whose fake `this` lacks `_director`, `_later` or `_hold` | it throws once its method moves; the sandbox helper adds them |
 
 Each is edited in the move commit of its slice, by name; the slice section repeats the line.
@@ -1175,7 +1262,8 @@ Each is edited in the move commit of its slice, by name; the slice section repea
    its clear), `card-build.js` (the director's three injected wrappers: `schedule`, `repeat`, `frame`),
    `card-tick.js` (the typing interval and its clear), `card-actions.js` (the scene rAF and its cancel),
    `card-visit.js` (the answer resend), `card-sheets.js` (R51-R55: lines 141, 147, 306, 311, 460 and their
-   clears 143, 146, 317, 373). Each entry has a comment with its reason and a count; an unused entry
+   clears 143, 146, 317, 373) and `card-layout.js` (R52's `clearTimeout(s.shellPendingTimer)` in
+   `_shellSettled`, line 433: the one `card-layout` line left, 0 timers started there). Each entry has a comment with its reason and a count; an unused entry
    fails. From slice 0 it is a ratchet (5.0). Appendix B has the starting counts.
 2. **B1-B4 each have a test:** B1 `forget_drain.test.js` (and the per-slice drain tests); B2
    `hidden_policy.test.js`; B3 `pet_oneshots_trace.test.js` (the two-flip case; one name, N7); B4
@@ -1183,8 +1271,9 @@ Each is edited in the move commit of its slice, by name; the slice section repea
    D-keep, D-reattach and `reattach_keeps.test.js`; A3 L18 and the lean forget case; A4 L15 and the
    "no slide" traces.
 3. **The player sees no change:** every trace test in section 5 passes unchanged across its move; the
-   device rows above show nothing new. The differences are named: B1-B4, and the scene's quiet end at a
-   disconnect (G9).
+   device rows above show nothing new. The differences are exactly **D1-D4 of section 0**: the B3 second
+   flip, B1's forget (including the forgotten visitor), the `rock2` cut at a quiet end (forget,
+   disconnect, Hop's board load; B4) and a leaving swipe (B4). Nothing else.
 4. **No leaks:** `leak_guard.test.js` extended: **after the longest due time** (not at the leave: a
    disconnect keeps entries running, G9), `director.pending() === 0`.
 5. **The docs:** AGENTS.md carries the ledger and the rule.
@@ -1260,16 +1349,23 @@ and an alias.
     doc's acceptance 10 reads ("reconnect cancels timers/classes"). *Recommendation: (a).* (b) cannot tell
     a re-attach from a removal in `disconnectedCallback`, ends a question or a pick unfinished on a view
     switch unless every entry is classed, and a delayed "end after N s disconnected" needs a timer the
-    disconnected card does not have. One visible difference under (a), disclosed: the clean scene's 1.3 s
-    `rock2` shake-off and the murk restore end with the scene when the card leaves (the scene's own quiet
-    end already runs at a disconnect); a re-attach inside 1.3 s no longer sees the shake. Say no and the
-    scene drain skips the disconnect path, at the cost of one flag. The intent doc's acceptance line
+    disconnected card does not have. The disclosed changes under (a) are D1-D4 of section 0, and the one that
+    touches a disconnect is D3: the clean scene's 1.3 s `rock2` shake-off ends with the scene when the card
+    leaves (the scene's own quiet end already runs at a disconnect); a re-attach inside 1.3 s no longer
+    sees the shake. The murk restore is **not** drained: it keeps firing at +50 ms as now (R16 is keep).
+    The same `rock2` cut also happens at a forget and when **Hop's board loads** over a clean scene past
+    1800 ms (`card-board.js:174`, behind `experimental_hop`), because the drain is on every quiet end. Say
+    no to any of these and the scene drain moves behind an explicit flag
+    (`_sceneEnd(s, { quiet, drain: true })`) passed only at the callers the owner keeps, at the cost of one
+    argument. The intent doc's acceptance line
     (`docs/plan-2026-11-03-living-device-interactions.md:501`) is then amended to match.
 12. **Q12. Slide switch.** The intent doc says a slide switch cancels timers and classes (item 6 at `:133`,
     acceptance 10 at `:501`). Today `_go` ends a game, mode, typing, lay sheet, name sheet, memory page, lay
     wait and scene on the slide being left, and **leaves every other one-shot running on the off-screen
     slide** (a flair, a house fx, a perk), where it ends on its own within 6 s. The plan keeps that:
-    nothing new is drained by a swipe except the scene's stragglers (B4), so the player sees no change.
+    nothing new is drained by a swipe except the scene's `rock2` (B4, D4) on a slide being left
+    (`i !== to`: on a one-pet card a swipe or a dot tap goes to the slide on show and drains nothing), so
+    the player sees no other change.
     (a) Keep, and amend the intent line to "a forgotten pet, a quit game, a closed scene". (b) Drain the
     decorative entries of the slide being left in `_go` (a `group`-based drain; the effect vanishes at
     once instead of finishing off-screen, and a swipe back within 6 s finds it gone). *Recommendation: (a);*
@@ -1335,7 +1431,8 @@ The seven `forEach(clearTimeout)` value uses are in these numbers (`card-build.j
 (7.1): `card-actions` 2 rAF + 1 cancel; `card-base` 1 `setInterval` + 1 `clearInterval`; `card-build` the
 three wrappers (`setTimeout` 1, `setInterval` 1, `requestAnimationFrame` 1) and `clearTimeout` 1 (`:58`),
 the `repeat` and `frame` cancels beside it; `card-tick` 1 `setInterval` + 1 `clearInterval` (typing);
-`card-visit` 1 `setTimeout`; `card-sheets` 5 `setTimeout` + 4 `clearTimeout`; every other file 0. The
+`card-visit` 1 `setTimeout`; `card-sheets` 5 `setTimeout` + 4 `clearTimeout`; `card-layout` 1 `clearTimeout` (`:433`, R52's
+`shellPendingTimer`, allowlisted with R52; with Q7b "yes" it goes in slice 13b); every other file 0. The
 exact numbers are set by slice 0's wrappers and checked by slice 14.
 
 ## 10. Review response (s2976)
@@ -1348,8 +1445,8 @@ the check turned up beyond it.
 | Finding | Response | Evidence |
 |---|---|---|
 | A1, the name `cancel()` | The ledger's silent cancel is `stop`, not `cancel`. The review's text says "`cancel()` used for a `clearTimeout` is silent". `cancel(slide, reason, tracks)` already exists and is the track API; an overload by argument shape would be a trap. Same behaviour, a new name. | `interaction-director.js` exports `cancel` with that signature; L16 pins it |
-| A2, the mechanism (`onReset`, a per-entry flag) | Done in effect, by a **simpler mechanism**: `reset()` drains nothing at all. The review wants "end" only for what `disconnectedCallback` ends today; those are all ended by closers it calls (`_endGame`, `_powerEnd`, `_drapeStop`, `_sceneEnd`, `_giftPopEnd`, `_dropFinds`, `_memoryPageClose`, `_unsubscribe`, `_linkEnd`), so a flag would repeat what the closer does and give a second place to set it wrong. No entry needs `reset()` to end it. | `card-base.js:180-211`; 3.14 |
-| A2, the one visible difference | Not in the review: the scene's quiet end drains `rock2` and the murk at a disconnect (the scene closes there today; its 1.3 s leftovers now close with it). Disclosed in G9 and Q11. | `card-base.js:200` calls `_sceneEnd(s, { quiet: true })` |
+| A2, the mechanism (`onReset`, a per-entry flag) | Done in effect, by a **simpler mechanism**: `reset()` drains nothing at all. The review wants "end" only for what `disconnectedCallback` ends today; those are all ended by closers it calls (`_endGame`, `_powerEnd`, `_drapeStop`, `_sceneEnd`, `_giftPopEnd`, `_memoryPageClose`, `_unsubscribe`, `_linkEnd`), so a flag would repeat what the closer does and give a second place to set it wrong. No entry needs `reset()` to end it. | `card-base.js:180-211`; 3.14 |
+| A2, the one visible difference | Not in the review: the scene's quiet end drains `rock2` at a disconnect (the scene closes there today; its 1.3 s leftover now closes with it; the murk restore is kept, s2978 fix 5). Disclosed in G9 and Q11. (`_dropFinds` was listed as a closer here in the first revision: it is not one for the reveal, s2978 fix 2.) | `card-base.js:200` calls `_sceneEnd(s, { quiet: true })` |
 | A3, the fix | Both of the review's options are taken: the drain runs to empty (cap 50), **and** undos are synchronous (lean's removes every `lean-*` itself). The boot half needs neither: R12/R13 sit on the card scope, which is never drained. | `_patLeanOff` makes `leanRelTimer`; `_bootEnd(false)` makes `finish` |
 | A4, "30+ sites" | There are **54 of 67** call sites without `s`, more than the review said; the scope rule covers them all, and every slice gets an audit step. `_perk(s)` is already null-safe (`if (!s?.pet) return`). | `grep -n "_tapped(" src/card/*.js` |
 | F1, extra lines | The card-check reads of `gameTimers` also include `:3834`, and `dev/bench/page.js` also freezes `cur.wipeTimer` (`:1228`), `cur.leanTimer` (`:1312`) and `cur.swapTimer` (`:1393`). All named in the slices. | `dev/bench/page.js`, `scripts/card-check.js` |
