@@ -1068,7 +1068,7 @@ const STYLE = `
         radial-gradient(ellipse 32% 26% at 50% 67%, rgba(30,22,14,.5) 60%, transparent 100%); }
     .hw.glass .mark.dir-mark-br.dir-mark-paw, .hw.glass .mark.dir-mark-mr.dir-mark-paw { rotate: 12deg; }
     .hw.glass .mark.dir-mark-smudge { width: 15%; aspect-ratio: 1.7; border-radius: 50%;
-      background: radial-gradient(ellipse 50% 50% at 46% 52%, rgba(255,255,255,.5), rgba(255,255,255,.24) 55%, transparent 100%); }
+      background: radial-gradient(ellipse 50% 50% at 46% 52%, rgba(200,190,175,.22), rgba(200,190,175,.1) 55%, transparent 100%); }
     .hw.glass .mark.dir-mark-edge { width: 10%; height: 38%; }
     .hw.glass .mark.dir-mark-edge.dir-mark-bl, .hw.glass .mark.dir-mark-edge.dir-mark-br { top: 58%; }
     .hw.glass .mark.dir-mark-edge.dir-mark-bl, .hw.glass .mark.dir-mark-edge.dir-mark-ml { left: 0; background: linear-gradient(90deg, rgba(10,8,6,.62), rgba(10,8,6,.26) 45%, transparent); }
@@ -1130,7 +1130,7 @@ const STYLE = `
     .hw.rim.dir-rim-dim::before { --rim-glow: rgba(10, 12, 24, .5); opacity: 1; }
     .hw.rim.dir-rim-fire::before { --rim-glow: rgba(255, 96, 24, .75); opacity: 1; }
     .bezel:has(.screen.lit) .hw.rim.dir-rim-lit::before, .bezel:has(.screen.lit) .hw.rim.dir-rim-dim::before { opacity: 0; }
-    .hw.rim.dir-rim-warm::after { --rim-tint: rgba(255, 170, 60, .6); opacity: 1; }
+    .hw.rim.dir-rim-warm::after { --rim-tint: rgba(255, 165, 50, .8); opacity: 1; }
     .hw.rim.dir-rim-cool::after { --rim-tint: rgba(110, 176, 255, .4); opacity: 1; }
     .hw.rim.dir-lamp-on, .hw.rim.dir-lamp-off, .hw.rim.dir-ember-in, .hw.rim.dir-ember-out { animation: dir-rim-life 1.5s linear both; }
     .hw.rim.dir-chime { animation: dir-rim-life 1.2s linear both; }
