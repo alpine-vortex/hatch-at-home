@@ -239,11 +239,7 @@ async def fixtures(api: Api, wanted: list, lead: float) -> None:
     the coordinator's 5-minute tick then crosses it live."""
     for name in wanted:
         if name == "rain":
-            await api.call(
-                "POST", "/api/services/input_number/set_value",
-                {"entity_id": "input_number.fake_rain_rate", "value": RAIN_RATE},
-            )
-            continue
+            continue  # set after the restart: dev/config's input_number starts from `initial: 0`
         pet, world = FIXTURE_PETS[name]
         flow = await api.call("POST", "/api/config/config_entries/flow", {"handler": "virtual_pet"})
         done = await api.call(
@@ -393,6 +389,12 @@ async def proof(ha: Ha, s, wanted: list) -> None:
     access = await sign_in(s, ha.base)
     api = Api(s, ha.base, access)
     await api.connect(access)
+    if "rain" in wanted:
+        await api.call(
+            "POST", "/api/services/input_number/set_value",
+            {"entity_id": "input_number.fake_rain_rate", "value": RAIN_RATE},
+        )
+        await asyncio.sleep(2)
     ids = await pet_ids(api)
     states = {x["entity_id"]: x for x in await api.call("GET", "/api/states")}
     names = [n for n, _, _ in PETS] + [FIXTURE_PETS[w][0] for w in wanted if w in FIXTURE_PETS]
