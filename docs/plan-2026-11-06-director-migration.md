@@ -106,7 +106,7 @@ the slice (review s2978, fixes 1, 3, 4):
 |---|---|---|---|
 | D1 | A second flip inside 200 ms keeps `turn` to its own end (B3) | a double tap on a species change | B3, slice 3 |
 | D2 | A forgotten pet's leftovers no longer land on the next pet (B1): a class a one-shot would strip, an old visitor's art, a flock | `_forget` | B1; 3.14; slice 11 for the visitor (`_forget` ends it, R2-1) |
-| D3 | The clean scene's 1.3 s `rock2` shake-off is cut when the scene ends **quietly**: at a forget, at a disconnect (G9, Q11), and when Hop's board loads over a live clean scene (`card-board.js:174`, behind `experimental_hop`; R2-4) | the scene lives past 1800 ms | B4; slice 9; Q11 |
+| D3 | The clean scene's 1.3 s `rock2` shake-off is cut when the scene ends **quietly**: at a forget, at a disconnect (G9, Q11), and when Hop's board loads over a live clean scene (`card-board.js:166`, on every card: Hop was ungated in 9b99ed51; R2-4) | the scene lives past 1800 ms | B4; slice 9; Q11 |
 | D4 | A swipe away from a care scene on a card with **two or more** pets cuts `rock2` on the slide being left. A one-pet swipe or a tap on the current dot goes `_go(to)` with `to === i`, the visible slide, and keeps `rock2` as now (`{ swipe: i !== to }`, R2-3) | a swipe or a dot tap | B4; slice 9; Q12 |
 
 ### The four audit bugs (named here so the slices can cite them)
@@ -1143,8 +1143,8 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
   stopped silently by `_drapeStop` as now; R19's `drapeAnim = false` is its `undo` for the forget drain).
   `_sceneEnd` gains `drain(s, { group: "scene" })` **after** the `if (!sc) return` and **before**
   `entry.clear?.call(...)`, and **only when `quiet` is true or the end is a swipe**. Its quiet callers are
-  `_forget` (`card-build.js:791`), the disconnect (`card-base.js:200`) and **Hop's board load**
-  (`card-board.js:174`, behind `experimental_hop`: the board loading over a clean scene past 1800 ms now
+  `_forget` (`card-build.js:800`), the disconnect (`card-base.js:253`) and **Hop's board load**
+  (`card-board.js:166`, on every card since 9b99ed51 ungated Hop: the board loading over a clean scene past 1800 ms now
   cuts `rock2`, disclosed as D3, Q11). A normal end (the
   answer arrives, the hold runs out) leaves the group, so the 1.3 s shake-off after the broom still plays
   out, exactly as now. The swipe is not told apart from a press today: every caller is `this._sceneEnd(x)`
@@ -1181,6 +1181,33 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
   asleep with lights out. `qa_screen`: the clean scene, the lights scene. Look at: the broom shake-off
   after the sweep (still plays to the end), tuck and wake (the blanket's three frames), swipe away from a
   scene mid-way.
+- **Shipped, and where it differed from the draft:** `scene_stragglers.test.js` has 13 cases that pass before and after: the
+  normal end at 2000 (`rock2` on at 1800, off at 3100), the murk restore at +50 after a normal end and after a quiet one, a
+  press end at 1900 (3100), the one-pet `_go(0)` and `_go(1)` (the wrap) keep `rock2` to 3100 (D4; `scene_ledger.test.js` adds `_go(-1)`), a scene ended before 1800,
+  and the drape: a fall (frames at 0, 150, 300; `drapeAnim = false` at 450), `_drapeStop` mid-fall, no restart of a landing,
+  the slide-out (frame 2 dropped, hidden at 150), a stopped slide-out, calm, a wake mid-fall. The first commit (9983ab0d)
+  also pinned the three cases B4 changes as BEFORE (a quiet end at 1900, the disconnect, the two-pet swipe: each left `rock2`
+  to 3100); the move commit takes them out of that file and `scene_ledger.test.js` (17 cases) has them as their after: the
+  quiet end, Hop's board and the disconnect cut `rock2` at 1900 and the murk restore still fires at +50 (and at +50 on a
+  leaving swipe, not at 0); D-reattach; the two-pet swipe in both directions; the one-pet `_go` to the same slide; a forget
+  after a press end ends the shake-off and the murk's `undo` (the restore runs at once), `pending(s) === 0`; the drape's three
+  entries, `_drapeStop` silent, R19's `undo` through a bare `detach`; and text pins (`{ swipe: i !== to }` at `_go` only, the
+  drain after `if (!sc) return` and before `entry?.clear`). The helpers (the clean scene and the drape on the fake clock) are
+  `tests/js/scene_world.js`, so the first commit's test file now requires it. `_go`'s head line ends in a comment, which
+  `timer_trace.js`'s `methodText` does not read, so `scene_world.js` loads it with its own regex rather than change the harness.
+  The move: `card-care.js` R15 is `this._hold(s, s.pet, ["rock2"], 1300, { group: "scene" })`, R16
+  `_later(s, 50, restore, { group: "scene.murk", undo: restore })`, R17-R19 three `_later` in group `drape` (R19 with
+  `undo: landed`), R20 one; `_drapeStop` is `this._stop(s, { group: "drape" })` plus `drapeAnim = false`; `_sceneEnd` takes
+  `{ quiet, swipe }` and drains `scene` for either; `_go` passes `{ swipe: i !== to }`. `s.drapeTimers` is gone. **Differences
+  from the draft:** the line numbers had moved (`card-build.js:800`, `card-base.js:253`, `card-board.js:166`; fixed above), and
+  Hop is no longer behind `experimental_hop` (9b99ed51): D3's Hop-board case holds for every card; the slice-10 device queue
+  still says "and Hop if `experimental_hop`". Edits outside `src`: `care_reactions.test.js` (`lightsCard` takes `adapters()`,
+  which records the schedule as `[fn, ms]` as the stub did; the drape cases read the ledger group `drape`; `:197` pinned
+  `s.pet.classList.add("rock2")` and pins the `_hold` call). No change to `card-check.js` or the bench (neither reads
+  `drapeTimers`; `card-check.js`'s `rock2` reads are the egg and the pat). Ratchet: `card-care` (`setTimeout` 6 -> 0,
+  `clearTimeout` 1 -> 0) reached zero and its row is deleted. Bench: `--preset tuck`, `--preset feed` and a clean scene at
+  1000, 1850, 1900, 2000, 2300 and 2600 ms for an adult and a child (470 shots) before (the parent commit, twice) and after:
+  the two unmoved runs differ in one file, the moved run matches the unmoved one byte for byte in all 470.
 - **Timings:** identical; B4 fixed for forget, disconnect, the Hop board and a leaving swipe. **Rollback:** revert.
 
 ### 5.10 Slice 10: games

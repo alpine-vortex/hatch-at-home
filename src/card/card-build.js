@@ -1027,7 +1027,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
       if (x.nameSheet && i !== to) this._closeName(x); // and so does the name sheet (S3)
       if (i !== to && x.memoryPage) this._memoryPageClose(x); // the memory page stays with no pet left (M3a, path 3)
       if (i !== to) this._layDrop(x); // a lay waited for belongs to the slide it was made on: no sheet opens off-screen
-      this._sceneEnd(x); // a swipe ends a care scene, showing how things are now
+      this._sceneEnd(x, { swipe: i !== to }); // a swipe ends a care scene, showing how things are now (the slide stayed on keeps its shake-off)
       if (x.visitor && i !== to) { // a world visitor goes too, after a grace: a slip of the finger keeps it (UX8 F11)
         const V = x.visitor;
         setTimeout(() => {

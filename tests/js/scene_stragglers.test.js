@@ -1,63 +1,12 @@
 // Director migration slice 9 (care scene stragglers and the drape), the characterization half: what the clean scene's rock2
-// shake-off (R15), its murk restore (R16) and the drape's timers (R17-R20) do today, on the unmoved code. The cases marked
-// BEFORE are the ones B4 changes (a quiet or leaving end used to leave rock2 to run out; the move cuts it at once): the move
-// commit takes them out and pins the new behaviour in scene_ledger.test.js. Every other case here passes unchanged after the
-// move (plan 5.9, D3, D4, F7). The scene is driven through the real SCENES.clean render and clear and the real _sceneEnd.
+// shake-off (R15), its murk restore (R16) and the drape's timers (R17-R20) do, passing before and after the move (plan 5.9, D3,
+// D4, F7). The cases B4 changes (a quiet or leaving end used to leave rock2 to run out for 1.3 s; the move cuts it at once) were
+// pinned here as BEFORE cases on the unmoved code (9983ab0d) and are in scene_ledger.test.js as their after. The scene is driven
+// through the real SCENES.clean render and clear and the real _sceneEnd (scene_world.js).
 // node --test tests/js
 const test = require("node:test");
 const assert = require("node:assert");
-const vm = require("node:vm");
-const { world } = require("./timer_trace");
-const src = require("./card-source");
-
-const SCENES_BLOCK = src.slice(src.indexOf("const SCENES = {"), src.indexOf("\n};\n", src.indexOf("const SCENES = {")) + 4);
-const GO = src.match(/\n  _go\(index[^\n]*\n[\s\S]*?\n  \}\n/)[0];
-const SPEC = {
-  methods: ["_sceneEnd", "_drapeStop", "_drapeSync"],
-  consts: ["SCENE_OWE_MS", "DRAPE_FALL_MS", "DRAPE_SLIDE_PX"],
-  screen: true,
-  watch: ["_drapeShow", "_drapeHide"],
-  returns: { _drapeInfo: { size: "l" } },
-  slide: (el) => ({ poops: [], murk: el("murk"), perch: el("perch"), drape: el("drape"), drapeImg: el("drapeImg") }),
-};
-
-function sceneWorld({ pets = 1 } = {}) {
-  const w = world(SPEC);
-  vm.runInContext(`${SCENES_BLOCK}\nthis.SCENES = SCENES;`, w.sandbox);
-  // _go's head line ends in a comment, which the harness's method reader does not take: loaded here, onto the card's own object.
-  vm.runInContext(`this.go = {${GO}};`, w.sandbox);
-  w.card._go = w.sandbox.go._go;
-  w.slides = [w.slide];
-  for (let i = 1; i < pets; i++) {
-    const x = { ...w.slide, pet: w.el(`pet${i}`), murk: w.el(`murk${i}`), perch: w.el(`perch${i}`), ids: { device: `dev${i}` } };
-    w.slides.push(x);
-  }
-  w.card._slides = w.slides;
-  return w;
-}
-// A clean scene as _sceneStart leaves it (the boxes are the browser's), at the world's now.
-const begin = (w, s = w.slide, { murk = false } = {}) => {
-  const sc = { kind: "clean", start: w.now, els: [], mess: [], tool: w.el("tool"), toolArt: ["broom"], water: false, murk, petX: 0, answered: false };
-  s.scene = sc;
-  return sc;
-};
-// The render at scene time t: from 1800 on it adds rock2 once.
-const render = (w, s, sc, t) => {
-  const ramp = (a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));
-  w.sandbox.SCENES.clean.render.call(w.card, s, sc, t, { sw: 400, sh: 300, ramp });
-};
-const rock = (w, name = "pet") => w.log.filter((x) => x.el === name && x.arg === "rock2").map((x) => [x.op, x.t]);
-// A clean scene played to `t` (rendered at 1800 so rock2 goes on), then ended by `end(w, s)`.
-function played(opts, end, at = 1900) {
-  const w = sceneWorld(opts);
-  const sc = begin(w, w.slide, { murk: opts?.murk });
-  w.run(1800);
-  render(w, w.slide, sc, 1800);
-  w.run(at - 1800);
-  end(w, w.slide);
-  return w;
-}
-const murk = (w) => w.slide.murk.style.transition;
+const { sceneWorld, begin, rock, played, murk } = require("./scene_world");
 
 test("a normal end at 2000: rock2 goes on at 1800 and off at 3100, the shake-off plays out", () => {
   const w = played({}, (x, s) => x.card._sceneEnd(s), 2000);
@@ -81,12 +30,6 @@ test("a press end at 1900 (not quiet, not a swipe) leaves rock2 to 3100", () => 
   assert.deepStrictEqual(rock(w), [["class+", 1800], ["class-", 3100]]);
 });
 
-test("BEFORE: a quiet end at 1900 (a forget, the disconnect, Hop's board) leaves rock2 to 3100", () => {
-  const w = played({}, (x, s) => x.card._sceneEnd(s, { quiet: true }));
-  w.run(1500);
-  assert.deepStrictEqual(rock(w), [["class+", 1800], ["class-", 3100]], "stripped at 3100, from whatever pet is there then");
-});
-
 test("the murk restore after a quiet end still fires at +50 (it is not drained)", () => {
   const w = played({ murk: true }, (x, s) => x.card._sceneEnd(s, { quiet: true }));
   assert.strictEqual(murk(w), "none");
@@ -94,26 +37,6 @@ test("the murk restore after a quiet end still fires at +50 (it is not drained)"
   assert.strictEqual(murk(w), "none");
   w.run(1);
   assert.strictEqual(murk(w), "");
-});
-
-test("BEFORE: the disconnect during a clean scene closes it and leaves rock2 to 3100; the murk restore fires at +50", () => {
-  const w = played({ murk: true }, (x) => x.disconnect());
-  assert.strictEqual(w.slide.scene, null, "the scene is closed by the disconnect");
-  assert.strictEqual(murk(w), "none");
-  w.run(50);
-  assert.strictEqual(murk(w), "");
-  w.run(1500);
-  assert.deepStrictEqual(rock(w), [["class+", 1800], ["class-", 3100]]);
-});
-
-test("BEFORE: swiping away from a scene on a card with two pets leaves rock2 on the slide left to 3100; the murk restore is at +50", () => {
-  const w = played({ pets: 2, murk: true }, (x) => x.card._go(1));
-  assert.strictEqual(w.slide.scene, null);
-  assert.strictEqual(murk(w), "none");
-  w.run(50);
-  assert.strictEqual(murk(w), "");
-  w.run(1500);
-  assert.deepStrictEqual(rock(w), [["class+", 1800], ["class-", 3100]]);
 });
 
 test("a one-pet card: _go to the same slide (a swipe, a tap on the current dot) ends the scene and keeps rock2 to 3100 (D4)", () => {

@@ -17,7 +17,6 @@ const PINNED = {
   "card-base": { [ST]: 2, [SI]: 1, [CT]: 3, [CI]: 1, [AN]: 1 },
   // + slice 0: the director's repeat and frame wrappers (setInterval, clearInterval, rAF, cancel 1 each)
   "card-build": { [ST]: 2, [SI]: 1, [RAF]: 1, [CT]: 6, [CI]: 1, [CAF]: 1 }, // slice 5: R76-R77's closer _clearAsk moved (clearTimeout 9 -> 8); slice 8: R11-R13 moved (setTimeout 5 -> 2, clearTimeout 8 -> 6)
-  "card-care": { [ST]: 6, [CT]: 1 },
   "card-flair": { [CT]: 1, [CAF]: 1 }, // slice 2: R21 moved (setTimeout 1 -> 0, clearTimeout 2 -> 1)
   "card-games": { [ST]: 3 },
   // slice 1: card-journal (R25) and card-mode (R40) have no bare timer left; card-base clearTimeout 4 -> 3 (R27's closer)
@@ -25,6 +24,7 @@ const PINNED = {
   "card-link": { [ST]: 3, [SI]: 2, [CT]: 3, [CI]: 2 },
   // slice 5: card-looks (R34-R37) and card-moment (R41, R44) have no bare timer left; their rows are gone
   // slice 6: card-season (R45-R50) has no bare timer left; its row is gone
+  // slice 9: card-care (R15-R20: setTimeout 6 -> 0, clearTimeout 1 -> 0) has no bare timer left; its row is gone
   "card-memory": { [ST]: 2, [CT]: 3 },
   "card-sheets": { [ST]: 6, [CT]: 5 },
   "card-tick": { [SI]: 1, [CI]: 1 }, // slice 3: R60-R68, R70, R73 moved (setTimeout 15 -> 4); slice 4: R57-R58, R71, R72, R74, R75 (setTimeout 4 -> 0, clearTimeout 5 -> 0, .animate( 2 -> 0)

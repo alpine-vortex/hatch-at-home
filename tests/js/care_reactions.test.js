@@ -194,7 +194,7 @@ test("lights on stretches the pet (no line); the play beat, meds sniff and clean
   assert.match(src, /this\._reactFrames\(s, "played"\)/);
   assert.match(src, /sc\.sniff = this\._careVariant\(s, "medicine"/);
   assert.match(src, /const hopK = near < 1 && sweep < 1/);
-  assert.match(src, /s\.pet\.classList\.add\("rock2"\)/); // the shake-off after the broom
+  assert.match(src, /this\._hold\(s, s\.pet, \["rock2"\], 1300, \{ group: "scene" \}\)/); // the shake-off after the broom (R15)
 });
 
 test("_react: praise gets the star above, hearts (not for spoiled); a spoiled care ends smug with its own line", () => {
@@ -979,7 +979,14 @@ function lightsCard({ calm = false, energy = "60", asleep = false, lights = fals
     game: null, frames: ["adult_content_1"], poseFrames: [], poseUntil: 0,
   };
   s.screen.classList = Object.assign(s.screen.classList, { contains: () => false });
-  const self = Object.assign(Object.create(ctx.api), {
+  // The ledger adapters over the real director (slice 9: the drape's timers are group "drape"); a timer it schedules is
+  // recorded as [fn, ms], as the stubbed setTimeout's was, and a cancel takes it out.
+  const ledger = adapters((ms, fn) => {
+    const t = [fn, ms];
+    log.timers.push(t);
+    return () => { const k = log.timers.indexOf(t); if (k >= 0) log.timers.splice(k, 1); };
+  });
+  const self = Object.assign(Object.create(ctx.api), ledger, {
     _hass: { states }, _state: (_s, k) => states[k], _live: (_s, k) => states[k],
     _rimCue() {}, _tapped: (_b, _s, o) => log.tapped.push(o?.perk !== false), _careMarks() {},
     _call: () => { log.calls.push(1); return Promise.resolve(self.callResult ?? true); },
@@ -1251,15 +1258,19 @@ test("the drape: others' tuck falls in DRAPE_FALL_MS, a wake slides off in two s
   assert.strictEqual(f.s.drapeFrame, undefined);
   f.self._drapeSync(f.s, true);
   assert.strictEqual(f.s.drapeFrame, 1, "asleep and the lights out turned on: it falls");
+  const drape = (g) => plain((g.self._director.inspect(g.s)?.timers || []).filter((x) => x.group === "drape").map((x) => x.ms));
   assert.deepStrictEqual(plain(f.log.timers.map(([, ms]) => ms)), [150, 300, 450]);
-  f.log.timers.forEach(([fn]) => fn());
+  assert.deepStrictEqual(drape(f), [150, 300, 450], "the ledger group drape");
+  f.log.timers.slice().forEach(([fn]) => fn());
+  assert.deepStrictEqual(drape(f), [], "nothing left once they have run");
+  f.log.timers.length = 0; // the recorded schedule, not the ledger
   assert.deepStrictEqual([f.s.drapeFrame, f.s.drapeAnim], [3, false]);
   assert.match(f.s.drapeImg.src, /drape_l_3\.png/);
-  f.log.timers.length = 0;
   f.self._drapeSync(f.s, false); // a wake: lights on, or a natural morning that cleared them: the same
   assert.strictEqual(f.s.drapeFrame, 2);
   assert.ok(f.s.drapeImg.style.translate, "frame 2, dropped");
   assert.deepStrictEqual(plain(f.log.timers.map(([, ms]) => ms)), [150]);
+  assert.deepStrictEqual(drape(f), [150]);
   f.log.timers[0][0]();
   assert.strictEqual(f.s.drape.hidden, true);
   // A pet tucked when the card opens shows the final frame; calm is on or off at once.
@@ -1429,7 +1440,7 @@ test("audit N2, N7, N9: _forget clears the drape, a lights scene drops .resting,
   assert.strictEqual(f.s.drapeAnim, true);
   f.self._drapeStop(f.s);
   f.self._drapeHide(f.s);
-  assert.deepStrictEqual([f.s.drapeAnim, f.s.drape.hidden, f.s.drapeFrame, plain(f.s.drapeTimers)], [false, true, 0, []]);
+  assert.deepStrictEqual([f.s.drapeAnim, f.s.drape.hidden, f.s.drapeFrame, plain(f.self._director.inspect(f.s)?.timers ?? [])], [false, true, 0, []]);
 });
 
 test("audit N3: _animate restarts the blanket with the pet (not the lie squash); startle, jig, droop, sulk share the drape's rules", () => {

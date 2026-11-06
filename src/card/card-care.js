@@ -118,8 +118,7 @@ const SCENES = {
       s.pet.style.translate = `0 ${lift}px`;
       if (t >= 1800 && !sc.shook) {
         sc.shook = true;
-        s.pet.classList.add("rock2");
-        setTimeout(() => s.pet.classList.remove("rock2"), 1300);
+        this._hold(s, s.pet, ["rock2"], 1300, { group: "scene" }); // a quiet or leaving end drains it (_sceneEnd)
       }
       if (sc.dust) {
         // Dust kicks up behind it.
@@ -166,7 +165,9 @@ const SCENES = {
         s.murk.style.transition = "none";
         s.murk.style.opacity = "0";
         s.murk.style.maskImage = "";
-        setTimeout(() => { s.murk.style.transition = ""; }, 50);
+        // Not in group "scene": this runs inside _sceneEnd after its drain, so the restore keeps its +50 ms (detach takes it).
+        const restore = () => { s.murk.style.transition = ""; };
+        this._later(s, 50, restore, { group: "scene.murk", undo: restore });
       }
     },
   },
@@ -967,8 +968,7 @@ class HatchPetCardCare extends HatchPetCardMode {
   }
 
   _drapeStop(s) {
-    (s.drapeTimers || []).forEach(clearTimeout);
-    s.drapeTimers = [];
+    this._stop(s, { group: "drape" });
     s.drapeAnim = false;
   }
 
@@ -1000,11 +1000,10 @@ class HatchPetCardCare extends HatchPetCardMode {
         s.drapeAnim = true;
         this._drapeShow(s, 1);
         const third = DRAPE_FALL_MS / 3;
-        s.drapeTimers = [
-          setTimeout(() => this._drapeShow(s, 2), third),
-          setTimeout(() => this._drapeShow(s, 3), third * 2),
-          setTimeout(() => { s.drapeAnim = false; }, DRAPE_FALL_MS),
-        ];
+        this._later(s, third, () => this._drapeShow(s, 2), { group: "drape" });
+        this._later(s, third * 2, () => this._drapeShow(s, 3), { group: "drape" });
+        const landed = () => { s.drapeAnim = false; };
+        this._later(s, DRAPE_FALL_MS, landed, { group: "drape", undo: landed });
       } else {
         this._drapeShow(s, 3);
       }
@@ -1014,7 +1013,7 @@ class HatchPetCardCare extends HatchPetCardMode {
     this._drapeStop(s);
     if (was === true && !calm() && !s.scene) {
       this._drapeShow(s, 2, DRAPE_SLIDE_PX);
-      s.drapeTimers = [setTimeout(() => this._drapeHide(s), DRAPE_FALL_MS / 3)];
+      this._later(s, DRAPE_FALL_MS / 3, () => this._drapeHide(s), { group: "drape" });
     } else {
       this._drapeHide(s);
     }

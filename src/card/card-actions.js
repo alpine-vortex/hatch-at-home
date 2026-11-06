@@ -247,9 +247,12 @@ class HatchPetCardActions extends HatchPetCardMemory {
   }
 
   // End it, wherever it got to, and draw the pet as it is now.
-  _sceneEnd(s, { quiet = false } = {}) {
+  // A quiet end (a forget, the disconnect, Hop's board) or a leaving swipe also cuts the scene's own
+  // stragglers (group "scene": the clean scene's rock2); a press end lets the shake-off play out.
+  _sceneEnd(s, { quiet = false, swipe = false } = {}) {
     const sc = s.scene;
     if (!sc) return;
+    if (quiet || swipe) this._drain(s, { group: "scene" }); // before entry.clear: its murk restore (group "scene.murk") must keep its +50 ms
     const entry = SCENES[sc.kind];
     cancelAnimationFrame(sc.raf);
     s.scene = null;
