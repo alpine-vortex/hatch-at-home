@@ -5,6 +5,7 @@ const assert = require("node:assert");
 const vm = require("vm");
 
 const src = require("./card-source");
+const { adapters } = require("./timer_trace");
 const rule = (sel) => (src.match(new RegExp(`\\n\\s*${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\{[^}]*\\}`)) || [""])[0];
 
 // The method's text, to the next two-space-indented "}" line.
@@ -12,14 +13,14 @@ const method = (name) => src.match(new RegExp(`\\n  ${name}\\([^)]*\\) \\{[\\s\\
 
 test("a wander left turns first (look with it), a wander right does not", () => {
   const timers = [];
-  const ctx = { pick: (list) => list[ctx.i], i: 0, setTimeout: (fn, ms) => timers.push([fn, ms]) };
+  const ctx = { pick: (list) => list[ctx.i], i: 0 };
   vm.runInNewContext(`const o = {${method("_wander")}}; this.wander = o._wander;`, ctx);
   for (const [i, side, turns] of [[0, "wander-l", true], [1, "wander-r", false]]) {
     ctx.i = i;
     const set = new Set();
     const s = { pet: { classList: { add: (...c) => c.forEach((x) => set.add(x)), remove: (...c) => c.forEach((x) => set.delete(x)) } } };
     timers.length = 0;
-    ctx.wander.call({ _moving() {} }, s, 2200);
+    ctx.wander.call({ _moving() {}, ...adapters((ms, fn) => { timers.push([fn, ms]); return () => {}; }) }, s, 2200);
     assert.ok(set.has(side));
     assert.strictEqual(set.has("look"), turns, side);
     assert.strictEqual(timers[0][1], 2200);
@@ -37,7 +38,7 @@ test("the left wander's translate waits for the .2 s flip, and the perch, pat bo
 });
 
 test("every wander goes through _wander, which both callers have gated on calm()", () => {
-  assert.strictEqual((src.match(/classList\.add\(side\)/g) || []).length, 1);
+  assert.strictEqual((src.match(/this\._hold\(s, s\.pet, side === "wander-l" \? \[side, "look"\] : \[side\], ms, \{ remove: \[side, "look"\] \}\)/g) || []).length, 1);
   assert.strictEqual((src.match(/this\._wander\(s, /g) || []).length, 2);
 });
 

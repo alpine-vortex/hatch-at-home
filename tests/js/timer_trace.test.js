@@ -86,7 +86,7 @@ test("_animate and a keyed, restarting _hold give the same trace, once and twice
   }
 });
 
-test("_swapFlip twice 100 ms apart: today the first flip's timer cuts the second (B3, slice 3 edits this pin)", () => {
+test("_swapFlip twice 100 ms apart: the second flip keeps turn to its own end, 300 (B3, fixed in slice 3)", () => {
   const spec = { methods: ["_swapFlip", "_moving"], consts: ["TURN_MS"] };
   const site = (card, s, w) => {
     card._swapFlip(s, () => w.mark("put 1"));
@@ -95,7 +95,7 @@ test("_swapFlip twice 100 ms apart: today the first flip's timer cuts the second
   };
   const turnOff = short(trace(spec, site).log).filter((x) => / (class- turn|mark)/.test(x));
   assert.deepStrictEqual(turnOff, ["0 pet class- turn", "100 test mark put 1", "100 pet class- turn",
-    "200 pet class- turn", "200 test mark put 2", "300 pet class- turn"]);
+    "200 test mark put 2", "300 pet class- turn"]);
 });
 
 // ---- the disconnect policy (G9): D-keep and D-reattach on the shared harness ----

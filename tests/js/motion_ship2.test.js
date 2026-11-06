@@ -5,7 +5,7 @@ const assert = require("node:assert");
 const vm = require("vm");
 
 const src = require("./card-source");
-const { world } = require("./timer_trace");
+const { world, adapters } = require("./timer_trace");
 const rule = (sel) => (src.match(new RegExp(`\\n\\s*${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\{[^}]*\\}`)) || [""])[0];
 const method = (name) => src.match(new RegExp(`\\n  (?:async )?${name}\\([^)]*\\) \\{[\\s\\S]*?\\n  \\}\\n`))[0];
 const classes = () => {
@@ -17,30 +17,32 @@ const classes = () => {
 test("the swap flip: turn on, the art swapped at 90 degrees (.1 s), turn off at .2 s", () => {
   assert.match(src, /const TURN_MS = 200;/);
   const timers = [];
-  const ctx = { TURN_MS: 200, setTimeout: (fn, ms) => timers.push([fn, ms]), Date };
+  const ctx = { TURN_MS: 200, Date };
   vm.runInNewContext(`const o = {${method("_swapFlip")}, ${method("_afterTurn")}}; this.swap = o._swapFlip; this.after = o._afterTurn;`, ctx);
+  const host = adapters((ms, fn) => { timers.push([fn, ms]); return () => {}; });
+  const at = (ms) => timers.find((t) => t[1] === ms)[0];
   const pet = classes();
   const s = { pet };
   let moved = 0;
   let put = 0;
-  ctx.swap.call({ _moving: (_s, ms) => { moved = ms; } }, s, () => { put++; });
+  ctx.swap.call({ ...host, _moving: (_s, ms) => { moved = ms; } }, s, () => { put++; });
   assert.ok(pet.set.has("turn"));
   assert.ok(moved >= 200, "a hat waits for it");
-  assert.deepStrictEqual(timers.map((t) => t[1]), [100, 200]);
-  timers[0][0]();
+  assert.deepStrictEqual(timers.map((t) => t[1]).sort((a, b) => a - b), [100, 200]);
+  at(100)();
   assert.strictEqual(put, 1);
   assert.ok(pet.set.has("turn"), "still turning at the swap");
-  timers[1][0]();
+  at(200)();
   assert.ok(!pet.set.has("turn"));
   // the moment's pop and sparkle wait for it, and run at once with no swap going
   let ran = 0;
   timers.length = 0;
-  ctx.after.call({}, s, () => { ran++; });
+  ctx.after.call({ ...host }, s, () => { ran++; });
   assert.strictEqual(ran, 0);
   assert.strictEqual(timers.length, 1);
   assert.ok(timers[0][1] > 0 && timers[0][1] <= 200);
   s.turnUntil = 0;
-  ctx.after.call({}, s, () => { ran++; });
+  ctx.after.call({ ...host }, s, () => { ran++; });
   assert.strictEqual(ran, 1);
 });
 

@@ -28,7 +28,7 @@ const PINNED = {
   "card-moment": { [ST]: 2 }, // slice 2: R42, R43 moved (setTimeout 4 -> 2, clearTimeout 1 -> 0)
   "card-season": { [ST]: 6, [CT]: 1 },
   "card-sheets": { [ST]: 6, [CT]: 5 },
-  "card-tick": { [ST]: 15, [SI]: 1, [CT]: 5, [CI]: 1, [AN]: 2 }, // slice 2: R59 moved (setTimeout 16 -> 15, clearTimeout 6 -> 5)
+  "card-tick": { [ST]: 4, [SI]: 1, [CT]: 5, [CI]: 1, [AN]: 2 }, // slice 3: R60-R68, R70, R73 moved (setTimeout 15 -> 4)
   "card-visit": { [ST]: 4, [CT]: 3 }, // slice 2: R79, R81-R84 moved (setTimeout 9 -> 4, clearTimeout 7 -> 3)
   "card-visitors": { [ST]: 3, [CT]: 2 },
 };

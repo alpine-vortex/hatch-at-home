@@ -6,6 +6,7 @@ const assert = require("node:assert");
 const vm = require("vm");
 
 const src = require("./card-source");
+const { adapters } = require("./timer_trace");
 const rule = (sel) => (src.match(new RegExp(`\\n\\s*${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\{[^}]*\\}`)) || [""])[0];
 const method = (name) => src.match(new RegExp(`\\n  ${name}\\([^\\n]*\\) \\{[\\s\\S]*?\\n  \\}\\n`))[0];
 const konst = (name) => src.match(new RegExp(`\\nconst ${name} = [\\s\\S]*?;\\n`))[0];
@@ -32,7 +33,9 @@ function card({ calm = false, species, drawn = "child" } = {}) {
     pet: { classList: { add: (c) => classes.add(c), remove: (c) => classes.delete(c), contains: (c) => classes.has(c) } },
     prop: { classList: { add: (c) => classes.add(`prop:${c}`) }, style: {}, offsetWidth: 0 },
   };
-  const self = Object.assign(Object.create(ctx.api), {
+  // The ledger adapters over the real director; a timer it schedules is recorded as [fn, ms], as setTimeout's was.
+  const ledger = adapters((ms, fn) => { log.timers.push([fn, ms]); return () => {}; });
+  const self = Object.assign(Object.create(ctx.api), ledger, {
     _actPose: (sp0, stage, id, act) => (!act || stage === "child" ? null : [`${stage}_${act}_1`, `${stage}_${act}_2`]),
     _show: (_s, _el, f) => log.shown.push(f),
     _animate: (_s, _el, c, ms) => log.animated.push([c, ms]),

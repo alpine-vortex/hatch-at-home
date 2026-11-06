@@ -888,6 +888,24 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
   (`_wander` pins `timers[0][1] === 2200`), `care_reactions.test.js:121` (the shake's 550 ms timer),
   `touch.test.js:101` (`_look`/`_wander` with `setTimeout: () => 0`): each gains the adapter stubs and
   reads the entry from the ledger (`inspect().timers`) where it read a stubbed `setTimeout` call.
+- **Shipped, and where it differed from the draft:** B1 has no trace case (a forget is the change, and the unmoved
+  code has nothing to pin); `pet_oneshots_ledger.test.js` carries it, as `screen_fx_ledger.test.js` did for slice 2:
+  look, wander and turn end at once, the speck node goes and its follow-look is dropped, the art put, after-turn,
+  perk2, chirp, yawn and shake are dropped, a reused slide's next look is not cut short, plus D-keep and D-reattach.
+  The B3 "before" trace was replaced in the move commit, and so was slice 0's own pin of it in
+  `timer_trace.test.js` (named there as "slice 3 edits this pin"). Four of the traces drive their site through its
+  caller (`_trickMove`, `_promiseMove`, `_idle`, `_reactFrames`/`_reactMove`), since the timer is an inline arrow; the
+  speck uses the world's new `screen` option. `_swapFlip` now creates the 200 ms `turn` timer (through `_hold`) before
+  the 100 ms `put` timer; the order of creation is the only difference and no two are due together. `touch.test.js:101`
+  needed **no edit**: its fake `this` stubs `_look` and never reaches `_wander`; the other three (`motion_ship2`,
+  `motion_ship1`, `care_reactions`) read the ledger through `adapters(schedule)`, a helper in `timer_trace.js` that gives
+  a hand-rolled vm `this` the real director and `_later`/`_hold`/`_stop`/`_drain`/`_has`, so slices 4 and 7 use it too
+  (`care_reactions`' `card()` already has it, so slice 4's `_poseEnd` and `_propShow` need no new stubs there;
+  `touch.test.js` does). The shared screen helpers of `screen_fx_trace` and `screen_fx_ledger` moved into `world({
+  screen: true })` first, with `w.run` and `w.settle`. No bench edit was needed (nothing in `dev/bench/page.js` reaches
+  these timers). Ratchet: `card-tick` `setTimeout` 15 -> 4, no row reached zero. Calm: `_look`, `_wander`, `_swapFlip`,
+  `_afterTurn` and the speck have no `calm()` of their own (their callers check), `_trickMove` and `_reactMove` return
+  early, `_promiseMove` still chirps and the yawn takes the plain path.
 - **Checks:** trace tests; `motion_rule.test.js`, `touch.test.js`, `excited_pose.test.js`,
   `nature_lines.test.js` (speck); `scripts/ci-gate` (iterate with `gate --auto`: `pat`, `react`, `ghost`,
   `types`, `moments`, `egg`); **a bench before/after contact sheet** (`--preset species`, 6.7).

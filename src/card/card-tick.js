@@ -172,8 +172,7 @@ class HatchPetCardTick extends HatchPetCardSitter {
 
   _look(s, ms) {
     this._moving(s, ms + 250);
-    s.pet.classList.add("look");
-    setTimeout(() => s.pet.classList.remove("look"), ms);
+    this._hold(s, s.pet, "look", ms); // unkeyed: a second look does not extend the first (5.3)
   }
 
   // A wander: a slide a little to one side and back after `ms`. The art faces right, so a
@@ -181,10 +180,9 @@ class HatchPetCardTick extends HatchPetCardSitter {
   // turns back as it heads home. Callers have checked calm().
   _wander(s, ms) {
     const side = pick(["wander-l", "wander-r"]);
-    s.pet.classList.add(side);
-    if (side === "wander-l") s.pet.classList.add("look");
+    // Unkeyed, like _look. A right wander adds no `look` and still removes it.
+    this._hold(s, s.pet, side === "wander-l" ? [side, "look"] : [side], ms, { remove: [side, "look"] });
     this._moving(s, ms + 900); // out, and the slide back
-    setTimeout(() => s.pet.classList.remove(side, "look"), ms);
   }
 
   // A new sprite for a changed stage (a hatch, a stage-up, an egg laid) goes in edge-on: the paper flip
@@ -195,17 +193,15 @@ class HatchPetCardTick extends HatchPetCardSitter {
   _swapFlip(s, put) {
     this._moving(s, TURN_MS + 250);
     s.turnUntil = Date.now() + TURN_MS;
-    s.pet.classList.remove("turn");
-    void s.pet.offsetWidth; // restart
-    s.pet.classList.add("turn");
-    setTimeout(put, TURN_MS / 2);
-    setTimeout(() => s.pet.classList.remove("turn"), TURN_MS);
+    // Keyed: a second flip replaces the first removal silently, so its own `turn` stays to its own end (B3).
+    this._hold(s, s.pet, "turn", TURN_MS, { key: "turn", restart: true });
+    this._later(s, TURN_MS / 2, put, { group: "swapflip" });
   }
 
   // Run `fn` now, or when a swap flip has finished (the moment's pop and sparkle land on the new sprite).
   _afterTurn(s, fn) {
     const wait = (s.turnUntil || 0) - Date.now();
-    if (wait > 0) setTimeout(fn, wait);
+    if (wait > 0) this._later(s, wait, fn, { group: "swapflip" });
     else fn();
   }
 
@@ -343,7 +339,7 @@ class HatchPetCardTick extends HatchPetCardSitter {
       this._moving(s, 900);
     } else if (move === "perk2") {
       this._animate(s, s.pet, "perk", 320);
-      setTimeout(() => this._animate(s, s.pet, "perk", 320), 420);
+      this._later(s, 420, () => this._animate(s, s.pet, "perk", 320));
     } else {
       this._look(s, 1800);
     }
@@ -406,7 +402,7 @@ class HatchPetCardTick extends HatchPetCardSitter {
   _promiseMove(s, topic, small = false) {
     if (topic === "song") {
       this._chirp(s, "win");
-      if (!small) setTimeout(() => this._chirp(s, "win"), 500);
+      if (!small) this._later(s, 500, () => this._chirp(s, "win"));
       return;
     }
     if (calm()) return;
@@ -502,8 +498,8 @@ class HatchPetCardTick extends HatchPetCardSitter {
       speck.className = `speck${rtl ? " rtl" : ""}`;
       s.screen.append(speck);
       this._moving(s, 2700);
-      setTimeout(() => this._look(s, 1300), rtl ? 1200 : 0); // follows it across
-      setTimeout(() => speck.remove(), 2700);
+      this._later(s, rtl ? 1200 : 0, () => this._look(s, 1300), { group: "speck" }); // follows it across
+      this._later(s, 2700, () => speck.remove(), { group: "speck", undo: () => speck.remove() });
     } else {
       const words = this._words(s);
       const lines = this._babySet(s, `idle.${IDLE_LINES.has(s.moodState) ? s.moodState : "default"}`) || {
@@ -703,12 +699,12 @@ class HatchPetCardTick extends HatchPetCardSitter {
       const yawn = moodOf("sleepy");
       s.poseFrames = yawn;
       this._show(s, s.pet, yawn[0]);
-      setTimeout(() => {
+      this._later(s, 900, () => {
         if (s.poseFrames !== yawn || !s.poseUntil) return;
         s.poseFrames = moodOf("excited");
         this._show(s, s.pet, s.poseFrames[0]);
         this._animate(s, s.pet, "greethop", 700);
-      }, 900);
+      });
       this._poseEnd(s);
       return;
     }
@@ -766,7 +762,7 @@ class HatchPetCardTick extends HatchPetCardSitter {
     if (variant === "shake") { // a head shake: the flip, back, and the flip again
       this._look(s, 300);
       const until = s.poseUntil; // the second flip only while this reaction is still the one on show
-      setTimeout(() => { if (until && s.poseUntil === until) this._look(s, 300); }, 550);
+      this._later(s, 550, () => { if (until && s.poseUntil === until) this._look(s, 300); });
       this._moving(s, 1200);
       return;
     }

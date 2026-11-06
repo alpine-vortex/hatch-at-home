@@ -3,7 +3,7 @@
 // (_swapFlip), R64 (_afterTurn), R65 (perk2, through _trickMove), R66 (the song's second chirp, through _promiseMove),
 // R67-R68 (the idle speck, through _idle), R70 (the yawn, through _reactFrames) and R73 (the head shake, through
 // _reactMove). It passes on the unmoved code (bare timers on the fake clock) and passes after the move (the same sites
-// through the ledger), with one edit: the B3 case below, which the move commit replaces.
+// through the ledger), with one edit: the B3 case below, which the move commit replaced.
 // Reduced motion is whatever the unmoved code does, both ways (F13): _look, _wander, _swapFlip, _afterTurn and _idle's
 // speck make their moves with no calm() check of their own (their callers check); _trickMove, _promiseMove's
 // payoff and _reactMove return early under calm. "Called with no slide" (G8) has no case: every one of these reads
@@ -110,23 +110,21 @@ test("_swapFlip: turn on with a reflow, put at 100, turn off at 200; calm both w
   }
 });
 
-// B3 (the audit bug, plan 0): the second flip's `turn` is cut short by the first flip's removal. THIS TRACE IS THE
-// "BEFORE" AND THE MOVE COMMIT REPLACES IT: after, the removal is keyed, the first replaced silently, and `turn` stays
-// to 300 (the class the second flip added stays to its own end).
-test("B3 (before): two flips 100 ms apart; the first flip's timer takes turn off at 200, cutting the second short", () => {
+// B3 (the audit bug, plan 0), AFTER the move: the removal is keyed and the second flip replaces the first silently, so
+// the class the second flip added stays to its own end, 300. (Before the move this trace ended `turn` at 200, cut
+// short by the first flip's timer: "0 ... 100 put1, class- turn, reflow, class+ turn ... 200 class- turn, put2".)
+test("B3 (after): two flips 100 ms apart; the second flip's turn stays to its own end, 300", () => {
   const w = pw(flipSpec);
   w.card._swapFlip(w.slide, () => w.mark("put1"));
   w.run(100);
   w.card._swapFlip(w.slide, () => w.mark("put2"));
-  w.run(50); // 150
-  assert.deepStrictEqual(pet(w), ["turn"]);
-  w.run(100); // 250: the second flip's turn has 50 ms to run
-  assert.deepStrictEqual(pet(w), [], "B3: gone at 200, not 300");
+  w.run(150); // 250: past the first flip's 200
+  assert.deepStrictEqual(pet(w), ["turn"], "B3: still turning at 250");
   w.settle();
   assert.deepStrictEqual(short(w.log), [
     "0 pet class- turn", "0 pet reflow", "0 pet class+ turn",
     "100 test mark put1", "100 pet class- turn", "100 pet reflow", "100 pet class+ turn",
-    "200 pet class- turn", "200 test mark put2", "300 pet class- turn",
+    "200 test mark put2", "300 pet class- turn",
   ]);
 });
 

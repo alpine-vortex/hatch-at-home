@@ -278,6 +278,21 @@ function world(spec = {}) {
   return w;
 }
 
+// For a test that runs a card method on its own fake `this` in its own vm (the older pin tests): the card's real
+// ledger adapters over the real director, as an object to spread into that `this`. `schedule(ms, fn) -> cancel` is
+// the test's own (it records `[fn, ms]` where the test read a stubbed `setTimeout`); the default arms nothing.
+function adapters(schedule = () => () => {}) {
+  const ctx = { Date, Object, Array, Number, Math };
+  vm.runInNewContext(`${DIRECTOR}\nthis.o = {${["_later", "_hold", "_stop", "_drain", "_has"].map(methodText).join(",\n")}};\n` +
+    "this.HATCH_DIRECTOR = HATCH_DIRECTOR;", ctx);
+  const never = () => () => {};
+  const _director = ctx.HATCH_DIRECTOR.create({
+    now: () => Date.now(), deviceNow: () => Date.now(), trusted: () => true, canRender: () => true,
+    schedule, repeat: never, frame: never, recipes: {},
+  });
+  return { ...ctx.o, _director, _dirCard: Object.freeze({ card: true }) };
+}
+
 // Runs `site(card, slide, w)` (with no slide for `noSlide`), then advances in 10 ms steps to the latest
 // due time plus 500 ms (or `until` ms). Returns `{ log, threw, w }`; `log` is what the tests assert.
 function trace(spec, site, { calm = false, noSlide = false, until } = {}) {
@@ -297,4 +312,4 @@ function trace(spec, site, { calm = false, noSlide = false, until } = {}) {
   return { log: w.log, threw, w };
 }
 
-module.exports = { world, trace, methodText, CARD_METHODS, ADAPTERS };
+module.exports = { world, trace, adapters, methodText, CARD_METHODS, ADAPTERS };
