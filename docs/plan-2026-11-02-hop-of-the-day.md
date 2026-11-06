@@ -1,5 +1,7 @@
 # Plan: board mode and Hop of the Day (2026-11-02)
 
+Status (2026-11-05): ships 1, 2a, 3a (`5c0b2ad8`), 3b (`b3a34bef`) and 4a (`ab484258`) are built on main and merged. Hop is still behind `experimental_hop`: the commit removing it was reverted by `a6c6deb0`. Ships 4b and 5 are open. The "awaiting owner merge OK" below is history.
+
 Status: ships 1, 2a and 3a are built (2a: s2779, `73564bfb`, awaiting the batch gate; **3a: s2857,
 `5c0b2ad8`, awaiting owner merge OK**); the rest is plan. The build is five numbered ships, seven builds (section
 9: 1, 2a, 2b, 3a, 3b, 4, 5). **Ship 3a is tier 2** (it adds a saved field, `PetState.hop_day`);

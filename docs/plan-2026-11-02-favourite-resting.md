@@ -1,5 +1,7 @@
 # Favourite pet and the resting switch, 2026-11-02 (build plan)
 
+Status (2026-11-05): R1 (resting switch, `b02114e5`, refill cooldown `cb273822`, merge `a8376e06`), R2 (favourite pet, `bbb76cb6`) and R3 (rest offer, `4f76c8d2`) are all built on main. The "PLAN, docs only" line below is history.
+
 **Status: PLAN, docs only (s2720).** Written from the scout report s2717 (design scout,
 nothing built) and the owner/FM decisions of 2026-11-02 (§1). Every `file:line` in the
 scout was re-read against `origin/main` at `60ebf751`; they held (the card ones moved

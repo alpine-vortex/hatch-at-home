@@ -1,5 +1,7 @@
 # Plan: split the card into `src/` parts joined into the same file (2026-11-02)
 
+Status (2026-11-05): DONE. The cut landed as `72d79621` (parts in `src/card/` joined by `scripts/build-card.js`) and `f2c5e8a8` (blame-ignore). AGENTS.md describes the live layout. "Plan only" below is history.
+
 Status: plan only; no code changes. The move itself is ONE later ship (tier 1).
 Direction (from the task brief; the first mate records the owner decision): option (c) of
 the options note. Split `custom_components/virtual_pet/frontend/hatch-pet-card.js`

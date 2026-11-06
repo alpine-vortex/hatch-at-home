@@ -1,5 +1,7 @@
 # Plan: care reactions, every button, 2026-11-02 (build plan)
 
+Status (2026-11-05): all of ships A-E are built on main: A (`b8e0e8b0`, `06350cc7`), B1 (`f208b2a9`..`a6be45ae`), B2 (`0469d255`), C (`430be337`, merge `d7bc1bad`), D (art `45fcb9da`; audit fixes `3e4ff647`..`4fd3aaf4`, tally `da9a7f1f`), E (merge `185dc3c5`, touch-up `72f93546`). Nothing is open.
+
 **Status: PLAN, docs only (s2738, tier 0), revised by s2743 (tier 0) after the adversarial
 review s2740.** Written from scout s2735's report
 (`~/.local/state/crew/archive/hatch-at-home-s2735-20261102-1439/report.md`) and the

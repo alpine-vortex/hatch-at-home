@@ -1,5 +1,7 @@
 # Per-person memory and the ask gaps, 2026-11-02 (build plan)
 
+Status (2026-11-05): M0 (`1cb5971d`, `02611a24`, `bc82a756`, `2246a002`), M1a (`fb5586d4`), M1b (`4ccef2b3`) and M2 (`f9481e1b`, `dc342933`, `76b0065e`, audit `ffe21f56`) are built on main. M3a (the "things you told me" page, `memory_get`/`memory_forget`) and M3b (stickers) are open; nothing for them is in code.
+
 **Status: PLAN, docs only (tier 0).** Written by s2716 from the scout report s2714
 (`~/.local/state/crew/archive/hatch-at-home-s2714-20261102-1303/report.md`) and the
 owner's answers of 2026-11-02 (section 1). The scout's claims were checked against

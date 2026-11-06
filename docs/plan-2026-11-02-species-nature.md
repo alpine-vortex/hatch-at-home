@@ -1,5 +1,7 @@
 # Plan: species nature, 2026-11-02 (build plan)
 
+Status (2026-11-05): N1 (`96e4c129`), N2 (`e9117ad7`), N3 (merge `cf43f0c4`) and N4 (the 60 signature frames: wiring `2f2e009c`, art batches to `87cf6393`, fix `022d8a63`, card-check `2457188f`) are all built on main. Nothing is open.
+
 **Status: PLAN, docs only (tier 0).** Written by s2730 from scout s2728's report
 (`~/.local/state/crew/archive/hatch-at-home-s2728-20261102-1414/report.md`) and the
 decisions of 2026-11-02 (section 1). Every file:line claim in the scout's report was

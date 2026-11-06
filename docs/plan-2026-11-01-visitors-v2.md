@@ -1,5 +1,7 @@
 # Visitors v2, 2026-11-01 (plan: finds, a basket, a collection, gifts)
 
+Status (2026-11-05): all slices V-A to V-F are built on main: V-D (collection page, merge `a40c9b0b`), V-E2 (gifts on the card, `731b1b77`, merge `59b58aa5`), V-F final art (`c2ca186c`, `353e8c23`, `209e617e`); finds are on (`FINDS_SHOWN`, `a6f028f3` added the switch; set true in `049261bf`). The "next" and "owner Q1/Q2 open" wording below is history; check §13 for the answers.
+
 **Status: PLAN, docs only. Reviewed + folded 2026-11-01** (tier-2 review s2580, findings
 #1-#23, and the owner's answers; see "Decided" in §13). **V-A built 2026-10-31** (s2582,
 branch `crew/hatch-at-home-s2582-v-a-the-server-owns-the-day-s`; see "V-A as built" under
