@@ -23,6 +23,10 @@ Recipe used by the Pass G runs. Nothing here is committed state; keep it in a sc
 5. ReDroid has system animations off, so the WebView reports reduced motion. For looks
    set `adb shell settings put global animator_duration_scale 1`, relaunch the WebView,
    and put it back to 0 afterwards.
+6. Two traps. `adb shell am start` with no URL opens `about:blank`, and CDP then reads a
+   hidden stale page that looks frozen: always launch with the URL, and check
+   `document.visibilityState == "visible"` before you trust a log. Local port 9222 may be held
+   by another session's adb: pick a free one (`adb forward tcp:9422 ...`) and leave theirs.
 
 ## Dev seed: two pets in a known state
 
@@ -37,7 +41,7 @@ State it leaves:
 - Two pets: Pip (woodland, baby) and Mew (hearth, fast-forwarded to teen so the dark finish unlocks;
   its hunger is 0, feed it first if the pass needs it).
 - Both pets' options map to the fakes: weather, rain, room light, fireplace, TV, music, heating,
-  cooling. Bedtime starts 6 h from the run and wakes 14 h later, so Pip is awake for about 6 h.
+  cooling, motion (`binary_sensor.fake_motion_sensor`, held by the `bedtime` options topic). Bedtime starts 6 h from the run and wakes 14 h later, so Pip is awake for about 6 h.
 - Pip's hunger is 77 (under 95). Finishes: Pip `dune` (light), Mew `smoke` (dark).
 - Memory is on for the `dev` user, with four tagged days (exam, match, trip, show), a game
   and a dream pick, and a "great" day; Pip has today's Hop of the Day pinned (not played).

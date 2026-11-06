@@ -1,7 +1,7 @@
 # Device Alive: the canonical plan
 
 **Date:** 2026-11-03 (rewritten the same day, slice 0)
-Status (2026-11-05): slices 3A-3C, 4A, 4B and 6 are built on main; 4C, 4D, 5 and 7 are open. Species N4's art has merged (see FM12), slice 5 is DROPPED (Q-S5 = a, first mate 2026-11-05, reversible). Open: 4C, 4D, 7.
+Status (2026-11-06): slices 0-4D and 6 are built on main (4C a38c43b2, 4D a8bd53a3, 6 a7e3bb45; look tweak 414833ee: duller smudge, warm tint .8, owner OK 2026-11-05). Slice 5 is DROPPED (Q-S5 = a, first mate 2026-11-05, reversible). Slice 7 is parked (FM14). The heating/cooling 120 s reverse block is kept (first mate 2026-11-06; the owner may shorten it).
 
 **Status:** Canonical. Slice 0 of 7; no runtime change in this document.
 **Replaces:** `docs/plan-2026-11-03-living-device-interactions.md` (marked superseded; its
@@ -1298,6 +1298,16 @@ art. **Do not run two workers on the card chain or `manifest.txt` at once.**
 | 5 | **Idle delta: re-scoped after N4 (s2950); recommend DROP** (FM12 kept: glass curiosity stays dropped). N4's signature pose is already 2 in 8 idle moves; post-play settle is covered by `_endGame`'s line, `_react` and the `settle` move; what is left is one `_look(host, 1800)` in `_linkEnd` when the body is free, which folds into the next `card-link.js` slice if the owner wants it (section 8; Q-S5). Not startable as its own slice until answered. | 1 | XS if folded | `gate --auto` | If folded: finish a real link and watch the host glance once. Otherwise none; the owner's N4 watch on the phone (the bench `signature` preset, then ten idle minutes) is the one open check. |
 | 6 | **Rare glass: generic marks, after 4B merges** (FM13, FM16; section 9). Paw print, smudge, edge shadow (no leaf; FM13's "rim shadow"); its own `<u class="mark">` after the glass's seventh `<b>` (not a `<b>`, not the pseudo-elements; `card-build.js:156` and the `{7}` test at `device_fx_room.test.js:572` change with it) and a fifth `mark` key in `CLASSES_BY_LAYER`; **no lease** (never writes `s.dirEffect`; it ends on `dir-mark-life` with a timer backstop, and is skipped while `inspect(s).tracks.shellImpulse` exists); a `_rareGlass(s, now)` gate in `_tick` with an injected clock and `pick`, a viewed-time counter (about 20 min per slide, each tick credited at most 2 s, in memory, no clock-based quiet hours), one mark at a time, 20 s on screen and a 2 s fade (FM16), fixed margin-band spots, reset in `_forget`, `_dirSwitch` and `_go`; `dir-mark-*` only. **Not startable before 4B has merged.** Acceptance below, including a card-check geometry assertion. | 1 | S | `gate --auto` plus the extended `devicefx` section (the geometry check needs real Chromium) | A long idle watch on the phone and the wall tablet: is a mark charming or dirty, and is one per about 20 minutes of viewed time rare enough; never over a control; the switch off (nothing); reduced motion (nothing). The bench stills are the worker's, the watch is the owner's. |
 | 7 | **Screen morphs: parked, not a slice** (FM14; section 10). Re-planned only if the owner asks after slice 6. | n/a | n/a | n/a | none |
+
+**Device Pass 2 (done: s2962/s2964, 2026-11-06).** On a ReDroid WebView against a scratch HA
+from `scripts/dev-seed`; the device rows above that these cover are now seen:
+
+- [x] Rain end to end, with the 45-55 s held reverse after a flap (m4).
+- [x] Flap and the m4 hold: the pet said "rain!", the glass was dry 46-54 s later.
+- [x] 4D onsets, and the echo at 20 s and at 3 min.
+- [x] The echo with two pets: one echo, on the second pet's slide, never replayed.
+- [x] The busy sensor: lux +-3 is ignored, indoor temperature reacts. A daytime lamp or motion
+  gives no bubble by design (`home.py`: a light matters at bedtime, motion greets once a morning).
 
 **Slice 3 is three PRs (s2811 review).** Order: **3A, then 3C or 3B, then the other.**
 3B and 3C both need the adapter and neither depends on the other, so whichever lands

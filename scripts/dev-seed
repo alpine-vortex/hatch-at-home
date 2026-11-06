@@ -8,7 +8,7 @@ port (never 8123), onboards `dev` / `devdevdev` and then drives the real flows:
 
   * the config flow makes two pets (Pip, woodland; Mew, hearth);
   * the options flow maps both to the fakes (weather, rain, room light, fireplace, TV,
-    music, heating, cooling, indoor temperature, lux) and sets a bedtime window that is
+    music, heating, cooling, indoor temperature, lux, motion) and sets a bedtime window that is
     hours away, so pet 1 is awake for the pass;
   * fast_forward 1 h (hunger falls under 95), then Pip's finish is dune (light) and
     Mew's is smoke (dark; a teen show-off, so Mew is fast-forwarded to teen first);
@@ -44,6 +44,7 @@ import aiohttp
 ROOT = Path(__file__).resolve().parent.parent
 CLIENT = "http://dev-seed/"
 USER = {"username": "dev", "password": "devdevdev", "name": "Dev"}
+MOTION = ["binary_sensor.fake_motion_sensor"]  # held by the bedtime topic
 PETS = [("Pip", "woodland", "dune"), ("Mew", "hearth", "smoke")]
 
 # Pet options by topic: the fakes in dev/config/configuration.yaml.
@@ -229,7 +230,7 @@ async def seed(ha: Ha, s: aiohttp.ClientSession) -> dict:
     bed = (now + dt.timedelta(hours=6)).strftime("%H:%M:00")
     wake = (now + dt.timedelta(hours=14)).strftime("%H:%M:00")
     for eid in entries:
-        await options_topic(api, eid, "bedtime", {"bedtime": bed, "wake_time": wake})
+        await options_topic(api, eid, "bedtime", {"bedtime": bed, "wake_time": wake, "motion": MOTION})
         for topic, data in OPTIONS.items():
             await options_topic(api, eid, topic, data)
         await options_topic(api, eid, "people", {"memory": True})
@@ -374,7 +375,7 @@ async def main() -> None:
         ha.stop()
         for e in json.loads((conf / ".storage/core.config_entries").read_text())["data"]["entries"]:
             if e["domain"] == "virtual_pet":
-                keep = ("weather", "rain", "room_lights", "fireplace", "tv", "music", "heating", "cooling", "memory", "bedtime", "wake_time")
+                keep = ("motion", "weather", "rain", "room_lights", "fireplace", "tv", "music", "heating", "cooling", "memory", "bedtime", "wake_time")
                 print(f"options {e['title']}:", {k: e["options"].get(k) for k in keep})
         write_memory(conf, info["user"])
         async with aiohttp.ClientSession() as s:
