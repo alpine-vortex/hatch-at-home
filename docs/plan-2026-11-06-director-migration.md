@@ -1021,6 +1021,21 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
   and keeping the flyer's picture only when `passed`. **Forget mid-visit** (at 2000): `s.seasonVisit ===
   null`, the flyer node gone, `pending(s) === 0`. Under calm: the same trace (the audit's finding 5:
   these sequences run under calm today; pinned, not changed).
+- **Shipped, and where it differed from the draft:** `season_trace.test.js` has 15 cases on the unmoved code (R47 through
+  `_costume`, R45 through `_seasonTick` on the treat day, R46 `_confetti`, R48/R49 a flock of 5 and a two-frame flyer, R50
+  through `_seasonVisitor`/`_seasonVisitEnd`; each both ways for calm where the site differs). `season_ledger.test.js` carries
+  B1: the forget mid-visit at 2000 (`s.seasonVisit` null, the flyer gone, `pending(s) === 0`, no greet), a flock mid-flight, the
+  costume box, the confetti and the treat; D-keep and D-reattach; and a text pin that `_forget` calls `_seasonVisitEnd` before
+  `detach`. Keys: none (every site is unkeyed, as the table says); groups `season` (R45-R49, the nodes with an `undo` that removes
+  them) and `season.visit` (R50's steps; `_seasonVisitEnd` is `stop(s, { group: "season.visit" })`, so it cancels the rest of
+  the beats and leaves the flyer's own `season` removal pending, which is what keeps the picture through a `passed` end).
+  `V.timers` is gone (nothing else read it). **Two differences from the draft:** the brief and 5.5 put the closer "next to
+  `_clearAsk`", but `detach` is at `card-build.js:835` and `_clearAsk` after it, so the call is placed immediately before `detach`
+  (3.14's own wording), not beside `_clearAsk`; and the draft's trace lists the forget case as a characterization test, but it
+  is a change (the unmoved code leaves the flyer up and the beats pending), so it is in the ledger test with the other B1 cases.
+  No edit to `card-check.js`, the bench or any existing test (none read `V.timers` or a season `setTimeout`;
+  `motion_ship1.test.js:67` pins the `_seasonFly` call text, unchanged). Ratchet: `card-season` (`setTimeout` 6 -> 0,
+  `clearTimeout` 1 -> 0) reached zero and its row is deleted.
 - **Checks:** trace tests; cc `winter` and `moments` carry the season code (`gate --auto` picks them; the
   `winter` section is the largest consumer); `scripts/ci-gate`.
 - **Device queue:** fixture: no bench preset covers the season boxes; use the dev HA with the date pinned to a

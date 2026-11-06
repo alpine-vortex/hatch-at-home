@@ -123,7 +123,7 @@ class HatchPetCardSeason extends HatchPetCardBoard {
       if (fresh) {
         const named = season.treatLine && unnamed([season.treatLine]).length;
         this._costume(s, season, named ? season.treatLine : seasonLine(season, today));
-        setTimeout(() => this._seasonTreat(s, season), 1600);
+        this._later(s, 1600, () => this._seasonTreat(s, season), { group: "season" });
         return;
       }
     }
@@ -195,7 +195,7 @@ class HatchPetCardSeason extends HatchPetCardBoard {
       box.append(bit);
     }
     s.screen.append(box);
-    setTimeout(() => box.remove(), 3600);
+    this._later(s, 3600, () => box.remove(), { group: "season", undo: () => box.remove() });
   }
 
   // Where a hat sits: the top of the head in the frame on show, found by going
@@ -304,7 +304,7 @@ class HatchPetCardSeason extends HatchPetCardBoard {
     s.flairUntil = Date.now() + FLAIR_MS + 1800;
     this._speak(s, line, 4000, { catch: catchy });
     this._animate(s, s.pet, "perk", 320);
-    setTimeout(() => box.remove(), FLAIR_MS + 1800);
+    this._later(s, FLAIR_MS + 1800, () => box.remove(), { group: "season", undo: () => box.remove() });
   }
 
   // Trick or treat: a sweet pops up at its feet. At Thanksgiving, the pet
@@ -336,7 +336,7 @@ class HatchPetCardSeason extends HatchPetCardBoard {
     const top = 8 + Math.random() * 22;
     for (let i = 0; i < flock; i++) {
       const lag = Math.abs(i - (flock - 1) / 2); // the leader in the middle, ahead
-      setTimeout(() => this._seasonFly(s, season, art, cls, ms, { ltr, top: top + lag * 6 }), lag * 450);
+      this._later(s, lag * 450, () => this._seasonFly(s, season, art, cls, ms, { ltr, top: top + lag * 6 }), { group: "season" });
     }
   }
 
@@ -352,7 +352,7 @@ class HatchPetCardSeason extends HatchPetCardBoard {
       `<img src="${BASE}/ui/season_${season.key}_${n}.png?v=${VERSION}" alt="">`).join("");
     if (frames.length > 1) el.classList.add("flap");
     s.seasonBox.append(el);
-    setTimeout(() => el.remove(), ms + 200);
+    this._later(s, ms + 200, () => el.remove(), { group: "season", undo: () => el.remove() });
     return el;
   }
 
@@ -368,12 +368,12 @@ class HatchPetCardSeason extends HatchPetCardBoard {
     s.flairUntil = Date.now() + ms; // nothing else meanwhile
     s.visitUntil = s.flairUntil; // a pat wiggles, no line
     s.nextVisitCheck = Math.max(s.nextVisitCheck || 0, s.flairUntil + VISIT_AFTER_MS); // a world one later
-    const V = s.seasonVisit = { el, timers: [], until: s.flairUntil };
-    const at = (t, fn) => V.timers.push(setTimeout(() => {
+    const V = s.seasonVisit = { el, until: s.flairUntil };
+    const at = (t, fn) => this._later(s, t, () => {
       if (s.seasonVisit !== V) return;
       if (this._visitorLive(s)) fn();
       else this._seasonVisitEnd(s);
-    }, t));
+    }, { group: "season.visit" });
     at(1400, () => {
       if (!this._mayInterrupt(s, FLAVOUR)) return;
       // The art faces right, so only a visitor on the left is faced (as a world visitor is,
@@ -396,7 +396,7 @@ class HatchPetCardSeason extends HatchPetCardBoard {
     const V = s.seasonVisit;
     if (!V) return;
     s.seasonVisit = null;
-    V.timers.forEach(clearTimeout);
+    this._stop(s, { group: "season.visit" });
     if (!passed) V.el.remove();
     if (s.flairUntil === V.until) s.flairUntil = 0;
     if (s.visitUntil === V.until) s.visitUntil = 0;

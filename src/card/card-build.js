@@ -832,6 +832,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     }
     // Device-alive: another pet's glass, ring and first view are not this one's (the house view that
     // follows sets the ambient state again).
+    this._seasonVisitEnd(s); // closer (3.14, R50): clears s.seasonVisit, takes the flyer away; before detach
     this._director?.detach(s);
     s.dirViewed = false;
     s.dirRecent = null;
