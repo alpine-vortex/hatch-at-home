@@ -1,7 +1,7 @@
 # Device Alive: the canonical plan
 
 **Date:** 2026-11-03 (rewritten the same day, slice 0)
-Status (2026-11-05): slices 3A-3C, 4A, 4B and 6 are built on main; 4C, 4D, 5 and 7 are open. Species N4's art has merged (see FM12), so slice 5 is ready to re-scope (not re-scoped here).
+Status (2026-11-05): slices 3A-3C, 4A, 4B and 6 are built on main; 4C, 4D, 5 and 7 are open. Species N4's art has merged (see FM12), slice 5 is re-scoped in section 8 (s2950): drop recommended, one question open (Q-S5).
 
 **Status:** Canonical. Slice 0 of 7; no runtime change in this document.
 **Replaces:** `docs/plan-2026-11-03-living-device-interactions.md` (marked superseded; its
@@ -1089,34 +1089,37 @@ bench `alive` preset with `.pressed`/`.pending`/`.failed` pinned by class (the b
 cannot hold `:active`), a card-check fast double tap (one `button.press`, `.pending`
 clears). Device rows are in the slice 2 device queue (section 13).
 
-## 8. Idle: a delta over N1-N4 (F8) (parked until N4's art merges, FM12)
+## 8. Idle: a delta over N1-N4 (F8) (re-scoped after N4: recommend drop, s2950)
 
-**Slice 5 is not startable.** N1 and N2 are built (section 2: `_idleMoves`,
-`card-tick.js:294`, and `_skyReact` in `_idle`). N4 (60 signature-pose frames, idle only)
-has not shipped: `signature` appears in no species data and no card code on main, and
-`own` is child-only today. So the gate "only if N4's poses do not already cover them" has
-no input, and N4's cadence (one signature every 2-3 minutes) is unjudged and may already
-be busy enough that extra beats are noise. When N4's art has merged and the owner has seen
-it (the bench `signature` preset), the first mate re-scopes this slice from what is left.
+**Re-scope (s2950, 2026-11-05; a recommendation until the first mate or owner answers Q-S5 below).**
+N1, N2 and N4 are all on main, so the gate "only if N4's poses do not already cover them"
+now has its input. Read from main:
 
-**Glass curiosity is dropped (FM12).** A face or paw touch on the glass is a pose, so it
-needs art per species, not CSS ("where the sprite allows" is undefined), and it is slice
-6's glass in disguise. If a pet-touches-the-glass beat is ever wanted it joins slice 6
-only when a pose exists.
+- **N4 is the idle beat.** `_idle` (`card-tick.js:468`) gives an adult with a
+  `species.json` `signature` pose two `pose` copies in `_idleMoves`: 2 in 8 idle moves,
+  about one signature every two to three minutes of an awake, free pet (the species-nature
+  plan's own cadence note). That is already as busy as the idle layer should be, and the
+  owner has not yet judged it on a phone. Another beat on top is noise until that watch.
+- **Post-play settle: covered, drop.** `_endGame` (`card-flair.js:194`) writes the closing
+  line and holds `sayUntil` 4 s; `_react` already gives win and cheer bodies; the
+  `settle` body move (`card-tick.js:463`) is already a habit idle move for the species
+  that have it. A beat after a game would restate one of these.
+- **Link-port curiosity: a one-glance gap, not a slice.** During a link
+  `card-link.js:123` already runs `_look(guest, 6500)`; `_linkEnd` (`card-link.js:298`)
+  clears `look` and `linking` and sets `_linkEndedAt` (a world visitor waits on it). What
+  is left is a single `_look(host, 1800)` after the link when the body is free. It is
+  one line in `_linkEnd`, with no beat engine, cooldown, director track or acceptance
+  table, and a real link is rare (two pets in one household meeting).
+- **Glass curiosity stays dropped (FM12).** No new decision there.
 
-**What the re-scope may contain:** two rows, **post-play settle** (a finished game with a
-free body; it overlaps the existing `settle` idle move, `card-tick.js:450`, and `_react`'s
-win/cheer, so it must add something those do not) and **link-port curiosity** (after a
-real link, once the body is free; `card-link.js:123` already has a look-at-guest beat
-`_look(guest, 6500)`, so only "after the link, body free" is new). Rules: eligibility
-stays with `_idle`, `_freeBody` and `_firstMove`; a beat is a short cancellable chain with
-an absolute maximum and cancels on any state change; 45-120 s global cooldown while
-viewed; never the same beat twice in a row; no counts, no reward, no trick progress, and a
-glance is never mistaken for a care response. Any new body class goes on `ALLOWED`
-(`motion_rule.test.js`) on purpose, with a comment. The slice needs **no director track**
-unless it leases `petBody`; the re-scope says which. The acceptance for the re-scope is
-in section 13 ("Slice 5 acceptance, for the re-scope"). A per-world exclusive beat is a
-separate decision for after N4 (it would be art).
+**Recommendation: drop slice 5 as a slice.** The cooldown, chain and "never the same
+beat twice" machinery the earlier text planned has nothing left to carry. If the owner
+wants the after-link glance, it is a fold-in to the next slice that touches
+`card-link.js` (tier 1, `gate --auto`, one node test: after `_linkEnd(true)` with a free
+body the host gets `look` once and not under a game, scene or sleep; any `look` already
+passes `motion_rule.test.js`). If N4's cadence proves too busy on the phone, the fix is
+the species-nature plan's one-line change (one `pose` copy, 1 in 7), not a new beat.
+A per-world exclusive beat would be art and is not planned.
 
 ## 9. Rare glass moments (after 4B, FM13)
 
@@ -1292,7 +1295,7 @@ art. **Do not run two workers on the card chain or `manifest.txt` at once.**
 | 4B | **Weather keys: client** (FM9, FM11). `device-fx.js` becomes a table (section 6.6b, F12): `ambientOf`/`cueOf`/`paint`/`sync` driven by a JS map, no hardcoded `rain`; recipes for snow (frost), fog, storm (non-flashing) and wind on `.hw.glass`; the glass `animationend` filter, `CLASSES_BY_LAYER` and per-kind cooldowns (F11); the **client-computed moon** (static halo, full/new from `serverNow()`, no onset, no wire, no echo); the node parity test on `device_signal_map.json`; bench `alive` shots per key; `devicefx` card-check extended. Drives `_channel` with a fake wire shaped by 4A, as 3B did. | 1 | M | `gate --auto` plus the extended `devicefx` section | Each weather look once on the phone and the wall tablet, against a light and a dark finish (frost, fog, wind and the storm shiver: is it quiet, is it **not a flash**); storm with reduced motion on (still tint, nothing moves); the switch off (nothing drawn); the moon on a full and a new day; a flap in snow (the 45-55 s held reverse); the drop for rain unchanged. |
 | 4C | **Activity keys: server** (FM9; startable after 4A, which is built; the owner's rule of 2026-11-03, section 6.6a, lifts the privacy limits, so **no privacy review is required** and 4C is tier 1 like 4A). **Scope:** six keys and nothing else: `lights` (enum `off\|on`, kinds `lights_on`/`lights_off`), `fireplace`, `tv`, `music` (bool, kinds `x_started`/`x_stopped`): each with an onset, a ring entry and an echo like the weather; `heating`, `cooling` (bool): **ambient only**, `kinds=()`, no onset and no echo (F9: their wash is the `house_answered` moment, client-side). No key, kind or wire for the doorbell, the appliance tick or the vacuum (FM10, FM15), nor arrival or the moon (FM11). **Work, in order:** (1) the two row shapes 4A did not build (section 6.2 item 1): an enum with onsets (`_add` learns the two-member enum) and an ambient-only row (`observe` picks onsets only from rows with kinds, `_add` is not called for it); no new `Signal` column; regenerate `tests/js/device_signal_map.json`; (2) `Watcher.known(key)` for the four plain-bool readings, lights using `room_light_level is not None` (section 6.5); (3) the six rows with the numbers of the section 6.5 table, each with its `sources` (`CONF_ROOM_LIGHTS`, `CONF_FIREPLACE`, `CONF_TV`, `CONF_MUSIC`, `CONF_HEATING`, `CONF_COOLING`), constants named in `device_fx.py` (`LIGHTS_ON_LEVEL = 0.0`), music `playing` only with `block_s` 60; (4) the dev config: `input_boolean`s for fireplace, heating and cooling (none exists; there is no vacuum key) and a light for `CONF_ROOM_LIGHTS` (`dev/config/configuration.yaml` has template lights over `fake_lamp_level` and `fake_bedroom_level`, `fake_music` and `fake_tv`: check they map, or add one); (5) the tests of the acceptance table. The onset rank is the table's (section 6.5). No client work (4D); a card ignores the new keys until 4D (a kind with no recipe is ignored). No version bump. | 1 | M | `scripts/ci-gate` (pick-sections prints `all` for non-test `.py`) | With the dev fakes: flip each activity fake and restart HA in each state: the card loads, no console error, nothing new on screen. Without the fakes the first real flip is the owner's. |
 | 4D | **Activity: client, and moment-driven rim cues** (FM9, FM10, FM15; startable after **4B and 4C**). **Scope:** (1) recipes for the 4C keys, as the matrix (section 6.6) wants them: the **ambience** from `current` (lights: the dimmed or lit rim, never over `.lit`; fireplace: the warm rim; music: the quiet bars; TV: the faint colour reflection; heating and cooling: the warm and cool tint), with persistent classes and custom properties and no finite animation (section 6.6b); the **onset and the echo** for lights, fireplace, music and TV from the `fx` entry and the ring (ember, bars, reflection, rim brightening), using 3C's three-lamp vocabulary, each kind with its `cooldownMs` and onset rank (section 6.5); (2) **moment-driven rim cues, client only, no server, no wire**: `doorbell_live` (chime mark), `appliance_done` (one tick per moment, lamp by kind, the middle tick for an unknown kind), `robot_out` (rotor turns) and `robot_home` (rotor slows) (FM15), and `house_answered` for the heating or cooling wash (**on only**, section 6.6a, F9), each offered as `presentation:"onset"`, `origin:"house"` from the same callback as its sibling `fx-*` call (section 6.6c: `now()` for the doorbell, the `speak` callback for the rest), no `clockKnown` gate, a game suppresses it, a catch-up never cues, the idle `_robotFx` does not cue; (3) what the adapter must offer first is in section 6.6c (the moment entry point beside `rim`, ambient-only rows, enum rows, `ambientOf` strictness): confirm 4B landed it, or add it with `rim()` untouched. `_houseFx`/`_robotFx` do not move (FM10). Bench `alive` shots per key, `devicefx` card-check extended with a fireplace flip and a lights flip over the 4C dev fakes. | 1 | M | `gate --auto` plus the extended `devicefx` section | Each row once on the phone: lights, fireplace, music, heating (the wash on `house_answered`, the tint on every other switch), doorbell, appliance, the vacuum, and a storm with reduced motion on; the rim cue and the `fx-*` cue for one event fire together, once; open at 20 s and at 3 min after a fireplace flip (echo, then ambience only); the doorbell is silent in its cooldown and asleep. |
-| 5 | **Idle delta: parked until species N4's art merges, then re-scoped; not startable** (FM12). Glass curiosity is dropped; what may remain is section 8's post-play settle and link-port curiosity, with the "Slice 5 acceptance, for the re-scope" below. | 1 | S-M | `gate --auto` | After the re-scope: a game then idle; a link then idle; a ten-minute idle watch on the phone (subjective: the owner's call). |
+| 5 | **Idle delta: re-scoped after N4 (s2950); recommend DROP** (FM12 kept: glass curiosity stays dropped). N4's signature pose is already 2 in 8 idle moves; post-play settle is covered by `_endGame`'s line, `_react` and the `settle` move; what is left is one `_look(host, 1800)` in `_linkEnd` when the body is free, which folds into the next `card-link.js` slice if the owner wants it (section 8; Q-S5). Not startable as its own slice until answered. | 1 | XS if folded | `gate --auto` | If folded: finish a real link and watch the host glance once. Otherwise none; the owner's N4 watch on the phone (the bench `signature` preset, then ten idle minutes) is the one open check. |
 | 6 | **Rare glass: generic marks, after 4B merges** (FM13, FM16; section 9). Paw print, smudge, edge shadow (no leaf; FM13's "rim shadow"); its own `<u class="mark">` after the glass's seventh `<b>` (not a `<b>`, not the pseudo-elements; `card-build.js:156` and the `{7}` test at `device_fx_room.test.js:572` change with it) and a fifth `mark` key in `CLASSES_BY_LAYER`; **no lease** (never writes `s.dirEffect`; it ends on `dir-mark-life` with a timer backstop, and is skipped while `inspect(s).tracks.shellImpulse` exists); a `_rareGlass(s, now)` gate in `_tick` with an injected clock and `pick`, a viewed-time counter (about 20 min per slide, each tick credited at most 2 s, in memory, no clock-based quiet hours), one mark at a time, 20 s on screen and a 2 s fade (FM16), fixed margin-band spots, reset in `_forget`, `_dirSwitch` and `_go`; `dir-mark-*` only. **Not startable before 4B has merged.** Acceptance below, including a card-check geometry assertion. | 1 | S | `gate --auto` plus the extended `devicefx` section (the geometry check needs real Chromium) | A long idle watch on the phone and the wall tablet: is a mark charming or dirty, and is one per about 20 minutes of viewed time rare enough; never over a control; the switch off (nothing); reduced motion (nothing). The bench stills are the worker's, the watch is the owner's. |
 | 7 | **Screen morphs: parked, not a slice** (FM14; section 10). Re-planned only if the owner asks after slice 6. | n/a | n/a | n/a | none |
 
@@ -1465,8 +1468,7 @@ at once**.
 | **card-check** | inside the existing `devicefx` section (it needs `pinAwake`, `setLcd(true)` and the glass setup there, `card-check.js:9928-9929`; not a new section); name `_rareGlass` in its comment so `pick-sections` finds it. Force each fixed spot through the real gate with a stubbed clock and `pick`, then, at 420 and 330 px, `getBoundingClientRect` of the mark does not intersect `.attention`, `.bubble`, `.pat`, `.request`, `.basket` or the game box at their shown size, nor the pet's box at placement. `elementFromPoint` at the mark's centre stays only as the cheap `pointer-events` check (it cannot fail on the mark: it skips `pointer-events:none`). Real Chromium, not a device. |
 | device (owner) | a long idle watch: charming or dirty, and whether one per about 20 min of viewed time is rare enough. Not provable by the worker. |
 
-**Slice 5 acceptance, for the re-scope** (FM12; it holds only after N4's art has merged and
-the first mate has re-scoped the slice). Everything is provable without a device except the
+**Slice 5 acceptance, for the re-scope** (FM12; **s2950 recommends dropping the beat engine, so this table applies only if a beat slice is chosen over the drop; the fold-in glance needs just its one node test, section 8**). Everything is provable without a device except the
 last row.
 
 | Case | Proof |
@@ -1502,7 +1504,7 @@ Anything a slice would otherwise check only by eye (the bench shot per owner, a 
 screen) belongs to that slice's device queue and starts with the first slice that has an
 adapter (3B or 3C).
 
-Slice 5 is parked until N4's art merges (FM12). Slice 6 depends on slice 3B's glass layer
+Slice 5 is re-scoped after N4 (s2950): drop recommended, pending Q-S5 (FM12). Slice 6 depends on slice 3B's glass layer
 and starts only after 4B has merged (FM13), not on slice 7; slice 7 is parked (FM14). The full gate is the first mate's, once per merged batch;
 3A is the only slice-3 PR that needs `scripts/ci-gate` at once (and its PR gets the
 privacy review); in slice 4 that is 4A and 4C (4A is merged; 4C needs no privacy review, section 6.6a).
@@ -1565,6 +1567,12 @@ wire are FM11, which the owner may reverse. The slice 5-7 review's questions are
 as FM12 (slice 5 parked until N4's art, glass curiosity dropped), FM13 (slice 6 generic
 marks, about one per 20 minutes of viewed time, after 4B) and FM14 (slice 7 parked); the
 owner may reverse any of them.
+
+**Open (s2950): Q-S5, slice 5 after N4.** Options: (a) **drop slice 5** and keep N4 as the
+idle beat (recommended; section 8); (b) drop it but fold the one after-link `_look(host,
+1800)` into the next `card-link.js` slice; (c) build the beat engine of the old text
+(post-play settle and link curiosity, cooldown, acceptance table) anyway. Decide after
+the owner's N4 phone watch if cadence is in doubt.
 
 **Answered (2026-11-03): the owner's privacy questions.** They gated 4C and 4D (FM9); the
 answers are in section 6.6a, and the s2823 review applied them to this plan. The same day
