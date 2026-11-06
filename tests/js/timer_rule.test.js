@@ -1,0 +1,66 @@
+// The timer ratchet (docs/plan-2026-11-06-director-migration.md 5.0, 7.1, Appendix B). Per card part, the
+// bare identifiers setTimeout, setInterval, requestAnimationFrame, clearTimeout, clearInterval,
+// cancelAnimationFrame and the member `.animate(`, comments stripped (tests/js/timer_count.js). The bare
+// word, not the call, so `forEach(clearTimeout)` and an alias (`const t = setTimeout`) count. It fails when a
+// count differs in either direction: a new bare timer fails at once, and a slice that moves one onto the
+// ledger lowers its number here in the same commit. `node tests/js/timer_count.js` prints the live table.
+// Slice 14 replaces this table with the allowlist (7.1). node --test tests/js
+const test = require("node:test");
+const assert = require("node:assert");
+const { countParts, countText, stripComments, COLUMNS } = require("./timer_count");
+
+const [ST, SI, RAF, CT, CI, CAF, AN] = COLUMNS;
+// Appendix B's counts on 531cd101, recounted on 0d6abbea (the same), plus slice 0's own lines, marked.
+const PINNED = {
+  "card-actions": { [ST]: 5, [RAF]: 2, [CAF]: 1 },
+  // + slice 0: `.animate(` 1, in the _waapi adapter
+  "card-base": { [ST]: 2, [SI]: 1, [CT]: 4, [CI]: 1, [AN]: 1 },
+  // + slice 0: the director's repeat and frame wrappers (setInterval, clearInterval, rAF, cancel 1 each)
+  "card-build": { [ST]: 5, [SI]: 1, [RAF]: 1, [CT]: 9, [CI]: 1, [CAF]: 1 },
+  "card-care": { [ST]: 6, [CT]: 1 },
+  "card-flair": { [ST]: 1, [CT]: 2, [CAF]: 1 },
+  "card-games": { [ST]: 3 },
+  "card-journal": { [ST]: 1, [CT]: 1 },
+  "card-layout": { [ST]: 2, [RAF]: 1, [CT]: 2 },
+  "card-link": { [ST]: 3, [SI]: 2, [CT]: 3, [CI]: 2 },
+  "card-looks": { [ST]: 4, [CT]: 2 },
+  "card-memory": { [ST]: 2, [CT]: 3 },
+  "card-mode": { [ST]: 1, [CT]: 1 },
+  "card-moment": { [ST]: 4, [CT]: 1 },
+  "card-season": { [ST]: 6, [CT]: 1 },
+  "card-sheets": { [ST]: 6, [CT]: 5 },
+  "card-tick": { [ST]: 16, [SI]: 1, [CT]: 6, [CI]: 1, [AN]: 2 },
+  "card-visit": { [ST]: 9, [CT]: 7 },
+  "card-visitors": { [ST]: 3, [CT]: 2 },
+};
+
+test("the counter: comments go, strings, templates and regex literals stay whole", () => {
+  assert.deepStrictEqual(countText("// setTimeout(x)\n/* clearTimeout */ a();"), {});
+  assert.deepStrictEqual(countText("list.forEach(clearTimeout); const t = setTimeout;"), { [CT]: 1, [ST]: 1 });
+  assert.deepStrictEqual(countText("x.mySetTimeout(); setTimeouts; $setTimeout; el.animate(k, 9); a.animated"),
+    { [AN]: 1 });
+  assert.deepStrictEqual(countText('const u = "http://x"; setInterval(f, 1);'), { [SI]: 1 });
+  assert.deepStrictEqual(countText("const r = /a\\/\\/b|[/]/g; requestAnimationFrame(f); // setTimeout"), { [RAF]: 1 });
+  assert.deepStrictEqual(countText("const s = `a ${b ? `//c` : 'd'} e`; cancelAnimationFrame(i); // clearInterval"),
+    { [CAF]: 1 });
+  assert.deepStrictEqual(countText("const half = a / 2; setTimeout(f, b / 2); // setTimeout"), { [ST]: 1 });
+  assert.strictEqual(stripComments("a // b\nc /* d\ne */ f").split("\n").length, 3, "line breaks kept");
+});
+
+test("the ratchet: every card part's bare timer count is pinned, in both directions", () => {
+  const live = countParts();
+  const rows = new Set([...Object.keys(PINNED), ...Object.keys(live)]);
+  const off = [];
+  for (const file of [...rows].sort()) {
+    for (const k of COLUMNS) {
+      const want = PINNED[file]?.[k] || 0;
+      const got = live[file]?.[k] || 0;
+      if (want !== got) off.push(`${file}.js ${k} ${got} (pinned ${want})`);
+    }
+  }
+  assert.deepStrictEqual(off, [], [
+    "A bare timer count changed. A new one goes through the director's ledger (this._later, _hold, _waapi;",
+    "docs/plan-2026-11-06-director-migration.md 1.4), not a bare timer. A slice that moved one lowers its",
+    "number in PINNED in the same commit. Off:", ...off,
+  ].join("\n"));
+});

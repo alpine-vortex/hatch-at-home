@@ -671,9 +671,12 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     s.dirRecent = null;
   }
 
-  // The tab went hidden, or the card scrolled away: nothing runs; the state is painted on return.
-  _dirPause() {
+  // The tab went hidden ("tab"), or the card scrolled away ("offscreen"): nothing runs; the state is
+  // painted on return. The ledger hears which (G6): "tab" drains its `hidden: "tab"` entries (none until
+  // slice X1), "offscreen" drains nothing.
+  _dirPause(why) {
     for (const s of this._slides || []) this._director?.cancel(s, "paused", ["shellImpulse"]);
+    this._director?.hidden(why);
   }
 
   // The "screen effects here" switch changed: off draws nothing at once (the CSS also hangs on

@@ -113,7 +113,7 @@ class HatchPetCardBase extends HTMLElement {
       (this._slides || []).forEach((x) => this._stopTyping(x));
       (this._slides || []).forEach((x) => this._memoryPageClose(x)); // memory plan M3a, path 5
       this._hiddenAt ??= Date.now();
-      this._dirPause();
+      this._dirPause("tab");
       audioPark(); // nobody can hear it
       return;
     }
@@ -175,6 +175,60 @@ class HatchPetCardBase extends HTMLElement {
   // not a game keeps moments, visitors, wander, scenes and the link off too (tests/js/owned_reads.test.js).
   _owned(s) {
     return !!s?.game || !!(s?.mode && s.mode.owns !== false);
+  }
+
+  // --- The ledger's adapters (docs/plan-2026-11-06-director-migration.md 1.4) -------------
+  //
+  // Thin calls into the director's ledger, so a timer site moves by a rename. `scope` comes first: a
+  // slide, or `this._dirCard` (the card's own token, made in _build) where there may be no slide (G8);
+  // an undefined scope throws. The director is made in _build, before any slide, so there is no
+  // fallback and no bare timer here. Undo runs only on a drain (rule 1).
+  _later(scope, ms, fn, opts) {
+    return this._director.later(scope, ms, fn, opts);
+  }
+
+  // A temporary class: on now, off after `ms`. `opts.remove` (default `classes`) is what the timer
+  // takes off and what `restart` clears before the reflow; `opts.mirror` (an element) gets the same
+  // restart and add (the pet's blanket, as _animate keeps it); `key`, `group` and `hidden` go to the
+  // ledger, the target is `el`. A same-key hold first stops the earlier timer silently, so the class
+  // stays on to the second one's end; a drain takes the classes off at once.
+  _hold(scope, el, classes, ms, opts = {}) {
+    if (!scope || typeof scope !== "object") throw new TypeError("_hold: the scope must be an object");
+    const add = [].concat(classes);
+    const off = opts.remove === undefined ? add : [].concat(opts.remove);
+    const mirror = opts.mirror || null;
+    if (opts.key !== undefined) this._director.stop(scope, { key: opts.key, target: el });
+    if (opts.restart) {
+      el.classList.remove(...off);
+      mirror?.classList.remove(...off);
+      void el.offsetWidth; // restart the animation
+    }
+    el.classList.add(...add);
+    mirror?.classList.add(...add);
+    const remove = () => el.classList.remove(...off);
+    return this._director.later(scope, ms, remove, { key: opts.key, group: opts.group, hidden: opts.hidden,
+      target: el, undo: remove });
+  }
+
+  // A WAAPI animation the ledger owns: a drain cancels it; its own finish or cancel takes it off.
+  _waapi(scope, el, frames, timing, opts) {
+    const a = el.animate(frames, timing);
+    const handle = this._director.adopt(scope, { ...opts, cancel: () => a.cancel() });
+    a.addEventListener("finish", handle.done);
+    a.addEventListener("cancel", handle.done);
+    return a;
+  }
+
+  _stop(scope, sel) {
+    return this._director.stop(scope, sel);
+  }
+
+  _drain(scope, sel) {
+    return this._director.drain(scope, sel);
+  }
+
+  _has(scope, sel) {
+    return this._director.has(scope, sel);
   }
 
   disconnectedCallback() {

@@ -6,6 +6,8 @@
 // `canRender` and `schedule(ms, fn) -> cancel`; tests pass fakes. One frozen namespace, no
 // loose globals: the card is a classic script, so a top-level name is shared with every other
 // card on the page. The card creates one per card (card-build.js); its rain adapter is device-fx.js.
+// It also owns the timers of the card's own one-shots: the ledger below (docs/plan-2026-11-06-director-
+// migration.md 1.3), with `repeat(ms, fn) -> cancel` and `frame(fn) -> cancel` injected beside `schedule`.
 //
 // Tracks. `control`, `shellImpulse`, `screenFx` and `petBody` are leased: one effect each per
 // slide, a generation token on every effect. `shellAmbient` is state (setAmbient), never
@@ -106,7 +108,10 @@ const HATCH_DIRECTOR = Object.freeze(
       return "";
     };
 
-    const create = ({ now, deviceNow, trusted, canRender, schedule, recipes, scopeOf } = {}) => {
+    const LEDGER_PASSES = 50; // a drain whose undos keep adding entries stops here (plan 1.3 G7, A3)
+    const HIDDEN = Object.freeze(["keep", "tab"]);
+
+    const create = ({ now, deviceNow, trusted, canRender, schedule, repeat, frame, recipes, scopeOf } = {}) => {
       if (typeof now !== "function") throw new TypeError("director: now() is required");
       if (typeof schedule !== "function") throw new TypeError("director: schedule(ms, fn) is required");
       // The slide's own timers (poseUntil) are on the device clock, `now` is the server's: the
@@ -123,6 +128,217 @@ const HATCH_DIRECTOR = Object.freeze(
       let states = new WeakMap(); // slide -> per-slide state, freed with the slide
       const live = new Set(); // the effects running now: short-lived, so reset() can reach them
       let generation = 0; // one counter for the director: no two effects share a token
+
+      // ---- The ledger (plan 1.3, G1-G9): owned one-shots, intervals, frames and adopted animations ----
+      //
+      // Ownership without arbitration: it never refuses, queues or reorders a call, and it adds no
+      // watchdog. It is not in `states`, so reset() (which replaces that map) leaves it alone (rule 2). An
+      // entry ends one of five ways (rule 1): it fires (`fn`, no `undo`), a same-key entry replaces it,
+      // stop() takes it (both silent: no `fn`, no `undo`), or a drain (drain, detach, drainAll, and
+      // hidden("tab") for a `hidden: "tab"` entry) takes it: its `undo` runs once, `fn` never does.
+      const ledger = new WeakMap(); // scope -> Set(entry)
+      const entries = new Set(); // every entry, for pending(), hidden() and drainAll()
+
+      const needScope = (scope, what) => {
+        if (!isObj(scope)) throw new TypeError(`director: ${what}'s scope must be an object`);
+      };
+      const optsOf = (scope, opts, what) => {
+        const o = opts === undefined ? {} : opts;
+        const bad = (why) => {
+          throw new TypeError(`director: ${what}: ${why}`);
+        };
+        if (!isObj(o)) bad("opts must be an object");
+        if (o.key !== undefined && typeof o.key !== "string") bad("key must be a string");
+        if (o.group !== undefined && typeof o.group !== "string") bad("group must be a string");
+        if (o.target !== undefined && !isObj(o.target)) bad("target must be an object");
+        if (o.undo !== undefined && typeof o.undo !== "function") bad("undo must be a function");
+        if (o.hidden !== undefined && !HIDDEN.includes(o.hidden)) bad(`hidden must be one of ${HIDDEN.join(", ")}`);
+        return { key: o.key, group: o.group, target: o.target === undefined ? scope : o.target, undo: o.undo,
+          hidden: o.hidden || "keep" };
+      };
+      // The entry leaves the ledger; false when it had already left (fired, stopped, drained, done).
+      const unlist = (e) => {
+        if (!entries.delete(e)) return false;
+        const set = ledger.get(e.scope);
+        if (set) {
+          set.delete(e);
+          if (!set.size) ledger.delete(e.scope);
+        }
+        return true;
+      };
+      // Silent: the native handle is cancelled (an adopted animation's own cancel too); no fn, no undo.
+      const quiet = (e) => {
+        if (!unlist(e)) return false;
+        e.cancel();
+        return true;
+      };
+      const matches = (e, sel) =>
+        (sel.key === undefined || e.key === sel.key) && (sel.target === undefined || e.target === sel.target)
+        && (sel.group === undefined || e.group === sel.group);
+      const selOf = (sel, what) => {
+        if (!isObj(sel) || (sel.key === undefined && sel.target === undefined && sel.group === undefined)) {
+          throw new TypeError(`director: ${what} needs a key, a target or a group`); // no selector takes a whole scope
+        }
+        return sel;
+      };
+      const inScope = (scope, pick) => [...(ledger.get(scope) || [])].filter(pick);
+      // A drain runs to empty (A3): each entry leaves the ledger before its undo runs, and an undo that adds
+      // a matching entry is taken on the next pass. After LEDGER_PASSES the rest is stopped silently. An
+      // undo that throws does not stop the others: the first throw is raised once the drain is over.
+      const drainWhere = (list, out) => {
+        let n = 0;
+        let error = null;
+        for (let pass = 0; pass < LEDGER_PASSES; pass++) {
+          const take = list();
+          if (!take.length) break;
+          for (const e of take) {
+            if (!unlist(e)) continue;
+            n++;
+            e.cancel();
+            if (!e.undo) continue; // a drop: just stopped
+            try {
+              e.undo();
+            } catch (err) {
+              if (!error) error = { err };
+            }
+          }
+        }
+        for (const e of list()) quiet(e); // past the cap
+        out.n = n;
+        return error;
+      };
+      const raise = (error) => {
+        if (error) throw error.err;
+      };
+
+      // Adds an entry; `start(e)` arms the native handle and returns its cancel. A same-key entry on the
+      // same (scope, target) is replaced silently first; an adopted one's own cancel is not called then
+      // (the ghost trail cancels its animations itself, G4).
+      const enlist = (scope, o, kind, ms, start) => {
+        if (o.key !== undefined) {
+          for (const e of inScope(scope, (x) => x.key === o.key && x.target === o.target)) {
+            if (e.kind === "adopt") unlist(e);
+            else quiet(e);
+          }
+        }
+        const e = { scope, kind, key: o.key, group: o.group, target: o.target, undo: o.undo, hidden: o.hidden,
+          ms, dueAt: Number.isFinite(ms) ? dnow() + ms : null, cancel: () => {} };
+        let set = ledger.get(scope);
+        if (!set) ledger.set(scope, (set = new Set()));
+        set.add(e);
+        entries.add(e);
+        e.cancel = start(e);
+        return Object.freeze({
+          stop: () => quiet(e),
+          // An adopted thing finished on its own: it leaves, nothing is cancelled. Per handle and
+          // idempotent, so a late event never takes a newer entry under the same key.
+          done: () => unlist(e),
+        });
+      };
+      const needFn = (fn, what) => {
+        if (typeof fn !== "function") throw new TypeError(`director: ${what} needs a function`);
+      };
+
+      const ledgerApi = {
+        // G1. One schedule() call, `ms` unchanged (setTimeout semantics). Bookkeeping first, then fn, no
+        // try/catch: a re-arm inside fn with the same key stands, and a throw reaches the page as before.
+        later: (scope, ms, fn, opts) => {
+          needScope(scope, "later");
+          needFn(fn, "later");
+          const o = optsOf(scope, opts, "later");
+          return enlist(scope, o, "later", ms, (e) =>
+            schedule(ms, () => {
+              if (unlist(e)) fn();
+            }));
+        },
+        // G2. An owned interval through the injected repeat(ms, fn) -> cancel. It stays until stopped.
+        every: (scope, ms, fn, opts) => {
+          needScope(scope, "every");
+          needFn(fn, "every");
+          if (typeof repeat !== "function") throw new TypeError("director: every() needs repeat(ms, fn) at create");
+          const o = optsOf(scope, opts, "every");
+          return enlist(scope, o, "every", ms, (e) =>
+            repeat(ms, (...args) => {
+              if (!entries.has(e)) return;
+              e.dueAt = dnow() + ms;
+              fn(...args);
+            }));
+        },
+        // G3. An owned next-frame callback through the injected frame(fn) -> cancel (not later(.., 0)).
+        frame: (scope, fn, opts) => {
+          needScope(scope, "frame");
+          needFn(fn, "frame");
+          if (typeof frame !== "function") throw new TypeError("director: frame() needs frame(fn) at create");
+          const o = optsOf(scope, opts, "frame");
+          return enlist(scope, o, "frame", undefined, (e) =>
+            frame((...args) => {
+              if (unlist(e)) fn(...args);
+            }));
+        },
+        // G4. Something started elsewhere (a WAAPI Animation): a drain or a stop calls `cancel` once;
+        // handle.done() is its completion.
+        adopt: (scope, opts) => {
+          needScope(scope, "adopt");
+          const cancel = isObj(opts) ? opts.cancel : undefined;
+          needFn(cancel, "adopt");
+          const o = optsOf(scope, opts, "adopt"); // reads key, group, target, hidden (and undo) only
+          return enlist(scope, o, "adopt", undefined, () => () => cancel());
+        },
+        // G7. Silent: no undo, no fn. Returns how many it took.
+        stop: (scope, sel) => {
+          needScope(scope, "stop");
+          selOf(sel, "stop");
+          let n = 0;
+          for (const e of inScope(scope, (x) => matches(x, sel))) if (quiet(e)) n++;
+          return n;
+        },
+        // G7. Each entry's undo once, never fn; an entry with no undo is just stopped. Runs to empty.
+        drain: (scope, sel) => {
+          needScope(scope, "drain");
+          selOf(sel, "drain");
+          const out = {};
+          raise(drainWhere(() => inScope(scope, (x) => matches(x, sel)), out));
+          return out.n;
+        },
+        has: (scope, sel) => {
+          needScope(scope, "has");
+          selOf(sel, "has");
+          return inScope(scope, (x) => matches(x, sel)).length > 0;
+        },
+        // G6. "tab" drains the `hidden: "tab"` entries; "offscreen" (and "keep" entries) are left. A
+        // snapshot: an entry an undo adds here is new and keeps its own policy.
+        hidden: (why) => {
+          if (why !== "tab") return 0;
+          let n = 0;
+          let error = null;
+          for (const e of [...entries].filter((x) => x.hidden === "tab")) {
+            if (!unlist(e)) continue;
+            n++;
+            e.cancel();
+            try {
+              if (e.undo) e.undo();
+            } catch (err) {
+              if (!error) error = { err };
+            }
+          }
+          raise(error);
+          return n;
+        },
+        // Every scope (tests and the bench only; the card never calls it).
+        drainAll: () => {
+          const out = {};
+          raise(drainWhere(() => [...entries], out));
+          return out.n;
+        },
+        // One scope's count, or the whole director's.
+        pending: (scope) => (scope === undefined ? entries.size : (isObj(scope) && ledger.get(scope)?.size) || 0),
+      };
+      const timersOf = (scope) =>
+        inScope(scope, () => true).map((e) => {
+          const row = { key: e.key, group: e.group, ms: e.ms, dueAt: e.dueAt };
+          if (e.target !== scope) row.target = e.target;
+          return row;
+        });
 
       const stateOf = (slide) => {
         if (!isObj(slide)) throw new TypeError("director: the slide must be an object");
@@ -399,15 +615,22 @@ const HATCH_DIRECTOR = Object.freeze(
           return n;
         },
 
-        // The slide is going: timers, effects, ambient state and memory, all of it.
+        // The slide is going: timers, effects, ambient state and memory, all of it. The ledger is
+        // drained first (each undo once, to empty), then the tracks end and the state goes.
         detach: (slide) => {
+          if (!isObj(slide)) return;
+          const out = {};
+          const error = drainWhere(() => inScope(slide, () => true), out);
           const st = states.get(slide);
-          if (!st) return;
-          for (const e of [...st.tracks.values()]) endEffect(e, "detach");
-          states.delete(slide);
+          if (st) {
+            for (const e of [...st.tracks.values()]) endEffect(e, "detach");
+            states.delete(slide);
+          }
+          raise(error);
         },
 
         // The card disconnected: every effect on every slide, and the state.
+        // The ledger is not touched: its entries fire on their time (plan 1.3 rule 2, G9).
         reset: () => {
           for (const e of [...live]) endEffect(e, "reset");
           live.clear();
@@ -421,23 +644,26 @@ const HATCH_DIRECTOR = Object.freeze(
         busyOwners: (slide) => busyOwners(slide, dnow()),
 
         // A plain look at one slide, for tests and the bench.
+        // `timers` is the slide's ledger, `dueAt` on the device clock; null with no state and no timer.
         inspect: (slide) => {
           const st = states.get(slide);
-          if (!st) return null;
+          const timers = isObj(slide) ? timersOf(slide) : [];
+          if (!st && !timers.length) return null;
           const tracks = {};
-          for (const [track, e] of st.tracks) tracks[track] = { id: e.id, kind: e.kind, expiresAt: e.expiresAt };
+          for (const [track, e] of st ? st.tracks : []) tracks[track] = { id: e.id, kind: e.kind, expiresAt: e.expiresAt };
           return {
-            ambient: st.ambient, tracks, seen: st.seen.size, pending: st.pending ? st.pending.id : null,
-            lastMicroBeat: st.lastMicroBeat,
+            ambient: st ? st.ambient : Object.freeze({}), tracks, seen: st ? st.seen.size : 0,
+            pending: st && st.pending ? st.pending.id : null, lastMicroBeat: st ? st.lastMicroBeat : 0, timers,
           };
         },
+        ...ledgerApi,
       };
       return Object.freeze(api);
     };
 
     return {
       create, BUSY_OWNERS, isBusy, busyOwners, PRIORITY, TRACKS, LEASED,
-      ECHO_WINDOW_MS, SEEN_MAX, WATCHDOG_MS,
+      ECHO_WINDOW_MS, SEEN_MAX, WATCHDOG_MS, LEDGER_PASSES,
     };
   })()
 );

@@ -48,7 +48,10 @@ class HatchPetCardBuild extends HatchPetCardBase {
     this._syncTheme();
     this._card.classList.toggle("lcd-on", lcdOn());
     // The device-alive director (slice 3B): the server clock for the cues, the device clock for the
-    // slides' own timers, and one timer through setTimeout (the card's _tick also calls tick()).
+    // slides' own timers, and one timer through setTimeout (the card's _tick also calls tick()). Its
+    // ledger (director migration plan 1.3) takes the interval and the frame wrappers too, and owns the
+    // card-level timers under `this._dirCard`, the card's own scope (never drained by a forget).
+    this._dirCard = Object.freeze({ card: true });
     this._director = HATCH_DIRECTOR.create({
       now: serverNow, deviceNow: Date.now, trusted: serverClockKnown,
       canRender: (s) => lcdOn() && this._dirShown(s),
@@ -56,6 +59,14 @@ class HatchPetCardBuild extends HatchPetCardBase {
       schedule: (ms, fn) => {
         const timer = setTimeout(fn, ms);
         return () => clearTimeout(timer);
+      },
+      repeat: (ms, fn) => {
+        const timer = setInterval(fn, ms);
+        return () => clearInterval(timer);
+      },
+      frame: (fn) => {
+        const id = requestAnimationFrame(fn);
+        return () => cancelAnimationFrame(id);
       },
       recipes: HATCH_DEVICE_FX.RECIPES,
     });
@@ -138,7 +149,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
       this._visible = entries.some((e) => e.isIntersecting);
       this._card.classList.toggle("offscreen", !this._visible); // pauses the loops
       if (!this._visible) this._slides.forEach((x) => this._stopTyping(x));
-      if (!this._visible) this._dirPause();
+      if (!this._visible) this._dirPause("offscreen");
       else this._dirView(this._slides[this._index]); // in view: the first view's echo, or just the ambience
       if (this._visible && this._dirty) this._update(); // catch up on what was skipped
     });

@@ -32,7 +32,7 @@ Where things live:
 | prefs | VERSION, BOOT_VERSION, icons, actions, games, sound/lcd/mono/shared prefs, chirps |
 | world | odds, ms, flair, SEASONS, hanukkah, turn/visitor day, once-per-day, season helpers |
 | hop-engine | `HATCH_HOP`, Hop of the Day's rules (one frozen namespace; hop.py's twin, no `this`) |
-| interaction-director | `HATCH_DIRECTOR`, the device-alive director: track leases, generation tokens, `BUSY_OWNERS` (one frozen namespace, pure, no `this`, no DOM; the card creates one per card in `_build`, device-fx.js is its first adapter) |
+| interaction-director | `HATCH_DIRECTOR`, the device-alive director: track leases, generation tokens, `BUSY_OWNERS` (one frozen namespace, pure, no `this`, no DOM; the card creates one per card in `_build`, device-fx.js is its first adapter); and the **ledger** of the card's own timers (docs/plan-2026-11-06-director-migration.md 1.3): `later`, `every`, `frame`, `adopt`, `stop` (silent), `drain` (runs each `undo`), `has`, `hidden(why)`, `pending`, `inspect().timers`, `drainAll` (tests, bench). Undo runs only on a drain; `detach` drains, `reset()` does not. A new card timer goes through it (card-base's `_later`, `_hold`, `_waapi`), not a bare `setTimeout`: `tests/js/timer_rule.test.js` pins the bare count per part, and a slice that moves one lowers it there. Traces: `tests/js/timer_trace.js` |
 | device-fx | `HATCH_DEVICE_FX`, the adapter for the director (slices 3B, 3C): wire entry to cue, the rain recipe (`dir-*` classes on the slide's `.hw.glass`), ambience paint, `live`, `enter`; and the rim cues (feed, play, clean, the confirmed tuck: `RIM`, `rim`, `dir-*` classes on the slide's `.hw.rim`) (one frozen namespace, no `this`, no DOM beyond the glass and the rim; the card's `_dir*` methods and `_rimCue` in card-visit call it) |
 | sitter-engine | `HATCH_SITTER`, the sitter's rules (one frozen namespace, pure, no `this`, no DOM, no clock; sitter plan S3a: whose sitter, the cue plan, the first-snapshot rule, idles, the hold pose, the beats; `card-sitter` is its adapter) |
 | lines | poses, wishes, BABY, PERSONA |
@@ -41,7 +41,7 @@ Where things live:
 | shell-modes | `SHELL_MODES` (the shell-mode table: one entry per mode, 8 slots each; the three server games ship, built by `shellGame`, and hop, built by `shellHop`), `SHELL_TINTS`, `shellCheck` (the schema), `shellIcon` (pure, no `this`, no DOM; no game words except in `shellGame` and the table, whose slot functions read `s.game`; docs/plan-2026-11-04-shell-modes.md) |
 | shell-data | moulded shell, finishes, traits, server clock, `timeAgo` |
 | style | `STYLE`, `SCENE_STYLE` (CSS strings; the one part over 1,000 lines) |
-| card-base | setConfig, hass, connect, channel, finding pets |
+| card-base | setConfig, hass, connect, channel, finding pets; the ledger's adapters `_later`, `_hold`, `_waapi`, `_stop`, `_drain`, `_has` (scope first: a slide, or `this._dirCard` where there may be none) |
 | card-build | `_build`, `_buildSlide`, low battery, power-on, `_update`, `_forget`, `_go` |
 | card-layout | `_layout`, `_mould`, `_renderShelf`, `_dress`, `_renderSlide`, `_say`, frames |
 | card-sitter | the sitter's life (`HatchPetCardSitter`): the art load (`frontend/sitter/`, `sitters.json`), `_sitterSync` (drawn by `_renderSlide`), beats, cues, idles, the one timer is `_sitterTick` (called by `_tick`), `_sitterAt` (the bench) |

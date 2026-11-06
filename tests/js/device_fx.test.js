@@ -398,7 +398,7 @@ test("the hooks: statusOpen, the director, the glass element, the first-view and
   const go = src.slice(src.indexOf("  _go(index, auto = false) {"));
   assert.match(go.slice(0, go.indexOf("\n  }\n")), /this\._dirView\(this\._slides\[to\]\)/);
   const hidden = src.slice(src.indexOf("  _onHidden = () => {"), src.indexOf("  connectedCallback() {"));
-  assert.match(hidden, /this\._dirPause\(\);/);
+  assert.match(hidden, /this\._dirPause\("tab"\);/);
   assert.match(hidden, /this\._dirView\(this\._slides\?\.\[this\._index\]\)/);
   assert.match(src, /else this\._dirView\(this\._slides\[this\._index\]\); \/\/ in view/);
   assert.match(src, /this\._director\?\.detach\(s\)/); // _forget
