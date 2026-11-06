@@ -96,7 +96,7 @@ class HatchPetCardTick extends HatchPetCardSitter {
     if (!this._ghosting(s) || s.pet.classList.contains("look") || s.pet.getAnimations().length ||
       s.ghostUntil > Date.now()) return;
     s.ghost.setAttribute("src", src);
-    s.ghost.animate([{ opacity: 0.35 }, { opacity: 0 }], { duration: 180, easing: "linear" });
+    this._waapi(s, s.ghost, [{ opacity: 0.35 }, { opacity: 0 }], { duration: 180, easing: "linear" });
   }
 
   // A wander or a game move: the ghost follows the pet 120 ms behind (its CSS
@@ -109,7 +109,7 @@ class HatchPetCardTick extends HatchPetCardSitter {
     const turn = parseFloat(cs.transitionDelay) * 1000 || 0; // a wander left turns first
     const duration = turn + move + 120 + 180;
     s.ghost.setAttribute("src", s.pet.getAttribute("src"));
-    s.ghost.animate([{ opacity: 0.3 }, { opacity: 0.3, offset: (turn + move + 120) / duration }, { opacity: 0 }],
+    this._waapi(s, s.ghost, [{ opacity: 0.3 }, { opacity: 0.3, offset: (turn + move + 120) / duration }, { opacity: 0 }],
       { duration });
     s.ghostUntil = Date.now() + duration;
   }
@@ -718,13 +718,13 @@ class HatchPetCardTick extends HatchPetCardSitter {
   _poseEnd(s) {
     const until = s.poseUntil;
     if (!until) return;
-    setTimeout(() => {
+    this._later(s, Math.max(0, until - Date.now()) + 30, () => {
       if (s.poseUntil !== until) return; // a newer pose owns the end
       s.poseUntil = 0;
       s.frame = 0;
       const frames = this._frames(s);
       if (frames.length && !s.scene) this._show(s, s.pet, frames[0]);
-    }, Math.max(0, until - Date.now()) + 30);
+    });
   }
 
   // A care prop onto the floor (or above the head with `cls`), dropped in, then leaving in two
@@ -732,7 +732,6 @@ class HatchPetCardTick extends HatchPetCardSitter {
   // flourish under reduced motion (the global CSS rule already stills the animation).
   _propShow(s, sprite, ms, cls = "") {
     const el = s.prop;
-    clearTimeout(s.propOutTimer);
     el.className = `prop ${cls}`.trim();
     el.style.animation = "none";
     void el.offsetWidth; // restart the drop
@@ -740,9 +739,9 @@ class HatchPetCardTick extends HatchPetCardSitter {
     this._show(s, el, sprite);
     const until = Date.now() + ms;
     s.propUntil = until;
-    s.propOutTimer = setTimeout(() => {
+    this._later(s, Math.max(0, ms - 300), () => {
       if (s.propUntil === until && !calm()) el.classList.add("prop-out");
-    }, Math.max(0, ms - 300));
+    }, { key: "prop.out" });
   }
 
   // A choice from a short list that is never the one made last time for `key` (plan 4.7, the
@@ -977,26 +976,28 @@ class HatchPetCardTick extends HatchPetCardSitter {
   _patLean(s, side, holdMs) {
     const c = s.pet.classList;
     if (calm() || !side || c.contains("look") || [...c].some((k) => k.startsWith("wander-"))) return false;
-    clearTimeout(s.leanTimer);
-    clearTimeout(s.leanRelTimer);
+    this._stop(s, { key: "lean" });
+    this._stop(s, { key: "lean.rel" });
     c.remove("lean-rel");
     c.remove(side === "l" ? "lean-r" : "lean-l");
     c.toggle("lean-sick", s.moodState === "sick"); // slower, in and out
     c.add(side === "l" ? "lean-l" : "lean-r");
-    s.leanTimer = setTimeout(() => this._patLeanOff(s), holdMs);
+    // A forget lets the lean go at once, by a direct removal (A3): not _patLeanOff, which would start a timer.
+    this._later(s, holdMs, () => this._patLeanOff(s), { key: "lean", undo: () => c.remove("lean-l", "lean-r", "lean-rel", "lean-sick") });
     this._moving(s, holdMs + 300); // the pet is off true: no idle look or wander, no hat placed, till it lets go
     return true;
   }
 
   // Let the lean go, over .3 s (.45 s when sick), then drop its classes.
   _patLeanOff(s) {
-    clearTimeout(s.leanTimer);
+    this._stop(s, { key: "lean" });
     const c = s.pet?.classList;
     if (!c || !(c.contains("lean-l") || c.contains("lean-r"))) return;
-    clearTimeout(s.leanRelTimer);
+    this._stop(s, { key: "lean.rel" });
     c.add("lean-rel");
     c.remove("lean-l", "lean-r");
-    s.leanRelTimer = setTimeout(() => c.remove("lean-rel", "lean-sick"), c.contains("lean-sick") ? 450 : 300);
+    this._later(s, c.contains("lean-sick") ? 450 : 300, () => c.remove("lean-rel", "lean-sick"),
+      { key: "lean.rel", undo: () => c.remove("lean-l", "lean-r", "lean-rel", "lean-sick") });
   }
 
   // An asleep pat: the slow perk as ever; the third stirs it (the sleepy face for 500 ms, a small turn)

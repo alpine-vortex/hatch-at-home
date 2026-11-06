@@ -1309,7 +1309,7 @@
         } finally {
           Date.now = realNow;
         }
-        clearTimeout(cur.leanTimer);
+        card._director.stop(cur, { key: "lean" }); // hold the lean for the shot: its release is on the ledger
         await new Promise((r) => setTimeout(r, 30));
         for (const a of cur.screen.getAnimations({ subtree: true })) {
           if (a instanceof CSSTransition) a.finish();

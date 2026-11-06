@@ -3,6 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const vm = require("vm");
+const { adapters } = require("./timer_trace");
 
 const src = require("./card-source");
 const method = (name) => src.match(new RegExp(`\\n  ${name}\\([^\\n]*\\) \\{[\\s\\S]*?\\n  \\}\\n`))[0];
@@ -98,7 +99,6 @@ function card({ calm = false, random = 0.99, klass = [], mood = "content", drawn
   const classes = new Set(klass);
   const ctx = {
     calm: () => calm, Date, Number, Math: { ...Math, random: () => random }, MINE: 4, pick: (l) => l[0],
-    setTimeout: () => 0, clearTimeout: () => {},
   };
   vm.runInNewContext(`${CONSTS.map(konst).join("")}${func("patZone")}${func("patStep")}` +
     `const PAT_SPOT = "that's the spot!! ♥"; const PAT_RUN_LINES = ${konst("PAT_RUN_LINES").replace(/^\nconst PAT_RUN_LINES = /, "").replace(/;\n$/, "")};` +
@@ -109,7 +109,7 @@ function card({ calm = false, random = 0.99, klass = [], mood = "content", drawn
     species: { moods: ["content", "sleepy", "cozy"], frames: 2, extras: {}, reactions: {} },
     moodState: mood, drawn, egg, asleep, poseUntil: 0 };
   const self = {
-    ...ctx.api,
+    ...ctx.api, ...adapters(), // the ledger the lean's timers go on (nothing is scheduled)
     _patOn: () => true, _swiped: false, _tapped: () => {}, _chirp: () => {}, _look: () => { log.looks++; },
     _animate: (_s, _el, cls) => log.animated.push(cls), _moving: () => {},
     _reactFrames: (_s, kind, opts) => log.reacted.push([kind, opts]),

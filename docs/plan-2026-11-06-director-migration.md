@@ -935,6 +935,25 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
   `stop(cur, { key: "lean" })`); `tests/js/care_reactions.test.js:161` (pose end: `log.timers.some(ms 2400-2600)`),
   `touch.test.js`, `excited_pose.test.js` gain the adapter stubs. The ghost frame's stub animation needs
   `addEventListener`.
+- **Shipped, and where it differed from the draft:** B1 for the lean has no trace case (a forget is the change);
+  `pose_lean_ledger.test.js` carries it: a forget mid-hold and mid-release (also sick) takes every `lean-*` class off at
+  once, nothing is pending and no timer was started by the undo (A3), a reused slide's next lean is not cut short, an A1
+  re-arm and `_patLeanOff` run no undo, and the pose end and prop-out are dropped. The ghost has no B1 in the draft; the
+  ledger test pins that a forget cancels a ghost in flight and that a finished one has left the ledger by itself (F5:
+  `pending(s)` is back to 0 after the 180 ms). The lean has **two keys**, `lean` (the hold) and `lean.rel` (the release),
+  both with the same direct undo, as R74 and R75 say; `_patLean` stops both before it adds a class, `_patLeanOff` stops
+  `lean` and then `lean.rel`, as the two `clearTimeout`s did. The ghost frame and trail are **unkeyed** `_waapi` (no key:
+  today's code does not clear them; the trail cancels the earlier animations itself, and the cancel event completes each
+  entry). `_poseEnd` is unkeyed, `_propShow`'s `prop.out` is keyed (the `clearTimeout` before it goes: the `_later`
+  replaces silently, with nothing between the two that can run a timer). No `_hold` and no `mirror` is used by any slice-4
+  caller. Ratchet: `card-tick` `setTimeout` 4 -> 0, `clearTimeout` 5 -> 0, `.animate(` 2 -> 0; the row keeps only its
+  `setInterval`/`clearInterval` (the tick), no row reached zero. Edits outside `src`: `dev/bench/page.js:1312`
+  (`stop(cur, { key: "lean" })`), `touch.test.js` (the fake `this` gains `adapters()`), the trace harness (`classList` is
+  iterable, elements have `setAttribute`/`getAttribute`). `excited_pose.test.js` needed **no edit** (its stub card never
+  reaches `_poseEnd`), `care_reactions.test.js:161` needed none (its `card()` has the adapters and records `[fn, ms]`), and
+  the harness's animate stub already had `addEventListener`. Bench: `--preset species` and `--preset touch` before/after
+  are byte-identical except the excited/calling moods (a looping phase) and the two lean shots (`touch/resting-lean`,
+  `touch/sick-lean`, a transition frozen mid-way), each of which differs between two runs of the unmoved code too.
 - **Checks:** trace tests; `touch.test.js`, `care_reactions.test.js`, `excited_pose.test.js`; `scripts/ci-gate`
   (iterate with `gate --auto`: `pat`, `react`, `ghost`, `care`); **a bench before/after contact sheet** (6.7).
 - **Device queue:** fixture: dev pet teen and adult, awake. `qa_screen`: the pet screen. Look at: pat the
