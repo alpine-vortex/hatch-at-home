@@ -46,7 +46,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     // Built each time: the card's options decide which games are offered.
     s.gameBox.querySelector(".gpick").innerHTML = games.map((g) =>
       `<button data-game="${g.key}">${g.label}</button>`).join("");
-    this._hopRow(s); // behind experimental_hop: the Hop of the Day row, outside .gpick (plan section 5)
+    this._hopRow(s); // the Hop of the Day row, outside .gpick (plan section 5)
     this._gameView(s, "pick");
     // A narrow card has room for one short line beside the close button.
     this._pickerSay(s, s.game, s.game.prompt);

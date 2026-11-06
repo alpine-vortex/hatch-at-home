@@ -884,9 +884,9 @@
 
     if (shot.view === "board") await hopBoard(shot);
     const card = document.createElement("hatch-pet-card");
-    // `hop: true` (and any board shot) turns the YAML-only experimental_hop flag on.
+    // Hop is on for every card; `hop: true` only marks a picker shot that is about the Hop row.
     card.setConfig({ seasonal: shot.season === "auto" ? undefined : shot.season,
-      ...(shot.hop || shot.view === "board" ? { experimental_hop: true } : {}), ...(shot.config || {}) });
+      ...(shot.config || {}) });
     card.hass = buildHass(shot, WORLDS);
     // The moon (device-alive 4B) follows the card's server clock, and the default pinned day is a real new
     // moon, so every shot would carry the halo. The bench holds it off unless a shot asks: `moon: "full"` or

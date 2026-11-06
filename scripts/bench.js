@@ -510,7 +510,7 @@ const PRESETS = {
       name: "mode-icons/420-2x-dig-blocked", label: "dig, keep blocked (0.6)" });
     return out;
   },
-  // Hop of the Day (ship 2b, behind experimental_hop): the picker with the Hop row, then per width and
+  // Hop of the Day (ship 2b): the picker with the Hop row, then per width and
   // family (a canned `board` reply built by hop.py, dev/bench/hop-boards.json) a board at the start, a lit
   // cell (the first tap of a two-tap commit), a spent special, the solved view (a plain win) and the tidy view
   // (both pinned by the bench's `board.moves`, not by a reply's done/tidy), and a blocked key (a corner:

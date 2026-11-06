@@ -46,12 +46,14 @@ test("the piece is not a .pet class: no .pet animation rule and no go-left or go
   assert.doesNotMatch(part, /_animate\(/);
 });
 
-test("experimental_hop is read from the YAML config only", () => {
-  assert.strictEqual(card._hopOn.call({ _config: {} }), false);
-  assert.strictEqual(card._hopOn.call({ _config: { experimental_hop: true } }), true);
-  assert.strictEqual(card._hopOn.call({ _config: { experimental_hop: "yes" } }), false);
-  assert.doesNotMatch(read("src/card/editor.js"), /experimental_hop/);
-  assert.doesNotMatch(read("src/card/card-base.js"), /getStubConfig\(\) \{\s*return \{[^}]*experimental_hop/);
+test("the Hop row shows with no config, and no card file reads an experimental_hop key", () => {
+  assert.strictEqual(card._hopOn, undefined);
+  const row = { hidden: true, addEventListener() {}, setAttribute() {} };
+  const s = { gameBox: { querySelector: () => row, append() {} } };
+  const self = { _config: {}, _hopRowSet() { return false; } };
+  card._hopRow.call(self, s);
+  assert.strictEqual(row.hidden, false);
+  for (const f of ["card-base", "editor"]) assert.doesNotMatch(read(`src/card/${f}.js`), /experimental_hop/);
 });
 
 test("the copy is the plan's drafts, and the keys carry their aria labels", () => {

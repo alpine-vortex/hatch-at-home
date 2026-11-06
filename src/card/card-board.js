@@ -106,7 +106,7 @@ const hopCellLabel = (board, st, i) => {
 
 class HatchPetCardBoard extends HatchPetCardGames {
   // --- Board mode: Hop of the Day (plan 2026-11-02-hop-of-the-day, ship 2b) ---------------------
-  // Behind the YAML-only `experimental_hop` key. The board is `s.game` ({kind: "hop"}), so every
+  // On for every card (0.48.0; an old `experimental_hop` YAML key is ignored). The board is `s.game` ({kind: "hop"}), so every
   // quit path that already tests `s.game` ends it: _endGame clears it (_hopEnd), and the server
   // never hears of it (hop is not in SERVER_GAMES). The keys are the shell's eight buttons (the
   // `hop` entry of SHELL_MODES, shell-modes.js; shell modes slice 3): _hopDraw writes their state
@@ -115,18 +115,10 @@ class HatchPetCardBoard extends HatchPetCardGames {
   // nest entry shows the solved view at once and sends the list (`settle`, ship 3b): the server
   // replays it and pays; the list stays parked until the server has answered `ok`.
 
-  _hopOn() {
-    return this._config?.experimental_hop === true;
-  }
-
-  // The row beside the picker (plan section 5): built when the picker opens and the flag is on,
-  // removed when it is off, so a flag-off card has none. Pressing it asks `hop` for the board.
+  // The row beside the picker (plan section 5): built when the picker opens. Pressing it asks
+  // `hop` for the board.
   _hopRow(s) {
     let row = s.gameBox.querySelector(".ghop");
-    if (!this._hopOn()) {
-      row?.remove();
-      return;
-    }
     if (!row) {
       row = document.createElement("button");
       row.className = "ghop";

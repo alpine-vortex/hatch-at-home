@@ -4490,8 +4490,8 @@ async function main() {
 
   }
   if (enter("board")) {
-  // Hop of the Day, ship 2b (plan 2026-11-02-hop-of-the-day): board mode behind the YAML-only
-  // experimental_hop key. The `hop` service is stubbed on the card (_hopFetch) with replies
+  // Hop of the Day, ship 2b (plan 2026-11-02-hop-of-the-day): board mode (on for everyone since
+  // 0.48.0; the old experimental_hop key is ignored). The `hop` service is stubbed on the card (_hopFetch) with replies
   // from tests/fixtures/hop_cases.json's boards, never a random draw. The real-HA run owns the
   // wiring only (the last check: the row calls `board` and the reply has the right shape).
   await pinAwake(card, "board");
@@ -4510,11 +4510,10 @@ async function main() {
     const warnings = [];
     page.on("console", (m) => { if (m.type() === "warning" && /hop board/.test(m.text())) warnings.push(m.text()); });
     const flag = (on) => card.evaluate((el, on) => {
-      const config = { ...el._config };
-      if (on) config.experimental_hop = true;
-      else delete config.experimental_hop;
-      el.setConfig(config);
-      el.hass = el._hass;
+      // Harness only: Hop has no flag now. "Off" shadows _hopRow on this card so the picker has no row
+      // (the baseline the fit checks compare with); "on" removes the shadow.
+      if (on) delete el._hopRow;
+      else el._hopRow = (s) => s.gameBox.querySelector(".ghop")?.remove();
     }, on);
     const stub = (reply) => card.evaluate((el, r) => { el.__hopCalls = 0; el._hopFetch = async () => { el.__hopCalls++; return r; }; }, reply);
     const unstub = () => card.evaluate((el) => { delete el._hopFetch; });
