@@ -277,3 +277,14 @@ test("M3b P2: a read that is not the latest is dropped, and a failed latest read
   assert.deepStrictEqual(plain(s2.memoryData), plain(FIXTURE));
   assert.ok(!s2.memoryFailed);
 });
+
+test("F4: a read with no pet id settles after the caller returns, never inside it", async () => {
+  const { makeCard } = load();
+  const card = makeCard(FIXTURE);
+  const s = slide({ ids: {} });
+  const load1 = card._memoryFetch(s);
+  assert.strictEqual(card.redraws, 0); // the outer render is still running
+  await load1;
+  assert.strictEqual(card.redraws, 1);
+  assert.strictEqual(s.memoryFailed, true);
+});

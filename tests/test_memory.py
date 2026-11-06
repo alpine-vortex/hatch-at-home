@@ -2558,6 +2558,19 @@ async def test_forget_pattern_saves_with_no_await_after_the_pop(
     assert await pet.people.forget_pattern("u", "show", 6) == 0
 
 
+async def test_forget_pattern_clears_the_door_ten_said_date_and_leaves_since_told(
+    hass: HomeAssistant, hass_storage: dict[str, Any]
+) -> None:
+    """F6: the pattern's last-said date goes with it; since_told is ask-again's."""
+    mem = tag_memory(*(tag(d, "show") for d in SUNDAYS[:3]), door10="2026-10-02")
+    mem["since_told"] = {"fav_weather": "2026-09-20"}
+    pet = await start(hass, hass_storage, {"u": {"memory": mem}})
+    assert await pet.people.forget_pattern("u", "show", 6) == 3
+    saved = saved_people(hass_storage)["u"]["memory"]
+    assert "door10" not in saved["said"]
+    assert saved["since_told"] == {"fav_weather": "2026-09-20"}
+
+
 async def test_the_page_commands_leave_no_value_in_the_log_at_the_default_level(
     hass: HomeAssistant,
     hass_storage: dict[str, Any],

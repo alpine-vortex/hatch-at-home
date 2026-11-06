@@ -477,6 +477,7 @@ class People:
         gone = len(entries) - len(kept)
         if gone:
             entries[:] = kept  # no await between this and the save's start
+            mem.get("said", {}).pop("door10", None)  # the pattern's line goes with it
             await self.async_save_now()
         return gone
 

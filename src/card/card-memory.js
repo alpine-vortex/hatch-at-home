@@ -97,6 +97,9 @@ class HatchPetCardMemory extends HatchPetCardJournal {
         reply = await this._hass.callWS({ type: "virtual_pet/memory_get", entity_id: id, shared: false });
         if (!reply || typeof reply !== "object" || !Array.isArray(reply.tags)) throw new Error("no page");
       } catch (err) {
+        // Never redraw inside the caller: _renderMemory calls this while building its HTML, and
+        // a sync failure (no pet id) would be overwritten by the outer render (F4).
+        await null;
         if (stale() || !latest()) return;
         s.memoryLoad = null;
         if (quiet && s.memoryData) return; // a re-read after a forget: the rows on show stay
