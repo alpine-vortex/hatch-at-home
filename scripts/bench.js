@@ -817,6 +817,16 @@ const PRESETS = {
     shot("failed", "failed", { memory: "error" });
     shot("bigtext", "big text", { bigText: true });
     shot("mono", "mono", { mono: true });
+    // M3b: all six stickers; a weekend tag, work_thing and a day after today get none.
+    const six = { ...empty, tags: [
+      ...["exam", "match", "show", "trip", "party", "lesson"].map((tag, i) => ({ day: `2026-10-0${i + 1}`, kind: "big_day", tag })),
+      { day: "2026-10-11", kind: "weekend", tag: "trip" }, { day: "2026-10-12", kind: "big_day", tag: "work_thing" },
+    ] };
+    shot("stickers", "six stickers", { memory: six });
+    shot("stickers-bigtext", "six stickers, big text", { memory: six, bigText: true });
+    shot("stickers-mono", "six stickers, mono", { memory: six, mono: true });
+    shot("stickers-one", "one sticker (a later day gets none)", { memory: { ...empty, tags: [
+      { day: "2026-11-06", kind: "big_day", tag: "party" }, { day: "2026-11-07", kind: "big_day", tag: "show" }] } });
     shot("off", "status: memory off, no link", { view: "status", mine: { memory_on: false, memory_allowed: true } });
     return out;
   },

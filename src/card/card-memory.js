@@ -9,6 +9,7 @@
 // (_goShared), the sheet closing or the slide changing (_toggleStatus, _forget, _go), a
 // reply landing late (memoryEpoch), and a hidden tab or 2 minutes idle (_onHidden, the timer).
 const MEMORY_IDLE_MS = 2 * 60 * 1000;
+const MEMORY_STICKER_TAGS = ["exam", "match", "show", "trip", "party", "lesson"]; // M3b: the six that get one
 
 class HatchPetCardMemory extends HatchPetCardJournal {
   // The status sheet's link: only on the person's own screen while memory is on for them
@@ -119,6 +120,25 @@ class HatchPetCardMemory extends HatchPetCardJournal {
       { month: "short", day: "numeric" });
   }
 
+  // The server's day ("YYYY-MM-DD", the house's time zone) on the card's server clock.
+  _memoryToday() {
+    const zone = this._hass?.config?.time_zone;
+    try {
+      return new Date(serverNow()).toLocaleDateString("en-CA", zone ? { timeZone: zone } : undefined);
+    } catch (err) {
+      return new Date(serverNow()).toLocaleDateString("en-CA");
+    }
+  }
+
+  // M3b: one sticker per big-day tag of the six, on and after the tagged day (never before),
+  // derived from `tags`; no count, nothing kept. A weekend entry or another tag gets none.
+  _memoryStickers(data) {
+    const today = typeof data?.today === "string" ? data.today : this._memoryToday(); // the server's own day first
+    const have = new Set((Array.isArray(data?.tags) ? data.tags : [])
+      .filter((e) => e && e.kind === "big_day" && typeof e.day === "string" && e.day <= today).map((e) => e.tag));
+    return MEMORY_STICKER_TAGS.filter((tag) => have.has(tag));
+  }
+
   // The rows the page lists, each with its text and (but a favourite) its forget key.
   _memoryRows(s, data) {
     const P = MEMORY_PAGE;
@@ -161,6 +181,16 @@ class HatchPetCardMemory extends HatchPetCardJournal {
     return { fav, days, picks: picked, patterns };
   }
 
+  _memoryStickerHtml(data) {
+    const tags = this._memoryStickers(data);
+    if (!tags.length) return "";
+    return `<div class="mstickers" role="list">${tags.map((tag) => {
+      const label = MEMORY_TAG_CHIPS.labels[tag];
+      return `<span class="msticker" role="listitem" aria-label="${escape(label)}">` +
+        `${pixelIcon(`icon_sticker_${tag}`, 48)}</span>`;
+    }).join("")}</div>`;
+  }
+
   // The page: a skeleton of fixed copy and empty slots, then every value as textContent.
   _renderMemory(s) {
     const P = MEMORY_PAGE;
@@ -186,6 +216,7 @@ class HatchPetCardMemory extends HatchPetCardJournal {
       const any = rows.fav.length || rows.days.length || rows.picks.length || rows.patterns.length;
       html = `${band}<div class="mempage" data-rev="${s.memoryRev || 0}">` +
         (data.since ? `<div class="shellnote msince"></div>` : "") +
+        this._memoryStickerHtml(data) +
         (any ? section(P.h_fav, "fav") + section(P.h_days, "days") + section(P.h_picks, "picks") +
           section(P.h_pattern, "patterns") : `<div class="log">${escape(P.empty)}</div>`) +
         `<div class="shellnote mnever">${escape(P.never)}</div>` +

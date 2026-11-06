@@ -11068,6 +11068,60 @@ async function main() {
     check("memory M3a (8): one real memory_get through HA has the keys the card reads; forget of nothing is 0; shared true is refused",
       !real.error && real.keys.every((k) => VIEW.includes(k)) && real.shape && real.forgot?.forgot === 0 && real.badShared === "shared", // shared true
       JSON.stringify(real));
+    // M3b (stickers, plan section 9): one per big_day tag of the six, on and after the tagged
+    // day (server's `today`), never before; none for a weekend, work_thing or a later day; no
+    // count; each has the tag's label as its aria-label; a forget removes it.
+    const st = await card.evaluate(async (el) => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const s = el._slides[el._index];
+      const conn = el._hass.connection;
+      const realSend = conn.sendMessagePromise;
+      const had = { mine: s.mine, on: el._memoryOn, allowed: s.memoryAllowed, sheet: s.screen.classList.contains("show-status") };
+      const view = {
+        today: "2026-11-06", since: "2026-09-01", since_told: {}, patterns: [],
+        picks: { dream: [], game: [], guess: [], great: [] },
+        tags: [
+          { day: "2026-11-06", kind: "big_day", tag: "party" }, { day: "2026-11-07", kind: "big_day", tag: "show" },
+          { day: "2026-10-01", kind: "big_day", tag: "exam" }, { day: "2026-10-02", kind: "weekend", tag: "trip" },
+          { day: "2026-10-03", kind: "big_day", tag: "work_thing" },
+        ],
+      };
+      conn.sendMessagePromise = function (msg) {
+        if (msg?.type === "virtual_pet/memory_get") return Promise.resolve(JSON.parse(JSON.stringify(view)));
+        if (msg?.type === "virtual_pet/memory_forget") return Promise.resolve({ forgot: 1 });
+        return realSend.call(this, msg);
+      };
+      const out = {};
+      try {
+        s.mine = { ...(had.mine || {}), memory_on: true, memory_allowed: true };
+        if (!s.screen.classList.contains("show-status")) el._toggleStatus(s);
+        s.statusHtml = null; el._memoryRedraw(s);
+        s.status.querySelector(".mlink")?.click();
+        s.status.querySelector(".mshow")?.click();
+        for (let i = 0; i < 60 && !s.memoryData; i++) await wait(25);
+        await wait(30);
+        const read = () => [...s.status.querySelectorAll(".msticker")].map((x) => ({
+          aria: x.getAttribute("aria-label"), src: x.querySelector("img")?.getAttribute("src") || "", w: x.querySelector("img")?.width }));
+        out.stickers = read();
+        out.digits = /\d/.test(s.status.querySelector(".mstickers")?.textContent || "");
+        out.loaded = await Promise.all(out.stickers.map((x) => fetch(x.src).then((r) => r.ok)));
+        // forget the exam's day: its sticker goes with it
+        const b = [...s.status.querySelectorAll(".mforget")].find((x) => x.getAttribute("aria-label")?.includes("exam"));
+        b?.click(); await wait(700); b?.click();
+        for (let i = 0; i < 40 && read().some((x) => x.aria === "exam"); i++) await wait(25);
+        out.afterForget = read().map((x) => x.aria);
+      } finally {
+        conn.sendMessagePromise = realSend;
+        el._memoryPageClose(s, false);
+        s.mine = had.mine; el._memoryOn = had.on; s.memoryAllowed = had.allowed;
+        s.statusHtml = null;
+        if (s.screen.classList.contains("show-status") !== had.sheet) el._toggleStatus(s);
+      }
+      return out;
+    });
+    check("memory M3b: a sticker per big_day tag on and after its day (party, exam), none for a later day, a weekend or work_thing; each labelled, no digits, the art served; a forget takes it away",
+      st.stickers?.map((x) => x.aria).join() === "exam,party" && st.stickers.every((x) => /icon_sticker_\w+\.png/.test(x.src)) &&
+        st.digits === false && st.loaded.every(Boolean) && st.afterForget?.join() === "party", JSON.stringify(st));
   }
   await unpinAwake(card);
   }

@@ -1596,6 +1596,9 @@ const STYLE = `
   /* The "things you told me" page (memory plan M3a): rows of text, each with its button. */
   .mempage { display: flex; flex-direction: column; gap: 3px; }
   .mempage .mshow, .mempage .mstop { align-self: flex-start; margin-top: 4px; }
+  .mstickers { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 4px; }
+  .msticker { display: block; width: 48px; height: 48px; }
+  .msticker .picon { width: 48px; height: 48px; }
   .mrow .mtext { overflow-wrap: anywhere; }
   /* Big text (top10 4b): every size on the status box's pages, about 3 px up. */
   ha-card.bigtext .status { font-size: 16px; }
