@@ -63,7 +63,7 @@ every id and one-liner below with the real device ids filled in.
 | Egg a few minutes from hatching | `egg`: pet **Dot**, fast-forwarded 0.1 h steps short of 0.5 h | the egg wobbling, then the hatch and the born pop, `hatched` moment |
 | Live stage change | `stage`: pet **Nib**, baby fast-forwarded to 23.8 h (child at 24 h) | a `stage_changed` moment: a card open on Nib says "i'm a child now!" (stretch, sparkle); one opened later says the catch-up line |
 | A refused action | `refuse`: pet **Gus**, fed until hunger is 95 or more | Feed answers `full`: "i'm full!" and a look or a head shake |
-| Rain | `rain`: `input_number.fake_rain_rate` set to 0.3 in/h | wet glass and the drop; flap the rate (0 to 0.3) for the onset and the 45-55 s hold |
+| Rain | `rain`: `input_number.fake_rain_rate` set to 0.3 in/h after the restart (the fake restarts at 0) | wet glass and the drop; flap the rate (0 to 0.3) for the onset and the 45-55 s hold |
 | A drop-style meal | any pet with hunger under 95 (Pip 77, Nib, Dot after hatch) | feed variant A: the bowl drops in |
 | Long absence | the `hatch-seen-<device>` mark, below | the welcome and the greet hop on the first look |
 
