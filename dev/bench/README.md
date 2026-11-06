@@ -41,6 +41,7 @@ node scripts/bench.js --preset gifts      # 11 shots: a gift's first look, V5 (l
 node scripts/bench.js --preset look       # 8 shots at 330: a fresh morning look and a resumed tab at 5, 10, 20, 30 s (fresh-moment)
 node scripts/bench.js --preset collection # 21 shots: the finds page, each world at 420/330, shared, empty, all met, mono, an older server
 node scripts/bench.js --preset memorytags # 11 shots: memory's tag chips in the big day's typed step at 420/330/300, weekend, porthole, big text, mono, memory off
+node scripts/bench.js --preset memory     # 13 shots: the "things you told me" page (memory M3a): the link, the gate, the shared fixture at 420/330/300, empty, one pattern, long (top and end), failed, big text, mono, memory off
 node scripts/bench.js --preset bigtext    # 18 shots: "big text" on, every status-box page at 420, 330 and 260
 node scripts/bench.js --preset everyworld # 10 shots: the journal's "every world" page, none / some / all raised, 420 and 330, big text
 node scripts/bench.js --preset dig        # 22 shots: the Berry dig at 420/330/300, calm bee, the picker at 300-420
@@ -95,6 +96,7 @@ A shot (all optional):
 | `moment` | a public moment (`{type: "sunset"}`, `{type: "good_morning"}`) put through the card's own `_moment`, the line it says shown in the bubble (species nature N1: the clock lines) |
 | `ask` | a question kind (`catchphrase`) put through the card's own `_ask`, so its answer buttons show |
 | `textStep` | `{kind, day, tag}`: the big day's (`kind: "big_day"`, `day` the picked ISO day) or weekend's typed step through the card's own `_askTextStart` and `_askText`, its line in the bubble and the box held (no timer). With `mine: {memory_on: true, memory_allowed: true}` the box carries memory's tag chips (memory plan M2); `tag` (`"show"`) is picked by a tap. Without them the box is as it was |
+| `memory` | memory_get's answer for the "things you told me" page (memory M3a), the shape of `tests/fixtures/memory_get.json`, or `"error"`. With `view: "memory"` (and `mine: {memory_on: true, memory_allowed: true}`) the shot taps the status sheet's link and the gate's one tap, then waits for the rows; `memoryGate: true` stops at the gate |
 | `note` | on `settings` / `picker`: a line shown in the feedback bubble (the pet's head and the note, under the back row), through the card's own `_statusMessage` |
 | `afterChange`, `afterWait` | on `settings`: the sheet closed after that change (a `SETTINGS_REACT` key: `monoOn`, `monoOff`, `effectsOff`, `shell`, `sharedOn`, `notifyOn`), through the card's own `_settingsChanged` and Status chip, so the pet perks and says its line (settings UX F14); `afterWait` ms to let it type (default 1500) |
 | `haDark`, `os` | HA's dark mode (`hass.themes.darkMode`: `true`, `false`; unset = HA says nothing) and the OS's colour scheme (`"dark"` / `"light"`), for the glow finish's dark look (UX7 F6) |

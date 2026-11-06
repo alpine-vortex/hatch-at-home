@@ -787,6 +787,39 @@ const PRESETS = {
     shot("330-off", "330: memory off", { width: 330, mine: { memory_on: false, memory_allowed: true } });
     return out;
   },
+  // The "things you told me" page (memory plan M3a, section 9) on the status sheet: the link,
+  // the gate, the shared fixture (tests/fixtures/memory_get.json, the server's own shape), an
+  // empty record, one pattern alone, a long list at the cap, the error line, big text and mono.
+  memory() {
+    const on = { memory_on: true, memory_allowed: true };
+    const fixture = JSON.parse(fs.readFileSync(path.join(ROOT, "tests", "fixtures", "memory_get.json"), "utf8"));
+    const empty = { today: fixture.today, tags: [], picks: { dream: [], game: [], guess: [], great: [] },
+      since_told: {}, patterns: [] };
+    const long = { ...fixture, tags: [], picks: { dream: [], game: [], guess: [], great: [] } };
+    const ISO = (n) => new Date(Date.UTC(2026, 9, 31 - n)).toISOString().slice(0, 10);
+    const TAGS = ["match", "show", "lesson", "exam", "interview", "work_thing", "something_else"];
+    for (let n = 0; n < 5; n++) {
+      for (const tag of TAGS) long.tags.push({ day: ISO(n * 7 + TAGS.indexOf(tag)), kind: "big_day", tag });
+      for (const [kind, field, pick] of [["dream", "pick", "sea"], ["game", "pick", "dig"], ["guess", "pick", "rain"],
+        ["great", "ask", "how_day"]]) long.picks[kind].push({ day: ISO(n + 1), [field]: pick });
+    }
+    long.patterns = [{ tag: "match", weekday: 5 }, { tag: "show", weekday: 2 }, { tag: "lesson", weekday: 0 }];
+    const out = [];
+    const shot = (name, label, extra) => out.push({ name: `memory/${name}`, group: "memory", label,
+      world: "woodland", width: 330, mine: on, view: "memory", memory: fixture, ...extra });
+    shot("link", "status: the link", { view: "status", scroll: ".mlink" });
+    shot("gate", "the gate", { memoryGate: true });
+    for (const width of [420, 330, 300]) shot(`${width}-items`, `${width}: the fixture`, { width });
+    shot("empty", "empty", { memory: empty });
+    shot("pattern", "one pattern", { memory: { ...empty, patterns: [{ tag: "show", weekday: 2 }] } });
+    shot("long", "long, at the cap", { memory: long });
+    shot("long-end", "long, the end", { memory: long, scrollEnd: true });
+    shot("failed", "failed", { memory: "error" });
+    shot("bigtext", "big text", { bigText: true });
+    shot("mono", "mono", { mono: true });
+    shot("off", "status: memory off, no link", { view: "status", mine: { memory_on: false, memory_allowed: true } });
+    return out;
+  },
   // The lay sheet (settings S2): the offer in two worlds at both card widths, big text at
   // 330, a pick made in HA outside the offer, and a waiting world change (the offer is the
   // new world's, raised by a second pet there).

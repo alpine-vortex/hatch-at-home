@@ -55,7 +55,7 @@ const results = [];
 
 // The gated sections of main(), in file order.
 const SECTIONS = ["shelf", "shell", "play", "resume", "board", "shellmode", "moments", "photos", "personality", "types",
-  "egg", "sharedscreen", "memorytags", "forget", "prefs", "channel", "devicefx", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "winter", "care",
+  "egg", "sharedscreen", "memorytags", "memorypage", "forget", "prefs", "channel", "devicefx", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "winter", "care",
   "editor", "boot", "infrared", "lowbattery", "restart", "gifts", "finds", "collection", "oldcard"];
 // oldcard asserts restart's seeded bond; finds taps the basket restart seeds; collection
 // opens the finds page on the collection restart seeds; gifts uses restart's bounce (and
@@ -10816,6 +10816,258 @@ async function main() {
         m2.offSent.length === 1 && !("tag" in m2.offSent[0]) && m2.disallowed === 0, JSON.stringify({ off: m2.off, sent: m2.offSent, no: m2.disallowed }));
     check("memory M2: the prompt and every chip label are text (textContent), never markup",
       m2.markup?.length === 10 && m2.markup.every(Boolean), JSON.stringify(m2.markup));
+  }
+  await unpinAwake(card);
+  }
+  if (enter("memorypage")) {
+  // Memory M3a (docs/plan-2026-11-02-memory.md section 8 "M3a building notes", "Card-check
+  // memorypage"): the "things you told me" page in the real card. The stub answers
+  // memory_get with the shared fixture (tests/fixtures/memory_get.json) on the connection
+  // (it outlives the hass object), memory_forget with {forgot: 1}; row 8 makes one real
+  // call through this HA. The server's side is pytest's (tests/test_memory.py, "M3a").
+  await pinAwake(card, "memorypage");
+  {
+    const FIXTURE = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "tests", "fixtures", "memory_get.json"), "utf8"));
+    const mp = await card.evaluate(async (el, FIXTURE) => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const s = el._slides[el._index];
+      const entity = s.ids?.["sensor.life_stage"];
+      const user = el._hass.user?.id;
+      const conn = el._hass.connection;
+      const realSend = conn.sendMessagePromise;
+      const sent = [];
+      let reply = () => Promise.resolve(JSON.parse(JSON.stringify(FIXTURE)));
+      conn.sendMessagePromise = function (msg) {
+        if (msg?.type === "virtual_pet/memory_get") { sent.push({ ...msg }); return reply(); }
+        if (msg?.type === "virtual_pet/memory_forget") { sent.push({ ...msg }); return Promise.resolve({ forgot: 1 }); }
+        return realSend.call(this, msg);
+      };
+      // Every key and value, but the shelf's: rows 4 and 5 swipe, and _go keeps the pet on
+      // show (hatch-shelf-<device>), as any swipe does; the page itself keeps nothing.
+      const store = () => JSON.stringify([localStorage, sessionStorage].map((x) =>
+        Object.keys(x).filter((k) => !k.startsWith("hatch-shelf-")).sort().map((k) => [k, x.getItem(k)])));
+      const had = { mine: s.mine, on: el._memoryOn, allowed: s.memoryAllowed, shared: localStorage.getItem("hatch-shared-screen"),
+        sheet: s.screen.classList.contains("show-status"), index: el._index };
+      const other = el._slides.length > 1 ? (el._index + 1) % el._slides.length : -1;
+      const on = () => { s.mine = { ...(had.mine || {}), memory_on: true, memory_allowed: true }; };
+      const sheet = (up) => { if (s.screen.classList.contains("show-status") !== up) el._toggleStatus(s); };
+      const draw = () => { s.statusHtml = null; el._memoryRedraw(s); };
+      const q = (sel) => s.status.querySelector(sel);
+      const gets = () => sent.filter((m) => m.type === "virtual_pet/memory_get");
+      const forgets = () => sent.filter((m) => m.type === "virtual_pet/memory_forget");
+      const rows = () => [...s.status.querySelectorAll(".mrow .mtext")].map((x) => x.textContent);
+      const loaded = async () => { for (let i = 0; i < 60 && !s.memoryData && !s.memoryFailed; i++) await wait(25); await wait(20); };
+      const open = async (show = true) => {
+        on(); sheet(true); draw();
+        q(".mlink")?.click();
+        if (show) { q(".mshow")?.click(); await loaded(); }
+      };
+      const deferred = () => { let go; const p = new Promise((r) => { go = r; }); reply = () => p; return () => go(JSON.parse(JSON.stringify(FIXTURE))); };
+      const out = {};
+      let texts = [];
+      const leak = (root) => texts.filter((t) => (root?.textContent || "").includes(t));
+      const shadow = () => el.shadowRoot || el;
+      try {
+        localStorage.removeItem("hatch-shared-screen");
+        out.before = store();
+        // (1) the link: none on a shared screen, only with both flags, none while unknown
+        on(); sheet(true);
+        localStorage.setItem("hatch-shared-screen", "on");
+        draw();
+        out.link = { shared: !!q(".mlink") };
+        localStorage.removeItem("hatch-shared-screen");
+        draw(); out.link.both = !!q(".mlink"); out.link.label = q(".mlink")?.textContent;
+        s.mine = { ...(had.mine || {}), memory_on: false, memory_allowed: true }; draw(); out.link.off = !!q(".mlink");
+        s.mine = { ...(had.mine || {}), memory_on: true, memory_allowed: false }; draw(); out.link.disallowed = !!q(".mlink");
+        s.mine = { ...(had.mine || {}), memory_on: true }; delete s.mine.memory_allowed; s.memoryAllowed = undefined;
+        draw(); out.link.unknown = !!q(".mlink");
+        s.memoryAllowed = had.allowed;
+        out.link.calls = gets().length;
+        // (2) the confirm tap, then the call, then the items
+        await open(false);
+        out.gate = { shown: !!q(".mgate"), button: !!q(".mshow"), calls: gets().length, rows: rows().length };
+        q(".mshow")?.click();
+        await loaded();
+        out.open = { calls: gets().map((m) => ({ ...m })), rows: rows(), forgets: s.status.querySelectorAll(".mforget").length,
+          since: q(".msince")?.textContent || "" };
+        texts = rows().concat(out.open.since ? [out.open.since] : []);
+        out.during = store();
+        // (3) forget sends once with the item's key; the pattern's with list "pattern"
+        const press = async (pick) => {
+          const b = () => [...s.status.querySelectorAll(".mforget")].find(pick);
+          b()?.click(); await wait(700); b()?.click();
+          for (let i = 0; i < 40 && forgets().length === 0; i++) await wait(25);
+          await loaded(); await wait(50);
+        };
+        const groups = (g) => (b) => b.dataset.group === g;
+        await press(groups("patterns"));
+        out.pattern = forgets().map((m) => ({ ...m }));
+        sent.length = 0;
+        await press(groups("days"));
+        out.day = forgets().map((m) => ({ ...m }));
+        sent.length = 0;
+        // (9) markup in a value renders as text (an off-list value is dropped, a listed one is text)
+        out.text = [...s.status.querySelectorAll(".mrow .mtext, .msince")].every((x) => x.children.length === 0);
+        out.noTags = !s.status.querySelector(".mempage b, .mempage img, .mempage script");
+        // (4) path 4: a late reply after a close, a slide change and a shared flip draws nothing
+        let go = deferred();
+        await open(false); q(".mshow")?.click(); await wait(30);
+        q(".sback")?.click();
+        go(); await wait(80);
+        out.late = { close: rows().length, data: !!s.memoryData };
+        if (other >= 0) {
+          go = deferred();
+          await open(false); q(".mshow")?.click(); await wait(30);
+          el._go(other); go(); await wait(80);
+          out.late.slide = { rows: rows().length, data: !!s.memoryData, page: s.memoryPage };
+          el._go(had.index); await wait(50);
+        }
+        go = deferred();
+        await open(false); q(".mshow")?.click(); await wait(30);
+        localStorage.setItem("hatch-shared-screen", "on"); el._onSharedStorage({ key: "hatch-shared-screen" });
+        go(); await wait(80);
+        out.late.shared = { rows: rows().length, data: !!s.memoryData, page: s.memoryPage };
+        localStorage.removeItem("hatch-shared-screen"); el._onSharedStorage({ key: "hatch-shared-screen" }); await wait(50);
+        reply = () => Promise.resolve(JSON.parse(JSON.stringify(FIXTURE)));
+        // (5) paths 2/3: a shared flip, and a close plus a swipe
+        await open();
+        out.flip = { open: rows().length };
+        localStorage.setItem("hatch-shared-screen", "on"); el._onSharedStorage({ key: "hatch-shared-screen" }); await wait(50);
+        out.flip.leak = leak(shadow()); out.flip.html = s.statusHtml; out.flip.page = s.memoryPage;
+        localStorage.removeItem("hatch-shared-screen"); el._onSharedStorage({ key: "hatch-shared-screen" }); await wait(50);
+        await open();
+        out.swipe = { open: rows().length };
+        sheet(false);
+        if (other >= 0) { el._go(other); await wait(50); }
+        out.swipe.leak = leak(shadow()); out.swipe.html = s.statusHtml; out.swipe.page = s.memoryPage;
+        if (other >= 0) { el._go(had.index); await wait(50); }
+        // (6) path 1: the push through the real channel handler, memory_on off, then the option off
+        await open();
+        out.push = { open: rows().length };
+        el._channel(s, { mine: { ...s.mine, memory_on: false } }, user); await wait(30);
+        out.push.off = { page: s.memoryPage, leak: leak(s.status), html: s.statusHtml };
+        await open();
+        el._channel(s, { mine: { ...s.mine, memory_allowed: false } }, user); await wait(30);
+        out.push.disallowed = { page: s.memoryPage, leak: leak(s.status), html: s.statusHtml };
+        // (7) path 5: the tab hidden, and the idle timer (its timeout caught and run here)
+        await open();
+        Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+        document.dispatchEvent(new Event("visibilitychange"));
+        delete document.hidden;
+        document.dispatchEvent(new Event("visibilitychange"));
+        await wait(30);
+        out.hidden = { page: s.memoryPage, leak: leak(s.status) };
+        const realTimeout = window.setTimeout;
+        let idle = null;
+        window.setTimeout = function (fn, ms, ...rest) {
+          if (ms === 2 * 60 * 1000) { idle = fn; return 0; }
+          return realTimeout.call(this, fn, ms, ...rest);
+        };
+        try { on(); sheet(true); draw(); q(".mlink")?.click(); } finally { window.setTimeout = realTimeout; }
+        q(".mshow")?.click(); await loaded();
+        out.idle = { caught: !!idle, open: rows().length };
+        idle?.();
+        out.idle.page = s.memoryPage; out.idle.leak = leak(s.status);
+        draw();
+        out.after = store(); // (the journal and finds pages below keep their own keys)
+        // The journal (its photos row), every world and the finds page hold none of the page's
+        // strings while its data is loaded.
+        await open();
+        out.pages = {};
+        s.memoryPage = false; // back to the status page with the reply still held
+        draw();
+        const page = async (name, link, ready) => {
+          q(link)?.click();
+          for (let i = 0; i < 120 && !q(ready); i++) await wait(25);
+          out.pages[name] = { shown: !!q(ready), leak: leak(s.status) };
+        };
+        const keep = s.memoryData;
+        await page("journal", ".jlink", ".jgrid");
+        await page("everyworld", ".wlink", ".jgrid");
+        s.journal = false; s.everyWorld = false; draw();
+        q(".jlink")?.click(); for (let i = 0; i < 120 && !q(".flink"); i++) await wait(25);
+        await page("finds", ".flink", ".fgrid, .fempty, .log");
+        out.pages.data = !!keep;
+        s.journal = false; s.finds = false; s.everyWorld = false;
+      } finally {
+        conn.sendMessagePromise = realSend;
+        el._memoryPageClose(s, false);
+        if (had.shared === null) localStorage.removeItem("hatch-shared-screen"); else localStorage.setItem("hatch-shared-screen", had.shared);
+        el._onSharedStorage({ key: "hatch-shared-screen" });
+        s.mine = had.mine; el._memoryOn = had.on; s.memoryAllowed = had.allowed;
+        Object.assign(s, { journal: false, finds: false, everyWorld: false, settings: false });
+        s.statusHtml = null;
+        sheet(had.sheet);
+      }
+      return out;
+    }, FIXTURE);
+    const [sat] = FIXTURE.patterns;
+    const tagOf = FIXTURE.tags.slice().sort((a, b) => (a.day < b.day ? 1 : -1))[0];
+    check("memory M3a (1): no link on a shared screen; the link only with memory_on and memory_allowed, none while either is off or unknown; no call",
+      mp.link && !mp.link.shared && mp.link.both && !mp.link.off && !mp.link.disallowed && !mp.link.unknown && mp.link.calls === 0,
+      JSON.stringify(mp.link));
+    check("memory M3a (2): the confirm tap first, then one memory_get with shared false, then the fixture's items",
+      mp.gate?.shown && mp.gate.button && mp.gate.calls === 0 && mp.gate.rows === 0 && mp.open.calls.length === 1 &&
+        mp.open.calls[0].shared === false && mp.open.calls[0].entity_id && mp.open.forgets === FIXTURE.tags.length + 4 + FIXTURE.patterns.length &&
+        mp.open.since !== "", JSON.stringify({ gate: mp.gate, open: mp.open }));
+    check("memory M3a (3): forget sends once with the item's key, the pattern's with list pattern",
+      mp.pattern?.length === 1 && mp.pattern[0].list === "pattern" && mp.pattern[0].tag === sat.tag && mp.pattern[0].weekday === sat.weekday &&
+        mp.pattern[0].shared === false && mp.day?.length === 1 && mp.day[0].list === "tags" && mp.day[0].day === tagOf.day &&
+        mp.day[0].kind === tagOf.kind && mp.day[0].shared === false, // a day's key is its day and kind
+      JSON.stringify({ pattern: mp.pattern, day: mp.day }));
+    check("memory M3a (4): a late reply after a close, a slide change or a shared flip draws nothing",
+      mp.late && mp.late.close === 0 && !mp.late.data && (!mp.late.slide || (!mp.late.slide.data && !mp.late.slide.page)) &&
+        mp.late.shared.rows === 0 && !mp.late.shared.data && !mp.late.shared.page, JSON.stringify(mp.late));
+    check("memory M3a (5): a shared flip, and a close plus a swipe, leave no memory text and statusHtml null",
+      mp.flip?.open > 0 && mp.flip.leak.length === 0 && mp.flip.page === false && mp.swipe.open > 0 &&
+        mp.swipe.leak.length === 0 && mp.swipe.page === false && !(mp.flip.html || "").includes("mempage") &&
+        !(mp.swipe.html || "").includes("mempage"), JSON.stringify({ flip: mp.flip, swipe: mp.swipe }));
+    check("memory M3a (6): the channel's push (memory_on off, then the option off) closes the page",
+      mp.push?.open > 0 && mp.push.off.page === false && mp.push.off.leak.length === 0 &&
+        mp.push.disallowed.page === false && mp.push.disallowed.leak.length === 0, JSON.stringify(mp.push));
+    check("memory M3a (7): a hidden tab and the 2-minute idle timer close the page",
+      mp.hidden?.page === false && mp.hidden.leak.length === 0 && mp.idle.caught && mp.idle.open > 0 &&
+        mp.idle.page === false && mp.idle.leak.length === 0, JSON.stringify({ hidden: mp.hidden, idle: mp.idle }));
+    check("memory M3a (9): every value is text: no element inside a row, no markup in the page",
+      mp.text === true && mp.noTags === true, JSON.stringify({ text: mp.text, tags: mp.noTags }));
+    check("memory M3a: localStorage and sessionStorage are byte-identical before, during and after the page",
+      mp.before === mp.during && mp.during === mp.after, (() => { // the keys that differ
+        const keys = (x) => new Map(JSON.parse(x || "[[],[]]").flatMap((side, i) => side.map(([k, v]) => [`${i}:${k}`, v])));
+        const [a, b, c] = [mp.before, mp.during, mp.after].map(keys);
+        return JSON.stringify([...new Set([...a.keys(), ...b.keys(), ...c.keys()])].filter((k) => a.get(k) !== b.get(k) || b.get(k) !== c.get(k))
+          .map((k) => [k, a.get(k)?.length, b.get(k)?.length, c.get(k)?.length]));
+      })());
+    check("memory M3a: the journal (with its photos), every world and the finds page hold none of the page's strings",
+      mp.pages?.data && ["journal", "everyworld", "finds"].every((k) => mp.pages[k]?.shown && mp.pages[k].leak.length === 0),
+      JSON.stringify(mp.pages));
+    // (8) one real call through this HA: memory on, the real memory_get, the keys the card
+    // reads, a forget of nothing, then memory back as it was.
+    const real = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const entity_id = s.ids?.["sensor.life_stage"];
+      const ws = (msg) => el._hass.callWS(msg);
+      const was = !!s.mine?.memory_on;
+      const out = { allowed: s.mine?.memory_allowed };
+      try {
+        if (!was) await ws({ type: "virtual_pet/memory", entity_id, enabled: true, shared: false });
+        const view = await ws({ type: "virtual_pet/memory_get", entity_id, shared: false });
+        out.keys = Object.keys(view).sort();
+        out.shape = Array.isArray(view.tags) && Array.isArray(view.patterns) && typeof view.picks === "object" &&
+          ["dream", "game", "guess", "great"].every((k) => Array.isArray(view.picks[k])) && typeof view.since_told === "object" &&
+          typeof view.today === "string";
+        out.forgot = await ws({ type: "virtual_pet/memory_forget", entity_id, shared: false, list: "dream", day: "2026-01-01" });
+        out.badShared = await ws({ type: "virtual_pet/memory_get", entity_id, shared: true }).then(() => "answered", (e) => e?.code);
+      } catch (e) {
+        out.error = e?.code || String(e);
+      } finally {
+        if (!was) await ws({ type: "virtual_pet/memory", entity_id, enabled: false, shared: false }).catch(() => {});
+      }
+      return out;
+    });
+    const VIEW = ["today", "since", "tags", "picks", "since_told", "patterns"];
+    check("memory M3a (8): one real memory_get through HA has the keys the card reads; forget of nothing is 0; shared true is refused",
+      !real.error && real.keys.every((k) => VIEW.includes(k)) && real.shape && real.forgot?.forgot === 0 && real.badShared === "shared", // shared true
+      JSON.stringify(real));
   }
   await unpinAwake(card);
   }

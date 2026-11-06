@@ -178,6 +178,13 @@
         : service === "play_game" && shot.digReplies?.length ? shot.digReplies.shift() : {} }),
       callWS: async (msg) => {
         if (msg.type === "virtual_pet/photos") return { photos: [] };
+        // The "things you told me" page (memory M3a): `memory` is memory_get's answer (the
+        // shared fixture's shape) or "error"; memory_forget answers one gone.
+        if (msg.type === "virtual_pet/memory_get") {
+          if (!shot.memory || shot.memory === "error") throw { code: "not_asked" };
+          return JSON.parse(JSON.stringify(shot.memory));
+        }
+        if (msg.type === "virtual_pet/memory_forget") return { forgot: 1 };
         // The name sheet (settings S3): `rename` is an error code the server would answer with.
         if (msg.type === "virtual_pet/rename") {
           if (shot.rename) throw { code: shot.rename };
@@ -1096,6 +1103,17 @@
       for (let n = 0; !root.querySelector(".fgrid") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
       await Promise.all([...root.querySelectorAll(".fgrid img")].map((img) => img.decode().catch(() => {})));
       if (shot.scrollEnd) cur.status.scrollTop = cur.status.scrollHeight; // the foot's links
+    }
+    // The "things you told me" page (memory M3a): the link, the gate's one tap (not with
+    // `memoryGate`), then the rows from `memory`.
+    if (shot.view === "memory") {
+      root.querySelector(".statusbtn").click();
+      root.querySelector(".mlink").click();
+      if (!shot.memoryGate) {
+        root.querySelector(".mshow").click();
+        for (let n = 0; !cur.memoryData && !cur.memoryFailed && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
+      }
+      if (shot.scrollEnd) cur.status.scrollTop = cur.status.scrollHeight;
     }
     if (shot.view === "games") card._startGame(cur, cur.buttons.play); // the button itself can be disabled
     // `pickWait`: ms to hold the picker, so a long line has given way to "pick a game!" (2 s) before the shot.
