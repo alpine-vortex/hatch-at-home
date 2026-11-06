@@ -1,7 +1,7 @@
 # Device Alive: the canonical plan
 
 **Date:** 2026-11-03 (rewritten the same day, slice 0)
-Status (2026-11-05): slices 3A-3C, 4A, 4B and 6 are built on main; 4C, 4D, 5 and 7 are open. Species N4's art has merged (see FM12), slice 5 is re-scoped in section 8 (s2950): drop recommended, one question open (Q-S5).
+Status (2026-11-05): slices 3A-3C, 4A, 4B and 6 are built on main; 4C, 4D, 5 and 7 are open. Species N4's art has merged (see FM12), slice 5 is DROPPED (Q-S5 = a, first mate 2026-11-05, reversible). Open: 4C, 4D, 7.
 
 **Status:** Canonical. Slice 0 of 7; no runtime change in this document.
 **Replaces:** `docs/plan-2026-11-03-living-device-interactions.md` (marked superseded; its
@@ -1091,7 +1091,7 @@ clears). Device rows are in the slice 2 device queue (section 13).
 
 ## 8. Idle: a delta over N1-N4 (F8) (re-scoped after N4: recommend drop, s2950)
 
-**Re-scope (s2950, 2026-11-05; a recommendation until the first mate or owner answers Q-S5 below).**
+**Re-scope (s2950, 2026-11-05). Decided: dropped (Q-S5 = a, first mate 2026-11-05).**
 N1, N2 and N4 are all on main, so the gate "only if N4's poses do not already cover them"
 now has its input. Read from main:
 
@@ -1568,7 +1568,7 @@ as FM12 (slice 5 parked until N4's art, glass curiosity dropped), FM13 (slice 6 
 marks, about one per 20 minutes of viewed time, after 4B) and FM14 (slice 7 parked); the
 owner may reverse any of them.
 
-**Open (s2950): Q-S5, slice 5 after N4.** Options: (a) **drop slice 5** and keep N4 as the
+**Decided (first mate, 2026-11-05): Q-S5 = (a), slice 5 is dropped; the after-link glance is not folded (owner may override). Was open (s2950): Q-S5, slice 5 after N4.** Options: (a) **drop slice 5** and keep N4 as the
 idle beat (recommended; section 8); (b) drop it but fold the one after-link `_look(host,
 1800)` into the next `card-link.js` slice; (c) build the beat engine of the old text
 (post-play settle and link curiosity, cooldown, acceptance table) anyway. Decide after
