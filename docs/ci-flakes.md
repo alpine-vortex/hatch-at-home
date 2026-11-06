@@ -12,3 +12,4 @@ date, run id, shard, check). A check listed twice gets fixed next.
 - 2026-11-05 run 42174965607 shard 3/5: the half rule: heads a type's own hello and moments, tails the normal ones, for all eight (mellow hello: yay! I'm so glad ♥ {"free":false,
 - 2026-11-05 run 42174965607 shard 3/5: hellos by type: nameless on a shared screen and never a bond line; bond lines only with the viewer's own bond (mellow shared: my wish came t
 - 2026-11-06 run 42230595419 shard 2/5: game on the shell: higher_lower: the F13 restart keeps the mode: one announcement, from kept, the eight restored
+- 2026-11-06 run 42266085194 shard 4/5: the pat box sits on the pet's box, shown, named for the pet
