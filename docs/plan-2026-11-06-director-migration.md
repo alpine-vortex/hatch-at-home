@@ -1122,6 +1122,19 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
 - **Device queue:** fixture: dev pet with a low battery; a first load with the boot logo (reload the page).
   `qa_screen`: the boot logo, then the low-battery screen. Look at: 5 s with no tap ends silently; a tap
   fills the logo and cuts to the pet; the low-battery gag's blinks and lines.
+- **Shipped, and where it differed from the draft:** `boot_power_trace.test.js` has 15 cases on the unmoved code: the gag's blank
+  blinks (0-80, 160-240), the low line at 0, the back line and the perk at 2200, the end at 4200 (calm: no blinks, no level
+  change, the same lines); a tap (`_powerEnd`) drops the rest and takes the line in the bubble; a finished gag leaves its last
+  line; the 2200 step ends the gag for an asleep pet; a forget after `_powerEnd`; the boot wait at 5000 (silent) and the fill
+  at 5600, a tap sooner (chirp, fill, cut at +600, the wait never fires), a second tap, calm (no fill), the held moments;
+  **D-keep** (fill running, then wait running) and **D-reattach** (disconnect 4900, reconnect 5000: the wait fires on its time,
+  the fill ends at 5600). `boot_power_ledger.test.js` has 3 cases for the move: no `power.timers` or `_bootTimer` in the card,
+  the gag's 7 steps are group `power` and `_powerEnd` plus a detach leave nothing, the wait is key `boot.wait` and the fill
+  unkeyed on `_dirCard`, and a slide's detach leaves both. The trace passed unchanged. `s.power` is now `{}` (a flag; the
+  `{ timers: [] }` that `card-check.js` sets for the same flag still works); `_bootTimer` is gone with its one reader.
+  Ratchet: `card-build` `setTimeout` 5 -> 2, `clearTimeout` 8 -> 6. `dev/bench/page.js` freezes the gag with
+  `card._director.stop(cur, { group: "power" })`; `--power battery` and `--power line` render. No 6.2 row changes (no old
+  test extracted this code). `leak_guard.test.js` passes.
 - **Timings:** identical. **Rollback:** revert.
 
 ### 5.9 Slice 9: care scene stragglers and the drape

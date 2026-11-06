@@ -16,7 +16,7 @@ const PINNED = {
   // + slice 0: `.animate(` 1, in the _waapi adapter
   "card-base": { [ST]: 2, [SI]: 1, [CT]: 3, [CI]: 1, [AN]: 1 },
   // + slice 0: the director's repeat and frame wrappers (setInterval, clearInterval, rAF, cancel 1 each)
-  "card-build": { [ST]: 5, [SI]: 1, [RAF]: 1, [CT]: 8, [CI]: 1, [CAF]: 1 }, // slice 5: R76-R77's closer _clearAsk moved (clearTimeout 9 -> 8)
+  "card-build": { [ST]: 2, [SI]: 1, [RAF]: 1, [CT]: 6, [CI]: 1, [CAF]: 1 }, // slice 5: R76-R77's closer _clearAsk moved (clearTimeout 9 -> 8); slice 8: R11-R13 moved (setTimeout 5 -> 2, clearTimeout 8 -> 6)
   "card-care": { [ST]: 6, [CT]: 1 },
   "card-flair": { [CT]: 1, [CAF]: 1 }, // slice 2: R21 moved (setTimeout 1 -> 0, clearTimeout 2 -> 1)
   "card-games": { [ST]: 3 },

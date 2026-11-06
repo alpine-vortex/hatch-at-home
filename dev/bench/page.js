@@ -711,7 +711,7 @@
   // or "line" (full battery, second line). The timers stop, the blink holds still.
   function powerGag(card, cur, at) {
     card._powerGag(cur);
-    cur.power.timers.forEach(clearTimeout);
+    card._director.stop(cur, { group: "power" });
     cur.screen.classList.remove("blank");
     cur.batt.classList.remove("blink");
     if (at === "line") {

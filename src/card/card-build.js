@@ -476,9 +476,8 @@ class HatchPetCardBuild extends HatchPetCardBase {
 
   _powerGag(s) {
     const isCalm = calm();
-    const timers = [];
-    const at = (ms, fn) => timers.push(setTimeout(fn, ms));
-    s.power = { timers };
+    const at = (ms, fn) => this._later(s, ms, fn, { group: "power" });
+    s.power = {};
     this._patSync(s, true); // no pat over the gag
     const level = (n, blink) => {
       s.batt.dataset.level = String(n);
@@ -512,11 +511,10 @@ class HatchPetCardBuild extends HatchPetCardBase {
 
   // The gag over, or cut short: the battery goes, and so do lines not yet said.
   _powerEnd(s, abort = true) {
-    const power = s.power;
-    if (!power) return;
+    if (!s.power) return;
     s.power = null;
     this._patSync(s);
-    power.timers.forEach(clearTimeout);
+    this._stop(s, { group: "power" });
     s.screen.classList.remove("blank");
     s.batt.hidden = true;
     s.poseUntil = 0;
@@ -532,7 +530,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     this._booting = true;
     this._card.classList.add("booting");
     this._slides.forEach((x) => { x.boot.hidden = false; });
-    this._bootTimer = setTimeout(() => this._bootEnd(false), BOOT_WAIT_MS);
+    this._later(this._dirCard, BOOT_WAIT_MS, () => this._bootEnd(false), { key: "boot.wait" }); // card scope: no detach drains it
   }
 
   // A tap ends it with the beep (if this browser has sounds on and the pet may
@@ -541,7 +539,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
   _bootEnd(tapped) {
     if (!this._booting || this._bootEnding) return;
     this._bootEnding = true;
-    clearTimeout(this._bootTimer);
+    this._stop(this._dirCard, { key: "boot.wait" });
     if (tapped) {
       try {
         if (soundsOn()) unlockAudio(); // sounds off here: no AudioContext at all
@@ -571,7 +569,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
       return;
     }
     this._slides.forEach((x) => x.boot.classList.add("filling"));
-    setTimeout(finish, BOOT_FILL_MS);
+    this._later(this._dirCard, BOOT_FILL_MS, finish); // unkeyed, card scope: it fires through a disconnect
   }
 
   // --- Updating --------------------------------------------------------------
