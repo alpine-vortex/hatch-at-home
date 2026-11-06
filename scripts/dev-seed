@@ -1,0 +1,392 @@
+#!/usr/bin/env python3
+"""Seed a scratch Home Assistant with two pets in a known state, for device passes.
+
+    scripts/dev-seed [--dir DIR] [--port N] [--keep]
+
+Copies dev/config to DIR (default: a fresh dir under $TMPDIR), starts HA on a free
+port (never 8123), onboards `dev` / `devdevdev` and then drives the real flows:
+
+  * the config flow makes two pets (Pip, woodland; Mew, hearth);
+  * the options flow maps both to the fakes (weather, rain, room light, fireplace, TV,
+    music, heating, cooling, indoor temperature, lux) and sets a bedtime window that is
+    hours away, so pet 1 is awake for the pass;
+  * fast_forward 1 h (hunger falls under 95), then Pip's finish is dune (light) and
+    Mew's is smoke (dark; a teen show-off, so Mew is fast-forwarded to teen first);
+  * the websocket `memory` command turns the dev user's memory on;
+  * the `hop` service pins today's Hop of the Day for Pip (the hop day).
+
+The one thing it writes by hand is the dev user's memory entries (big days, a weekend,
+picks): the pet only takes a big-day answer after it has asked, and it asks on Sundays
+and Mondays alone, so no API can put them there on any other day. HA is stopped, the
+entries go into `.storage/virtual_pet.people` through the integration's own validator
+(people._memory_entry_ok, people.remember's rules) in its own Store format, and HA starts
+again. Then it prints each pet's state and the memory read back over `memory_get`.
+
+Never point it at a real HA; it starts its own. With --keep HA stays up on the
+printed port (reach it from the ReDroid VM at http://<lan-ip>:<port>); without it
+HA is stopped when the proof is printed.
+"""
+import argparse
+import asyncio
+import datetime as dt
+import json
+import os
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+import aiohttp
+
+ROOT = Path(__file__).resolve().parent.parent
+CLIENT = "http://dev-seed/"
+USER = {"username": "dev", "password": "devdevdev", "name": "Dev"}
+PETS = [("Pip", "woodland", "dune"), ("Mew", "hearth", "smoke")]
+
+# Pet options by topic: the fakes in dev/config/configuration.yaml.
+OPTIONS = {
+    "weather": {
+        "rain": "sensor.fake_rain_rate",
+        "weather": "weather.fake_weather",
+        "indoor_temperature": "sensor.fake_indoor_temperature_sensor",
+    },
+    "room": {
+        "room_lights": ["light.fake_living_room_lamp"],
+        "fireplace": "input_boolean.fake_fireplace",
+        "lux": ["sensor.fake_illuminance"],
+        "tv": ["media_player.fake_tv"],
+        "music": ["media_player.fake_speaker"],
+    },
+    "house": {
+        "heating": ["input_boolean.fake_heating"],
+        "cooling": ["input_boolean.fake_cooling"],
+    },
+}
+
+
+def house_now() -> dt.datetime:
+    """Now on the scratch HA's clock (dev/config's time_zone), not this machine's."""
+    import re
+    from zoneinfo import ZoneInfo
+
+    tz = re.search(r"time_zone:\s*(\S+)", (ROOT / "dev/config/configuration.yaml").read_text())
+    return dt.datetime.now(ZoneInfo(tz.group(1)))
+
+
+def hass_bin() -> str:
+    if os.environ.get("HASS"):
+        return os.environ["HASS"]
+    for base in (ROOT, *ROOT.parents):
+        if (base / ".venv/bin/hass").exists():
+            return str(base / ".venv/bin/hass")
+    common = subprocess.run(
+        ["git", "rev-parse", "--git-common-dir"], cwd=ROOT, capture_output=True, text=True
+    ).stdout.strip()
+    main = (ROOT / common).resolve().parent
+    return str(main / ".venv/bin/hass")
+
+
+def free_port() -> int:
+    for port in range(8400, 8500):
+        with socket.socket() as s:
+            if s.connect_ex(("127.0.0.1", port)) != 0:
+                return port
+    sys.exit("no free port in 8400-8499")
+
+
+class Ha:
+    def __init__(self, conf: Path, port: int) -> None:
+        self.conf, self.port, self.proc = conf, port, None
+        self.base = f"http://127.0.0.1:{port}"
+
+    def start(self) -> None:
+        log = open(self.conf / "ha.log", "ab")
+        self.proc = subprocess.Popen(
+            [hass_bin(), "--config", str(self.conf)], stdout=log, stderr=log
+        )
+
+    def stop(self) -> None:
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()  # SIGTERM: HA writes its stores on the way out
+            try:
+                self.proc.wait(90)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+
+    async def wait_up(self, s: aiohttp.ClientSession) -> None:
+        for _ in range(150):
+            try:
+                async with s.get(self.base + "/api/onboarding") as r:
+                    if r.status in (200, 404):
+                        return
+            except aiohttp.ClientError:
+                pass
+            await asyncio.sleep(2)
+        sys.exit(f"HA did not come up; see {self.conf}/ha.log")
+
+
+async def token(s, base, form) -> str:
+    async with s.post(base + "/auth/token", data={"client_id": CLIENT, **form}) as r:
+        return (await r.json())["access_token"]
+
+
+async def sign_in(s, base) -> str:
+    async with s.get(base + "/api/onboarding") as r:
+        steps = await r.json() if r.status == 200 else []
+    user = next((x for x in steps if x["step"] == "user"), None)
+    if user and not user["done"]:
+        async with s.post(
+            base + "/api/onboarding/users", json={"client_id": CLIENT, **USER, "language": "en"}
+        ) as r:
+            code = (await r.json())["auth_code"]
+        access = await token(s, base, {"grant_type": "authorization_code", "code": code})
+        for step in steps:
+            if step["done"] or step["step"] == "user":
+                continue
+            body = {"client_id": CLIENT, "redirect_uri": CLIENT} if step["step"] == "integration" else {}
+            await s.post(
+                f"{base}/api/onboarding/{step['step']}", json=body,
+                headers={"Authorization": f"Bearer {access}"},
+            )
+        return access
+    async with s.post(
+        base + "/auth/login_flow",
+        json={"client_id": CLIENT, "handler": ["homeassistant", None], "redirect_uri": CLIENT},
+    ) as r:
+        flow = await r.json()
+    async with s.post(
+        f"{base}/auth/login_flow/{flow['flow_id']}",
+        json={"client_id": CLIENT, "username": USER["username"], "password": USER["password"]},
+    ) as r:
+        code = (await r.json())["result"]
+    return await token(s, base, {"grant_type": "authorization_code", "code": code})
+
+
+class Api:
+    def __init__(self, s, base, access) -> None:
+        self.s, self.base, self.h = s, base, {"Authorization": f"Bearer {access}"}
+        self.ws = None
+        self.n = 0
+
+    async def call(self, method, path, body=None):
+        async with self.s.request(method, self.base + path, json=body, headers=self.h) as r:
+            if r.status >= 400:
+                sys.exit(f"{method} {path} -> {r.status}: {(await r.text())[:300]}")
+            return await r.json() if "json" in r.content_type else await r.text()
+
+    async def connect(self, access) -> None:
+        self.ws = await self.s.ws_connect(self.base + "/api/websocket")
+        await self.ws.receive_json()
+        await self.ws.send_json({"type": "auth", "access_token": access})
+        assert (await self.ws.receive_json())["type"] == "auth_ok"
+
+    async def wscmd(self, **msg):
+        self.n += 1
+        await self.ws.send_json({"id": self.n, **msg})
+        while True:
+            r = await self.ws.receive_json()
+            if r.get("id") == self.n:
+                if not r.get("success"):
+                    sys.exit(f"ws {msg['type']} failed: {r.get('error')}")
+                return r["result"]
+
+
+async def options_topic(api: Api, entry_id: str, topic: str, data: dict) -> None:
+    flow = await api.call("POST", "/api/config/config_entries/options/flow", {"handler": entry_id})
+    step = await api.call(
+        "POST", f"/api/config/config_entries/options/flow/{flow['flow_id']}", {"next_step_id": topic}
+    )
+    # Fill the form's required fields with their defaults, then lay ours over them.
+    body = {
+        f["name"]: f["default"] for f in step["data_schema"] if f.get("required") and "default" in f
+    }
+    body.update(data)
+    done = await api.call(
+        "POST", f"/api/config/config_entries/options/flow/{flow['flow_id']}", body
+    )
+    if done["type"] != "create_entry":
+        sys.exit(f"options {topic}: {done.get('errors') or done}")
+
+
+async def seed(ha: Ha, s: aiohttp.ClientSession) -> dict:
+    access = await sign_in(s, ha.base)
+    api = Api(s, ha.base, access)
+    await api.connect(access)
+
+    entries = []
+    for name, world, _ in PETS:
+        flow = await api.call("POST", "/api/config/config_entries/flow", {"handler": "virtual_pet"})
+        done = await api.call(
+            "POST", f"/api/config/config_entries/flow/{flow['flow_id']}", {"name": name, "world": world}
+        )
+        entries.append(done["result"]["entry_id"])
+
+    now = house_now()
+    # Asleep from bed to wake: starts 6 h from now and runs 8 h, so the pass has hours.
+    bed = (now + dt.timedelta(hours=6)).strftime("%H:%M:00")
+    wake = (now + dt.timedelta(hours=14)).strftime("%H:%M:00")
+    for eid in entries:
+        await options_topic(api, eid, "bedtime", {"bedtime": bed, "wake_time": wake})
+        for topic, data in OPTIONS.items():
+            await options_topic(api, eid, topic, data)
+        await options_topic(api, eid, "people", {"memory": True})
+        await asyncio.sleep(1)  # each save reloads the pet
+
+    await api.call("POST", "/api/services/virtual_pet/fast_forward", {"hours": 1})
+    # Mew is a teen for the dark show-off finish (smoke unlocks at teen).
+    ids = await pet_ids(api)
+    await api.call(
+        "POST", "/api/services/virtual_pet/fast_forward",
+        {"hours": 125, "config_entry_id": entries[1]},
+    )
+    await asyncio.sleep(1)
+    for (name, _, finish) in PETS:
+        await api.wscmd(type="virtual_pet/set_shell", entity_id=ids[name].find("life_stage"), finish=finish)
+    # Memory on for this person; the entries come in the offline step.
+    await api.wscmd(
+        type="virtual_pet/memory", entity_id=ids["Pip"].find("life_stage"), enabled=True, shared=False
+    )
+    # The hop day: the first board ask of the day pins it.
+    await api.call(
+        "POST", "/api/services/virtual_pet/hop?return_response",
+        {"entity_id": ids["Pip"].find("life_stage"), "action": "board"},
+    )
+    me = await api.wscmd(type="auth/current_user")
+    await ws_close(api)
+    return {"user": me["id"], "entries": entries}
+
+
+async def ws_close(api: Api) -> None:
+    await api.ws.close()
+
+
+async def pet_ids(api: Api) -> dict:
+    """{pet name: its entity ids} from the entity registry."""
+    reg = await api.wscmd(type="config/entity_registry/list")
+    entries = {e["entry_id"]: e for e in await api.call("GET", "/api/config/config_entries/entry?domain=virtual_pet")}
+    out: dict = {}
+    for e in reg:
+        ce = entries.get(e.get("config_entry_id"))
+        if not ce or e["platform"] != "virtual_pet":
+            continue
+        out.setdefault(ce["title"], []).append(e["entity_id"])
+    return {k: Pet(v) for k, v in out.items()}
+
+
+class Pet(list):
+    def find(self, suffix: str) -> str:
+        return next(i for i in self if i.endswith("_" + suffix))
+
+
+def write_memory(conf: Path, user: str) -> dict:
+    """Put the memory entries into the people store with the integration's validator."""
+    sys.path.insert(0, str(ROOT))
+    from custom_components.virtual_pet import people as P  # noqa: E402
+
+    path = conf / ".storage" / P.STORE_KEY
+    doc = json.loads(path.read_text())
+    mem = doc["data"]["people"][user]["memory"]
+    today = house_now().date()
+    d = lambda n: (today + dt.timedelta(days=n)).isoformat()  # noqa: E731
+    wanted = [
+        ("tags", {"day": d(-12), "kind": "big_day", "tag": "exam"}),
+        ("tags", {"day": d(-5), "kind": "big_day", "tag": "match"}),
+        ("tags", {"day": d(-4), "kind": "weekend", "tag": "trip"}),
+        ("tags", {"day": d(2), "kind": "big_day", "tag": "show"}),
+        ("game", {"day": d(-3), "pick": P.ANSWERS["game"][0]}),
+        ("dream", {"day": d(-2), "pick": P.ANSWERS["dream"][0]}),
+        ("great", {"day": d(-1), "ask": "how_day"}),
+    ]
+    for kind, entry in wanted:
+        if not P._memory_entry_ok(kind, entry):
+            sys.exit(f"the integration refuses {kind} {entry}")
+        if kind == "tags":
+            mem.setdefault("tags", []).append(entry)
+        else:
+            mem.setdefault("picks", {}).setdefault(kind, []).append(entry)
+    path.write_text(json.dumps(doc, indent=2))
+    return mem
+
+
+async def proof(ha: Ha, s, user_token_for) -> None:
+    access = await sign_in(s, ha.base)
+    api = Api(s, ha.base, access)
+    await api.connect(access)
+    ids = await pet_ids(api)
+    states = {x["entity_id"]: x for x in await api.call("GET", "/api/states")}
+    for name, _, _ in PETS:
+        mine = ids[name]
+        life = states[mine.find("life_stage")]
+        asleep = states[mine.find("asleep")]["state"]
+        hunger = states[mine.find("hunger")]["state"]
+        print(f"{name}: stage={life['state']} hunger={hunger} asleep={asleep} "
+              f"finish={life['attributes'].get('shell_finish')}")
+    hop = await api.call(
+        "POST", "/api/services/virtual_pet/hop?return_response",
+        {"entity_id": ids["Pip"].find("life_stage"), "action": "board"},
+    )
+    board = hop.get("service_response", hop)
+    print("hop day (Pip):", {k: board.get(k) for k in ("day", "stage", "done", "id", "twist") if k in board})
+    view = await api.wscmd(
+        type="virtual_pet/memory_get", entity_id=ids["Pip"].find("life_stage"), shared=False
+    )
+    print("memory_get (Pip):", json.dumps(view))
+    await ws_close(api)
+
+
+async def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dir")
+    ap.add_argument("--port", type=int)
+    ap.add_argument("--keep", action="store_true")
+    a = ap.parse_args()
+    port = a.port or free_port()
+    if port == 8123:
+        sys.exit("never 8123")
+    conf = Path(a.dir or tempfile.mkdtemp(prefix="hatch-seed-"))
+    if conf.exists() and any(conf.iterdir()):
+        sys.exit(f"{conf} is not empty; give a fresh --dir")
+    shutil.copytree(ROOT / "dev/config", conf, dirs_exist_ok=True)
+    (conf / "custom_components").mkdir(exist_ok=True)
+    link = conf / "custom_components/virtual_pet"
+    if not link.exists():
+        link.symlink_to(ROOT / "custom_components/virtual_pet")
+    (conf / ".storage").mkdir(exist_ok=True)
+    (conf / ".storage/http").write_text(json.dumps({
+        "version": 2, "minor_version": 2, "key": "http",
+        "data": {"stable": {
+            "server_port": port, "cors_allowed_origins": ["https://cast.home-assistant.io"],
+            "login_attempts_threshold": -1, "ip_ban_enabled": True, "ssl_profile": "modern",
+            "use_x_frame_options": True, "error": None, "error_message": None},
+            "pending": None, "yaml_migration_done": True},
+    }))
+    subprocess.run(["node", str(ROOT / "scripts/build-card.js")], check=True)
+    print(f"scratch HA: {conf} on port {port}")
+    ha = Ha(conf, port)
+    try:
+        async with aiohttp.ClientSession() as s:
+            ha.start()
+            await ha.wait_up(s)
+            info = await seed(ha, s)
+        ha.stop()
+        for e in json.loads((conf / ".storage/core.config_entries").read_text())["data"]["entries"]:
+            if e["domain"] == "virtual_pet":
+                keep = ("weather", "rain", "room_lights", "fireplace", "tv", "music", "heating", "cooling", "memory", "bedtime", "wake_time")
+                print(f"options {e['title']}:", {k: e["options"].get(k) for k in keep})
+        write_memory(conf, info["user"])
+        async with aiohttp.ClientSession() as s:
+            ha.start()
+            await ha.wait_up(s)
+            await asyncio.sleep(10)  # the pets load after the HTTP server
+            await proof(ha, s, None)
+    finally:
+        if not a.keep:
+            ha.stop()
+    if a.keep:
+        print(f"HA stays up on port {port} (pid {ha.proc.pid}); user dev / devdevdev")
+
+
+asyncio.run(main())

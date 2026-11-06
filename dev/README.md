@@ -24,6 +24,29 @@ Recipe used by the Pass G runs. Nothing here is committed state; keep it in a sc
    set `adb shell settings put global animator_duration_scale 1`, relaunch the WebView,
    and put it back to 0 afterwards.
 
+## Dev seed: two pets in a known state
+
+`scripts/dev-seed` builds the scratch HA of "Device pass" for you (run it with the main
+checkout's venv python, which has aiohttp: `.venv/bin/python scripts/dev-seed --keep`).
+It copies `dev/config`, picks a free port in 8400-8499 (never 8123), onboards `dev` /
+`devdevdev` and drives the real flows. `--dir` names a fresh scratch dir, `--keep` leaves
+HA up on the printed port (otherwise it stops after printing the proof).
+
+State it leaves:
+
+- Two pets: Pip (woodland, baby) and Mew (hearth, fast-forwarded to teen so the dark finish unlocks;
+  its hunger is 0, feed it first if the pass needs it).
+- Both pets' options map to the fakes: weather, rain, room light, fireplace, TV, music, heating,
+  cooling. Bedtime starts 6 h from the run and wakes 14 h later, so Pip is awake for about 6 h.
+- Pip's hunger is 77 (under 95). Finishes: Pip `dune` (light), Mew `smoke` (dark).
+- Memory is on for the `dev` user, with four tagged days (exam, match, trip, show), a game
+  and a dream pick, and a "great" day; Pip has today's Hop of the Day pinned (not played).
+
+The memory entries are the one hand-written part: the pet takes a big-day answer only after it
+asked, and it asks on Sundays and Mondays, so no API can plant them on other days. The script
+stops HA, adds the entries to `.storage/virtual_pet.people` through the integration's own
+validator (`people._memory_entry_ok`), and starts HA again.
+
 ## Wall tablet (shared screen)
 
 The dashboard's second view, `Wall tablet` (`/dashboard-pet-bench/wall`), is a panel view
