@@ -1586,7 +1586,7 @@ name from `.weekdays`.
 | `.forgot` | forgotten | the line after, spoken once to the live region |
 | `.stop` | stop remembering | the page's switch-off button (opens the existing `memory_off` two-tap confirm) |
 | `.never` | never kept: words you typed, anyone's name | the line saying what is not kept |
-| `.kept_note` | something you forget may still come up for a day | one line under the list (M3 P2-2): a forget removes the memory, the pet's own copies of this week's answers can still come up |
+| `.kept_note` | something you forget may still come up this week | one line under the list (M3 P2-2): a forget removes the memory, the pet's own copies of this week's answers can still come up |
 | `.aria_forget` | forget this: {row text} | each button's `aria-label` (the row's text, as text; no emoji) |
 
 Notes on the wording, for the first mate:
