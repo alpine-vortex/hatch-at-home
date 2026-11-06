@@ -205,6 +205,7 @@ class HatchPetCardBase extends HTMLElement {
       this._dropPhotos(s);
       this._giftPopEnd(s); // a take on its way, or its line, is still said on return
       this._dropFinds(s);
+      this._memoryPageClose(s, false); // the memory page's text goes with the card
       this._unsubscribe(s);
     }
   }

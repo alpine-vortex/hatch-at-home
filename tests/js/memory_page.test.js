@@ -210,3 +210,20 @@ test("the five teardown paths are wired where the plan says", () => {
   assert.match(grab(/\n  _onHidden = \(\) => \{[\s\S]*?\n  \};\n/), /_memoryPageClose\(x\)/);
   assert.match(src, /const MEMORY_IDLE_MS = 2 \* 60 \* 1000;/);
 });
+
+test("F1: a good forget drops the row at once, and a failed re-read keeps the rest", async () => {
+  const { makeCard, makeButton, MEMORY_PAGE } = load();
+  const card = makeCard(FIXTURE);
+  const base = card._hass.callWS;
+  card._hass.callWS = (msg) => (msg.type.endsWith("memory_get") ? Promise.reject(new Error("down")) : base(msg));
+  const s = slide({ memoryData: plain(FIXTURE) });
+  const before = card._memoryRows(s, s.memoryData).days;
+  const row = before[1];
+  s.confirm = { key: card._memoryItemKey(row.key), at: Date.now(), last: Date.now() - 1000 };
+  await card._memoryForget(s, row, makeButton());
+  await new Promise((r) => setTimeout(r, 0));
+  assert.ok(!s.memoryFailed);
+  assert.strictEqual(card._memoryRows(s, s.memoryData).days.length, before.length - 1);
+  assert.deepStrictEqual(plain(card.said), [MEMORY_PAGE.forgot]);
+  clearTimeout(s.confirmTimer);
+});

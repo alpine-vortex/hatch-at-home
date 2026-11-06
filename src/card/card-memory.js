@@ -79,14 +79,14 @@ class HatchPetCardMemory extends HatchPetCardJournal {
 
   // One read per open; a reply for another pet, after a close, or across a shared-screen
   // flip is dropped (path 4).
-  _memoryFetch(s) {
+  _memoryFetch(s, quiet = false) {
     if (s.memoryLoad) return s.memoryLoad;
     const id = s.ids?.["sensor.life_stage"];
     const epoch = s.memoryEpoch || 0;
     const shared = sharedScreen();
     const stale = () => (s.memoryEpoch || 0) !== epoch || s.ids?.["sensor.life_stage"] !== id ||
       sharedScreen() !== shared || s.memoryPage !== "open";
-    s.memoryFailed = false;
+    if (!quiet) s.memoryFailed = false;
     const load = (async () => {
       let reply = null;
       try {
@@ -96,6 +96,7 @@ class HatchPetCardMemory extends HatchPetCardJournal {
       } catch (err) {
         if (stale()) return;
         s.memoryLoad = null;
+        if (quiet && s.memoryData) return; // a re-read after a forget: the rows on show stay
         s.memoryFailed = true;
         this._memoryRedraw(s);
         return;
@@ -277,11 +278,22 @@ class HatchPetCardMemory extends HatchPetCardJournal {
       return;
     }
     if (stale()) return;
-    s.memoryData = null; // read again: the item is gone (or the window slid)
-    s.memoryLoad = null;
-    await this._memoryFetch(s);
-    if (stale()) return;
+    // The item is gone: drop it from the rows on show at once, then read again (a pattern's
+    // window may slide onto an older run). A failed re-read keeps these rows (F1).
+    const d = s.memoryData;
+    if (d) {
+      const k = row.key;
+      const keep = (e) => !(e.day === k.day && (k.list !== "tags" || e.kind === k.kind));
+      if (k.list === "tags") d.tags = (d.tags || []).filter(keep);
+      else if (k.list === "pattern") d.patterns = (d.patterns || []).filter((p) => !(p.tag === k.tag && p.weekday === k.weekday));
+      else if (Array.isArray(d.picks?.[k.list])) d.picks[k.list] = d.picks[k.list].filter(keep);
+    }
+    s.memoryRev = (s.memoryRev || 0) + 1;
+    s.statusHtml = null;
+    this._memoryRedraw(s);
     this._statusMessage(s, P.forgot); // once, to the live region
+    s.memoryLoad = null;
+    this._memoryFetch(s, true);
   }
 
   // A favourite's "ask me again" (M0-c's own action, its own two taps), from the page.

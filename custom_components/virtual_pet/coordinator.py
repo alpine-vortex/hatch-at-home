@@ -1220,8 +1220,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._pick_favourite()
         # Follow-ups past their day (F1); then the memory of removed HA users (M3a).
         if self.people.prune_daily(self._today(now)[0]):
-            self.config_entry.async_create_background_task(
-                self.hass, self.people.async_prune_users(), "virtual_pet prune users"
+            # On hass, not the entry: a reload of this pet's entry must not cancel
+            # the house's once-a-day prune (it is not retried that day).
+            self.hass.async_create_background_task(
+                self.people.async_prune_users(), "virtual_pet prune users"
             )
         self._save()
 
