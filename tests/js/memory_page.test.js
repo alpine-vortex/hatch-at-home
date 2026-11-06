@@ -227,3 +227,53 @@ test("F1: a good forget drops the row at once, and a failed re-read keeps the re
   assert.deepStrictEqual(plain(card.said), [MEMORY_PAGE.forgot]);
   clearTimeout(s.confirmTimer);
 });
+
+test("M3b P1: a pattern forget drops that tag's big_day entries on that weekday (the last five), and their stickers", async () => {
+  const { makeCard, makeButton } = load();
+  const card = makeCard(FIXTURE);
+  const base = card._hass.callWS;
+  card._hass.callWS = (msg) => (msg.type.endsWith("memory_get") ? Promise.reject(new Error("down")) : base(msg));
+  // 2026-10-03/10/17 are Saturdays; 10-06 a Tuesday; 09-05 a Saturday older than the last five.
+  const tag = (day, t = "match", kind = "big_day") => ({ day, tag: t, kind });
+  const data = {
+    today: "2026-10-20",
+    tags: [tag("2026-09-05"), tag("2026-10-03"), tag("2026-10-06"), tag("2026-10-10"), tag("2026-10-13"),
+      tag("2026-10-17"), tag("2026-10-04", "match", "weekend"), tag("2026-10-03", "show")],
+    patterns: [{ tag: "match", weekday: 5 }],
+  };
+  const s = slide({ memoryData: data });
+  const row = { key: { list: "pattern", tag: "match", weekday: 5 } };
+  s.confirm = { key: card._memoryItemKey(row.key), at: Date.now(), last: Date.now() - 1000 };
+  await card._memoryForget(s, row, makeButton());
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepStrictEqual(plain(s.memoryData.patterns), []);
+  // The window is the last five match days (10-03 .. 10-17 less 09-05): the Saturdays in it go; the older one stays.
+  assert.deepStrictEqual(plain(s.memoryData.tags.filter((e) => e.tag === "match" && e.kind === "big_day").map((e) => e.day)),
+    ["2026-09-05", "2026-10-06", "2026-10-13"]);
+  assert.strictEqual(s.memoryData.tags.length, 5); // the weekend entry and the show tag stay
+  clearTimeout(s.confirmTimer);
+});
+
+test("M3b P2: a read that is not the latest is dropped, and a failed latest read keeps the rows", async () => {
+  const { makeCard } = load();
+  const card = makeCard("late");
+  const s = slide({ memoryData: plain(FIXTURE) });
+  const first = card._memoryFetch(s, true);
+  s.memoryLoad = null; // a forget lands and starts the next read
+  const second = card._memoryFetch(s, true);
+  assert.strictEqual(card.resolvers.length, 2);
+  const fresh = plain(FIXTURE);
+  fresh.tags = [];
+  card.resolvers[1](fresh);
+  await second;
+  card.resolvers[0](plain(FIXTURE)); // the older reply lands last
+  await first;
+  assert.deepStrictEqual(plain(s.memoryData.tags), []);
+  // A failed latest read keeps the local rows.
+  const card2 = makeCard(FIXTURE);
+  card2._hass.callWS = () => Promise.reject(new Error("down"));
+  const s2 = slide({ memoryData: plain(FIXTURE) });
+  await card2._memoryFetch(s2, true);
+  assert.deepStrictEqual(plain(s2.memoryData), plain(FIXTURE));
+  assert.ok(!s2.memoryFailed);
+});

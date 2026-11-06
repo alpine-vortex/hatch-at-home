@@ -87,6 +87,8 @@ class HatchPetCardMemory extends HatchPetCardJournal {
     const shared = sharedScreen();
     const stale = () => (s.memoryEpoch || 0) !== epoch || s.ids?.["sensor.life_stage"] !== id ||
       sharedScreen() !== shared || s.memoryPage !== "open";
+    const seq = s.memoryReadSeq = (s.memoryReadSeq || 0) + 1; // only the latest read may land
+    const latest = () => s.memoryReadSeq === seq;
     if (!quiet) s.memoryFailed = false;
     const load = (async () => {
       let reply = null;
@@ -95,14 +97,14 @@ class HatchPetCardMemory extends HatchPetCardJournal {
         reply = await this._hass.callWS({ type: "virtual_pet/memory_get", entity_id: id, shared: false });
         if (!reply || typeof reply !== "object" || !Array.isArray(reply.tags)) throw new Error("no page");
       } catch (err) {
-        if (stale()) return;
+        if (stale() || !latest()) return;
         s.memoryLoad = null;
         if (quiet && s.memoryData) return; // a re-read after a forget: the rows on show stay
         s.memoryFailed = true;
         this._memoryRedraw(s);
         return;
       }
-      if (stale()) return;
+      if (stale() || !latest()) return;
       s.memoryLoad = null;
       s.memoryData = reply;
       s.memoryRev = (s.memoryRev || 0) + 1;
@@ -316,7 +318,16 @@ class HatchPetCardMemory extends HatchPetCardJournal {
       const k = row.key;
       const keep = (e) => !(e.day === k.day && (k.list !== "tags" || e.kind === k.kind));
       if (k.list === "tags") d.tags = (d.tags || []).filter(keep);
-      else if (k.list === "pattern") d.patterns = (d.patterns || []).filter((p) => !(p.tag === k.tag && p.weekday === k.weekday));
+      else if (k.list === "pattern") {
+        d.patterns = (d.patterns || []).filter((p) => !(p.tag === k.tag && p.weekday === k.weekday));
+        // The server drops that tag's big_day entries on that weekday within the tag's last
+        // five by day (people.py forget_pattern); the stickers follow `tags`.
+        const wd = (day) => { const [y, m, dd] = String(day).split("-").map(Number); return (new Date(Date.UTC(y, m - 1, dd)).getUTCDay() + 6) % 7; };
+        const mine = (d.tags || []).filter((e) => e && e.kind === "big_day" && e.tag === k.tag && typeof e.day === "string")
+          .map((e) => e.day).sort().slice(-5);
+        const gone = new Set(mine.filter((day) => wd(day) === k.weekday));
+        d.tags = (d.tags || []).filter((e) => !(e && e.kind === "big_day" && e.tag === k.tag && gone.has(e.day)));
+      }
       else if (Array.isArray(d.picks?.[k.list])) d.picks[k.list] = d.picks[k.list].filter(keep);
     }
     s.memoryRev = (s.memoryRev || 0) + 1;

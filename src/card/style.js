@@ -1596,8 +1596,7 @@ const STYLE = `
   /* The "things you told me" page (memory plan M3a): rows of text, each with its button. */
   .mempage { display: flex; flex-direction: column; gap: 3px; }
   .mempage .mshow, .mempage .mstop { align-self: flex-start; margin-top: 4px; }
-  .mstickers { display: flex; flex-wrap: nowrap; gap: 4px; margin: 2px 0 4px; }
-  ha-card.bigtext .mstickers { flex-wrap: wrap; }
+  .mstickers { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 4px; }
   .msticker { display: block; flex: none; width: 32px; height: 32px; }
   .msticker .picon { width: 32px; height: 32px; }
   .mrow .mtext { overflow-wrap: anywhere; }
