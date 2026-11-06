@@ -230,6 +230,64 @@ def lesson_v2():  # a chalkboard with a note
     return v.done()
 
 
+def meeting_v1():  # two speech bubbles
+    v = Cv()
+    v.rect(2, 3, 14, 11, "blue")
+    v.rect(2, 9, 14, 11, "blue_d")
+    v.poly([(4, 11), (8, 11), (4, 15)], "blue_d")
+    v.rect(5, 6, 11, 6, "paper")
+    v.rect(5, 8, 9, 8, "paper")
+    v.rect(9, 10, 21, 17, "gold")
+    v.rect(9, 15, 21, 17, "gold_d")
+    v.poly([(18, 17), (14, 17), (18, 21)], "gold_d")
+    v.rect(12, 12, 18, 12, "brown_d")
+    v.rect(12, 14, 16, 14, "brown")
+    return v.done()
+
+
+def meeting_v2():  # a presentation board with a chart, on legs
+    v = Cv()
+    v.rect(2, 2, 21, 15, "brown")
+    v.rect(4, 4, 19, 13, "paper")
+    v.rect(4, 12, 19, 13, "paper_s")
+    v.rect(6, 9, 8, 12, "blue")
+    v.rect(10, 6, 12, 12, "red")
+    v.rect(14, 8, 16, 12, "green")
+    v.rect(11, 15, 12, 16, "brown_d")
+    v.line([(11, 16), (6, 21)], "brown_d")
+    v.line([(12, 16), (17, 21)], "brown_d")
+    return v.done()
+
+
+def appointment_v1():  # a calendar page, the day ringed
+    v = Cv()
+    v.rect(3, 3, 20, 20, "paper")
+    v.rect(3, 3, 20, 7, "red")
+    v.rect(3, 18, 20, 20, "paper_s")
+    v.rect(6, 1, 7, 4, "black")
+    v.rect(16, 1, 17, 4, "black")
+    for x in (6, 10, 14, 17):
+        for y in (10, 13, 16):
+            v.px([(x, y), (x + 1, y)], "blue_d")
+    v.ell(8, 11, 14, 17, "gold")
+    v.ell(9, 12, 13, 16, "paper")
+    v.px([(10, 13), (11, 14), (10, 14)], "red_d")
+    return v.done()
+
+
+def appointment_v2():  # a clock
+    v = Cv()
+    v.ell(2, 2, 21, 21, "brown")
+    v.ell(4, 4, 19, 19, "paper")
+    v.rect(11, 5, 12, 6, "black")
+    v.rect(11, 17, 12, 18, "black")
+    v.rect(5, 11, 6, 12, "black")
+    v.rect(17, 11, 18, 12, "black")
+    v.line([(11, 11), (11, 7)], "black", 2)
+    v.line([(12, 12), (16, 14)], "red", 2)
+    return v.done()
+
+
 TAGS = {
     "exam": (exam_v1, exam_v2),
     "match": (match_v1, match_v2),
@@ -237,6 +295,8 @@ TAGS = {
     "trip": (trip_v1, trip_v2),
     "party": (party_v1, party_v2),
     "lesson": (lesson_v1, lesson_v2),
+    "meeting": (meeting_v1, meeting_v2),
+    "appointment": (appointment_v1, appointment_v2),
 }
 NAMES = [f"icon_sticker_{t}_v{i}" for t in TAGS for i in (1, 2)]
 

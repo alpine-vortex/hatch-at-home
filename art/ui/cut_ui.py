@@ -230,7 +230,7 @@ LIB = {
 }
 # set f: the six memory sticker icons, two takes each, drawn in code by draw_stickers.py (no sheet to cut)
 LIB["f"] = {
-    "f1": [f"icon_sticker_{t}_v{i}" for t in ("exam", "match", "show", "trip", "party", "lesson") for i in (1, 2)]
+    "f1": [f"icon_sticker_{t}_v{i}" for t in ("exam", "match", "show", "trip", "party", "lesson", "meeting", "appointment") for i in (1, 2)]
 }
 SETDIR = {"a": "a-modes", "b": "b-v2", "c": "c-games", "d": "d-util", "e": "e-worlds", "f": "f-stickers"}
 A_SHIPS = {
