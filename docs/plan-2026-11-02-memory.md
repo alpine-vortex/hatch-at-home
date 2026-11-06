@@ -1486,7 +1486,9 @@ server clock), so tapping a chip earns nothing and a day that has not happened g
 count shown near stickers, nothing lost or gained by skipping, and a per-item forget removes
 the sticker with the tag. Stickers are derived from `tags`: **nothing new is kept.**
 
-**Art ask (owner Q1): M3b waits on it.** A small pixel-icon set, six icons (one per sticker
+**Art signed (owner, 2026-11-05): set F, `art/ui/library/f-stickers/`** (drawn in code by `art/ui/draw_stickers.py`, cut by `cut_ui.py --lib f`): `exam` v1 (checked paper), `match` v2 (pennant), `show` v2 (curtain and star), `trip` v1 (suitcase), `party` v1 (balloon), `lesson` v1 (open book). M3b copies these six into `frontend/ui` and wires them; the other takes stay in the library.
+
+**Art ask (owner Q1, now met by set F above).** A small pixel-icon set, six icons (one per sticker
 tag), through the usual art path (`private-content/art/`; prompts and runs stay local,
 AGENTS.md). It must read on the card's Tiny5 pixel UI, in the mono LCD mode and in big-text
 mode, and each sticker has a text `aria-label` (the tag's `MEMORY_TAG_CHIPS` label). No
