@@ -130,7 +130,7 @@ The director is a lightweight client-side effect coordinator, not a second simul
 3. Chooses at most one effect per visual track and prevents incompatible pet transforms.
 4. Starts effects immediately when eligible, drops stale decorative work, and cancels lower-priority work when the player acts.
 5. Owns handles (timeout, animation, temporary class, CSS custom property, callback) so cancellation cleans them all up.
-6. Clears state on slide switch, removal, hidden tab, and relevant scene/game transitions.
+6. Clears state on a forgotten pet, a quit game, a closed scene, removal, and hidden tab (a slide switch alone ends only a game, mode, typing, sheet, memory page, wait and scene on the slide being left; amended 2026-11-06, director migration plan Q12).
 7. Exposes small start/stop/status hooks usable by the bench; it does not expose a user-facing queue.
 
 ### Suggested source placement
@@ -498,7 +498,7 @@ Implementation should use the project’s established gates and bench workflow. 
 7. Several sensor updates in one burst settle to latest state without queued animations.
 8. Multiple HA events across categories do not obscure pet text, questions, games, or care actions.
 9. An idle behavior cannot start during a scene, game, question, important line, visitor reveal, hidden tab, or unselected slide.
-10. Slide switch, card removal, hidden tab, and reconnect cancel timers/classes and avoid stale callbacks.
+10. A forgotten pet, a quit game, a closed scene, card removal and hidden tab cancel timers/classes and avoid stale callbacks. A reconnect keeps what the disconnect does not already close; a swipe ends only what the slide being left owns (amended 2026-11-06, director migration plan Q11a, Q12a).
 11. Reduced motion disables displacement/long morphs while preserving readable static state.
 12. Dark/light themes, high contrast, mono backlight, small viewport, and shared-screen mode remain usable.
 13. Every world’s unique morph remains short, cancellable, and does not intercept control input.

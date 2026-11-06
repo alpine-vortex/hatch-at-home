@@ -1,7 +1,7 @@
 # Director migration: every card timer, one-shot and temporary class under the director
 
 **Date:** 2026-11-06
-**Status:** Plan only (tier 0). The migration it describes is tier 2 in total, tier 1 per slice.
+**Status:** **Ready: slice 0 next.** Owner decisions recorded 2026-11-06 (section 9). Plan only (tier 0). The migration it describes is tier 2 in total, tier 1 per slice.
 No code under `src/` changes with this document. **Revised 2026-11-06 (s2977) after the adversarial
 review s2976**, which found the first draft UNSAFE (blockers A1-A4); every finding is resolved below or
 answered in section 10, and "Changes since review" says where. **Revised again 2026-11-06 (s2979) after the
@@ -94,7 +94,7 @@ disclosed change (section 0, D1-D4).
 4. Every slice writes its characterization test **first**, against the unmoved code, and the same test
    passes unchanged after the move (section 6). Timings are identical; the intentional changes are the four
    audit bugs and the disclosed list below, and each is named in its slice.
-5. Open questions for the owner are in section 9 (Q1-Q12), each with a recommendation.
+5. The owner's decisions on Q1-Q12 are in section 9.
 
 ### The disclosed changes (the whole list; Q11, Q12 and 7.1 point here)
 
@@ -1290,86 +1290,46 @@ missing, none extra. The 58 cancel lines are Appendix A. The first mate (or slic
 pins the same counts, now as bare identifiers (Appendix B), which also catches a `forEach(clearTimeout)`
 and an alias.
 
-## 9. Open questions for the owner
+## 9. Decisions (2026-11-06)
 
-1. **Q1. Ownership only, or arbitration too?** Do the pet's one-shots stay as they are (the director owns
-   the handle and the cleanup, never refuses a call), or should a `petBody` lease start dropping a move that
-   arrives while another plays? *Recommendation: ownership only.* A lease would change what the player sees
-   (a perk that plays today would be dropped); that is a design change for a separate plan.
-2. **Q2. Hidden tab.** (a) End the decorative one-shots at once when the **tab** hides (slice X1; flair,
-   season boxes, house fx, robot, hearts, sparkle, speck), so nothing stale shows on return? (b) Also end the
-   infrared visit on hidden (the audit's `_linkEnd()`)? (c) Also end them when the card **scrolls out of
-   view** (the observer at `card-build.js:141` also calls `_dirPause`)? *Recommendation: (a) yes; (b) no for
-   now; (c) no.* The visit is a scripted scene with queued lines and a cut-short path that says things;
-   ending it on hidden is a behaviour change, not cleanup. A scroll-off does not throttle timers, so the
-   effect ends on time unseen, and ending it early would be cut short for a player who scrolls back.
-3. **Q3. The long ones.** The robot's 6 s (`card-visit.js:632`), the season box's ≈6 s (`card-season.js:307`)
-   and the 4.2 s flair: keep, cap at 3 s, or document? *Recommendation: keep all three and document them as
-   ambient (pointer-events none, never blocking input); a 3 s cap changes the look and the CSS keyframes
-   (`robot-cross 6s`), which is art, not a migration.* No slice changes them.
-4. **Q4. The allowlisted sites** (`_tick`, the director's injection point, the typing interval, the
-   care scene's rAF loop, the answer resend, and the five sheet waits R51-R55 of Q7): accept the reasons in
-   section 4? *Recommendation: yes.* The alternative for the rAF loop is to move it through `frame()` as a
-   late optional slice; I advise against it (60 fps timing, no gain). The dead `cancelAnimationFrame` at
-   `card-flair.js:195` is deleted, not allowlisted.
-5. **Q5. The `perk` quirk.** `_perk` (`card-actions.js:32`) and `_animate(.., "perk", 320)` use the same class
-   with independent timers, so one can remove the class from the other early. *Recommendation: keep them
-   independent (`_perk` unkeyed, `_animate`'s keyed on its own: identical timing) in slice 1 and leave it;
-   merging them is a one-line follow-up if the owner wants it.*
-6. **Q6. Where the ledger lives.** In `interaction-director.js` (443 → about 700 lines; one frozen
-   namespace, one `detach`, as section 5 of the plan reads), or a new `director-ledger.js` part (its own
-   frozen namespace, created next to the director; `manifest.txt` order and the TDZ check)? *Recommendation:
-   keep it in the director's file;* the file's header already says "decides which effect may run"; add one
-   sentence for "and owns the timers of the card's own one-shots".
-7. **Q7. Network waits in the director.** The first draft recommended moving all of slice 13 (subscribe
-   wait and retry, the sheets' waits, memory idle). The review found that two of them are a call's
-   lifetime. *Recommendation, reversed:* move R8, R9, R38, R39, R56 (last, with `scripts/ci-gate`; drop
-   the slice, not the effort, if the first mate sees a flake) and **leave R51-R55 out** (the allowlist
-   grows by those five lines, so "all" is met by every site except the ten in section 4). R51 (the shell
-   pick's race timeout) and R55 (the rename's retry) must settle whatever happens to the slide or the card,
-   as R78 must. R52-R54 have no promise and would move safely under the keep policy: **Q7b: move them
-   too, as an optional slice 13b?** *Recommendation: no;* the sheet flows share closers (`_shellSettled`,
-   `_layDrop`, `_clearNameTimers`), and a rename of five lines gains the ledger's drain where the closers
-   already do the job.
-8. **Q8. Device rows required before merge?** Slices 11, 12 and 13 change nothing visible; their rows are
-   a smoke. *Recommendation: the owner reads one phone row for slice 12 (the link) before the batch merges;
-   the others ride on the next device pass.*
-9. **Q9. Batching.** One PR per slice (15 PRs, each one revert), or bundle 1+2, 3+4, 5+6 (about 9)? *Recommendation:
-   one per slice until slice 4 is in and quiet, then bundle low-risk neighbours.*
-10. **Q10. The device queue tool.** The brief names `qa_screen`; the repo has no `qa_screen`. The queue rows
-    above name a fixture and a screen in words. *Recommendation: the first mate maps each row to the
-    queue's real fields.*
-11. **Q11. The disconnect policy.** HA detaches and re-attaches the same card (a view switch and back,
-    masonry re-columning). Today `disconnectedCallback` ends a fixed list (the game, mode, scene, drape,
-    typing, power gag, photos, gift pop, finds, memory page, subscription, link, head swap, `_tick`) and
-    every other timer runs on, so the question, the shell pick's race, the rename retry, the lay wait and
-    the boot fill all finish on their own. (a) Keep exactly that: `reset()` drains nothing, the ledger's
-    entries fire on their time, and the closers stay the only ending at a disconnect. (b) End the
-    decorative one-shots (flair, season boxes, house fx, robot, ...) at a disconnect too, as the intent
-    doc's acceptance 10 reads ("reconnect cancels timers/classes"). *Recommendation: (a).* (b) cannot tell
-    a re-attach from a removal in `disconnectedCallback`, ends a question or a pick unfinished on a view
-    switch unless every entry is classed, and a delayed "end after N s disconnected" needs a timer the
-    disconnected card does not have. The disclosed changes under (a) are D1-D4 of section 0, and the one that
-    touches a disconnect is D3: the clean scene's 1.3 s `rock2` shake-off ends with the scene when the card
-    leaves (the scene's own quiet end already runs at a disconnect); a re-attach inside 1.3 s no longer
-    sees the shake. The murk restore is **not** drained: it keeps firing at +50 ms as now (R16 is keep).
-    The same `rock2` cut also happens at a forget and when **Hop's board loads** over a clean scene past
-    1800 ms (`card-board.js:174`, behind `experimental_hop`), because the drain is on every quiet end. Say
-    no to any of these and the scene drain moves behind an explicit flag
-    (`_sceneEnd(s, { quiet, drain: true })`) passed only at the callers the owner keeps, at the cost of one
-    argument. The intent doc's acceptance line
-    (`docs/plan-2026-11-03-living-device-interactions.md:501`) is then amended to match.
-12. **Q12. Slide switch.** The intent doc says a slide switch cancels timers and classes (item 6 at `:133`,
-    acceptance 10 at `:501`). Today `_go` ends a game, mode, typing, lay sheet, name sheet, memory page, lay
-    wait and scene on the slide being left, and **leaves every other one-shot running on the off-screen
-    slide** (a flair, a house fx, a perk), where it ends on its own within 6 s. The plan keeps that:
-    nothing new is drained by a swipe except the scene's `rock2` (B4, D4) on a slide being left
-    (`i !== to`: on a one-pet card a swipe or a dot tap goes to the slide on show and drains nothing), so
-    the player sees no other change.
-    (a) Keep, and amend the intent line to "a forgotten pet, a quit game, a closed scene". (b) Drain the
-    decorative entries of the slide being left in `_go` (a `group`-based drain; the effect vanishes at
-    once instead of finishing off-screen, and a swipe back within 6 s finds it gone). *Recommendation: (a);*
-    (b) is a behaviour change with no stale effect to cure.
+All twelve questions are answered. **Q3 is the owner's own answer.** The first mate decided the rest
+under its standing authority; each of those is the plan's recommendation, unchanged. The question text
+and the reasoning stay in the revision history (`git log -p` on this file); what is below is what to build.
+
+1. **Q1. Ownership only.** The director owns each one-shot's handle and cleanup and never refuses a call;
+   no `petBody` lease drops a move. (First mate.)
+2. **Q2. Hidden tab.** (a) Yes: slice X1 ends the decorative one-shots (flair, season boxes, house fx,
+   robot, hearts, sparkle, speck) at once when the **tab** hides. (b) No: the infrared visit is not ended on
+   hidden. (c) No: a scroll-off ends nothing. (First mate.)
+3. **Q3. The long ones.** Keep the robot's 6 s (`card-visit.js:632`), the season box's ≈6 s
+   (`card-season.js:307`) and the 4.2 s flair, **documented as ambient** (pointer-events none, never
+   blocking input). No cap, no slice changes them; a cap would change the CSS keyframes (`robot-cross 6s`),
+   which is art. The note lives in this plan (R47, R82, slice 3's flair pin); AGENTS.md's motion rule is
+   untouched, as the plan asks for no change there. (**Owner.**)
+4. **Q4. The allowlist stands.** The reasons in section 4 are accepted: `_tick`, the director's injection
+   point, the typing interval, the care scene's rAF loop, the answer resend, and the five sheet waits
+   R51-R55 stay off the ledger. The rAF loop does not move through `frame()`. The dead
+   `cancelAnimationFrame` at `card-flair.js:195` is deleted. (First mate.)
+5. **Q5. The `perk` quirk.** Two keys, leave it: `_perk` unkeyed, `_animate`'s keyed on its own, identical
+   timing. Merging them is a later one-liner if wanted. (First mate.)
+6. **Q6. The ledger lives in `interaction-director.js`** (one frozen namespace, one `detach`); no new
+   part. Add one sentence to the file's header for "and owns the timers of the card's own one-shots".
+   (First mate.)
+7. **Q7. Network waits.** Move R8, R9, R38, R39 and R56 **last**, with `scripts/ci-gate`; drop that slice,
+   not the effort, if it flakes. R51-R55 stay out (allowlisted). **No slice 13b.** (First mate.)
+8. **Q8. Device rows.** One owner phone row for slice 12 (the link) before its batch merges; the other rows
+   ride the next device pass. (First mate.)
+9. **Q9. Batching.** One PR per slice until slice 4 is in and quiet, then bundle low-risk neighbours.
+   (First mate.)
+10. **Q10. The device queue tool.** The first mate maps each device row to the queue's real fields.
+    (First mate.)
+11. **Q11. Disconnect policy: (a).** Keep exactly today's list: `reset()` drains nothing, ledger entries
+    fire on their time, and the closers stay the only ending at a disconnect. The disclosed changes are
+    D1-D4 of section 0 (D3 is the clean scene's `rock2` cut at a quiet end). The intent doc's acceptance 10
+    is amended to match (done, 2026-11-06). (First mate.)
+12. **Q12. Slide switch: (a).** Keep: a swipe drains nothing new except `rock2` on a slide being left
+    (D4). The intent doc's item 6 and acceptance 10 are amended to "a forgotten pet, a quit game, a closed
+    scene" (done, 2026-11-06). (First mate.)
 
 ## Appendix A: every cancel line on `531cd101`
 
