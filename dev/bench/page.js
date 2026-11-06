@@ -1327,7 +1327,7 @@
       Math.random = () => 0;
       let made;
       try { made = card._bubblePop(cur); } finally { Math.random = random; }
-      clearTimeout(made?.timer);
+      card._director.stop(cur, { group: "fx" }); // freeze the pop: its removal is on the ledger
       const pop = made.img;
       await pop.decode().catch(() => {});
       for (const a of pop?.getAnimations() || []) { a.pause(); a.currentTime = 1200 * (shot.bubblePop === true ? 0.7 : shot.bubblePop); }

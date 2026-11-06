@@ -352,6 +352,9 @@ there is no pre-build fallback and no bare timer in them):
 | `_stop(scope, sel)`, `_drain(scope, sel)`, `_has(scope, sel)` | the director's `stop`, `drain`, `has` |
 
 `scope` is the first argument everywhere so a slide-less call reads `this._hold(this._dirCard, button, ...)`.
+`_director` is a field of the **card** (made in `_build`), not of a slide: the bench writes `card._director.stop(cur, ...)`,
+card-check `el._director.inspect(s)` or the adapters `el._has(s, ...)`, and a vm test's fake `this` needs `_director` or
+the adapters it calls (slice 1 hit it in `shell_modes.test.js`, slice 2 in `rare_glass.test.js`).
 
 ### 1.5 Tests for the API (slice 0, `tests/js/interaction_director_ledger.test.js`, `node --test`, fake `schedule`)
 
@@ -805,7 +808,8 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
   250 and `_has` is true until then. Reach today: `cap_press.test.js`, `shell_modes.test.js`,
   `motion_ship2.test.js`, cc `pat`, `shellmode`.
 - **Edits outside `src`:** `dev/bench/page.js:1228` (`clearTimeout(cur.wipeTimer)` becomes
-  `cur._director.stop(cur, { key: "wipe" })`) and `:1393` (`clearTimeout(cur.swapTimer)` becomes
+  `card._director.stop(cur, { key: "wipe" })`: `_director` is on the **card**, not the slide, so every bench,
+  card-check and test edit in this plan reads `card._director` or `el._director`, never `s._director`) and `:1393` (`clearTimeout(cur.swapTimer)` becomes
   `stop(cur, { key: "mode.swap" })`); `scripts/card-check.js:1640,1658` (`clearTimeout(s.statusMessageTimer)`
   becomes `stop(s, { key: "status.note" })` through `page.evaluate`); `tests/js/cap_press.test.js:62`
   (a regex that pins `setTimeout(() => button.classList.remove("failed"), 400)`: rewritten to pin the
@@ -841,10 +845,18 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
   replaces the box and the first timer never removes the new box. **D-keep:** disconnect at 500 ms, advance
   10 s: every class and box is gone at its time, as before.
 - **Edits outside `src`:** `scripts/card-check.js:10621` plants `s.breezeTimer = setTimeout(...)` as a
-  `_forget` probe: it plants `_later(s, 60000, () => {}, { key: "breezy" })` and checks `has` is false
-  after `_forget`; `tests/js/rare_glass.test.js:355` requires the text `s.markTimer` in `_markEnd`'s body:
-  it requires the `_stop(s, { key: "mark" })` form; `tests/js/care_reactions.test.js` (breezy via
-  `_react`) gains the adapter stubs.
+  `_forget` probe: it plants `two._later(s, 60000, () => {}, { key: "breezy" })` and checks `two._has` is false
+  after `_forget` (the F6 check now asserts planted and ended); `tests/js/rare_glass.test.js` (see 6.2: the rig loads
+  `_later` and `_stop`, the `inspect` null read, and the `_markEnd` text now requires the `_stop(s, { key: "mark" })`
+  form); `dev/bench/page.js:1329` (`clearTimeout(made?.timer)` becomes `card._director.stop(cur, { group: "fx" })`;
+  `_bubblePop` returns `{ img }` only). `care_reactions.test.js` needs no edit (6.2).
+- **Shipped, and where it differed from the draft:** hearts are not guarded by `calm()` in `_bondHearts` itself (the
+  callers check it), so the trace pins "made under calm too, at the method", and says the callers do the guarding. The
+  trace has no "no slide" case: every one of these methods reads `s.screen` first and all callers pass a slide. B1 has no
+  trace case (it is the one change); `screen_fx_ledger.test.js` carries it (house fx and robot end on a forget, a reused
+  slide is not cut short). The D-keep run is 10 s for the classes and boxes and 23 s for the glass mark (its backstop is
+  at 22.5 s). `_forget`'s own `clearTimeout(s.breezeTimer)`, `litTimer` and `flairTimer` lines stay (slice 14), now
+  no-ops on deleted fields. No ratchet row reached zero in this slice (`card-moment` kept 2 `setTimeout`).
 - **Checks:** trace tests; `device_fx_room.test.js` (house fx and robot are named there), `care_reactions.test.js`;
   `scripts/ci-gate` (iterate with `gate --auto`: `moments`, `devicefx`, `backlight`, `sharedscreen`, `winter`).
 - **Device queue:** fixture: dev pet with the house signals (heating, cooling, robot, tumble dryer) from
@@ -1245,8 +1257,8 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
 |---|---|---|
 | 1 | `cap_press.test.js:62` | a regex pins `setTimeout(() => button.classList.remove("failed"), 400)` |
 | 1, 3 | `motion_ship2.test.js:28-118` | `_wipe` (170/220) is slice 1; `_swapFlip` `[100, 200]` is slice 3; the flip-clock 80 is slice 10 |
-| 2 | `rare_glass.test.js:355` | requires `s.markTimer` in `_markEnd`'s text |
-| 2, 3, 4, 7, 9 | `care_reactions.test.js:121,161,633,1249-1268,1427,1433` | `:121` shake (3), `:161` pose end (4), `:633,1433` extract `ANIMATE_TIMERS` (7), `:1249-1268,1427` drape (9) |
+| 2 | `rare_glass.test.js` (`:52`, `:225`, `:355`) | the rig's fake class has three methods and no `_later`/`_stop` (`_rareGlass` and `_markEnd` now call them: it loads the two adapters); `:225` read `inspect(slide) === null`, the slide now holds the backstop's entry (no tracks, one timer, key `mark`); `:355` required `s.markTimer` in `_markEnd`'s text |
+| 3, 4, 7, 9 | `care_reactions.test.js:121,161,633,1249-1268,1427,1433` | `:121` shake (3), `:161` pose end (4), `:633,1433` extract `ANIMATE_TIMERS` (7), `:1249-1268,1427` drape (9). **Slice 2 needs none**: nothing in it runs `_react`'s fan branch (it pins the method's text only), so the breezy move leaves it green |
 | 3 | `motion_ship1.test.js:25`, `touch.test.js:101` | `_wander` pins the timer; the fake `this` has no `_hold` |
 | 7 | `sitter_life.test.js`, `touch.test.js`, `motion_ship1/2.test.js` | `_animate` is extracted |
 | 13 | `subscribe_silence.test.js:63,86`, `memory_page.test.js:153,171,194,198,228,254` | `setTimeout` count; `s.retryTimer = 99`; `clearTimeout(s.confirmTimer)` |

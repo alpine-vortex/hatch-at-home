@@ -584,7 +584,8 @@ class HatchPetCardMoment extends HatchPetCardVisit {
     img.alt = "";
     img.src = `${BASE}/ui/prop_bubbles_1.png?v=${VERSION}`;
     s.prop.after(img);
-    return { img, timer: setTimeout(() => img.remove(), 1300) };
+    this._later(s, 1300, () => img.remove(), { group: "fx", undo: () => img.remove() });
+    return { img };
   }
 
   // Medicine that worked (2b, C8): the viewer's own is theirs, someone else's a beat.
@@ -655,9 +656,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
       }
       if (!busy && praise && !spoiled && !calm() && !s.asleep) this._bondHearts(s, "carehearts", variant === "spin" ? 1 : 2);
       if (entry.action === "fan" && !busy) { // the fan stands by, and its breeze crosses the scene
-        s.screen.classList.add("breezy");
-        clearTimeout(s.breezeTimer);
-        s.breezeTimer = setTimeout(() => s.screen.classList.remove("breezy"), 2600);
+        this._hold(s, s.screen, ["breezy"], 2600, { key: "breezy" });
       }
       const food = this._words(s).food;
       // The pet asked for the blanket or the fan by name: it thanks you (F11).

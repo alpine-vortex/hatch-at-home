@@ -10618,7 +10618,8 @@ async function main() {
         const realUnsub = s.unsub;
         s.unsub = () => { unsubbed = true; return realUnsub?.(); };
         s.screen.classList.add("breezy");
-        s.breezeTimer = setTimeout(() => {}, 60000);
+        two._later(s, 60000, () => {}, { key: "breezy" }); // a ledger entry a forget must end (director migration slice 2)
+        out.breezePlanted = two._has(s, { key: "breezy" });
         two.setConfig({ ...two._config, devices: devices.slice(0, 1) });
         two.hass = two._hass;
         for (let i = 0; i < 40 && two._slides.length > 1; i++) await new Promise((r) => setTimeout(r, 250));
@@ -10626,6 +10627,7 @@ async function main() {
           slides: two._slides.length, revoked: revoked.includes(url),
           dialogClosed: !two.shadowRoot.querySelector(".photo-dialog")?.open,
           game: s.game, unsubbed, unsubCleared: s.unsub === null, breezy: s.screen.classList.contains("breezy"),
+          breezeEnded: !two._has(s, { key: "breezy" }),
         });
         const before = { ...io };
         two._slides[0].unsub = () => {};
@@ -10643,7 +10645,7 @@ async function main() {
       return out;
     });
     check("F6: a dropped slide ends its game, revokes its photos, closes the dialog and unsubscribes",
-      f6.slides === 1 && f6.dialogOpened && f6.dialogClosed && f6.revoked && f6.game === null && f6.realSub && f6.unsubbed && f6.unsubCleared && f6.unsubClearedOnLeave && !f6.breezy,
+      f6.slides === 1 && f6.dialogOpened && f6.dialogClosed && f6.revoked && f6.game === null && f6.realSub && f6.unsubbed && f6.unsubCleared && f6.unsubClearedOnLeave && !f6.breezy && f6.breezePlanted && f6.breezeEnded,
       JSON.stringify(f6));
     check("F6: the card's observer disconnects when it leaves the page and observes again when back",
       f6.disconnected && f6.observed, JSON.stringify(f6));

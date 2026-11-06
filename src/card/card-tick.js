@@ -117,10 +117,8 @@ class HatchPetCardTick extends HatchPetCardSitter {
   // The backlight: the screen glows for a while; a second tap starts the while
   // again. Nothing else changes (no lights out, no waking, no line).
   _backlight(s) {
-    clearTimeout(s.litTimer);
-    s.screen.classList.add("lit");
+    this._hold(s, s.screen, ["lit"], BACKLIGHT_MS, { key: "lit" });
     this._chirp(s, "click");
-    s.litTimer = setTimeout(() => s.screen.classList.remove("lit"), BACKLIGHT_MS);
   }
 
   // Nothing else is going on: is the pet free for a small idle behaviour?

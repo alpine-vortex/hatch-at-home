@@ -543,7 +543,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
       box.append(img);
     });
     s.screen.append(box);
-    setTimeout(() => box.remove(), 2800);
+    this._later(s, 2800, () => box.remove(), { group: "fx", undo: () => box.remove() });
   }
 
   // The frames to draw now: a reaction pose while one runs, else the mood's.
@@ -618,18 +618,14 @@ class HatchPetCardVisit extends HatchPetCardLooks {
   // One house effect at a time: a new one replaces the last.
   _houseFx(s, cls) {
     s.screen.classList.remove("fx-heat", "fx-cool", "fx-suds", "fx-tumble", "fx-chime");
-    s.screen.classList.add(cls);
-    clearTimeout(s.houseFxTimer);
-    s.houseFxTimer = setTimeout(() => s.screen.classList.remove(cls), 2500);
+    this._hold(s, s.screen, [cls], 2500, { key: "housefx" });
   }
 
   // The robot vacuum's stand-in (fx-robot, 6 s across the floor line) until the art
   // (house_robot) lands; the screen's width sets how far it goes.
   _robotFx(s) {
     s.screen.style.setProperty("--robot-w", `${(s.screen.clientWidth || 400) - 22}px`);
-    s.screen.classList.add("fx-robot");
-    clearTimeout(s.robotTimer);
-    s.robotTimer = setTimeout(() => s.screen.classList.remove("fx-robot"), 6000);
+    this._hold(s, s.screen, ["fx-robot"], 6000, { key: "robot" });
   }
 
   // --- The device-alive rain adapter (plan 2026-11-03, slice 3B) --------------------------
@@ -693,7 +689,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
 
   // The rare glass mark (slice 6; plan section 9). A generic paw, smudge or edge shadow on the glass of the pet on
   // show, about one per 20 minutes of viewed time, in memory only (s.glassViewed, s.glassAt, s.glassSeen, s.markUntil,
-  // s.markLast, s.markTimer: nothing saved, nothing on the wire). Called by _tick for the selected slide with the clock
+  // s.markLast: nothing saved; the backstop is the ledger's key "mark": nothing saved, nothing on the wire). Called by _tick for the selected slide with the clock
   // (`now`) and the random (`choose`) as parameters, so a test needs no wait. Not a lease: it never writes s.dirEffect
   // and offers the director nothing; it only reads it (inspect: a running onset or echo; isBusy: the busy owners).
   _rareGlass(s, now = Date.now(), choose = pick) {
@@ -730,8 +726,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     s.markLast = kind;
     s.glassViewed = 0;
     s.markUntil = now + M.showMs + M.fadeMs;
-    clearTimeout(s.markTimer);
-    s.markTimer = setTimeout(() => this._markEnd(s), M.showMs + M.fadeMs + 500);
+    this._later(s, M.showMs + M.fadeMs + 500, () => this._markEnd(s), { key: "mark" });
   }
 
   // Is this spot free of the pet and of everything read or pressed on the screen, at its shown size right now? The
@@ -754,8 +749,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
   _markEnd(s, full = false) {
     if (!s) return;
     HATCH_DEVICE_FX.markClear(s);
-    clearTimeout(s.markTimer);
-    s.markTimer = 0;
+    this._stop(s, { key: "mark" });
     s.markUntil = 0;
     if (full) {
       s.glassViewed = 0;
@@ -791,7 +785,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     const ring = document.createElement("span");
     ring.className = "burst big";
     s.screen.append(ring);
-    setTimeout(() => ring.remove(), 600);
+    this._later(s, 600, () => ring.remove(), { group: "fx", undo: () => ring.remove() });
   }
 }
 

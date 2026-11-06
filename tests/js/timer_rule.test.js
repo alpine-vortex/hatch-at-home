@@ -18,18 +18,18 @@ const PINNED = {
   // + slice 0: the director's repeat and frame wrappers (setInterval, clearInterval, rAF, cancel 1 each)
   "card-build": { [ST]: 5, [SI]: 1, [RAF]: 1, [CT]: 9, [CI]: 1, [CAF]: 1 },
   "card-care": { [ST]: 6, [CT]: 1 },
-  "card-flair": { [ST]: 1, [CT]: 2, [CAF]: 1 },
+  "card-flair": { [CT]: 1, [CAF]: 1 }, // slice 2: R21 moved (setTimeout 1 -> 0, clearTimeout 2 -> 1)
   "card-games": { [ST]: 3 },
   // slice 1: card-journal (R25) and card-mode (R40) have no bare timer left; card-base clearTimeout 4 -> 3 (R27's closer)
   "card-layout": { [CT]: 1 }, // slice 1: R26, R27, R28 moved (setTimeout 2 -> 0, rAF 1 -> 0, clearTimeout 2 -> 1)
   "card-link": { [ST]: 3, [SI]: 2, [CT]: 3, [CI]: 2 },
   "card-looks": { [ST]: 4, [CT]: 2 },
   "card-memory": { [ST]: 2, [CT]: 3 },
-  "card-moment": { [ST]: 4, [CT]: 1 },
+  "card-moment": { [ST]: 2 }, // slice 2: R42, R43 moved (setTimeout 4 -> 2, clearTimeout 1 -> 0)
   "card-season": { [ST]: 6, [CT]: 1 },
   "card-sheets": { [ST]: 6, [CT]: 5 },
-  "card-tick": { [ST]: 16, [SI]: 1, [CT]: 6, [CI]: 1, [AN]: 2 },
-  "card-visit": { [ST]: 9, [CT]: 7 },
+  "card-tick": { [ST]: 15, [SI]: 1, [CT]: 5, [CI]: 1, [AN]: 2 }, // slice 2: R59 moved (setTimeout 16 -> 15, clearTimeout 6 -> 5)
+  "card-visit": { [ST]: 4, [CT]: 3 }, // slice 2: R79, R81-R84 moved (setTimeout 9 -> 4, clearTimeout 7 -> 3)
   "card-visitors": { [ST]: 3, [CT]: 2 },
 };
 

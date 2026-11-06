@@ -49,7 +49,7 @@ function rig(over = {}) {
     setTimeout: (fn, ms) => { const x = { at: w.now + ms, fn, live: true, id: w.timers.length + 1 }; w.timers.push(x); return x; },
     clearTimeout: (x) => { if (x && typeof x === "object") x.live = false; },
   };
-  const Card = vm.runInNewContext(`(class {\n${method("_rareGlass")}\n${method("_markClear")}\n${method("_markEnd")}\n_dirShown(s) { return SHOWN(s); }\n})`, {
+  const Card = vm.runInNewContext(`(class {\n${method("_rareGlass")}\n${method("_markClear")}\n${method("_markEnd")}\n${method("_later")}\n${method("_stop")}\n_dirShown(s) { return SHOWN(s); }\n})`, {
     HATCH_DEVICE_FX: F, lcdOn: () => w.lcd, calm: () => w.calm, SHOWN: (s) => w.shown && s === w.slide,
     pick: (l) => l[0], setTimeout: fake.setTimeout, clearTimeout: fake.clearTimeout, Math, Date,
   });
@@ -223,7 +223,10 @@ test("no lease: a mark never writes s.dirEffect or offers the director anything,
   assert.ok(showing(w).includes(M.on));
   assert.ok(!w.slide.dirEffect, "s.dirEffect untouched");
   assert.deepStrictEqual(offered, []);
-  assert.strictEqual(w.dir.inspect(w.slide), null, "no track at all");
+  // no track at all; the slide's state holds the backstop's ledger entry (slice 2), nothing else
+  const seen = w.dir.inspect(w.slide);
+  assert.deepStrictEqual({ ...seen.tracks }, {});
+  assert.deepStrictEqual([...seen.timers.map((x) => x.key)], ["mark"]);
   const r = F.live(w.dir, w.slide, entry("rain_started", { id: "n2-1" }), ENV);
   assert.ok(r.accepted, JSON.stringify(r));
   w.run(5 * TICK);
@@ -352,7 +355,11 @@ test("no release: a mark's animationend does not release a running lease, and a 
 test("memory only: the gate reads no save field and writes no PetState, no localStorage, nothing on the wire", () => {
   const body = [method("_rareGlass"), method("_markClear"), method("_markEnd")].join("\n").replace(/\/\/.*$/gm, "");
   assert.doesNotMatch(body, /localStorage|callService|callWS|sendMessage|subscribe|fetch\(|_state\(|\.states\b|PetState|_hass|prefs|sessionStorage/);
-  for (const f of ["glassViewed", "glassAt", "glassSeen", "markUntil", "markLast", "markTimer"]) assert.match(body, new RegExp(`s\\.${f}\\b`));
+  for (const f of ["glassViewed", "glassAt", "glassSeen", "markUntil", "markLast"]) assert.match(body, new RegExp(`s\\.${f}\\b`));
+  // the backstop is the ledger's key "mark" (slice 2), not a field on the slide
+  assert.match(body, /this\._later\(s, M\.showMs \+ M\.fadeMs \+ 500, \(\) => this\._markEnd\(s\), \{ key: "mark" \}\)/);
+  assert.match(method("_markEnd"), /this\._stop\(s, \{ key: "mark" \}\)/);
+  assert.doesNotMatch(body, /markTimer/);
 });
 
 // ---- markup, layers, CSS ----

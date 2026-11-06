@@ -31,8 +31,7 @@ class HatchPetCard extends HatchPetCardLink {
     for (const trait of shown) this._flairPieces(trait, levels[trait] || 1, at, box);
     s.screen.appendChild(box);
     s.flairUntil = Date.now() + FLAIR_MS;
-    clearTimeout(s.flairTimer);
-    s.flairTimer = setTimeout(() => box.remove(), FLAIR_MS);
+    this._later(s, FLAIR_MS, () => box.remove(), { key: "flair", undo: () => box.remove() });
     return shown;
   }
 
