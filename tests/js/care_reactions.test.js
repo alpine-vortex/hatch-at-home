@@ -626,28 +626,30 @@ test("feed's refuseAt: a full that came after a hold is refused at the gate, bef
 });
 
 test("_animate: one timer per element and class; a re-add keeps the class to the second timer's end", () => {
+  // The ledger adapters over the real director; its schedule is recorded, and a cancel takes the timer out.
   const timers = [];
-  let id = 0;
-  const ctx = {
-    WeakMap, Map,
-    setTimeout: (fn, ms) => { timers.push({ id: ++id, fn, ms }); return id; },
-    clearTimeout: (i) => { const k = timers.findIndex((t) => t.id === i); if (k >= 0) timers.splice(k, 1); },
-  };
-  vm.runInNewContext(`${konst("ANIMATE_TIMERS")}\nthis.api = {${method("_animate")}};`, ctx);
+  const ctx = {};
+  vm.runInNewContext(`this.api = {${method("_animate")}};`, ctx);
+  const self = Object.assign(Object.create(ctx.api), adapters((ms, fn) => {
+    const t = { fn, ms };
+    timers.push(t);
+    return () => { const k = timers.indexOf(t); if (k >= 0) timers.splice(k, 1); };
+  }));
+  const slide = {};
   const classes = new Set();
-  const el = { offsetWidth: 0, classList: { add: (c) => classes.add(c), remove: (c) => classes.delete(c) } };
-  ctx.api._animate({}, el, "chomp", 280);
+  const el = { offsetWidth: 0, classList: { add: (...c) => c.forEach((x) => classes.add(x)), remove: (...c) => c.forEach((x) => classes.delete(x)) } };
+  self._animate(slide, el, "chomp", 280);
   assert.ok(classes.has("chomp"));
   const first = timers[0];
-  ctx.api._animate({}, el, "chomp", 280); // variant C: the next chomp, 250 ms on
+  self._animate(slide, el, "chomp", 280); // variant C: the next chomp, 250 ms on
   assert.strictEqual(timers.length, 1, "the first timer is cleared");
   assert.notStrictEqual(timers[0], first);
-  assert.ok(classes.has("chomp"));
+  assert.ok(classes.has("chomp"), "the replacement runs no undo: the class stays for the second one");
   timers.shift().fn(); // it fires, and is gone
   assert.ok(!classes.has("chomp"));
   // Another class, or another element, keeps its own.
-  ctx.api._animate({}, el, "chomp", 280);
-  ctx.api._animate({}, el, "perk", 320);
+  self._animate(slide, el, "chomp", 280);
+  self._animate(slide, el, "perk", 320);
   assert.strictEqual(timers.length, 2);
 });
 
@@ -1432,21 +1434,22 @@ test("audit N2, N7, N9: _forget clears the drape, a lights scene drops .resting,
 
 test("audit N3: _animate restarts the blanket with the pet (not the lie squash); startle, jig, droop, sulk share the drape's rules", () => {
   const ops = [];
-  const ctx = { WeakMap, Map, setTimeout: () => 1, clearTimeout() {} };
-  vm.runInNewContext(`${konst("ANIMATE_TIMERS")}\nthis.api = {${method("_animate")}};`, ctx);
+  const ctx = {};
+  vm.runInNewContext(`this.api = {${method("_animate")}};`, ctx);
+  const self = Object.assign(Object.create(ctx.api), adapters());
   const el = (name) => ({ get offsetWidth() { ops.push(`${name}:reflow`); return 0; }, hidden: false, classList: { add: (c) => ops.push(`${name}+${c}`), remove: (c) => ops.push(`${name}-${c}`) } });
   const pet = el("pet");
   const drape = el("drape");
-  ctx.api._animate({ pet, drape }, pet, "perk", 320);
+  self._animate({ pet, drape }, pet, "perk", 320);
   assert.deepStrictEqual(ops, ["pet-perk", "drape-perk", "pet:reflow", "pet+perk", "drape+perk"], "removed from both, one reflow, added to both");
   ops.length = 0;
-  ctx.api._animate({ pet, drape }, pet, "lie", 300);
+  self._animate({ pet, drape }, pet, "lie", 300);
   assert.deepStrictEqual(ops, ["pet-lie", "pet:reflow", "pet+lie"], "the squash is the pet's alone");
   ops.length = 0;
-  ctx.api._animate({ pet, drape: Object.assign(el("drape"), { hidden: true }) }, pet, "perk", 320);
+  self._animate({ pet, drape: Object.assign(el("drape"), { hidden: true }) }, pet, "perk", 320);
   assert.ok(!ops.some((o) => o.startsWith("drape")), "a hidden blanket is left alone");
   ops.length = 0;
-  ctx.api._animate({ pet, drape }, el("prop"), "perk", 320);
+  self._animate({ pet, drape }, el("prop"), "perk", 320);
   assert.ok(!ops.some((o) => o.startsWith("drape")), "only the pet's own element");
   for (const c of ["startle", "jig", "droop", "sulk"]) {
     assert.match(src, new RegExp(`\\.pet\\.${c}, \\.drape\\.${c} \\{`), c);

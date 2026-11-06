@@ -28,7 +28,7 @@ const PINNED = {
   "card-memory": { [ST]: 2, [CT]: 3 },
   "card-sheets": { [ST]: 6, [CT]: 5 },
   "card-tick": { [SI]: 1, [CI]: 1 }, // slice 3: R60-R68, R70, R73 moved (setTimeout 15 -> 4); slice 4: R57-R58, R71, R72, R74, R75 (setTimeout 4 -> 0, clearTimeout 5 -> 0, .animate( 2 -> 0)
-  "card-visit": { [ST]: 2, [CT]: 1 }, // slice 2: R79, R81-R84 moved (setTimeout 9 -> 4, clearTimeout 7 -> 3); slice 5: R76, R77 (setTimeout 4 -> 2, clearTimeout 3 -> 1)
+  "card-visit": { [ST]: 1, [CT]: 0 }, // slice 2: R79, R81-R84 moved (setTimeout 9 -> 4, clearTimeout 7 -> 3); slice 5: R76, R77 (setTimeout 4 -> 2, clearTimeout 3 -> 1); slice 7: R80 `_animate` (setTimeout 2 -> 1, clearTimeout 1 -> 0)
   "card-visitors": { [ST]: 3, [CT]: 2 },
 };
 

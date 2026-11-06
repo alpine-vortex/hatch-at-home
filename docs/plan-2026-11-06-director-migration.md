@@ -1067,6 +1067,32 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
   stubs; `motion_ship1.test.js`, `motion_ship2.test.js`, `touch.test.js`, `sitter_life.test.js` gain the
   adapter stubs (every vm test whose fake `this` lacks `_director`/`_later`/`_hold` throws once the
   method moves).
+- **Shipped, and where it differed from the draft:** `animate_trace.test.js` has 17 cases on the unmoved code. The table is
+  read from the source: the 71 literal `(cls, ms)` call sites by regex (a new literal caller is a new row with no edit), and the
+  14 computed ones (a ternary or a variable: card-care, card-games, card-moment, card-season, card-sitter, card-tick,
+  card-visitors) are listed by hand in `DYNAMIC` with a count, so a new computed caller fails the count until its choices are
+  added. Each row: on at 0 (remove, reflow, add), off at `ms`, calm both ways; again at `ms / 2` it restarts and stays on to
+  `1.5 * ms` with no `class-` between (A1); plus a snack's chews 300 ms apart, a third call, another class on the same
+  element, the same class on `s.pet` and `s.gameNum`, the drape mirror (not for `lie`, a hidden drape, another element, no
+  drape; not taken off at the end), `ms` 0, an element out of the DOM, no slide (twice, too) and D-keep.
+  `animate_ledger.test.js` has 9 cases for the move: the entries (key `anim:<cls>`, one per element and class; a restart
+  replaces), A1 (the restart runs no undo), B1 (a forget mid-move takes the class off at once, `pending(s) === 0`, no timer
+  from the undo, the next pet's move ends only at its own time; every class and element in flight; the blanket is left to
+  `_drapeMirror`, as at the natural end), a named `turn` key and `anim:turn` as two entries, no slide (the entry is on
+  `this._dirCard`, a slide's detach and a disconnect leave it, G9), and D-keep / D-reattach. The move is the one `_hold`
+  call the draft shows, `key: "anim:" + cls, restart: true, mirror: drape`, scope `s ?? this._dirCard`; the drape test, `s?.pet`
+  and the order (remove on both, one reflow, add on both) are the unmoved code's, and the trace passes unchanged. No `_animate`
+  caller changed (85 sites). **Differences from the draft:** `motion_ship1/2.test.js`, `touch.test.js` and `sitter_life.test.js`
+  stub `_animate` itself (or pin its call text), so they needed **no edit** (the draft said they gain adapter stubs);
+  `tests/js/timer_trace.test.js:72` did need one (its slice-7 pin world loaded `consts: ["ANIMATE_TIMERS"]`, a name the card no
+  longer has); `care_reactions.test.js:633,1433` take `adapters()` instead of `konst("ANIMATE_TIMERS")` and a sandbox
+  `setTimeout` (`:633` records the schedule as `[fn, ms]` and its cancel; it needs one slide object across the calls, as the
+  card has); `:1249-1268,1427` are left for slice 9. Ratchet: `card-visit` `setTimeout` 2 -> 1, `clearTimeout` 1 -> 0 (the
+  one `setTimeout` left is R78, the answer resend, which stays out on purpose, 4.4); no row reached zero. No edit to `card-check.js` or the bench (neither
+  reads `ANIMATE_TIMERS`). Bench: `--preset species`, `touch`, `feed` and `tuck` (the care shots), unmoved twice and moved
+  twice: every difference is in a file that also differs between two runs of the same code (the excited/calling moods and the
+  sheets that hold them; `touch/resting-lean`, `sick-lean`, `calm-body-3` and `feed/resting-100`, `calm/child-reply`, frozen
+  mid-move; the `petBox` rects and `renderMs` in the JSON); nothing else differs.
 - **Checks:** trace tests; all `tests/js`; `scripts/ci-gate` (the whole gate: nearly every section names
   `_animate`); **a bench before/after contact sheet** (`--preset species` and the care shots, 6.7).
 - **Device queue:** fixture: dev pet; bench `--preset species` for the moves. `qa_screen`: the pet screen,
@@ -1334,7 +1360,7 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
 | 3, 4, 7, 9 | `care_reactions.test.js:121,161,633,1249-1268,1427,1433` | `:121` shake (3), `:161` pose end (4), `:633,1433` extract `ANIMATE_TIMERS` (7), `:1249-1268,1427` drape (9). **Slice 2 needs none**: nothing in it runs `_react`'s fan branch (it pins the method's text only), so the breezy move leaves it green |
 | 3 | `motion_ship1.test.js:25`, `touch.test.js:101` | `_wander` pins the timer; the fake `this` has no `_hold` |
 | 5 | `memory_tags.test.js` (`load`, `makeCard`) | the text step's end timer was a stubbed `setTimeout`/`clearTimeout`; it is `_later`/`_stop` now, so the vm card takes `adapters()` |
-| 7 | `sitter_life.test.js`, `touch.test.js`, `motion_ship1/2.test.js` | `_animate` is extracted |
+| 7 | `timer_trace.test.js:72`, `care_reactions.test.js:633,1433` | `:72` loaded `consts: ["ANIMATE_TIMERS"]`; `:633,1433` extracted it (shipped: `sitter_life`, `touch`, `motion_ship1/2` stub `_animate` itself and needed no edit) |
 | 13 | `subscribe_silence.test.js:63,86`, `memory_page.test.js:153,171,194,198,228,254` | `setTimeout` count; `s.retryTimer = 99`; `clearTimeout(s.confirmTimer)` |
 | all | any vm test whose fake `this` lacks `_director`, `_later` or `_hold` | it throws once its method moves; the sandbox helper adds them |
 

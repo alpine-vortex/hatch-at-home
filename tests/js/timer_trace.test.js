@@ -69,7 +69,7 @@ test("_tapped with no slide (54 of 67 callers): the button's chrome on its own t
 });
 
 test("_animate and a keyed, restarting _hold give the same trace, once and twice 300 ms apart (slice 7's pin)", () => {
-  const spec = { methods: ["_animate"], consts: ["ANIMATE_TIMERS"], slide: (el) => ({ drape: el("drape") }) };
+  const spec = { methods: ["_animate"], slide: (el) => ({ drape: el("drape") }) };
   const twice = (how) => (card, s, w) => {
     how(card, s);
     w.advance(300);
