@@ -120,6 +120,7 @@ function world(spec = {}) {
         add: (...c) => c.forEach((x) => { cls.add(x); push(name, "class+", x); }),
         remove: (...c) => c.forEach((x) => { cls.delete(x); push(name, "class-", x); }),
         contains: (x) => cls.has(x),
+        [Symbol.iterator]: () => cls[Symbol.iterator](),
         toggle: (x, on) => {
           const want = on === undefined ? !cls.has(x) : !!on;
           node.classList[want ? "add" : "remove"](x);
@@ -144,6 +145,9 @@ function world(spec = {}) {
         node.parent = null;
         push(name, "remove");
       },
+      attrs: {},
+      setAttribute: (k, v) => { node.attrs[k] = v; },
+      getAttribute: (k) => node.attrs[k],
       getBoundingClientRect: () => ({ top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 }),
       addEventListener: (type, fn) => (listeners[type] ||= []).push(fn),
       removeEventListener: (type, fn) => { listeners[type] = (listeners[type] || []).filter((f) => f !== fn); },
