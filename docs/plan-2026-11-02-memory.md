@@ -1550,7 +1550,7 @@ existing `remember me` row's two-tap `memory_off` confirm text; the page's butto
 below. Every value goes in as `textContent`.
 
 **Wording rules (door 10's, and the page's).** The pet never "knows" or "has been
-watching"; a pattern is "you often tell me about", never "I noticed", "I've been tracking"
+watching"; a pattern is "you often mention", never "I noticed", "I've been tracking"
 or a count ("3 times"); no line says a day happened ("you told me about", never "you
 went"); nothing nags; the page speaks as "i" (the pet), about what **you told me**. **No
 BABY variant** (FM 2026-11-05, M3 P3-4): these lines are short and plain, and the page is the
@@ -1558,14 +1558,14 @@ person's record, not the pet's voice mid-play; the settings sheet has none eithe
 `{label}` is a `MEMORY_TAG_CHIPS.labels` entry, `{day}` the card's short date, `{weekday}` a
 name from `.weekdays`.
 
-| Table.key | Line (approved 2026-11-05) | Use |
+| Table.key | Line (approved 2026-11-05; seven lines reworded by the first mate 2026-11-05 to pass the copy scan) | Use |
 |---|---|---|
 | `MEMORY_PAGE.link` | things you told me › | the status-sheet link, beside "journal ›" |
 | `.title` | things you told me | the page title (back button is `‹ status`) |
-| `.gate_q` | this page shows what you told me. show it? | the one confirm tap (R3) |
+| `.gate_q` | this shows what you told me. show it? | the one confirm tap (R3) |
 | `.gate_yes` | show | its button |
 | `.loading` | looking… | while `memory_get` is out |
-| `.failed` | couldn't look just now. try again later | the call failed (one text, no reason) |
+| `.failed` | couldn't look just now. try later | the call failed (one text, no reason) |
 | `.empty` | nothing kept yet | a person on, with no entries |
 | `.since` | i've kept these since {day} | the `since` line, when there is one |
 | `.h_fav` | favourites | section head |
@@ -1580,16 +1580,16 @@ name from `.weekdays`.
 | `.pick_game` | game · {value} · {day} | |
 | `.pick_guess` | guess · {value} · {day} | |
 | `.pick_great` | a great day · {day} | a `great` entry (no value; it is the answer) |
-| `.pattern` | {weekday}s: you often tell me about {label} | a pattern row |
+| `.pattern` | {weekday}s: you often mention {label} | a pattern row |
 | `.weekdays` | monday, tuesday, wednesday, thursday, friday, saturday, sunday | `weekday` 0-6 |
 | `.forget` | forget this | each item's button |
-| `.forget_sure` | sure? press again to forget | the second tap (a tap-to-confirm, the card's `_confirmed` style) |
+| `.forget_sure` | sure? tap once more to forget | the second tap (a tap-to-confirm, the card's `_confirmed` style) |
 | `.forget_pattern_sure` | sure? this forgets those days | the second tap on a pattern row, because it removes several entries |
-| `.forgot` | forgotten | the line after, spoken once to the live region |
+| `.forgot` | done, it's gone | the line after, spoken once to the live region |
 | `.stop` | stop remembering | the page's switch-off button (opens the existing `memory_off` two-tap confirm) |
-| `.never` | never kept: words you typed, anyone's name | the line saying what is not kept |
-| `.kept_note` | something you forget may still come up this week | one line under the list (M3 P2-2): a forget removes the memory, the pet's own copies of this week's answers can still come up |
-| `.aria_forget` | forget this: {row text} | each button's `aria-label` (the row's text, as text; no emoji) |
+| `.never` | not kept: what you typed, or names | the line saying what is not kept |
+| `.kept_note` | what you forget may come up this week | one line under the list (M3 P2-2): a forget removes the memory, the pet's own copies of this week's answers can still come up |
+| `.aria_forget` | forget this: {row text} | each button's `aria-label` (the row's text, as text; no emoji). Not on screen: the copy scan checks it for nag words but not length (`aria` in `COPY_TABLES`) |
 
 Notes on the wording, for the first mate:
 - `.gate_q` says **what you told me**, not what "i know": no "knows", no watching.

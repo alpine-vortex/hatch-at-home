@@ -24,3 +24,17 @@ test("the scan catches a table left out, a long line, a nag and a question", () 
   assert.match(text, /41 long/);
   assert.match(text, /digit/);
 });
+
+test("an aria-only key (`aria`) may run past 40 characters, and still may not nag", () => {
+  const swap = (from, to) => {
+    const out = src.replace(from, to);
+    assert.notStrictEqual(out, src, `no ${from} in the card`);
+    return scanFreshCopy(out).bad.join(" | ");
+  };
+  const long = "w".repeat(45);
+  // aria_forget is MEMORY_PAGE's aria-label: long passes, a nag word does not
+  assert.doesNotMatch(swap("aria_forget: (row) => `forget this: ${row}`", `aria_forget: (row) => \`${long} \${row}\``), /aria_forget/);
+  assert.match(swap("aria_forget: (row) => `forget this: ${row}`", "aria_forget: (row) => `still ${row}`"), /aria_forget: .* nags/);
+  // a key on screen in the same table keeps its cap
+  assert.match(swap('stop: "stop remembering"', `stop: "${long}"`), /MEMORY_PAGE\.stop: .* 45 long/);
+});

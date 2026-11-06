@@ -111,7 +111,7 @@ test("the rows read the shared fixture's fields, newest first", () => {
     { list: "great", day: "2026-11-02" }, { list: "guess", day: "2026-11-01" },
     { list: "game", day: "2026-10-31" }, { list: "dream", day: "2026-10-30" },
   ]);
-  assert.deepStrictEqual(plain(rows.patterns.map((r) => r.text)), ["saturdays: you often tell me about match"]);
+  assert.deepStrictEqual(plain(rows.patterns.map((r) => r.text)), ["saturdays: you often mention match"]);
   assert.deepStrictEqual(JSON.parse(JSON.stringify(rows.patterns[0].key)), { list: "pattern", tag: "match", weekday: 5 });
   // A favourite with no told day, or not in mine, has no row; nothing the server didn't send.
   assert.deepStrictEqual(plain(makeCard(FIXTURE)._memoryRows(slide({ mine: { fav_weather: "snow" } }),
@@ -147,7 +147,7 @@ test("forget this: two taps, then one call with the item's key and shared false"
     type: "virtual_pet/memory_forget", entity_id: "sensor.pip_life_stage", shared: false,
     list: "tags", day: "2026-10-24", kind: "weekend",
   }]);
-  // Then the page reads again, and says "forgotten" once.
+  // Then the page reads again, and says "done, it's gone" once.
   assert.strictEqual(card.calls.filter((c) => c.type === "virtual_pet/memory_get").length, 1);
   assert.deepStrictEqual(plain(card.said), [MEMORY_PAGE.forgot]);
   clearTimeout(s.confirmTimer);

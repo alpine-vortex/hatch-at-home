@@ -3,6 +3,9 @@
 // the scan, and every line in them is checked: no nagging words, 40 characters at most
 // with the longest fill, no "?" outside a question, no "!!!", no digits. Card-check runs
 // it (section "types"), and so does node --test (tests/js/fresh_copy.test.js).
+// A table's spec: `fill` (the one slot's kind), `fills` (a key's slots, in order), `asks`
+// (keys that may hold "?"), `aria` (keys that are only an aria-label: not on screen, so
+// no 40-character cap; the nag, digit and "!!!" rules still hold).
 const vm = require("vm");
 
 const NAG = /\b(still|again|why|never|pleas\w*|sad|cry|alone|forgot\w*)\b/i;
@@ -20,7 +23,7 @@ const FILL = {
   label: "something else", // the longest MEMORY_TAG_CHIPS label
   plabel: "lesson", // the longest label a weekday pattern can have (match, show, lesson)
   // The longest row a memory page "forget this" names: a pattern's.
-  row: "wednesdays: you often tell me about lesson",
+  row: "wednesdays: you often mention lesson",
 };
 // Each table: the fill its functions take, and the keys (at any depth) that may ask.
 // `fills`: a line with more than one slot, by its key: the fill of each, in order.
@@ -87,6 +90,7 @@ const COPY_TABLES = {
   SITTER_LINES: {}, // sitter plan 9 (S3a): Pip's lines about the sitter
   MEMORY_PAGE: { // memory plan M3a: the "things you told me" page
     asks: ["gate_q", "forget_sure", "forget_pattern_sure"],
+    aria: ["aria_forget"], // aria labels are not on screen: length only is exempt (first mate 2026-11-05)
     fills: {
       since: ["day"], fav_weather: ["season", "day"], fav_season: ["season", "day"],
       day_row: ["label", "day"], pick_dream: ["pick", "day"], pick_game: ["pick", "day"],
@@ -125,11 +129,12 @@ function scanFreshCopy(src) {
       count++;
       if (typeof line !== "string" || !line.trim()) { bad.push(`${where}: not a line`); continue; }
       const asks = (spec.asks || []).some((k) => where.includes(`.${k}`));
+      const aria = (spec.aria || []).includes(where.split(".").pop());
       if (NAG.test(line)) bad.push(`${where}: "${line}" nags`);
       if (line.includes("?") && !asks) bad.push(`${where}: "${line}" asks`);
       if (/!!!/.test(line)) bad.push(`${where}: "${line}" !!!`);
       if (/\d/.test(line)) bad.push(`${where}: "${line}" has a digit`);
-      if ([...line].length > 40) bad.push(`${where}: "${line}" ${[...line].length} long`);
+      if ([...line].length > 40 && !aria) bad.push(`${where}: "${line}" ${[...line].length} long`);
     }
   }
   return { bad, count, tables };
