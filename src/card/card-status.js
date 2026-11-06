@@ -8,6 +8,10 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       this._renderNameSheet(s);
       return;
     }
+    if (s.memoryPage) { // the "things you told me" page (memory plan M3a)
+      this._renderMemory(s);
+      return;
+    }
     if (s.everyWorld) {
       this._renderEveryWorld(s);
       return;
@@ -137,6 +141,7 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
       ${eggRow}
       ${nameRow}
+      ${this._memoryLinkHtml(s)}
       <button class="jlink">journal ›</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>` : `
       ${band}
@@ -164,6 +169,7 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       ${nextEgg ? row(null, "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       ${nameRow}
       <div class="log">${lines.join("") || "<div>all new here ♪</div>"}</div>
+      ${this._memoryLinkHtml(s)}
       <button class="jlink">journal ›</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
@@ -181,6 +187,7 @@ class HatchPetCardStatus extends HatchPetCardMoment {
     const head = s.status.querySelector(".whohead");
     if (head) this._headCrop(s, head, 14, 3);
     this._journalLink(s, true);
+    this._memoryLinkWire(s);
     this._gearLink(s);
     s.status.querySelector(".namechange")?.addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status

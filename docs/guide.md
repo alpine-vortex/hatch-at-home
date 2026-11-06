@@ -751,6 +751,21 @@ for only on a screen that isn't shared. That is the card's own check, since the 
 can't see the shared-screen switch. "great" is kept only while memory is on (and never
 makes the next morning softer); with memory off it never leaves the card.
 
+**Things you told me.** On your own screen, while memory is on and that pet allows it, the
+status screen has "things you told me ›". After one more tap ("show") it lists what memory
+keeps for you: your favourite weather and season with the day you told them (each with
+"ask me again"), the days you tagged, your recent picks (great days too) and the weekdays you
+often tell the pet about (the ones it may wish you well for). Each has "forget this" (two
+taps); on a weekday it forgets those tagged days among the last five of that tag, and an
+older run of the same weekday can then show in its place. The page is read from Home
+Assistant when you open it and kept nowhere on the device, and it closes when the status
+screen does, when you swipe to another pet, when the tab is hidden, after two minutes
+untouched, or when memory is turned off anywhere. "Forget this" removes the memory only: the
+pet's own copy of this week's answers (tonight's dream, tomorrow's game, a big day still to
+come) can still come up until it passes, and a line the card has already lined up may be
+said once. "Forget my data" clears those too. "stop remembering" on the page is the
+settings row's switch, with its two taps.
+
 Things to know:
 
 - It is in Home Assistant's backups, like the rest of the people store. Turning it off
@@ -766,7 +781,8 @@ Things to know:
   are kept for anyone. The pets won't ask a person with baby talk on whether to
   remember. An admin can turn memory off for the house (below).
 - If someone turns on debug logging for `homeassistant.components.websocket_api`, Home
-  Assistant logs every message, the picks sent to the pets included.
+  Assistant logs every message, the picks sent to the pets and what the "things you told
+  me" page shows included.
 - The memory of a person whose Home Assistant user has been removed is erased by the next
   daily clean-up (the first time a pet runs after local midnight). The rest of their record
   (their birthday, answers and settings) stays in the people store.

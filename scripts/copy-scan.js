@@ -15,8 +15,15 @@ const FILL = {
   pick: "higher or lower", // 15, the longest pick label a memory door says (GAMES)
   season: "spring", // 6, as long as every season's name
   home: "vivarium", // 8, the longest words.home of the 30 species
+  day: "Wwwwwww", // 7, the memory page's short date ("30 Sept"): its digits are a date, not a count
+  weekday: "wednesday",
+  label: "something else", // the longest MEMORY_TAG_CHIPS label
+  plabel: "lesson", // the longest label a weekday pattern can have (match, show, lesson)
+  // The longest row a memory page "forget this" names: a pattern's.
+  row: "wednesdays: you often tell me about lesson",
 };
 // Each table: the fill its functions take, and the keys (at any depth) that may ask.
+// `fills`: a line with more than one slot, by its key: the fill of each, in order.
 const COPY_TABLES = {
   PERSONA_FRESH: {},
   PAT_SPOT: {},
@@ -78,6 +85,15 @@ const COPY_TABLES = {
   LIGHTS_LINES: {}, // care reactions D: the tuck and the wake
   SPECIES_LINES: { fill: "home" }, // species nature N2: the habit action lines
   SITTER_LINES: {}, // sitter plan 9 (S3a): Pip's lines about the sitter
+  MEMORY_PAGE: { // memory plan M3a: the "things you told me" page
+    asks: ["gate_q", "forget_sure", "forget_pattern_sure"],
+    fills: {
+      since: ["day"], fav_weather: ["season", "day"], fav_season: ["season", "day"],
+      day_row: ["label", "day"], pick_dream: ["pick", "day"], pick_game: ["pick", "day"],
+      pick_guess: ["pick", "day"], pick_great: ["day"], pattern: ["weekday", "plabel"],
+      aria_forget: ["row"],
+    },
+  },
 };
 
 function lines(value, path, out) {
@@ -103,7 +119,9 @@ function scanFreshCopy(src) {
   for (const name of tables) {
     const spec = COPY_TABLES[name] || {};
     for (const [where, entry] of lines(values[name], name, [])) {
-      const line = typeof entry === "function" ? entry(FILL[spec.fill] ?? FILL.name) : entry;
+      const slots = spec.fills?.[where.split(".").pop()];
+      const line = typeof entry !== "function" ? entry
+        : slots ? entry(...slots.map((k) => FILL[k])) : entry(FILL[spec.fill] ?? FILL.name);
       count++;
       if (typeof line !== "string" || !line.trim()) { bad.push(`${where}: not a line`); continue; }
       const asks = (spec.asks || []).some((k) => where.includes(`.${k}`));

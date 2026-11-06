@@ -1,4 +1,4 @@
-class HatchPetCardActions extends HatchPetCardJournal {
+class HatchPetCardActions extends HatchPetCardMemory {
   // --- Actions ----------------------------------------------------------------
 
   // Instant feedback for every control: a visible press and ring, a short

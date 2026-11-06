@@ -308,7 +308,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     // The journal, finds and every-world pages are deeper pages and keep it the same way
     // (UX fix 2, F1): a tap on a tile or a heading is not a tap on the screen.
     s.status.addEventListener("click", (e) => {
-      if ((s.settings || s.journal || s.finds || s.everyWorld || s.nameSheet) && !s.laySheet) e.stopPropagation();
+      if ((s.settings || s.journal || s.finds || s.everyWorld || s.memoryPage || s.nameSheet) && !s.laySheet) e.stopPropagation();
     });
     // Escape steps back one page, like the back link (UX fix 2, F4): a sheet or picker to
     // where it came from, every world and finds to the journal, the journal to the status,
@@ -321,7 +321,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
         return;
       }
       const back = s.status.querySelector(".sback");
-      if (back && (s.settings || s.journal || s.finds || s.everyWorld)) {
+      if (back && (s.settings || s.journal || s.finds || s.everyWorld || s.memoryPage)) {
         back.click(); // back from the picker, the sheet (F8) or a journal page
         return;
       }
@@ -810,6 +810,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     s.journal = false;
     s.finds = false;
     s.everyWorld = false;
+    this._memoryPageClose(s, false); // memory plan M3a, path 3: another pet on the slide
     s.settings = false;
     s.settingsChanged = null;
     if (s.laySheet || s.nameSheet) { // another pet's slide: its lay sheet and name sheet go (S2, S3)
@@ -902,6 +903,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
       slide.journal = false;
       slide.finds = false; // the settings sheet stays, without its personal rows
       slide.everyWorld = false;
+      this._memoryPageClose(slide, false); // the memory page is personal (M3a, path 2)
       this._closePicker(slide); // and without the picker (read-only here)
       slide.confirm = null; // an armed "forget" is a personal row
       slide.status.innerHTML = ""; // drawn again, without its personal rows
@@ -1013,6 +1015,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
       this._stopTyping(x);
       if (x.laySheet && i !== to) this._closeLay(x); // the lay sheet stays with its pet
       if (x.nameSheet && i !== to) this._closeName(x); // and so does the name sheet (S3)
+      if (i !== to && x.memoryPage) this._memoryPageClose(x); // the memory page stays with no pet left (M3a, path 3)
       if (i !== to) this._layDrop(x); // a lay waited for belongs to the slide it was made on: no sheet opens off-screen
       this._sceneEnd(x); // a swipe ends a care scene, showing how things are now
       if (x.visitor && i !== to) { // a world visitor goes too, after a grace: a slip of the finger keeps it (UX8 F11)

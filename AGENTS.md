@@ -52,6 +52,7 @@ Where things live:
 | card-status | `_renderStatus`, `_renderSettings` |
 | card-sheets | shell picker, lay sheet, name sheet, `_set*` |
 | card-journal | journal, photos, every world, finds page |
+| card-memory | the "things you told me" page (`HatchPetCardMemory`, memory plan M3a): its link on the status page, the confirm tap, `memory_get` / `memory_forget` (the only part that names them), `_memoryPageClose(s)` (the five teardown paths) and the 2-minute idle timer |
 | card-actions | actions, the care scenes' shared frame (`_sceneStart`, `_sceneRender`, `_sceneEnd`, the answer) |
 | card-mode | the shell mode engine (`HatchPetCardMode`): `_modeEnter`, `_modeExit`, `_modeSync`, `_modeClick` (the one click handler of the eight buttons), `_modeKey` (the keyboard: a slot's `keys` press it through `_modeClick`), `_modeGuard`, `_modeEscape`, and `_paintCaps`, the one writer of the eight buttons' state (no `s.game`, `_endGame` or `GAMES`: tests/js/shell_modes.test.js; "who owns the screen" is `_owned(s)` in card-base, tests/js/owned_reads.test.js) |
 | card-care | `SCENES` (one entry per care scene: medicine, clean, feed), the bowl clip (`bowlCuts`), `_sceneFrames`, `_sceneArt` |

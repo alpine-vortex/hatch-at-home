@@ -598,4 +598,41 @@ const SITTER_LINES = {
   medicine: ["i feel better"],
   leave: ["bye, sitter!"],
 };
+// The "things you told me" page (memory plan M3a, section 9a; APPROVED by the first mate
+// 2026-11-05). Every value goes in as textContent. {label}: a MEMORY_TAG_CHIPS label; {day}:
+// the card's short date; {value}: a favourite (from mine) or a pick's own label; {weekday}:
+// one of .weekdays (0 Monday, as the server's weekday). No BABY variant (FM 2026-11-05).
+// "ask me again" is SETTINGS_AGAIN.askAgain; "stop remembering" opens memory_off's confirm.
+const MEMORY_PAGE = {
+  link: "things you told me ›",
+  title: "things you told me",
+  gate_q: "this page shows what you told me. show it?",
+  gate_yes: "show",
+  loading: "looking…",
+  failed: "couldn't look just now. try again later",
+  empty: "nothing kept yet",
+  since: (day) => `i've kept these since ${day}`,
+  h_fav: "favourites",
+  h_days: "days you told me about",
+  h_picks: "things you picked",
+  h_pattern: "days you often tell me about",
+  fav_weather: (value, day) => `weather: ${value} · told ${day}`,
+  fav_season: (value, day) => `season: ${value} · told ${day}`,
+  day_row: (label, day) => `${label} · ${day}`,
+  weekend: "weekend",
+  pick_dream: (value, day) => `dream · ${value} · ${day}`,
+  pick_game: (value, day) => `game · ${value} · ${day}`,
+  pick_guess: (value, day) => `guess · ${value} · ${day}`,
+  pick_great: (day) => `a great day · ${day}`,
+  pattern: (weekday, label) => `${weekday}s: you often tell me about ${label}`,
+  weekdays: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+  forget: "forget this",
+  forget_sure: "sure? press again to forget",
+  forget_pattern_sure: "sure? this forgets those days",
+  forgot: "forgotten",
+  stop: "stop remembering",
+  never: "never kept: words you typed, anyone's name",
+  kept_note: "something you forget may still come up this week",
+  aria_forget: (row) => `forget this: ${row}`,
+};
 // --- end fresh-expand copy ---

@@ -799,6 +799,7 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     s.journal = false;
     s.finds = false;
     s.everyWorld = false;
+    this._memoryPageClose(s, false); // memory plan M3a, path 3: and its text with it
     s.refocus = null;
     s.tileSaid = null;
     s.settings = false;

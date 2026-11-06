@@ -1579,7 +1579,7 @@ const STYLE = `
      a visitor at 18 cells and a find at 16 (--px a cell: their art 1:1 in whole device
      pixels), the unmet ones dark silhouettes with no name, the viewer's gifts with a ♥. */
   .jfoot { display: flex; justify-content: flex-end; align-items: flex-end; }
-  .flink, .wlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 0;
+  .flink, .wlink, .mlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 0;
     min-height: 44px; min-width: 44px;
     font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
   .fgrid { display: flex; flex-wrap: wrap; gap: 6px 8px; }
@@ -1593,11 +1593,15 @@ const STYLE = `
   ha-card.mono .ftile.locked img { opacity: .5; }
   .ftile .fheart { position: absolute; top: 0; right: 0; font-size: 12px; line-height: 1; }
   .jlist { font-size: 12px; opacity: .9; display: flex; flex-direction: column; gap: 3px; }
+  /* The "things you told me" page (memory plan M3a): rows of text, each with its button. */
+  .mempage { display: flex; flex-direction: column; gap: 3px; }
+  .mempage .mshow, .mempage .mstop { align-self: flex-start; margin-top: 4px; }
+  .mrow .mtext { overflow-wrap: anywhere; }
   /* Big text (top10 4b): every size on the status box's pages, about 3 px up. */
   ha-card.bigtext .status { font-size: 16px; }
   ha-card.bigtext .status .log, ha-card.bigtext .status .jlist, ha-card.bigtext .status .photos,
   ha-card.bigtext .status .status-feedback, ha-card.bigtext .status .sback, ha-card.bigtext .status .jlink,
-  ha-card.bigtext .status .flink, ha-card.bigtext .status .wlink, ha-card.bigtext .status .jolder,
+  ha-card.bigtext .status .flink, ha-card.bigtext .status .wlink, ha-card.bigtext .status .mlink, ha-card.bigtext .status .jolder,
   ha-card.bigtext .status .fheart { font-size: 15px; }
   ha-card.bigtext .status .layrow, ha-card.bigtext .status .laygo,
   ha-card.bigtext .status .namego, ha-card.bigtext .status .namechange, ha-card.bigtext .status .nameerr { font-size: 15px; }

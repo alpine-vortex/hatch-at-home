@@ -956,6 +956,13 @@ GUIDE_STRINGS = (
     "maybe a match tomorrow! go you ♥",
     "one such remark a month at most across all three",
     "the pattern has ended",
+    # M3a: the page.
+    "**Things you told me.**",
+    "kept nowhere on the device",
+    "after two minutes untouched",
+    '"Forget this" removes the memory only',
+    "a line the card has already lined up may be said once",
+    'what the "things you told me" page shows',
     # M3a: removed users (owner Q4).
     "memory of a person whose Home Assistant user has been removed is erased by the next"
     " daily clean-up",

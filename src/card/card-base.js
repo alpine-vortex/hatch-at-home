@@ -111,6 +111,7 @@ class HatchPetCardBase extends HTMLElement {
   _onHidden = () => {
     if (document.hidden) {
       (this._slides || []).forEach((x) => this._stopTyping(x));
+      (this._slides || []).forEach((x) => this._memoryPageClose(x)); // memory plan M3a, path 5
       this._hiddenAt ??= Date.now();
       this._dirPause();
       audioPark(); // nobody can hear it
@@ -377,6 +378,9 @@ class HatchPetCardBase extends HTMLElement {
       setBabyTalk(user, s.mine.baby_talk);
     }
     if (!user || user === this._hass?.user?.id) this._openOnSync();
+    // Memory ended elsewhere (off, forgotten, admin-erased, this pet's option): the memory
+    // page goes (memory plan M3a, path 1), read through _mineSwitch as its link is.
+    if (s.memoryPage && !this._memoryLinkShown(s)) this._memoryPageClose(s, false);
     s.statusHtml = null;
     this._redraw(s);
   }

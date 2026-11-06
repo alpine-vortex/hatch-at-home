@@ -21,6 +21,7 @@ card-moment.js
 card-status.js
 card-sheets.js
 card-journal.js
+card-memory.js
 card-actions.js
 card-mode.js
 card-care.js
