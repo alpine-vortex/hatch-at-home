@@ -5,6 +5,7 @@ const assert = require("node:assert");
 const vm = require("vm");
 
 const src = require("./card-source");
+const { world } = require("./timer_trace");
 const rule = (sel) => (src.match(new RegExp(`\\n\\s*${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\{[^}]*\\}`)) || [""])[0];
 const method = (name) => src.match(new RegExp(`\\n  (?:async )?${name}\\([^)]*\\) \\{[\\s\\S]*?\\n  \\}\\n`))[0];
 const classes = () => {
@@ -65,21 +66,23 @@ test("the sheet closes with a wipe up: .16 s, 4 steps, the reverse clip, off on 
   assert.match(rule(".screen .status.wipe-up"), /display: flex; pointer-events: none; animation: lcd-wipe-up \.16s steps\(4\) both/);
   assert.match(src, /const WIPE_UP_MS = 170;/);
   assert.doesNotMatch(method("_wipe") + method("_toggleStatus"), /animationend/);
-  const timers = [];
-  const ctx = { WIPE_UP_MS: 170, setTimeout: (fn, ms) => { timers.push([fn, ms]); return timers.length; }, clearTimeout() {} };
-  vm.runInNewContext(`const o = {${method("_wipe")}}; this.wipe = o._wipe;`, ctx);
-  const status = classes();
-  const s = { status };
-  ctx.wipe.call({}, s, "up");
-  assert.ok(status.set.has("wipe-up"));
-  assert.strictEqual(timers[0][1], 170);
-  timers[0][0]();
-  assert.strictEqual(status.set.size, 0);
+  // _wipe holds its class through the ledger (director migration slice 1): run it on the trace harness's clock
+  const w = world({ methods: ["_wipe"], consts: ["WIPE_UP_MS"], slide: (el) => ({ status: el("status") }) });
+  const status = w.slide.status;
+  w.card._wipe(w.slide, "up");
+  assert.ok(status.cls.has("wipe-up"));
+  w.advance(169);
+  assert.ok(status.cls.has("wipe-up"), "on until 170");
+  w.advance(1);
+  assert.strictEqual(status.cls.size, 0);
   // an open cancels it: the down wipe takes wipe-up off, and the timer is replaced
-  ctx.wipe.call({}, s, "up");
-  ctx.wipe.call({}, s, "down");
-  assert.ok(status.set.has("wipe-down") && !status.set.has("wipe-up"));
-  assert.strictEqual(timers[timers.length - 1][1], 220);
+  w.card._wipe(w.slide, "up");
+  w.card._wipe(w.slide, "down");
+  assert.ok(status.cls.has("wipe-down") && !status.cls.has("wipe-up"));
+  w.advance(219);
+  assert.ok(status.cls.has("wipe-down"), "the down wipe runs its own 220");
+  w.advance(1);
+  assert.strictEqual(status.cls.size, 0);
 });
 
 test("only a close that moves starts the wipe: the card's own state is closed at once, calm motion has none", () => {

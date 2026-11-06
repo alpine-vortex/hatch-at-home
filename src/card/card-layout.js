@@ -257,7 +257,7 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     const tx = Math.round((vr.left + (vw - w) / 2) * dpr) / dpr - vr.left - this._index * (w + 16);
     const ty = Math.round(vr.top * dpr) / dpr - vr.top;
     this._track.style.transform = `translate(${tx}px, ${ty}px)`;
-    if (s.px) requestAnimationFrame(() => this._mould(s)); // the parts' places moved with it
+    if (s.px) this._director.frame(s, () => this._mould(s)); // the parts' places moved with it
     this._slides.forEach((slide, i) => {
       const current = i === this._index;
       slide.el.classList.toggle("away-slide", !current);
@@ -279,14 +279,13 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     // On a swipe the name and the line change when the new pet is half there (250 ms into the
     // slide), not at once over the old pet (UX7 F4). Under reduced motion they change at once.
     const swapHead = !!this._headFor && this._headFor !== s && !s.empty && !calm();
-    if (swapHead && !this._headTimer) {
-      this._headTimer = setTimeout(() => {
-        this._headTimer = 0;
+    if (swapHead && !this._has(this._dirCard, { key: "head" })) {
+      this._later(this._dirCard, 250, () => { // card scope: one head for the whole card
         this._headFor = null;
         this._renderShelf();
-      }, 250);
+      }, { key: "head" });
     }
-    const headNow = !this._headTimer;
+    const headNow = !this._has(this._dirCard, { key: "head" });
     if (headNow && !s.empty) this._headFor = s;
     if (headNow && !s.empty) { // the empty card keeps its own title and line (_update)
       title.textContent = device?.name_by_user || device?.name || "Pet";
@@ -778,11 +777,9 @@ class HatchPetCardLayout extends HatchPetCardBuild {
   // and deaf to taps (.wipe-up), until the timer takes it off. A timer, not animationend: reduced
   // motion runs no animation (and _toggleStatus does not start one then). An open cancels it (below).
   _wipe(s, kind = "side") {
-    s.status.classList.remove("wipe-side", "wipe-down", "wipe-up");
-    void s.status.offsetWidth; // restart it
-    s.status.classList.add(`wipe-${kind}`);
-    clearTimeout(s.wipeTimer);
-    s.wipeTimer = setTimeout(() => s.status.classList.remove("wipe-side", "wipe-down", "wipe-up"), kind === "up" ? WIPE_UP_MS : 220);
+    // Keyed: a new wipe stops the earlier timer, so a class re-added stays to the new one's end.
+    this._hold(s, s.status, `wipe-${kind}`, kind === "up" ? WIPE_UP_MS : 220,
+      { key: "wipe", restart: true, remove: ["wipe-side", "wipe-down", "wipe-up"] });
   }
 
   _toggleStatus(s, lay = false, name = false) {

@@ -1637,7 +1637,7 @@ async function main() {
       const box = note.getBoundingClientRect();
       const out = { shown: !note.hidden, text: note.textContent, under: box.top >= head.bottom - 1, tapsThrough: getComputedStyle(note).pointerEvents === "none",
         head: getComputedStyle(note, "::before").backgroundImage.includes("sprites/") };
-      clearTimeout(s.statusMessageTimer);
+      el._director.stop(s, { key: "status.note" });
       note.hidden = true;
       note.textContent = "";
       return out;
@@ -1655,7 +1655,7 @@ async function main() {
       const box = note.getBoundingClientRect();
       const foot = s.status.getBoundingClientRect();
       const out = { atFoot: Math.abs(foot.bottom - 4 - box.bottom) < 3, clear: box.top > head.bottom + 40 };
-      clearTimeout(s.statusMessageTimer);
+      el._director.stop(s, { key: "status.note" });
       note.hidden = true;
       note.textContent = "";
       note.style.top = "";

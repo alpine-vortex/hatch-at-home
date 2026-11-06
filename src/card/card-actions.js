@@ -8,14 +8,16 @@ class HatchPetCardActions extends HatchPetCardMemory {
     if (!button || button.disabled) return;
     const at = button.getBoundingClientRect(); // where it was, for a note that must not cover it (F13)
     this._tapRect = { top: at.top, bottom: at.bottom, at: Date.now() };
-    button.classList.add("tap-feedback", "tapped", "pressed");
-    setTimeout(() => button.classList.remove("pressed"), 160);
-    setTimeout(() => button.classList.remove("tapped"), 400);
+    // The card's scope, not a pet's: most callers pass no slide, and a forget leaves button chrome to end
+    // on time. Unkeyed on purpose: two quick taps give two timers, as before (the first one's end wins).
+    button.classList.add("tap-feedback");
+    this._hold(this._dirCard, button, "tapped", 400);
+    this._hold(this._dirCard, button, "pressed", 160);
     if (button.classList.contains("toy")) {
       const ring = document.createElement("span");
       ring.className = "burst";
       button.append(ring);
-      setTimeout(() => ring.remove(), 500);
+      this._later(this._dirCard, 500, () => ring.remove(), { target: ring, undo: () => ring.remove() });
     }
     if (navigator.vibrate) {
       try { navigator.vibrate(12); } catch (err) { /* Unsupported or blocked by the browser. */ }
@@ -26,10 +28,8 @@ class HatchPetCardActions extends HatchPetCardMemory {
   // The pet perks up (a quick hop).
   _perk(s) {
     if (!s?.pet) return;
-    s.pet.classList.remove("perk");
-    void s.pet.offsetWidth; // restart the animation
-    s.pet.classList.add("perk");
-    setTimeout(() => s.pet.classList.remove("perk"), 320); // let "hop" run again
+    // Unkeyed: a second perk inside 320 ms ends at the first one's time, as it always has.
+    this._hold(s, s.pet, "perk", 320, { restart: true }); // let "hop" run again
   }
 
   // The pet's word on the last change made in the settings sheet (F14), said when the
@@ -61,8 +61,7 @@ class HatchPetCardActions extends HatchPetCardMemory {
       await this._hass.callService(domain, service, { entity_id: entityId });
       return true;
     } catch (err) {
-      button.classList.add("failed");
-      setTimeout(() => button.classList.remove("failed"), 400);
+      this._hold(this._dirCard, button, "failed", 400); // adds it; unkeyed, as the bare timer was
       this._write(s, "hmm, that didn't work", 3500);
       return false;
     } finally {

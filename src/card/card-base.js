@@ -234,8 +234,7 @@ class HatchPetCardBase extends HTMLElement {
   disconnectedCallback() {
     audioLeave();
     clearInterval(this._timer);
-    clearTimeout(this._headTimer);
-    this._headTimer = 0;
+    if (this._director) this._stop(this._dirCard, { key: "head" }); // a card that never built has no ledger
     this._linkEnd();
     this._resize?.disconnect();
     this._io?.disconnect();

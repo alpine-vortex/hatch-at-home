@@ -217,7 +217,7 @@ function world(spec = {}) {
   });
   const card = Object.assign(Object.create(Object.assign(Object.create(stubs), o)), {
     _hass: undefined, _card: undefined, _resize: undefined, _io: undefined, _viewport: undefined,
-    _timer: 0, _headTimer: 0, _sharedSeen: false, _visible: true, _index: 0, _booting: false,
+    _timer: 0, _sharedSeen: false, _visible: true, _index: 0, _booting: false,
     ...(spec.fields || {}),
   });
   // As _build makes them (card-build.js): the card's own scope, and the director with the three wrappers.

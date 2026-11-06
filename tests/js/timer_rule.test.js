@@ -12,20 +12,19 @@ const { countParts, countText, stripComments, COLUMNS } = require("./timer_count
 const [ST, SI, RAF, CT, CI, CAF, AN] = COLUMNS;
 // Appendix B's counts on 531cd101, recounted on 0d6abbea (the same), plus slice 0's own lines, marked.
 const PINNED = {
-  "card-actions": { [ST]: 5, [RAF]: 2, [CAF]: 1 },
+  "card-actions": { [RAF]: 2, [CAF]: 1 }, // slice 1: R1-R5 moved (setTimeout 5 -> 0)
   // + slice 0: `.animate(` 1, in the _waapi adapter
-  "card-base": { [ST]: 2, [SI]: 1, [CT]: 4, [CI]: 1, [AN]: 1 },
+  "card-base": { [ST]: 2, [SI]: 1, [CT]: 3, [CI]: 1, [AN]: 1 },
   // + slice 0: the director's repeat and frame wrappers (setInterval, clearInterval, rAF, cancel 1 each)
   "card-build": { [ST]: 5, [SI]: 1, [RAF]: 1, [CT]: 9, [CI]: 1, [CAF]: 1 },
   "card-care": { [ST]: 6, [CT]: 1 },
   "card-flair": { [ST]: 1, [CT]: 2, [CAF]: 1 },
   "card-games": { [ST]: 3 },
-  "card-journal": { [ST]: 1, [CT]: 1 },
-  "card-layout": { [ST]: 2, [RAF]: 1, [CT]: 2 },
+  // slice 1: card-journal (R25) and card-mode (R40) have no bare timer left; card-base clearTimeout 4 -> 3 (R27's closer)
+  "card-layout": { [CT]: 1 }, // slice 1: R26, R27, R28 moved (setTimeout 2 -> 0, rAF 1 -> 0, clearTimeout 2 -> 1)
   "card-link": { [ST]: 3, [SI]: 2, [CT]: 3, [CI]: 2 },
   "card-looks": { [ST]: 4, [CT]: 2 },
   "card-memory": { [ST]: 2, [CT]: 3 },
-  "card-mode": { [ST]: 1, [CT]: 1 },
   "card-moment": { [ST]: 4, [CT]: 1 },
   "card-season": { [ST]: 6, [CT]: 1 },
   "card-sheets": { [ST]: 6, [CT]: 5 },

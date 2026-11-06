@@ -93,9 +93,9 @@ class HatchPetCardMode extends HatchPetCardActions {
   _modeSwap(s) {
     if (calm()) return;
     const all = this._modeButtons(s);
-    clearTimeout(s.swapTimer);
     all.forEach((b) => b.classList.add("swap"));
-    s.swapTimer = setTimeout(() => all.forEach((b) => b.classList.remove("swap")), 90);
+    const off = () => all.forEach((b) => b.classList.remove("swap"));
+    this._later(s, 90, off, { key: "mode.swap", undo: off }); // keyed: a second swap restarts the 90 ms
   }
 
   // `from` is the care button pressed to get here (or null): the focus goes back to it at the exit.

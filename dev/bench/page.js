@@ -1225,7 +1225,7 @@
     // wipe-up paused that many ms in (motion ship 2). Needs `view: "status"`; with `motion: reduce` it just closes.
     if (shot.statusClose !== undefined) {
       card._toggleStatus(cur);
-      clearTimeout(cur.wipeTimer); // the card's 170 ms timer would take the sheet off before the shot
+      card._director.stop(cur, { key: "wipe" }); // the card's 170 ms timer would take the sheet off before the shot
       for (const a of cur.status.getAnimations()) { a.pause(); a.currentTime = shot.statusClose; }
     }
     // `gnumFlip`: `{at, win}` (use with `game: "higher_lower"`): the counter as the next number comes in, through
@@ -1390,7 +1390,7 @@
       return SHELL_MODES[shot.modeId];
     };
     const rest = async () => {
-      clearTimeout(cur.swapTimer);
+      card._director.stop(cur, { key: "mode.swap" });
       for (const b of Object.values(cur.buttons)) b.classList.remove("swap");
       for (const a of root.getAnimations()) if (a instanceof CSSTransition) a.finish();
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));

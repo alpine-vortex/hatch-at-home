@@ -47,11 +47,12 @@ class HatchPetCardJournal extends HatchPetCardSheets {
         note.style.top = `${foot - s.status.querySelector(".shead").getBoundingClientRect().top}px`;
       }
     }
-    clearTimeout(s.statusMessageTimer);
-    s.statusMessageTimer = setTimeout(() => {
+    // Keyed: a new note restarts the 3.5 s, and the earlier timer is stopped silently (a forget drains it).
+    const hide = () => {
       note.hidden = true;
       note.textContent = "";
-    }, 3500);
+    };
+    this._later(s, 3500, hide, { key: "status.note", undo: hide });
   }
 
   // Fill the status screen; false if it already shows this (kept as is, so

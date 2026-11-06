@@ -16,7 +16,7 @@ test("pending and failed are the existing _call classes, restyled, not duplicate
   assert.strictEqual((src.match(/\.toy\.pending \.cap \{/g) || []).length, 1);
   assert.strictEqual((src.match(/\.toy\.failed \.cap \{/g) || []).length, 1);
   assert.match(src, /button\.classList\.add\("pending"\)/);
-  assert.match(src, /button\.classList\.add\("failed"\)/);
+  assert.match(src, /this\._hold\(this\._dirCard, button, "failed", 400\)/); // adds it, takes it off at 400
 });
 
 test("no cap rule animates or sets transform: the pressed offset is translate", () => {
@@ -57,9 +57,10 @@ test("the release is the cap's own transition (an overshoot curve), per action t
 
 test("every state class a press adds has a removal, and the passing ones stay out of the focus selector", () => {
   const actions = src.slice(src.indexOf("class HatchPetCardActions"), src.indexOf("  _press(s, action)"));
-  for (const c of ["pressed", "tapped"]) assert.match(actions, new RegExp(`classList\\.remove\\("${c}"\\)`), `${c} is never removed`);
+  // _tapped adds both and the ledger takes them off (director migration slice 1): pressed at 160, tapped at 400
+  assert.match(actions, /classList\.add\("tap-feedback"\);\s*this\._hold\(this\._dirCard, button, "tapped", 400\);\s*this\._hold\(this\._dirCard, button, "pressed", 160\);/);
   assert.match(actions, /finally \{[^}]*classList\.remove\("pending"\)/);
-  assert.match(actions, /classList\.add\("failed"\);\s*setTimeout\(\(\) => button\.classList\.remove\("failed"\), 400\)/);
+  assert.match(actions, /this\._hold\(this\._dirCard, button, "failed", 400\)/);
   const passing = src.match(/const PASSING_CLASSES = new Set\(\[([^\]]*)\]\)/)[1];
   for (const c of ["tap-feedback", "tapped", "pressed", "pending", "failed"]) assert.ok(passing.includes(`"${c}"`), `${c} not in PASSING_CLASSES`);
 });

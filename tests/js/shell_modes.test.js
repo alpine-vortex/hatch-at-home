@@ -24,6 +24,7 @@ function load({ calm = false } = {}) {
   vm.runInNewContext(`const BASE = "/b"; const VERSION = "t";${prefs}${helpers}${dataPart}
     class HatchPetCardActions {
       _tapped(b) { (this.log ||= []).push(["tapped", b.dataset.action]); }
+      _later() {} // the swap's timer: the ledger has its own tests (chrome_trace.test.js)
       _sceneEnd(s) { s.scene = null; (this.log ||= []).push(["sceneEnd"]); }
       _toggleStatus(s) { s.statusOpen = !s.statusOpen; (this.log ||= []).push(["status"]); }
       _rimCue() { (this.log ||= []).push(["rim"]); }
