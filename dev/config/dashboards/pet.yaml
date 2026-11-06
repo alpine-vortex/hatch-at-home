@@ -20,3 +20,14 @@ views:
           - input_number.fake_lamp_level
           - input_number.fake_bedroom_level
           - input_number.fake_rain_rate
+  # F3: the wall tablet. A panel view is the card alone, full width, like a
+  # tablet kiosk. "Shared screen" is not a card config key: it is a per-browser
+  # switch, localStorage "hatch-shared-screen" = "on" (src/card/prefs.js:373,
+  # read by sharedScreen() at :382; the status page's shared-screen bell sets it,
+  # src/card/card-status.js:408-412). Open this view on the tablet, turn the
+  # bell on once (or set the key through CDP), then reload. See dev/README.md.
+  - title: Wall tablet
+    path: wall
+    panel: true
+    cards:
+      - type: custom:hatch-pet-card

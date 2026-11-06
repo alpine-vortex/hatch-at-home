@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Flip input_number.fake_rain_rate on a scratch HA and print the time, so a
+# device worker can swipe to the second pet inside the rain echo window.
+#   HA_URL=http://<lan-ip>:<port> HA_TOKEN=<long-lived token> scripts/echo-rain [on|off|<rate>]
+# Default "on" = 1.0 in/h ("off" = 0). Never point it at a real HA.
+set -euo pipefail
+: "${HA_URL:?set HA_URL, the scratch HA (never port 8123)}"
+: "${HA_TOKEN:?set HA_TOKEN, a long-lived access token of the scratch HA}"
+case "${1:-on}" in on) rate=1.0 ;; off) rate=0 ;; *) rate=$1 ;; esac
+curl -fsS -o /dev/null -X POST "$HA_URL/api/services/input_number/set_value" \
+  -H "Authorization: Bearer $HA_TOKEN" -H "Content-Type: application/json" \
+  -d "{\"entity_id\":\"input_number.fake_rain_rate\",\"value\":$rate}"
+echo "fake_rain_rate=$rate flipped at $(date +%H:%M:%S)"
+echo "The server refreshes about every 30 s; the onset reaches the card 0-10 s after that refresh."
+echo "The echo window is 20 s: open or swipe to the second pet within 20 s of the card's rain onset."
