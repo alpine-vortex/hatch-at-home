@@ -1535,9 +1535,9 @@ today; one on the day itself and after. No count, no "n of 6" anywhere near the 
 A per-item forget removes the sticker with the tag. A sticker's `aria-label` is the tag's
 text label. Mono and big-text render (the bench at both). The six icons are the art ask's.
 
-## 9a. The page copy (M3 P1-3): DRAFT, for first-mate approval
+## 9a. The page copy (M3 P1-3): APPROVED by the first mate 2026-11-05
 
-**Every line in this section is DRAFT** until the first mate approves it (decisions-2026-10-28,
+**Approved by the first mate on 2026-11-05**, with two edits (`.pattern`, `.kept_note`). Before that, every line was DRAFT until the first mate approved it (decisions-2026-10-28,
 "How the crew works with the owner"). Written by the plan's author; **the M3a ship worker
 writes no copy** and copies this table as approved, or as the first mate edits it. The table
 goes in the fresh block of `src/card/lines-fresh.js` as `MEMORY_PAGE` and is named in
@@ -1556,7 +1556,7 @@ person's record, not the pet's voice mid-play; the settings sheet has none eithe
 `{label}` is a `MEMORY_TAG_CHIPS.labels` entry, `{day}` the card's short date, `{weekday}` a
 name from `.weekdays`.
 
-| Table.key | Line (DRAFT) | Use |
+| Table.key | Line (approved 2026-11-05) | Use |
 |---|---|---|
 | `MEMORY_PAGE.link` | things you told me › | the status-sheet link, beside "journal ›" |
 | `.title` | things you told me | the page title (back button is `‹ status`) |
@@ -1578,7 +1578,7 @@ name from `.weekdays`.
 | `.pick_game` | game · {value} · {day} | |
 | `.pick_guess` | guess · {value} · {day} | |
 | `.pick_great` | a great day · {day} | a `great` entry (no value; it is the answer) |
-| `.pattern` | {weekday}s: you often tell me about a {label} | a pattern row |
+| `.pattern` | {weekday}s: you often tell me about {label} | a pattern row |
 | `.weekdays` | monday, tuesday, wednesday, thursday, friday, saturday, sunday | `weekday` 0-6 |
 | `.forget` | forget this | each item's button |
 | `.forget_sure` | sure? press again to forget | the second tap (a tap-to-confirm, the card's `_confirmed` style) |
@@ -1586,7 +1586,7 @@ name from `.weekdays`.
 | `.forgot` | forgotten | the line after, spoken once to the live region |
 | `.stop` | stop remembering | the page's switch-off button (opens the existing `memory_off` two-tap confirm) |
 | `.never` | never kept: words you typed, anyone's name | the line saying what is not kept |
-| `.kept_note` | i may still ask about this week's | one line under the list (M3 P2-2): a forget removes the memory, the pet's own copies of this week's answers can still come up |
+| `.kept_note` | something you forget may still come up for a day | one line under the list (M3 P2-2): a forget removes the memory, the pet's own copies of this week's answers can still come up |
 | `.aria_forget` | forget this: {row text} | each button's `aria-label` (the row's text, as text; no emoji) |
 
 Notes on the wording, for the first mate:
