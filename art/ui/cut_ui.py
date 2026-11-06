@@ -228,7 +228,11 @@ LIB = {
         )
     },
 }
-SETDIR = {"a": "a-modes", "b": "b-v2", "c": "c-games", "d": "d-util", "e": "e-worlds"}
+# set f: the six memory sticker icons, two takes each, drawn in code by draw_stickers.py (no sheet to cut)
+LIB["f"] = {
+    "f1": [f"icon_sticker_{t}_v{i}" for t in ("exam", "match", "show", "trip", "party", "lesson") for i in (1, 2)]
+}
+SETDIR = {"a": "a-modes", "b": "b-v2", "c": "c-games", "d": "d-util", "e": "e-worlds", "f": "f-stickers"}
 A_SHIPS = {
     "icon_mode_left",
     "icon_mode_right",
@@ -409,6 +413,23 @@ def lib_cut(s, src, repo):
     lib_contact(s, repo)
 
 
+MONO_TONES = [((0x2F, 0x3A, 0x24), 5), ((0x6F, 0x7F, 0x4F), 5), ((0x9A, 0xAA, 0x72), 3), ((0xC6, 0xD4, 0xA0), 7)]
+
+
+def mono4(im):
+    """The card's mono LCD filter (prefs.js monoFilter): luma, then 20 discrete steps over four tones."""
+    table = [t for t, n in MONO_TONES for _ in range(n)]
+    out = im.copy()
+    px = out.load()
+    for y in range(im.height):
+        for x in range(im.width):
+            r, g, b, a = px[x, y]
+            if a:
+                l = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+                px[x, y] = table[min(19, int(l * 20))] + (a,)
+    return out
+
+
 def lib_contact(s, repo, out=None):
     """The set on caps: 24 and 48 px on cream (care caps) and the game face #c4e2f2 (mode caps); set A also
     blocked (the cap at 0.6 over the shell) and armed (held down: no lip, two px lower)."""
@@ -416,6 +437,7 @@ def lib_contact(s, repo, out=None):
 
     names = [n for sh in LIB[s].values() for n in sh if lib_dest(repo, s, n).exists()]
     CREAM, FACE, SHELL = (255, 247, 236), (0xC4, 0xE2, 0xF2), (150, 138, 124)
+    MONO_BG = (0xC6, 0xD4, 0xA0)
     rows = [
         ("cream 24", CREAM, 24, ""),
         ("face 24", FACE, 24, ""),
@@ -429,7 +451,17 @@ def lib_contact(s, repo, out=None):
             ("blocked 48", FACE, 48, "blocked"),
             ("armed 48", FACE, 48, "armed"),
         ]
-    rows += [("96", CREAM, 96, "")]
+    if s == "f":  # stickers: the card's own screen (cream), the mono LCD, and a big-text slot (images do not scale with it)
+        rows = [
+            ("normal 24", CREAM, 24, ""),
+            ("mono 24", MONO_BG, 24, "mono"),
+            ("normal 32", CREAM, 32, ""),
+            ("mono 32", MONO_BG, 32, "mono"),
+            ("normal 96", CREAM, 96, ""),
+            ("mono 96", MONO_BG, 96, "mono"),
+        ]
+    else:
+        rows += [("96", CREAM, 96, "")]
     colw, lab = 108, 92
     heights = [max(44, sz + 22) for _, _, sz, _ in rows]
     W, H = lab + colw * len(names), 30 + sum(heights)
@@ -454,6 +486,8 @@ def lib_contact(s, repo, out=None):
                 .resize((sz, sz), Image.NEAREST if 96 % sz == 0 else Image.BOX)
             )
             cw, ch = sz + 10, sz + 8
+            if look == "mono":
+                ic = mono4(ic)
             drop = 2 if look == "armed" else 0
             cap = Image.new("RGBA", (cw, ch + 3))
             cd = ImageDraw.Draw(cap)
