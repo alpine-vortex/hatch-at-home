@@ -10908,7 +10908,7 @@ async function main() {
         sent.length = 0;
         // (9) markup in a value renders as text (an off-list value is dropped, a listed one is text)
         out.text = [...s.status.querySelectorAll(".mrow .mtext, .msince")].every((x) => x.children.length === 0);
-        out.noTags = !s.status.querySelector(".mempage b, .mempage img, .mempage script");
+        out.noTags = !s.status.querySelector(".mempage b, .mempage script") && !s.status.querySelector(".mempage img:not(.mstickers img)");
         // (4) path 4: a late reply after a close, a slide change and a shared flip draws nothing
         let go = deferred();
         await open(false); q(".mshow")?.click(); await wait(30);
@@ -11088,7 +11088,10 @@ async function main() {
       };
       conn.sendMessagePromise = function (msg) {
         if (msg?.type === "virtual_pet/memory_get") return Promise.resolve(JSON.parse(JSON.stringify(view)));
-        if (msg?.type === "virtual_pet/memory_forget") return Promise.resolve({ forgot: 1 });
+        if (msg?.type === "virtual_pet/memory_forget") {
+          view.tags = view.tags.filter((e) => !(e.day === msg.day && e.kind === msg.kind)); // gone for the re-read too
+          return Promise.resolve({ forgot: 1 });
+        }
         return realSend.call(this, msg);
       };
       const out = {};
