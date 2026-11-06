@@ -767,6 +767,9 @@ Things to know:
   remember. An admin can turn memory off for the house (below).
 - If someone turns on debug logging for `homeassistant.components.websocket_api`, Home
   Assistant logs every message, the picks sent to the pets included.
+- The memory of a person whose Home Assistant user has been removed is erased by the next
+  daily clean-up (the first time a pet runs after local midnight). The rest of their record
+  (their birthday, answers and settings) stays in the people store.
 - After a downgrade to a version without memory, the record stays on disk, unread and
   no longer capped, until "forget my data" or a newer version.
 - Downgrading to a version before this one drops "exam" tags (and any tag the older list

@@ -1218,7 +1218,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.debug["last_step_minutes"] = round((now - before) / 60, 2)
         self._fire(events, simulated)
         self._pick_favourite()
-        self.people.prune_daily(self._today(now)[0])  # follow-ups past their day (F1)
+        # Follow-ups past their day (F1); then the memory of removed HA users (M3a).
+        if self.people.prune_daily(self._today(now)[0]):
+            self.config_entry.async_create_background_task(
+                self.hass, self.people.async_prune_users(), "virtual_pet prune users"
+            )
         self._save()
 
     def _pick_favourite(self) -> None:

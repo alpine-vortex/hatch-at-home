@@ -566,10 +566,31 @@ class People:
         self._pruned = today
         return changed
 
-    def prune_daily(self, today: str) -> None:
-        """Once per house per local date (the first tick that sees it)."""
-        if self._pruned != today and self.prune(today):
+    def prune_daily(self, today: str) -> bool:
+        """Once per house per local date (the first tick that sees it). True if it
+        ran: the caller then runs `async_prune_users` (it awaits, this can't)."""
+        if self._pruned == today:
+            return False
+        if self.prune(today):
             self.save()
+        return True
+
+    async def async_prune_users(self) -> int:
+        """The daily prune's async half (memory plan M3a, owner Q4): the memory of
+        an HA user id that no longer exists is popped, memory only (the rest of the
+        record stays), each under that person's lock, then one save at once. Reads
+        nothing but the id, logs nothing. How many went."""
+        gone = 0
+        for user in [u for u, p in self.data["people"].items() if "memory" in p]:
+            if await self._hass.auth.async_get_user(user) is not None:
+                continue
+            async with self.lock(user):
+                person = self.data["people"].get(user)
+                if person is not None and person.pop("memory", None) is not None:
+                    gone += 1
+        if gone:
+            await self.async_save_now()
+        return gone
 
     def open_event(self, user: str) -> dict[str, Any] | None:
         return (self.data["people"].get(user, {}).get("follow") or {}).get("event")

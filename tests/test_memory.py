@@ -276,15 +276,19 @@ def test_memory_days_are_canonical_iso() -> None:
 async def test_a_stored_future_day_is_kept_on_load_even_with_a_stale_clock(
     hass: HomeAssistant, hass_storage: dict[str, Any]
 ) -> None:
-    """A box booting with a clock before NTP must not erase real days."""
+    """A box booting with a clock before NTP must not erase real days. (A real user:
+    the stale load date makes the first tick a new day, whose prune drops the memory
+    of an id HA doesn't know, M3a.)"""
+    ada, _ = await a_user(hass)
     far = {"day": "9999-12-31", "pick": "sea"}
     old = {"day": "2011-03-03", "pick": "sea"}
     stale = {"memory": {"on": True, "picks": {"dream": [old, far]}}}
     with patch(
         "custom_components.virtual_pet.people.model_today", return_value="2001-01-01"
     ):
-        pet = await start(hass, hass_storage, {"u": stale})
-    assert pet.people.memory("u")["picks"]["dream"] == [old, far]
+        pet = await start(hass, hass_storage, {ada.id: stale})
+    await hass.async_block_till_done()
+    assert pet.people.memory(ada.id)["picks"]["dream"] == [old, far]
 
 
 async def test_remember_keeps_one_per_key_and_its_caps_at_once(
@@ -952,6 +956,9 @@ GUIDE_STRINGS = (
     "maybe a match tomorrow! go you ♥",
     "one such remark a month at most across all three",
     "the pattern has ended",
+    # M3a: removed users (owner Q4).
+    "memory of a person whose Home Assistant user has been removed is erased by the next"
+    " daily clean-up",
 )
 
 
@@ -2630,3 +2637,65 @@ async def test_debug_logging_on_websocket_api_shows_the_page_by_design(
         if r.name.startswith("custom_components.virtual_pet")
     )
     assert "2026-10-03" not in ours and "2026-10-29" not in ours
+
+
+async def test_the_daily_prune_drops_a_removed_users_memory_only(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer
+) -> None:
+    """Owner Q4: a removed HA user's memory goes on the next daily clean-up, memory
+    only; a live user's stays; it runs once a local date."""
+    freezer.move_to("2026-11-05 12:00:00+00:00")
+    ada, _ = await a_user(hass)
+    bob, _ = await a_user(hass)
+    pet = await start(
+        hass,
+        hass_storage,
+        {
+            ada.id: {"memory": full_memory(), "baby_talk": True, "birthday": "03-14"},
+            bob.id: {"memory": full_memory()},
+        },
+    )
+    people = pet.people
+    await hass.auth.async_remove_user(ada)
+    await hass.async_block_till_done()
+    assert people.memory_on(ada.id)  # not before the next day's prune
+    with patch.object(
+        people, "async_prune_users", wraps=people.async_prune_users
+    ) as prune:
+        freezer.move_to("2026-11-06 00:30:00+00:00")
+        pet._advance(dt_util.utcnow().timestamp())
+        await hass.async_block_till_done()
+        assert prune.call_count == 1
+        assert people.data["people"][ada.id] == {"baby_talk": True, "birthday": "03-14"}
+        assert saved_people(hass_storage)[ada.id] == {
+            "baby_talk": True,
+            "birthday": "03-14",
+        }
+        assert people.memory(bob.id) == full_memory()
+        freezer.move_to("2026-11-06 18:00:00+00:00")
+        pet._advance(dt_util.utcnow().timestamp())
+        await hass.async_block_till_done()
+        assert prune.call_count == 1  # once a day
+    assert await people.async_prune_users() == 0  # nothing left to drop
+
+
+async def test_the_users_prune_takes_each_persons_lock(
+    hass: HomeAssistant, hass_storage: dict[str, Any]
+) -> None:
+    """A look that holds the person's lock finishes before their memory goes."""
+    pet = await start(hass, hass_storage, {"gone": {"memory": full_memory()}})
+    people = pet.people
+    looked = asyncio.Event()
+
+    async def get_user(user_id: str) -> None:
+        looked.set()
+
+    with patch.object(hass.auth, "async_get_user", side_effect=get_user):
+        async with people.lock("gone"):
+            task = hass.async_create_task(people.async_prune_users())
+            await looked.wait()  # the id is looked up, then it waits on the lock
+            for _ in range(20):
+                await asyncio.sleep(0)
+            assert not task.done() and people.memory_on("gone")
+        assert await task == 1
+    assert "memory" not in saved_people(hass_storage)["gone"]
