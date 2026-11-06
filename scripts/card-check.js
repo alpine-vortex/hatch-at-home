@@ -8251,6 +8251,7 @@ async function main() {
   await unpinAwake(card);
   }
   if (enter("photos")) {
+  await pinAwake(card, "photos");
   // 4b. A best friend's photo (phase 4). The viewer's photos come from the
   // virtual_pet/photos command, stubbed here with two generations.
   const PHOTOS = [
@@ -10270,6 +10271,7 @@ async function main() {
   await inject(pet["sensor.life_stage"], { state: stageBefore.state, attributes: { ...stageBefore.attributes, hatches_at: stageBefore.attributes.hatches_at ?? null } });
   await page.waitForTimeout(1200);
 
+  await unpinAwake(card);
   }
   if (enter("sharedscreen")) {
   await pinAwake(card, "sharedscreen");
