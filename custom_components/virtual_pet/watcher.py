@@ -292,22 +292,25 @@ def moved(old: Signature, new: Signature) -> bool:
     return False
 
 
-def _band(value: float, edges: tuple[float, ...]) -> int:
-    """How many of the (ascending) edges value is at or above."""
-    return sum(value >= edge for edge in edges)
+def _band(value: float, edges: tuple[tuple[float, bool], ...]) -> int:
+    """How many of the (ascending) edges value is past. An edge is (mark,
+    below): below means the pet tests "value <= mark", so value is past it only
+    when above it; otherwise the pet tests "value >= mark" and at it is past."""
+    return sum(value > edge if below else value >= edge for edge, below in edges)
 
 
-# Outdoor °C the pet or the card has a word for (snow talk at 0, coming home
-# cold or hot, the first warm day, a hot day, a cold snap).
+# Outdoor °C the pet or the card has a word for, each on the side the pet tests
+# it: snow talk at 0, coming home cold, and a cold snap read "<=" (True); the
+# first warm day, coming home hot and a hot day read ">=".
 OUTDOOR_EDGES = tuple(
     sorted(
         {
-            R.HOME_COLD_SNAP_C,
-            0.0,
-            R.HOME_COLD_C,
-            R.HOME_WARM_FIRST_C,
-            R.HOME_HOT_C,
-            R.HOME_HOT_DAY_C,
+            (R.HOME_COLD_SNAP_C, True),
+            (0.0, True),
+            (R.HOME_COLD_C, True),
+            (R.HOME_WARM_FIRST_C, False),
+            (R.HOME_HOT_C, False),
+            (R.HOME_HOT_DAY_C, False),
         }
     )
 )

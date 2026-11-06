@@ -773,7 +773,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             sig = self.watcher.signature(eid, new)
             last = seen.get(eid)
             if last is None and old is not None and old.state not in BAD:
-                last = self.watcher.signature(eid, old)
+                # The anchor: a first-seen entity is compared with where it was,
+                # and stays so until a change passes, so a slow drift adds up.
+                last = seen[eid] = self.watcher.signature(eid, old)
             if last is not None and not moved(last, sig):
                 return
             seen[eid] = sig

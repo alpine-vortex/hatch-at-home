@@ -228,6 +228,83 @@ NOTICED = {
         _set("media_player.radio", "playing", media_title="One", media_artist="A"),
         _set("media_player.radio", "playing", media_title="Two", media_artist="A"),
     ),
+    # Each of these steps stays inside the level step, so only the mark can
+    # wake the pet: an over-filtering signature would swallow it.
+    "indoor below comfort low": (
+        {"indoor_temperature": "sensor.in"},
+        _set("sensor.in", "18.0", unit_of_measurement="°C"),
+        _set("sensor.in", "17.9", unit_of_measurement="°C"),
+    ),
+    "indoor above comfort high": (
+        {"indoor_temperature": "sensor.in"},
+        _set("sensor.in", "26.5", unit_of_measurement="°C"),
+        _set("sensor.in", "26.6", unit_of_measurement="°C"),
+    ),
+    "wind reaches windy": (
+        {"weather": "weather.home"},
+        _set("weather.home", "cloudy", **{**WEATHER, "wind_speed": 29.9}),
+        _set("weather.home", "cloudy", **{**WEATHER, "wind_speed": 30.0}),
+    ),
+    "gust reaches gusty": (
+        {"weather": "weather.home"},
+        _set("weather.home", "cloudy", **{**WEATHER, "wind_gust_speed": 49.9}),
+        _set("weather.home", "cloudy", **{**WEATHER, "wind_gust_speed": 50.0}),
+    ),
+    "air quality turns bad": (
+        {"aqi": "sensor.aqi"},
+        _set("sensor.aqi", "100"),
+        _set("sensor.aqi", "101"),
+    ),
+    "solar reaches sunny": (
+        {"solar": "sensor.solar"},
+        _set("sensor.solar", "299"),
+        _set("sensor.solar", "300"),
+    ),
+    "moon rises": (
+        {"moon_altitude": "sensor.moon_alt"},
+        _set("sensor.moon_alt", "0"),
+        _set("sensor.moon_alt", "0.1"),
+    ),
+    "someone comes home": (
+        {},
+        _set("zone.home", "1"),
+        _set("zone.home", "2"),
+    ),
+    "vacuum starts": (
+        {},
+        _set("vacuum.robo", "docked"),
+        _set("vacuum.robo", "cleaning"),
+    ),
+    "appliance draw over the watts": (
+        {"appliances": ["sensor.washer"]},
+        _set("sensor.washer", "4", device_class="power", unit_of_measurement="W"),
+        _set("sensor.washer", "6", device_class="power", unit_of_measurement="W"),
+    ),
+    "bedtime lights go off": (
+        {"bedtime_lights": ["light.bed"]},
+        _set("light.bed", "on"),
+        _set("light.bed", "off"),
+    ),
+    "outdoor reaches freezing": (
+        {"weather": "weather.home"},
+        _set("weather.home", "cloudy", **{**WEATHER, "temperature": 0.4}),
+        _set("weather.home", "cloudy", **{**WEATHER, "temperature": 0.0}),
+    ),
+    "outdoor reaches cold": (
+        {"weather": "weather.home"},
+        _set("weather.home", "cloudy", **{**WEATHER, "temperature": 5.4}),
+        _set("weather.home", "cloudy", **{**WEATHER, "temperature": 5.0}),
+    ),
+    "outdoor reaches the cold snap": (
+        {"weather": "weather.home"},
+        _set("weather.home", "cloudy", **{**WEATHER, "temperature": -9.6}),
+        _set("weather.home", "cloudy", **{**WEATHER, "temperature": -10.0}),
+    ),
+    "outdoor reaches the first warm day": (
+        {"weather": "weather.home"},
+        _set("weather.home", "cloudy", **{**WEATHER, "temperature": 19.6}),
+        _set("weather.home", "cloudy", **{**WEATHER, "temperature": 20.0}),
+    ),
     "unavailable comes back": (
         {"lux": ["sensor.lux"]},
         _set("sensor.lux", "unavailable"),
@@ -255,3 +332,23 @@ async def test_a_change_the_pet_can_notice_wakes_it(
     after(hass)
     await tick(hass, freezer, loop_clock, R.HOME_DEBOUNCE_SECONDS)
     assert runs[0] == 1
+
+
+async def test_a_slow_drift_on_a_first_seen_sensor_adds_up(
+    hass: HomeAssistant,
+    now: float,  # noqa: F811
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    loop_clock: list[float],
+) -> None:
+    """Each step is under the level step, but the run is anchored where it began."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    hass.states.async_set("sensor.lux", "20")
+    await setup_with_house(hass, lux=["sensor.lux"])
+    await tick(hass, freezer, loop_clock, 11)
+    runs = count_reacts(hass, monkeypatch)
+    for i in range(1, 60):  # 20 -> 79 lux, one lux at a time, under the night cutoff
+        hass.states.async_set("sensor.lux", str(20 + i))
+        await tick(hass, freezer, loop_clock, R.HOME_DEBOUNCE_SECONDS)
+    assert runs[0] >= 2
