@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Seed a scratch Home Assistant with two pets in a known state, for device passes.
 
-    scripts/dev-seed [--dir DIR] [--port N] [--keep]
+    scripts/dev-seed [--dir DIR] [--port N] [--keep] [--fixture NAMES] [--lead MIN]
 
 Copies dev/config to DIR (default: a fresh dir under $TMPDIR), starts HA on a free
 port (never 8123), onboards `dev` / `devdevdev` and then drives the real flows:
@@ -21,6 +21,12 @@ and Mondays alone, so no API can put them there on any other day. HA is stopped,
 entries go into `.storage/virtual_pet.people` through the integration's own validator
 (people._memory_entry_ok, people.remember's rules) in its own Store format, and HA starts
 again. Then it prints each pet's state and the memory read back over `memory_get`.
+
+--fixture adds states a device pass cannot reach by tapping (comma list, or `all`; dev/README.md
+has what each does and the CDP one-liners): `egg` (a third pet, Dot, an egg that hatches in about
+--lead minutes), `stage` (Nib, a baby a --lead from its child birthday), `refuse` (Gus, fed to
+full: a feed tap is refused), `rain` (the rain fake set to 0.3 in/h). The proof prints the
+one-liners that need the pets' device ids (the long-absence mark, the pinned drop-in meal).
 
 Never point it at a real HA; it starts its own. With --keep HA stays up on the
 printed port (reach it from the ReDroid VM at http://<lan-ip>:<port>); without it
@@ -46,6 +52,16 @@ CLIENT = "http://dev-seed/"
 USER = {"username": "dev", "password": "devdevdev", "name": "Dev"}
 MOTION = ["binary_sensor.fake_motion_sensor"]  # held by the bedtime topic
 PETS = [("Pip", "woodland", "dune"), ("Mew", "hearth", "smoke")]
+# --fixture NAME: (extra pet, world) for the ones that need a pet of their own.
+FIXTURE_PETS = {"egg": ("Dot", "woodland"), "stage": ("Nib", "woodland"), "refuse": ("Gus", "hearth")}
+FIXTURES = ("egg", "stage", "refuse", "rain")
+# A CDP one-liner prefix: the card, wherever HA's shadow roots put it, as `c`.
+FIND_CARD = ("const f = (r) => { for (const e of r.querySelectorAll('*')) { if (e.localName === 'hatch-pet-card') return e; "
+             "if (e.shadowRoot) { const x = f(e.shadowRoot); if (x) return x; } } }; const c = f(document);")
+FORCE_SPECK = ("const s = c._slides[c._index], r = Math.random; for (const pose of [false, true]) { "
+               "const m = c._idleMoves(s, pose, false); s.nextIdle = 1; Math.random = () => (m.indexOf('speck') + .5) / m.length; "
+               "try { c._idle(s); } finally { Math.random = r; } if (s.screen.querySelector('.speck')) break; }")
+RAIN_RATE = 0.3  # in/h on input_number.fake_rain_rate: over the rain key's wet line
 
 # Pet options by topic: the fakes in dev/config/configuration.yaml.
 OPTIONS = {
@@ -212,7 +228,60 @@ async def options_topic(api: Api, entry_id: str, topic: str, data: dict) -> None
         sys.exit(f"options {topic}: {done.get('errors') or done}")
 
 
-async def seed(ha: Ha, s: aiohttp.ClientSession) -> dict:
+async def fixtures(api: Api, wanted: list, lead: float) -> None:
+    """The --fixture pets and states, after the two main pets are settled (so the
+    main pets' fast-forwards never touch them).
+
+    Stage and hatch changes only reach the card as moments when the pet lives them in
+    real time (coordinator._fire skips moments and the channel for a fast_forward, which is
+    why a fast-forwarded stage change never raised stage_changed on the card). So these
+    fast-forward to just short of the line and leave the last `lead` minutes to the clock:
+    the coordinator's 5-minute tick then crosses it live."""
+    for name in wanted:
+        if name == "rain":
+            await api.call(
+                "POST", "/api/services/input_number/set_value",
+                {"entity_id": "input_number.fake_rain_rate", "value": RAIN_RATE},
+            )
+            continue
+        pet, world = FIXTURE_PETS[name]
+        flow = await api.call("POST", "/api/config/config_entries/flow", {"handler": "virtual_pet"})
+        done = await api.call(
+            "POST", f"/api/config/config_entries/flow/{flow['flow_id']}", {"name": pet, "world": world}
+        )
+        eid = done["result"]["entry_id"]
+        now = house_now()
+        bed = (now + dt.timedelta(hours=6)).strftime("%H:%M:00")
+        wake = (now + dt.timedelta(hours=14)).strftime("%H:%M:00")
+        await options_topic(api, eid, "bedtime", {"bedtime": bed, "wake_time": wake, "motion": MOTION})
+        for topic, data in OPTIONS.items():
+            await options_topic(api, eid, topic, data)
+        await asyncio.sleep(1)
+
+        async def ff(h: float, eid: str = eid) -> None:
+            await api.call("POST", "/api/services/virtual_pet/fast_forward", {"hours": h, "config_entry_id": eid})
+
+        step = 0.1  # the service's smallest step; it leaves 0.1 h (6 min) at least
+        if name == "egg":  # hatches at 0.5 h
+            await ff(max(step, round(0.5 - lead / 60, 1)))
+        elif name == "stage":  # baby to child at 24 h
+            await ff(round(24 - lead / 60, 1))
+        elif name == "refuse":  # feed until the server says full
+            await ff(1)
+            await asyncio.sleep(1)
+            ids = await pet_ids(api)
+            feed = ids[pet].find("feed")
+            for _ in range(12):
+                await api.call("POST", "/api/services/button/press", {"entity_id": feed})
+                await asyncio.sleep(0.5)
+                hunger = await api.call("GET", f"/api/states/{ids[pet].find('hunger')}")
+                if float(hunger["state"]) >= 95:
+                    break
+            else:
+                sys.exit("could not feed Gus to full")
+
+
+async def seed(ha: Ha, s: aiohttp.ClientSession, wanted: list, lead: float) -> dict:
     access = await sign_in(s, ha.base)
     api = Api(s, ha.base, access)
     await api.connect(access)
@@ -255,6 +324,7 @@ async def seed(ha: Ha, s: aiohttp.ClientSession) -> dict:
         "POST", "/api/services/virtual_pet/hop?return_response",
         {"entity_id": ids["Pip"].find("life_stage"), "action": "board"},
     )
+    await fixtures(api, wanted, lead)
     me = await api.wscmd(type="auth/current_user")
     await ws_close(api)
     return {"user": me["id"], "entries": entries}
@@ -269,15 +339,22 @@ async def pet_ids(api: Api) -> dict:
     reg = await api.wscmd(type="config/entity_registry/list")
     entries = {e["entry_id"]: e for e in await api.call("GET", "/api/config/config_entries/entry?domain=virtual_pet")}
     out: dict = {}
+    devices: dict = {}
     for e in reg:
         ce = entries.get(e.get("config_entry_id"))
         if not ce or e["platform"] != "virtual_pet":
             continue
         out.setdefault(ce["title"], []).append(e["entity_id"])
-    return {k: Pet(v) for k, v in out.items()}
+        devices[ce["title"]] = e.get("device_id")
+    pets = {k: Pet(v) for k, v in out.items()}
+    for k, pet in pets.items():
+        pet.device = devices.get(k)
+    return pets
 
 
 class Pet(list):
+    device: str | None = None
+
     def find(self, suffix: str) -> str:
         return next(i for i in self if i.endswith("_" + suffix))
 
@@ -312,19 +389,30 @@ def write_memory(conf: Path, user: str) -> dict:
     return mem
 
 
-async def proof(ha: Ha, s, user_token_for) -> None:
+async def proof(ha: Ha, s, wanted: list) -> None:
     access = await sign_in(s, ha.base)
     api = Api(s, ha.base, access)
     await api.connect(access)
     ids = await pet_ids(api)
     states = {x["entity_id"]: x for x in await api.call("GET", "/api/states")}
-    for name, _, _ in PETS:
+    names = [n for n, _, _ in PETS] + [FIXTURE_PETS[w][0] for w in wanted if w in FIXTURE_PETS]
+    for name in names:
         mine = ids[name]
         life = states[mine.find("life_stage")]
         asleep = states[mine.find("asleep")]["state"]
         hunger = states[mine.find("hunger")]["state"]
-        print(f"{name}: stage={life['state']} hunger={hunger} asleep={asleep} "
-              f"finish={life['attributes'].get('shell_finish')}")
+        print(f"{name}: stage={life['state']} age_days={life['attributes'].get('age_days')} hunger={hunger} "
+              f"asleep={asleep} finish={life['attributes'].get('shell_finish')} device={mine.device}")
+    if "rain" in wanted:
+        print("rain fake:", states["input_number.fake_rain_rate"]["state"], "in/h;",
+              "weather fake:", states["weather.fake_weather"]["state"])
+    for name in names:
+        print(f"seen mark, 3 days old ({name}), run over CDP before load:\n  "
+              f"localStorage.setItem('hatch-seen-{ids[name].device}', JSON.stringify({{seen: Date.now() - 3*864e5, said: null}}))")
+    print("pin a variant on the slide on show (CDP; the card is behind shadow roots, so find it first):")
+    print("  " + FIND_CARD + " c._slides[c._index].pinVariant = {feed: 'A', 'refused.full': 'shake'}")
+    print("a speck crosses now (idle picks it 1 time in 7-9 every 20-45 s; this makes it the pick):")
+    print("  " + FIND_CARD + " " + FORCE_SPECK)
     hop = await api.call(
         "POST", "/api/services/virtual_pet/hop?return_response",
         {"entity_id": ids["Pip"].find("life_stage"), "action": "board"},
@@ -343,7 +431,12 @@ async def main() -> None:
     ap.add_argument("--dir")
     ap.add_argument("--port", type=int)
     ap.add_argument("--keep", action="store_true")
+    ap.add_argument("--fixture", default="", help="comma list of: " + ", ".join(FIXTURES) + ", all")
+    ap.add_argument("--lead", type=float, default=10, help="minutes the egg and stage fixtures leave (default 10; 6 at least)")
     a = ap.parse_args()
+    wanted = list(FIXTURES) if a.fixture == "all" else [x for x in a.fixture.split(",") if x]
+    if bad := [x for x in wanted if x not in FIXTURES]:
+        sys.exit(f"unknown fixture {bad}; known: {', '.join(FIXTURES)}")
     port = a.port or free_port()
     if port == 8123:
         sys.exit("never 8123")
@@ -371,7 +464,7 @@ async def main() -> None:
         async with aiohttp.ClientSession() as s:
             ha.start()
             await ha.wait_up(s)
-            info = await seed(ha, s)
+            info = await seed(ha, s, wanted, max(a.lead, 6))
         ha.stop()
         for e in json.loads((conf / ".storage/core.config_entries").read_text())["data"]["entries"]:
             if e["domain"] == "virtual_pet":
@@ -382,7 +475,7 @@ async def main() -> None:
             ha.start()
             await ha.wait_up(s)
             await asyncio.sleep(10)  # the pets load after the HTTP server
-            await proof(ha, s, None)
+            await proof(ha, s, wanted)
     finally:
         if not a.keep:
             ha.stop()
