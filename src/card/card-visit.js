@@ -405,14 +405,13 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     const done = () => {
       box.remove();
       s.asking = false;
-      clearTimeout(s.askTimer);
+      this._stop(s, { key: "ask" });
     };
     // No tap in the box reaches the screen behind (it would open the status),
     // and while someone is picking, it stays.
     for (const type of ["click", "change", "pointerdown", "pointerup"]) box.addEventListener(type, (e) => e.stopPropagation());
     const wait = () => {
-      clearTimeout(s.askTimer);
-      s.askTimer = setTimeout(done, ASK_MS);
+      this._later(s, ASK_MS, done, { key: "ask" }); // a silent replace: the box stays up (A1)
     };
     box.addEventListener("focusin", wait);
     box.addEventListener("change", wait);
@@ -474,7 +473,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     });
     s.screen.append(box);
     this._askPlace(s, box);
-    s.askTimer = setTimeout(done, ASK_MS);
+    this._later(s, ASK_MS, done, { key: "ask" });
     // The phone question is asked for good only once it's on screen (top10 1a): one
     // dropped before this comes again another day. A websocket answer, off the bus.
     if (kind === "phone") {

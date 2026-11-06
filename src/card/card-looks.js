@@ -94,7 +94,7 @@ class HatchPetCardLooks extends HatchPetCardTick {
     if (trick) {
       lines.push([turnPick(TRICK_LINES, `${device}|trick`), 4500]);
       s.trickSaid = new Date().toDateString(); // F7's payoff skips this look's (Q5 A)
-      if (!calm()) setTimeout(() => this._trickMove(s, trick), 600);
+      if (!calm()) this._later(s, 600, () => this._trickMove(s, trick));
     }
     // A dream story told here 2-4 days ago, once (F2).
     const callback = !stale && lines.length < capExtras && this._dreamCallback(s);
@@ -103,7 +103,7 @@ class HatchPetCardLooks extends HatchPetCardTick {
     const promise = lines.length < capExtras && this._promiseLook(s);
     if (promise) {
       lines.push([promise.line, 4500]);
-      if (promise.move) setTimeout(() => this._promiseMove(s, promise.move), 600);
+      if (promise.move) this._later(s, 600, () => this._promiseMove(s, promise.move));
     }
     // Last, and only if there is room: an adult on how it was raised, once a week.
     const raised = this._state(s, "sensor.life_stage")?.state === "adult" && UPBRINGING_LINES[stage.upbringing];
@@ -326,7 +326,7 @@ class HatchPetCardLooks extends HatchPetCardTick {
     }
     step.box = box;
     step.until = Date.now() + ASK_MS + 1000;
-    step.timer = setTimeout(() => this._askTextEnd(s), ASK_MS);
+    this._later(s, ASK_MS, () => this._askTextEnd(s), { key: "ask.text" });
   }
 
   // Memory's tag chips (plan M2, FM s2782 Q2), inside the text step's own box: the
@@ -372,7 +372,7 @@ class HatchPetCardLooks extends HatchPetCardTick {
     step.sent = true;
     s.textStep = null;
     step.box?.remove();
-    clearTimeout(step.timer);
+    this._stop(s, { key: "ask.text" });
     s.asking = false;
     if (s.queue?.length) s.queue = s.queue.filter((q) => q.text !== BIG_DAY.what || !q.ask);
     // "I'll remember" only once the server kept it (a step ending past midnight is refused).
@@ -442,7 +442,8 @@ class HatchPetCardLooks extends HatchPetCardTick {
     if (!calm()) img.classList.add("pop");
     s.screen.append(el);
     const until = Date.now() + GIFT_LINE_MS;
-    const P = s.giftPop = { el, until, timer: setTimeout(() => this._giftPopEnd(s), GIFT_LINE_MS) };
+    const P = s.giftPop = { el, until };
+    this._later(s, GIFT_LINE_MS, () => this._giftPopEnd(s), { key: "gift.pop" });
     if (!(s.flairUntil > until)) s.flairUntil = P.until; // a pat wiggles; nothing else starts
     if (!(s.visitUntil > until)) s.visitUntil = P.until;
   }
@@ -452,7 +453,7 @@ class HatchPetCardLooks extends HatchPetCardTick {
     const P = s.giftPop;
     if (P) {
       s.giftPop = null;
-      clearTimeout(P.timer);
+      this._stop(s, { key: "gift.pop" });
       P.el.remove();
       if (s.flairUntil === P.until) s.flairUntil = 0;
       if (s.visitUntil === P.until) s.visitUntil = 0;

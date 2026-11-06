@@ -10821,6 +10821,38 @@ async function main() {
     check("memory M2: the prompt and every chip label are text (textContent), never markup",
       m2.markup?.length === 10 && m2.markup.every(Boolean), JSON.stringify(m2.markup));
   }
+  {
+    // Director slice 5, A2 (docs/plan-2026-11-06-director-migration.md 5.5): a question up survives the card being
+    // taken out of the page and put back within a second (a view switch does it). The ask's timer is kept through a
+    // disconnect (3.14: R76-R77 "keep"), so the question is still on show and s.asking true, and at 60 s the box
+    // goes and asking clears: asking is a BUSY_OWNERS entry, never left stuck. Real time (ASK_MS is a constant).
+    const a2 = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const entity = s.ids?.["sensor.life_stage"];
+      const up = () => !!s.screen.querySelector(".askday");
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const out = {};
+      s.screen.querySelector(".askday")?.remove();
+      s.asking = true;
+      el._ask(s, "weekend", entity);
+      out.started = up();
+      const parent = el.parentNode;
+      const next = el.nextSibling;
+      el.remove();
+      await wait(300);
+      parent.insertBefore(el, next);
+      await wait(300);
+      out.back = { up: up(), asking: s.asking, pending: el._director.inspect(s)?.timers.length };
+      await wait(58500); // about 59.1 s after the question went up
+      out.late = { up: up(), asking: s.asking };
+      await wait(2500); // about 61.6 s
+      out.gone = { up: up(), asking: s.asking, pending: el._director.inspect(s)?.timers.length || 0 };
+      return out;
+    });
+    check("A2: a question up through el.remove() and a re-append within 1 s is still on show, asking true, and gone at 60 s with asking false",
+      a2.started && a2.back.up && a2.back.asking === true && a2.back.pending >= 1 && a2.late.up && a2.late.asking === true &&
+        !a2.gone.up && a2.gone.asking === false, JSON.stringify(a2));
+  }
   await unpinAwake(card);
   }
   if (enter("memorypage")) {
@@ -14063,7 +14095,7 @@ async function main() {
       const out = { box: !!s.screen.querySelector(".askday"), said: s.bubble.textContent, visitor: !!s.visitor };
       el._visitorEnd(s);
       s.screen.querySelector(".askday")?.remove();
-      clearTimeout(s.askTimer);
+      el._director.stop(s, { key: "ask" });
       Object.assign(s, { asking: false, sayUntil: 0, poseUntil: 0, flairUntil: 0, visitUntil: 0 });
       for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-")) localStorage.removeItem(k);
       return out;

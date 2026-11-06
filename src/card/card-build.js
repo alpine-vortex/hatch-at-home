@@ -970,7 +970,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
   // Take an open question off the screen (a game, another pet on this slide).
   _clearAsk(s) {
     s.screen?.querySelector(".askday")?.remove();
-    clearTimeout(s.askTimer);
+    this._stop(s, { key: "ask" });
     s.asking = false;
     if (s.queue) s.queue = s.queue.filter((q) => !q.ask); // a question only (a birthday line stays)
   }

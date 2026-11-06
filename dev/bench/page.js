@@ -239,7 +239,7 @@
     s.queue = (s.queue || []).filter((q) => q.type === "gift");
     for (let n = 0; s.gifting && n < 200; n++) await new Promise((r) => setTimeout(r, 5));
     card._sayQueued(s);
-    if (s.giftPop) clearTimeout(s.giftPop.timer); // held for the shot
+    if (s.giftPop) card._director.stop(s, { key: "gift.pop" }); // held for the shot
     window.bench.info = { lookedFirst: !!s.lookedFirst, said: s.sayEntry?.type === "gift" ? s.sayEntry.text : null,
       pop: s.giftPop ? s.giftPop.el.querySelector(".rf").dataset.find : null };
     await settled(card);

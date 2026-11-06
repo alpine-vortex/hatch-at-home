@@ -9,6 +9,7 @@ const assert = require("node:assert");
 const vm = require("vm");
 
 const src = require("./card-source");
+const { adapters } = require("./timer_trace");
 const grab = (re) => {
   const m = src.match(re);
   assert.ok(m, `not in the card: ${re}`);
@@ -58,8 +59,13 @@ function load({ shared = false } = {}) {
       setItem: (k, v) => store.set(k, String(v)),
       removeItem: (k) => store.delete(k),
     },
-    setTimeout: (fn) => { timers.push(fn); return timers.length; },
-    clearTimeout: (id) => { if (id) timers[id - 1] = null; },
+    // The text step's end timer is on the ledger now (slice 5, R36): the real adapters over a schedule that
+    // records the fn here, as the stubbed setTimeout did; a stop or a replace nulls its slot.
+    ADAPT: adapters((ms, fn) => {
+      timers.push(fn);
+      const at = timers.length - 1;
+      return () => { timers[at] = null; };
+    }),
     Date,
   };
   vm.runInNewContext([
@@ -75,6 +81,7 @@ function load({ shared = false } = {}) {
     `function makeCard(mine) {
       const card = {
         calls: [], said: [], tapped: 0, placed: 0,
+        ...ADAPT,
         _followOk: true,
         _memoryOn: undefined,
         _hass: { user: { id: "ada" }, callWS(msg) { card.calls.push(msg); return Promise.resolve({ until: "2026-11-10" }); } },

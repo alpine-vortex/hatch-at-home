@@ -78,7 +78,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
           this._sparkle(s);
           this._chirp(s, "trait");
           // Show what the new trait looks like, so its flair means something later.
-          setTimeout(() => this._flair(s, m.trait), 700);
+          this._later(s, 700, () => this._flair(s, m.trait));
         });
         break;
       case "egg_laid":
@@ -686,9 +686,9 @@ class HatchPetCardMoment extends HatchPetCardVisit {
       }
       // The smug beat (plan 4.4): two rocks after the praise, snack or play it was whining for.
       if (spoiled && !busy && !calm()) {
-        setTimeout(() => {
+        this._later(s, 1300, () => {
           if (!s.scene && !s.asleep && !this._owned(s)) this._animate(s, s.pet, "rock2", 1250);
-        }, 1300);
+        });
       }
       out();
       return;

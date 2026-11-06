@@ -982,6 +982,27 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
   question is still on screen, `s.asking` is true, and at 60 s it is gone. (The review's open
   question: whether HA's masonry re-columning still detaches and re-attaches cards on the current HA.
   A2 stands on the view-switch case alone; the probe does not depend on which HA path does it.)
+- **Shipped, and where it differed from the draft:** `looks_trace.test.js` has 24 cases on the unmoved code (R34/R35
+  through `_firstLook`, R41 through `_moment`, R44 through `_react`, R36 through `_askText`/`_askTextEnd`, R37, R76-R77 through
+  `_ask`, A1 and D-keep). Each inline-arrow site is driven through its caller with stubs and `fields` (`_line` is an own
+  field that runs `then`). `looks_ledger.test.js` carries B1: a forget drops the moves, the flair and the rock; `_clearAsk` and
+  `_dropGift` are the closers for the question and the pop (box gone, `s.asking` false, nothing pending); the text step is
+  dropped and left to the tick; a reused slide's next question and pop are their own; D-keep and D-reattach (the question
+  goes at 60 s with `asking` false). Keys: `ask` (R76 `wait()`, R77 and the `done`/`_clearAsk` stops), `ask.text` (R36),
+  `gift.pop` (R37); R34, R35, R41, R44 unkeyed. `s.askTimer`, `step.timer` and `P.timer` are gone (nothing else read them).
+  Edits outside `src`: `scripts/card-check.js` (the `fresh-moment 5a` cleanup `el._director.stop(s, { key: "ask" })`, and the
+  **A2 probe** in `memorytags`: `el.remove()`, re-append 300 ms later, the question still up with `s.asking` true at 0.6 s and
+  at about 59 s, gone with `asking` false at about 61.6 s, in real time), **`dev/bench/page.js:242`** (the gift shot held the pop
+  with `clearTimeout(s.giftPop.timer)`; now `stop(s, { key: "gift.pop" })`; the draft did not list it), and
+  `memory_tags.test.js` (its vm card stubbed `setTimeout` for the text step; it takes the real adapters through `adapters()`
+  with a `schedule` that records the fn, as slice 3 did). `gift_lines.test.js` and `promise.test.js` needed no edit. **One
+  difference the draft did not name:** the unmoved `_ask` re-armed with `s.askTimer = setTimeout(...)` and no clear, so a
+  second `_ask` over a first left the first timer pending, and its `done()` would `clearTimeout(s.askTimer)`, the second's id,
+  and leave the second box with no end. Keyed `ask` (R77, as the table says) replaces the first silently, so the second box
+  goes at its own 60 s; `looks_ledger.test.js` pins it. The card never asks twice at once (`s.asking` and the queue), so no
+  player sees it. Ratchet: `card-looks` (`setTimeout` 4 -> 0, `clearTimeout` 2 -> 0) and `card-moment` (`setTimeout` 2 -> 0)
+  reached zero and their rows are deleted; `card-visit` `setTimeout` 4 -> 2, `clearTimeout` 3 -> 1; `card-build` `clearTimeout`
+  9 -> 8 (`_clearAsk`). Bench: `--preset gifts` renders as before (the pop held for the shot).
 - **Checks:** trace tests; the above `tests/js` files; `scripts/ci-gate` (iterate with `gate --auto`:
   `gifts`, `moments`, `personality`, `memorytags`, `visitors`).
 - **Device queue:** fixture: dev pet with a gift waiting, and a question due (`scripts/dev-seed`).
@@ -1297,6 +1318,7 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
 | 2 | `rare_glass.test.js` (`:52`, `:225`, `:355`) | the rig's fake class has three methods and no `_later`/`_stop` (`_rareGlass` and `_markEnd` now call them: it loads the two adapters); `:225` read `inspect(slide) === null`, the slide now holds the backstop's entry (no tracks, one timer, key `mark`); `:355` required `s.markTimer` in `_markEnd`'s text |
 | 3, 4, 7, 9 | `care_reactions.test.js:121,161,633,1249-1268,1427,1433` | `:121` shake (3), `:161` pose end (4), `:633,1433` extract `ANIMATE_TIMERS` (7), `:1249-1268,1427` drape (9). **Slice 2 needs none**: nothing in it runs `_react`'s fan branch (it pins the method's text only), so the breezy move leaves it green |
 | 3 | `motion_ship1.test.js:25`, `touch.test.js:101` | `_wander` pins the timer; the fake `this` has no `_hold` |
+| 5 | `memory_tags.test.js` (`load`, `makeCard`) | the text step's end timer was a stubbed `setTimeout`/`clearTimeout`; it is `_later`/`_stop` now, so the vm card takes `adapters()` |
 | 7 | `sitter_life.test.js`, `touch.test.js`, `motion_ship1/2.test.js` | `_animate` is extracted |
 | 13 | `subscribe_silence.test.js:63,86`, `memory_page.test.js:153,171,194,198,228,254` | `setTimeout` count; `s.retryTimer = 99`; `clearTimeout(s.confirmTimer)` |
 | all | any vm test whose fake `this` lacks `_director`, `_later` or `_hold` | it throws once its method moves; the sandbox helper adds them |
