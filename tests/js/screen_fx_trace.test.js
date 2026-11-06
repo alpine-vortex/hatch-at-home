@@ -29,30 +29,10 @@ const only = (log, re) => short(log).filter((x) => re.test(x));
 // A world with a screen that can hold boxes, and a document that makes named, styled elements.
 function fx(spec = {}, { calm = false } = {}) {
   const w = world({
-    ...spec,
+    ...spec, screen: true,
     globals: { FLAIR: { glow: { place: "head" } }, HATCH_DEVICE_FX: F, lcdOn: () => true, pick: (l) => l[0], ...(spec.globals || {}) },
-    slide: (el) => {
-      const screen = el("screen");
-      screen.style.setProperty = (k, v) => { screen.style[k] = v; };
-      screen.clientWidth = 400;
-      screen.querySelector = (q) => screen.children.find((k) => k.cls.has(q.slice(1))) || null;
-      screen.appendChild = (k) => screen.append(k);
-      return { screen, species: {}, mark: el("mark"), empty: false, ...(spec.slide ? spec.slide(el) : {}) };
-    },
   });
   w.calm = calm;
-  let n = 0;
-  w.sandbox.document.createElement = (tag) => {
-    const e = w.el(`${tag}${++n}`);
-    e.style.setProperty = (k, v) => { e.style[k] = v; };
-    e.setAttribute = () => {};
-    return e;
-  };
-  const prop = w.el("prop");
-  prop.after = (k) => { k.parent = { children: [k] }; w.log.push({ t: w.t(), el: "prop", op: "after", arg: k.name }); };
-  w.slide.prop = prop;
-  w.run = (ms) => { for (let left = ms; left > 0; left -= 10) w.advance(Math.min(10, left)); };
-  w.settle = () => { while (w.now < w.horizon() + 500) w.advance(10); };
   return w;
 }
 const shown = (w) => [...w.slide.screen.cls].sort();

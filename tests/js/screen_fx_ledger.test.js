@@ -16,29 +16,11 @@ vm.runInNewContext(`${fs.readFileSync(path.join(__dirname, "..", "..", "src/card
 const M = ctx0.F.MARK;
 
 function fx(spec = {}) {
-  const w = world({
-    ...spec,
+  return world({
+    ...spec, screen: true,
     globals: { FLAIR: { glow: { place: "head" } }, HATCH_DEVICE_FX: ctx0.F, lcdOn: () => true, pick: (l) => l[0], ...(spec.globals || {}) },
-    slide: (el) => {
-      const screen = el("screen");
-      screen.style.setProperty = (k, v) => { screen.style[k] = v; };
-      screen.clientWidth = 400;
-      screen.querySelector = (q) => screen.children.find((k) => k.cls.has(q.slice(1))) || null;
-      screen.appendChild = (k) => screen.append(k);
-      return { screen, species: { head: {} }, mark: el("mark"), empty: false, glassSeen: true, glassViewed: M.everyMs, glassAt: 0 };
-    },
+    slide: () => ({ species: { head: {} }, glassSeen: true, glassViewed: M.everyMs, glassAt: 0 }),
   });
-  let n = 0;
-  w.sandbox.document.createElement = (tag) => {
-    const e = w.el(`${tag}${++n}`);
-    e.style.setProperty = (k, v) => { e.style[k] = v; };
-    e.setAttribute = () => {};
-    return e;
-  };
-  w.slide.prop = w.el("prop");
-  w.slide.prop.after = (k) => { k.parent = { children: [k] }; };
-  w.slide.pet = w.el("pet");
-  return w;
 }
 
 const ALL = {

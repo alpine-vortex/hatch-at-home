@@ -12,7 +12,9 @@
 // `disconnect()`, `reconnect()` (disconnectedCallback's and connectedCallback's bodies over the sandbox),
 // `director`, `pendingTimers()`. spec: `methods` (card methods to load), `consts` (one-line top-level consts),
 // `globals` (more sandbox globals), `watch` (stubbed method names whose calls go in the log), `fields` (own
-// card fields), `slide(el)` (more slide fields). Any other card method is a silent stub.
+// card fields), `slide(el)` (more slide fields), `screen` (true: the slide also holds a `screen` that takes boxes,
+// a `mark`, a `prop` with `after`, and `document.createElement` makes numbered, styled elements div1, div2, ...).
+// Any other card method is a silent stub. `w.run(ms)` advances in 10 ms steps; `w.settle()` runs to the horizon + 500.
 const vm = require("vm");
 const src = require("./card-source");
 
@@ -30,6 +32,16 @@ const CARD_METHODS = new Set([...src.matchAll(/\n {2}(_\w+)(?:\(| = \()/g)].map(
 // The slice-0 adapters, loaded into every world (F2): a trace never needs the move to exist.
 const ADAPTERS = ["_later", "_hold", "_waapi", "_stop", "_drain", "_has", "_dirPause"];
 const LIFECYCLE = ["disconnectedCallback", "connectedCallback"];
+
+// The slide fields of a screen world: a screen that holds boxes and answers querySelector for a class.
+function screenSlide(el) {
+  const screen = el("screen");
+  screen.style.setProperty = (k, v) => { screen.style[k] = v; };
+  screen.clientWidth = 400;
+  screen.querySelector = (q) => screen.children.find((k) => k.cls.has(q.slice(1))) || null;
+  screen.appendChild = (k) => screen.append(k);
+  return { screen, species: {}, mark: el("mark"), empty: false };
+}
 
 function world(spec = {}) {
   const w = { calm: false, log: [], calls: [], seq: 0, timers: [], base: 1767225600000, now: 0 };
@@ -239,8 +251,25 @@ function world(spec = {}) {
     recipes: {},
   });
   w.director = card._director;
-  const slide = { pet: el("pet"), el: el("slide"), ids: { device: "dev" }, ...(spec.slide ? spec.slide(el) : {}) };
+  const slide = { pet: el("pet"), el: el("slide"), ids: { device: "dev" }, ...(spec.screen ? screenSlide(el) : {}),
+    ...(spec.slide ? spec.slide(el) : {}) };
   card._slides = [slide];
+  if (spec.screen) {
+    // Boxes are named in creation order, so a trace says which box a removal is for.
+    let n = 0;
+    document.createElement = (tag) => {
+      const e = el(`${tag}${++n}`);
+      e.style.setProperty = (k, v) => { e.style[k] = v; };
+      e.setAttribute = noop;
+      return e;
+    };
+    if (!slide.prop) {
+      slide.prop = el("prop");
+      slide.prop.after = (k) => { k.parent = { children: [k] }; push("prop", "after", k.name); };
+    }
+  }
+  w.run = (ms) => { for (let left = ms; left > 0; left -= 10) w.advance(Math.min(10, left)); };
+  w.settle = () => { while (w.now < w.horizon() + 500) w.advance(10); };
   w.card = card;
   w.slide = slide;
   // G9: the card leaves the page and (maybe) comes back; the element and its slides are kept.
