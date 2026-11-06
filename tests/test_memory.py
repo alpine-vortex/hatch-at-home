@@ -860,7 +860,10 @@ async def test_full_memory_is_on_no_sensor_view_log_bus_dump_or_assist(
         text = json.dumps(out, default=str)
         assert MARK not in text, name
         assert "work_thing" not in text and "something_else" not in text, name
-        assert '"memory_on"' not in text and "since_told" not in text, name
+        # A log line holds Python reprs ('memory_on'), json.dumps escapes a quote: both
+        # forms are read as one, or the log half could never match (M3a).
+        plain = text.replace('\\"', '"').replace("'", '"')
+        assert '"memory_on"' not in plain and "since_told" not in plain, name
 
 
 async def test_mine_and_the_visit_carry_two_booleans_and_nothing_kept(
@@ -2279,3 +2282,351 @@ def test_a_stale_pattern_is_not_listed_and_the_gap_hides_none() -> None:
     )
     assert P.memory_door(fresh, FRI, 12) is None
     assert P.memory_patterns(fresh, date.fromisoformat(FRI)) == [("lesson", 5)]
+
+
+async def memory_forget(client: Any, entity: str = "sensor.pip_mood", **fields: Any):
+    return await ws(client, "memory_forget", entity_id=entity, **fields)
+
+
+async def test_forget_this_removes_one_entry_saved_at_once(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    """Erase, per item: one entry gone from the store (no delay) and from memory_get;
+    a key that is not there is {forgot: 0}, not an error; great is forgettable."""
+    ada, token = await a_user(hass)
+    await start(hass, hass_storage, {ada.id: {"memory": fixture_memory()}})
+    client = await hass_ws_client(hass, token)
+    gone = {"day": "2026-10-24", "kind": "weekend", "tag": "trip"}
+    msg = await memory_forget(
+        client, shared=False, list="tags", day=gone["day"], kind="weekend"
+    )
+    assert msg["result"] == {"forgot": 1}
+    stored = saved_people(hass_storage)[ada.id]["memory"]
+    assert gone not in stored["tags"] and len(stored["tags"]) == 4
+    view = (await memory_get(client, shared=False))["result"]
+    assert gone not in view["tags"] and len(view["tags"]) == 4
+    msg = await memory_forget(
+        client, shared=False, list="tags", day=gone["day"], kind="weekend"
+    )
+    assert msg["result"] == {"forgot": 0}
+    msg = await memory_forget(  # the right day, the wrong kind: nothing there
+        client, shared=False, list="tags", day="2026-10-29", kind="weekend"
+    )
+    assert msg["result"] == {"forgot": 0}
+    msg = await memory_forget(client, shared=False, list="great", day="2026-11-02")
+    assert msg["result"] == {"forgot": 1}
+    assert saved_people(hass_storage)[ada.id]["memory"]["picks"]["great"] == []
+    view = (await memory_get(client, shared=False))["result"]
+    assert view["picks"]["great"] == []
+
+
+async def test_forget_this_with_no_memory_is_nothing_and_makes_no_record(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    ada, token = await a_user(hass)
+    pet = await start(hass, hass_storage, {})
+    client = await hass_ws_client(hass, token)
+    msg = await memory_forget(client, shared=False, list="dream", day="2026-10-30")
+    assert msg["result"] == {"forgot": 0}
+    msg = await memory_forget(
+        client, shared=False, list="pattern", tag="match", weekday=5
+    )
+    assert msg["result"] == {"forgot": 0}
+    assert ada.id not in pet.people.data["people"]
+
+
+async def test_forgetting_a_dream_entry_leaves_the_pets_own_pick(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    """M3 P2-2: the page's .kept_note is true. The pet's own copy (dream_picks, the
+    morning's dream) goes only with "forget my data"."""
+    ada, token = await a_user(hass)
+    pet = await start(hass, hass_storage, {ada.id: {"memory": fixture_memory()}})
+    pet.state.dream_picks = [{"user": ada.id, "pick": "sea", "at": 1.0}]
+    client = await hass_ws_client(hass, token)
+    msg = await memory_forget(client, shared=False, list="dream", day="2026-10-30")
+    assert msg["result"] == {"forgot": 1}
+    assert pet.people.memory(ada.id)["picks"]["dream"] == []
+    assert pet.state.dream_picks == [{"user": ada.id, "pick": "sea", "at": 1.0}]
+
+
+async def test_forget_this_works_where_the_pets_option_is_off(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    """Erases are exempt, reads and writes are not (FM 2026-11-05, M3 P3-1)."""
+    ada, token = await a_user(hass)
+    await start(
+        hass,
+        hass_storage,
+        {ada.id: {"memory": fixture_memory()}},
+        **{CONF_MEMORY: False},
+    )
+    client = await hass_ws_client(hass, token)
+    assert (await memory_get(client, shared=False))["error"]["code"] == "not_asked"
+    msg = await memory_forget(client, shared=False, list="game", day="2026-10-31")
+    assert msg["result"] == {"forgot": 1}
+    assert saved_people(hass_storage)[ada.id]["memory"]["picks"]["game"] == []
+
+
+async def test_forget_this_never_touches_another_persons_memory(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    ada, _ = await a_user(hass)
+    _, bob_token = await a_user(hass)
+    pet = await start(hass, hass_storage, {ada.id: {"memory": fixture_memory()}})
+    before = copy.deepcopy(pet.people.data["people"][ada.id])
+    client = await hass_ws_client(hass, bob_token)
+    assert (await switch(client, True, shared=False))["success"]
+    for fields in (
+        {"list": "tags", "day": "2026-10-29", "kind": "big_day"},
+        {"list": "dream", "day": "2026-10-30"},
+        {"list": "pattern", "tag": "match", "weekday": 5},
+    ):
+        msg = await memory_forget(client, shared=False, **fields)
+        assert msg["result"] == {"forgot": 0}, fields
+    assert pet.people.data["people"][ada.id] == before
+
+
+async def test_forget_this_is_refused_on_a_shared_screen_before_the_pet_lookup(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    """WS shape: shared first; then no_pet; then invalid. One fixed text each."""
+    ada, token = await a_user(hass)
+    pet = await start(hass, hass_storage, {ada.id: {"memory": fixture_memory()}})
+    before = copy.deepcopy(pet.people.data["people"][ada.id])
+    client = await hass_ws_client(hass, token)
+    entry = {"list": "dream", "day": "2026-10-30"}
+    for shared in (True, None, "false"):
+        for entity in ("sensor.pip_mood", "sensor.nobody"):
+            msg = await memory_forget(client, entity, shared=shared, **entry)
+            assert msg["error"] == {
+                "code": "shared",
+                "message": "That is changed on its person's own screen",
+            }
+    assert (await memory_forget(client, **entry))["error"]["code"] == "invalid_format"
+    msg = await memory_forget(client, "sensor.nobody", shared=False, list="names")
+    assert msg["error"] == {"code": "no_pet", "message": "No pet owns that entity"}
+    assert pet.people.data["people"][ada.id] == before
+
+
+BAD_FORGETS = [
+    {"list": "names", "day": "2026-10-30"},
+    {"list": ["dream"], "day": "2026-10-30"},
+    {"list": {"x": 1}, "day": "2026-10-30"},
+    {"list": "dream"},
+    {"list": "dream", "day": "20261030"},
+    {"list": "dream", "day": "2026-W44-5"},
+    {"list": "dream", "day": 20261030},
+    {"list": "dream", "day": ["2026-10-30"]},
+    {"list": "tags", "day": "2026-10-29"},
+    {"list": "tags", "day": "2026-10-29", "kind": "trip"},
+    {"list": "tags", "day": "2026-10-29", "kind": ["big_day"]},
+    {"list": "pattern", "tag": "match", "weekday": True},
+    {"list": "pattern", "tag": "match", "weekday": 7},
+    {"list": "pattern", "tag": "match", "weekday": -1},
+    {"list": "pattern", "tag": "match", "weekday": "1"},
+    {"list": "pattern", "tag": "match", "weekday": 5.0},
+    {"list": "pattern", "tag": "match"},
+    {"list": "pattern", "tag": "exam", "weekday": 5},
+    {"list": "pattern", "tag": "trip", "weekday": 5},
+    {"list": "pattern", "tag": ["match"], "weekday": 5},
+    {"list": "pattern", "weekday": 5},
+]
+
+
+@pytest.mark.parametrize("fields", BAD_FORGETS)
+async def test_not_something_to_forget_is_invalid_and_changes_nothing(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    fields: dict[str, Any],
+) -> None:
+    ada, token = await a_user(hass)
+    pet = await start(hass, hass_storage, {ada.id: {"memory": fixture_memory()}})
+    before = copy.deepcopy(pet.people.data["people"][ada.id])
+    client = await hass_ws_client(hass, token)
+    msg = await memory_forget(client, shared=False, **fields)
+    assert msg["error"] == {"code": "invalid", "message": "Not something to forget"}
+    assert pet.people.data["people"][ada.id] == before
+
+
+SUNDAYS = ["2026-10-04", "2026-10-11", "2026-10-18", "2026-10-25", "2026-11-01"]
+
+
+async def forget_pattern_view(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    tags: list[dict[str, str]],
+) -> tuple[Any, Any, str]:
+    ada, token = await a_user(hass)
+    pet = await start(hass, hass_storage, {ada.id: {"memory": tag_memory(*tags)}})
+    return pet, await hass_ws_client(hass, token), ada.id
+
+
+async def test_forgetting_a_pattern_of_three_ends_it(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    freezer.move_to(f"{FRI} 12:00:00+00:00")
+    tags = [tag(d, "show") for d in SUNDAYS[:3]] + [tag("2026-10-20", "exam")]
+    pet, client, ada = await forget_pattern_view(
+        hass, hass_storage, hass_ws_client, tags
+    )
+    view = (await memory_get(client, shared=False))["result"]
+    assert view["patterns"] == [{"tag": "show", "weekday": 6}]
+    msg = await memory_forget(
+        client, shared=False, list="pattern", tag="show", weekday=6
+    )
+    assert msg["result"] == {"forgot": 3}
+    assert saved_people(hass_storage)[ada]["memory"]["tags"] == [
+        tag("2026-10-20", "exam")
+    ]
+    view = (await memory_get(client, shared=False))["result"]
+    assert view["patterns"] == [] and view["tags"] == [tag("2026-10-20", "exam")]
+
+
+async def test_forgetting_a_pattern_of_four_takes_all_four(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    """Owner Q3: all that tag's entries on that weekday in the last-5 window, not just
+    enough to end it. A weekend entry and another tag's on the day stay."""
+    freezer.move_to(f"{FRI} 12:00:00+00:00")
+    keep = [
+        tag("2026-10-21", "match"),  # a Wednesday, inside the window
+        tag(SUNDAYS[0], "match", "weekend"),
+        tag(SUNDAYS[0], "show"),  # (day, kind) is a tag's key: not on a match's day
+    ]
+    tags = [tag(d, "match") for d in SUNDAYS[1:]] + keep
+    pet, client, ada = await forget_pattern_view(
+        hass, hass_storage, hass_ws_client, tags
+    )
+    msg = await memory_forget(
+        client, shared=False, list="pattern", tag="match", weekday=6
+    )
+    assert msg["result"] == {"forgot": 4}
+    left = saved_people(hass_storage)[ada]["memory"]["tags"]
+    assert sorted(left, key=str) == sorted(keep, key=str)
+
+
+async def test_forgetting_a_pattern_can_reveal_an_older_run(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    """The window slides onto entries it did not read before: an older run of 3 on
+    the weekday shows on the next memory_get. That is door 10's own rule (it reads
+    the last 5 as they stand), not a forget that failed; the page refetches."""
+    freezer.move_to("2026-11-20 12:00:00+00:00")
+    older = [tag(d, "lesson") for d in ("2026-09-15", "2026-09-22", "2026-09-29")]
+    newer = [tag(d, "lesson") for d in ("2026-10-31", "2026-11-07", "2026-11-14")]
+    pet, client, ada = await forget_pattern_view(
+        hass, hass_storage, hass_ws_client, older + newer
+    )
+    view = (await memory_get(client, shared=False))["result"]
+    assert view["patterns"] == [{"tag": "lesson", "weekday": 5}]  # 3 of the last 5
+    msg = await memory_forget(
+        client, shared=False, list="pattern", tag="lesson", weekday=5
+    )
+    assert msg["result"] == {"forgot": 3}
+    view = (await memory_get(client, shared=False))["result"]
+    assert view["patterns"] == [{"tag": "lesson", "weekday": 1}]  # the Tuesdays
+
+
+async def test_forget_pattern_saves_with_no_await_after_the_pop(
+    hass: HomeAssistant, hass_storage: dict[str, Any]
+) -> None:
+    """The forget_item rule: the store is written before the call returns."""
+    pet = await start(
+        hass,
+        hass_storage,
+        {"u": {"memory": tag_memory(*(tag(d, "show") for d in SUNDAYS[:3]))}},
+    )
+    assert await pet.people.forget_pattern("u", "show", 6) == 3
+    assert saved_people(hass_storage)["u"]["memory"]["tags"] == []
+    assert await pet.people.forget_pattern("u", "show", 6) == 0
+
+
+async def test_the_page_commands_leave_no_value_in_the_log_at_the_default_level(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Logs, (a) at the default level (M3 P1-5): only the integration's logger is
+    raised, HA's websocket logger is left as it is. A bad list, bad key fields with
+    a valid day and tag of a real entry, a wrong type, a bad weekday and a schema
+    failure leave no record with the value. Bus: no event holds memory. This passes
+    only because every field is typed object (review B1).
+
+    The harness's caplog puts the root logger at DEBUG; HA's own default is INFO
+    (bootstrap's basicConfig), so the root goes back to that and websocket_api is
+    given no level of its own."""
+    caplog.set_level(logging.INFO)
+    caplog.set_level(logging.DEBUG, logger="custom_components.virtual_pet")
+    bus = async_capture_events(hass, MATCH_ALL)
+    ada, token = await a_user(hass)
+    mem = fixture_memory()
+    await start(hass, hass_storage, {ada.id: {"memory": mem}})
+    client = await hass_ws_client(hass, token)
+    secret = "zz-secret-value"
+    for fields in (
+        {"list": secret, "day": "2026-10-29"},
+        {"list": "tags", "day": "2026-10-29", "kind": secret},
+        {"list": "pattern", "tag": secret, "weekday": 5},
+        {"list": "pattern", "tag": "match", "weekday": [secret]},
+        {"list": "dream", "day": {"x": secret}},
+    ):
+        msg = await memory_forget(client, shared=False, **fields)
+        assert msg["error"]["code"] == "invalid"
+        assert secret not in json.dumps(msg)
+    msg = await memory_forget(client, list=secret, day="2026-10-29")  # no shared
+    assert msg["error"]["code"] == "invalid_format"
+    assert (await memory_get(client, shared=False))["success"]
+    msg = await memory_forget(
+        client, shared=False, list="tags", day="2026-10-29", kind="big_day"
+    )
+    assert msg["result"] == {"forgot": 1}
+    text = "\n".join(
+        r.getMessage()
+        for r in caplog.records
+        if not r.name.startswith("pytest_homeassistant_custom_component")
+    )
+    assert secret not in text
+    for e in FIXTURE["tags"]:
+        assert e["day"] not in text, e
+    events = json.dumps([(e.event_type, e.data) for e in bus], default=str)
+    assert secret not in events and "2026-10-29" not in events and "exam" not in events
+
+
+async def test_debug_logging_on_websocket_api_shows_the_page_by_design(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Logs, (b) at DEBUG on homeassistant.components.websocket_api (M3 P1-5): HA
+    logs "Received <whole message>" and "Sending <whole reply>" for every message
+    (websocket_api/http.py), so memory_get's reply and memory_forget's fields ARE in
+    that log. That is HA's by design; the guide's "debug logging" line is the guard.
+    The integration's own logger holds none of them."""
+    caplog.set_level(logging.DEBUG, logger="custom_components.virtual_pet")
+    caplog.set_level(logging.DEBUG, logger="homeassistant.components.websocket_api")
+    ada, token = await a_user(hass)
+    await start(hass, hass_storage, {ada.id: {"memory": fixture_memory()}})
+    client = await hass_ws_client(hass, token)
+    assert (await memory_get(client, shared=False))["success"]
+    msg = await memory_forget(
+        client, shared=False, list="tags", day="2026-10-29", kind="big_day"
+    )
+    assert msg["result"] == {"forgot": 1}
+    ws_log = "\n".join(
+        r.getMessage()
+        for r in caplog.records
+        if r.name.startswith("homeassistant.components.websocket_api")
+    )
+    assert "2026-10-03" in ws_log  # a tag's day, in the reply HA logged
+    assert "2026-10-29" in ws_log  # the forget's day, in the message HA logged
+    ours = "\n".join(
+        r.getMessage()
+        for r in caplog.records
+        if r.name.startswith("custom_components.virtual_pet")
+    )
+    assert "2026-10-03" not in ours and "2026-10-29" not in ours

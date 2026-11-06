@@ -457,6 +457,29 @@ class People:
         ]
         return view
 
+    async def forget_pattern(self, user: str, tag: str, weekday: int) -> int:
+        """Forget a weekday pattern (the page, owner Q3): every big_day entry of
+        this tag on this weekday within the tag's last MEMORY_PICKS_CAP entries by
+        day (the window door 10 reads), saved at once. How many went. The window
+        may slide onto an older run that is a pattern too: door 10's own rule."""
+        mem = self.memory(user)
+        if mem is None or tag not in MEMORY_DOOR10_TAGS or not mem.get("tags"):
+            return 0
+        days = {
+            d.isoformat() for d in _pattern_window(mem, tag) if d.weekday() == weekday
+        }
+        entries = mem["tags"]
+        kept = [
+            e
+            for e in entries
+            if not (e["kind"] == "big_day" and e["tag"] == tag and e["day"] in days)
+        ]
+        gone = len(entries) - len(kept)
+        if gone:
+            entries[:] = kept  # no await between this and the save's start
+            await self.async_save_now()
+        return gone
+
     async def forget_memory(self, user: str) -> bool:
         """Memory off: popped first, then saved at once (R7). True if it was on."""
         gone = self.set_memory(user, False, "")

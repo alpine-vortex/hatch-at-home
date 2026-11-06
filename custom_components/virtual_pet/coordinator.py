@@ -2529,6 +2529,26 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             raise ValueError("Not on this pet")
         return view
 
+    async def async_memory_forget(
+        self,
+        user: str,
+        kind: str,
+        *,
+        day: str = "",
+        tag_kind: str | None = None,
+        tag: str = "",
+        weekday: int = 0,
+    ) -> int:
+        """Forget one entry from the page (memory plan M3a: a list, its day, a
+        tag's kind), or a weekday pattern (`kind` "pattern": its tag and weekday).
+        An erase, so this pet's option is not asked (FM 2026-11-05). How many
+        entries went; none without a memory record. Nothing on the bus, nothing
+        pushed: the page refetches."""
+        async with self.people.lock(user):
+            if kind == "pattern":
+                return await self.people.forget_pattern(user, tag, weekday)
+            return int(await self.people.forget_item(user, kind, day, tag_kind))
+
     async def async_set_my_day(self, user: str, enabled: bool) -> None:
         """Let the pets notice this person's day (steps, sleep, where they've
         been...), or stop. One switch per person, for every pet."""

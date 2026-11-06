@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from pathlib import Path
+from typing import Any
 
 from homeassistant.auth.permissions.const import POLICY_CONTROL
 from homeassistant.components import persistent_notification, websocket_api
@@ -81,7 +82,16 @@ from .coordinator import (
 from .defaults import default_weather
 from .home import news_text
 from .model import GAMES
-from .people import ANSWERS, ASK_AGAIN_KINDS, People, async_erase_unless_allowed
+from .people import (
+    ANSWERS,
+    ASK_AGAIN_KINDS,
+    MEMORY_DOOR10_TAGS,
+    MEMORY_LISTS,
+    MEMORY_TAG_KINDS,
+    People,
+    _memory_day,
+    async_erase_unless_allowed,
+)
 from .react import REACTIONS
 
 _LOGGER = logging.getLogger(__name__)
@@ -249,6 +259,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_baby_talk)
     websocket_api.async_register_command(hass, websocket_memory)
     websocket_api.async_register_command(hass, websocket_memory_get)
+    websocket_api.async_register_command(hass, websocket_memory_forget)
     websocket_api.async_register_command(hass, websocket_photos)
     websocket_api.async_register_command(hass, websocket_forget_me)
     websocket_api.async_register_command(hass, websocket_ask_again)
@@ -743,6 +754,62 @@ async def websocket_memory_get(
         connection.send_error(msg["id"], "not_asked", "Not on this pet")
         return
     connection.send_result(msg["id"], view)
+
+
+def _forget_target(msg: dict) -> dict[str, Any] | None:
+    """`memory_forget`'s fields, checked here and not in the schema (plan section
+    5, B1): a vol.In would put the value in HA's log. None: not something to forget."""
+    kind = msg.get("list")
+    if kind == "pattern":
+        tag, weekday = msg.get("tag"), msg.get("weekday")
+        if (
+            isinstance(tag, str)
+            and tag in MEMORY_DOOR10_TAGS
+            and type(weekday) is int  # not a bool, not "1"
+            and 0 <= weekday <= 6
+        ):
+            return {"tag": tag, "weekday": weekday}
+        return None
+    if not isinstance(kind, str) or kind not in MEMORY_LISTS:
+        return None
+    day, tag_kind = msg.get("day"), msg.get("kind")
+    if not isinstance(day, str) or not _memory_day(day):
+        return None
+    if kind != "tags":
+        return {"day": day}
+    if isinstance(tag_kind, str) and tag_kind in MEMORY_TAG_KINDS:
+        return {"day": day, "tag_kind": tag_kind}
+    return None
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/memory_forget",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("shared"): object,
+        # Every field typed object, checked in the handler (plan section 5, B1).
+        vol.Required("list"): object,
+        vol.Optional("day"): object,
+        vol.Optional("kind"): object,
+        vol.Optional("tag"): object,
+        vol.Optional("weekday"): object,
+    }
+)
+@websocket_api.async_response
+async def websocket_memory_forget(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Forget one thing on the "things you told me" page (memory plan M3a): one
+    entry by its key, or a weekday pattern's entries. Theirs only. An erase, so it
+    works where this pet's option is off (FM 2026-11-05); nothing there is
+    `{forgot: 0}`. A websocket command, so nothing is on the bus."""
+    if (pet := _memory_pet(hass, connection, msg)) is None:
+        return
+    if (target := _forget_target(msg)) is None:
+        connection.send_error(msg["id"], "invalid", "Not something to forget")
+        return
+    forgot = await pet.async_memory_forget(connection.user.id, msg["list"], **target)
+    connection.send_result(msg["id"], {"forgot": forgot})
 
 
 @websocket_api.websocket_command(
