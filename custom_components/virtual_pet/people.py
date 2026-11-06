@@ -425,6 +425,38 @@ class People:
         await self.async_save_now()
         return True
 
+    def memory_view(self, user: str, today: str) -> dict[str, Any] | None:
+        """The "things you told me" page's reply (`memory_get`, M3a), or None while
+        their memory is off. Copies of the fixed-list entries and their days, the
+        favourites' told days and the derived weekday patterns; never `said`, `on`
+        or `memory_chosen_days`, no typed word, no user id. Reads only: no record
+        is made and nothing is saved."""
+        mem = self.memory(user)
+        if mem is None:
+            return None
+        picks = mem.get("picks") or {}
+        view: dict[str, Any] = {"today": today}
+        if _memory_day(mem.get("since")):
+            view["since"] = mem["since"]
+        view["tags"] = [
+            {"day": e["day"], "kind": e["kind"], "tag": e["tag"]}
+            for e in mem.get("tags") or []
+        ]
+        view["picks"] = {
+            kind: [{"day": e["day"], field: e[field]} for e in picks.get(kind) or []]
+            for kind, (field, _) in MEMORY_PICKS.items()
+        }
+        view["since_told"] = {
+            k: d
+            for k, d in (mem.get("since_told") or {}).items()
+            if _SINCE_TOLD.fullmatch(k)
+        }
+        view["patterns"] = [
+            {"tag": name, "weekday": weekday}
+            for name, weekday in memory_patterns(mem, date.fromisoformat(today))
+        ]
+        return view
+
     async def forget_memory(self, user: str) -> bool:
         """Memory off: popped first, then saved at once (R7). True if it was on."""
         gone = self.set_memory(user, False, "")
@@ -1237,28 +1269,43 @@ def memory_door(
 
 
 def _weekday_pattern(mem: dict[str, Any], now: date, last: str | None) -> str | None:
-    """Door 10 (plan section 6): tomorrow is the weekday on which 3 of the last 5
-    big_day entries of match, show or lesson fell (by day, as they stand now), at
-    most once in MEMORY_DOOR10_GAP_DAYS across every pattern. Nothing is kept for
-    it, so forgetting an entry re-derives it from what remains (M2 S11). A pattern
-    whose latest entry on that weekday is over MEMORY_DOOR10_STALE_DAYS old has
-    ended (FM s2784 Q2)."""
+    """Door 10 (plan section 6): tomorrow is the weekday of a pattern
+    `memory_patterns` lists, at most once in MEMORY_DOOR10_GAP_DAYS across every
+    pattern (a door rule: it hides no pattern from the page, M3 P1-2). Nothing is
+    kept for it, so forgetting an entry re-derives it from what remains (M2 S11)."""
     if last and (now - date.fromisoformat(last)).days < R.MEMORY_DOOR10_GAP_DAYS:
         return None
     tomorrow = (now + timedelta(days=1)).weekday()
+    return next(
+        (name for name, weekday in memory_patterns(mem, now) if weekday == tomorrow),
+        None,
+    )
+
+
+def _pattern_window(mem: dict[str, Any], name: str) -> list[date]:
+    """The days door 10 reads for one tag: its last MEMORY_PICKS_CAP big_day
+    entries, by day, as they stand now."""
+    days = sorted(e["day"] for e in _big_day_tags(mem, (name,)))
+    return [date.fromisoformat(d) for d in days[-MEMORY_PICKS_CAP:]]
+
+
+def memory_patterns(mem: dict[str, Any], now: date) -> list[tuple[str, int]]:
+    """The weekday patterns (door 10's core, and the page's list, M3a): (tag,
+    weekday) where 3 of the last 5 big_day entries of match, show or lesson fell
+    on that weekday (`date.weekday()`, 0 Monday), and the latest of them is at most
+    MEMORY_DOOR10_STALE_DAYS old (an older one has ended, FM s2784 Q2). In the order
+    door 10 tries them: tag, then weekday."""
+    found = []
     for name in MEMORY_DOOR10_TAGS:
-        days = sorted(e["day"] for e in _big_day_tags(mem, (name,)))
-        on_day = [
-            d
-            for d in map(date.fromisoformat, days[-MEMORY_PICKS_CAP:])
-            if d.weekday() == tomorrow
-        ]
-        if (
-            len(on_day) >= MEMORY_DOOR10_NEED
-            and (now - on_day[-1]).days <= R.MEMORY_DOOR10_STALE_DAYS
-        ):
-            return name
-    return None
+        window = _pattern_window(mem, name)
+        for weekday in range(7):
+            on_day = [d for d in window if d.weekday() == weekday]
+            if (
+                len(on_day) >= MEMORY_DOOR10_NEED
+                and (now - on_day[-1]).days <= R.MEMORY_DOOR10_STALE_DAYS
+            ):
+                found.append((name, weekday))
+    return found
 
 
 def memory_recap(mem: dict[str, Any], today: str) -> str | None:

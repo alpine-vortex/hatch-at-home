@@ -2067,3 +2067,215 @@ async def test_door_ten_through_the_visit_marks_memory_only(
     assert door_notes(await door_visit(pet, ada.id)) == []
     noted = pet.people.data["people"][ada.id].get("noted") or {}
     assert not any(k.startswith("door") for k in noted)
+
+
+# --- M3a: the "things you told me" page (plan sections 8, 9, 10) ----------------------
+
+FIXTURE = json.loads((ROOT / "tests" / "fixtures" / "memory_get.json").read_text())
+VIEW_KEYS = {"today", "since", "tags", "picks", "since_told", "patterns"}
+
+
+def fixture_memory() -> dict[str, Any]:
+    """The record the shared fixture's reply is built from, with the bookkeeping the
+    reply must never carry."""
+    return {
+        "on": True,
+        "since": FIXTURE["since"],
+        "tags": copy.deepcopy(FIXTURE["tags"]),
+        "picks": copy.deepcopy(FIXTURE["picks"]),
+        "since_told": dict(FIXTURE["since_told"]),
+        "said": {"door10": "2026-10-02", "door6_fav_weather": "2026-09-20"},
+    }
+
+
+async def memory_get(client: Any, entity: str = "sensor.pip_mood", **extra: Any):
+    return await ws(client, "memory_get", entity_id=entity, **extra)
+
+
+def assert_view_shape(view: dict[str, Any]) -> None:
+    """The key-set test (M3 P1-1, the door-notes test's style)."""
+    assert set(view) <= VIEW_KEYS
+    assert set(view["picks"]) == set(P.MEMORY_PICKS)
+    for e in view["tags"]:
+        assert set(e) <= {"day", "kind", "tag"}
+    for kind, entries in view["picks"].items():
+        for e in entries:
+            assert set(e) <= ({"day", "ask"} if kind == "great" else {"day", "pick"})
+    assert set(view["since_told"]) <= {"fav_weather", "fav_season"}
+    for e in view["patterns"]:
+        assert set(e) == {"tag", "weekday"}
+    text = json.dumps(view)
+    for word in ('"said"', '"on"', "memory_chosen_days", "door"):
+        assert word not in text, word
+
+
+async def test_memory_get_replies_with_the_shared_fixture(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any, freezer
+) -> None:
+    """One fixture (M3 P2-6): the card's JS test and the bench read it too, so a renamed
+    field fails on one side. `great` is listed (FM 2026-11-05)."""
+    freezer.move_to(f"{FIXTURE['today']} 12:00:00+00:00")
+    ada, token = await a_user(hass)
+    record = {"memory": fixture_memory(), "memory_chosen_days": ["2026-10-01"]}
+    await start(hass, hass_storage, {ada.id: record})
+    client = await hass_ws_client(hass, token)
+    msg = await memory_get(client, shared=False)
+    assert msg["success"], msg
+    assert set(msg["result"]) == set(FIXTURE)
+    assert msg["result"] == FIXTURE
+    assert_view_shape(msg["result"])
+    assert ada.id not in json.dumps(msg["result"])
+
+
+async def test_memory_get_of_an_empty_record_keeps_every_key(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    """An empty list is [], an empty picks key is kept; `since` only when there."""
+    ada, token = await a_user(hass)
+    await start(hass, hass_storage, {ada.id: {"memory": {"on": True}}})
+    client = await hass_ws_client(hass, token)
+    view = (await memory_get(client, shared=False))["result"]
+    assert view == {
+        "today": today(),
+        "tags": [],
+        "picks": {kind: [] for kind in P.MEMORY_PICKS},
+        "since_told": {},
+        "patterns": [],
+    }
+
+
+async def test_memory_get_shows_only_the_askers_own_items(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    """Other people: B sees none of A's; B with memory off is refused."""
+    ada, _ = await a_user(hass)
+    bob, bob_token = await a_user(hass)
+    await start(hass, hass_storage, {ada.id: {"memory": full_memory()}})
+    client = await hass_ws_client(hass, bob_token)
+    msg = await memory_get(client, shared=False)
+    assert msg["error"] == {"code": "not_asked", "message": "Not on this pet"}
+    assert (await switch(client, True, shared=False))["success"]
+    view = (await memory_get(client, shared=False))["result"]
+    assert MARK not in json.dumps(view)
+    assert view["tags"] == [] and view["since"] == today()
+
+
+async def test_memory_get_is_refused_on_a_shared_screen_before_the_pet_lookup(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    ada, token = await a_user(hass)
+    await start(hass, hass_storage, {ada.id: {"memory": full_memory()}})
+    client = await hass_ws_client(hass, token)
+    for shared in (True, None, 0, "false"):
+        msg = await memory_get(client, shared=shared)
+        assert msg["error"] == {
+            "code": "shared",
+            "message": "That is changed on its person's own screen",
+        }
+        msg = await memory_get(client, "sensor.nobody", shared=shared)
+        assert msg["error"]["code"] == "shared"
+    msg = await memory_get(client)  # no flag
+    assert msg["error"]["code"] == "invalid_format"
+    msg = await memory_get(client, "sensor.nobody", shared=False)
+    assert msg["error"]["code"] == "no_pet"
+
+
+async def test_memory_get_needs_this_pets_option(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    """Reads are not exempt (FM 2026-11-05): through Pip (option off) it is refused,
+    through Moss it works."""
+    ada, token = await a_user(hass)
+    await start(
+        hass,
+        hass_storage,
+        {ada.id: {"memory": full_memory()}},
+        **{CONF_MEMORY: False},
+    )
+    moss = a_pet(hass, "moss")
+    assert await hass.config_entries.async_setup(moss.entry_id)
+    await hass.async_block_till_done()
+    client = await hass_ws_client(hass, token)
+    msg = await memory_get(client, shared=False)
+    assert msg["error"] == {"code": "not_asked", "message": "Not on this pet"}
+    msg = await memory_get(client, "sensor.moss_mood", shared=False)
+    assert msg["success"] and len(msg["result"]["tags"]) == P.MEMORY_TAGS_CAP
+
+
+async def test_memory_get_makes_no_record_and_writes_nothing(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    ada, token = await a_user(hass)
+    pet = await start(hass, hass_storage, {"x": {"memory": full_memory()}})
+    people = pet.people
+    client = await hass_ws_client(hass, token)
+    before = copy.deepcopy(hass_storage[PEOPLE_KEY])
+    with (
+        patch.object(people, "save") as save,
+        patch.object(people, "async_save_now") as save_now,
+    ):
+        msg = await memory_get(client, shared=False)
+        assert msg["error"]["code"] == "not_asked"
+        people.data["people"][ada.id] = {"memory": full_memory()}
+        assert (await memory_get(client, shared=False))["success"]
+        del people.data["people"][ada.id]
+        assert save.call_count == 0 and save_now.call_count == 0
+    assert ada.id not in people.data["people"]
+    assert hass_storage[PEOPLE_KEY] == before
+
+
+@pytest.mark.parametrize("name", P.MEMORY_DOOR10_TAGS)
+@pytest.mark.parametrize("weekday", range(7))
+def test_the_pages_patterns_are_what_door_ten_would_fire_for(
+    name: str, weekday: int
+) -> None:
+    """Door 10's own function (owner Q3, M3 P1-2): three entries on one weekday are
+    listed, and door 10 fires on that weekday's eve and for no other pair."""
+    start_day = date(2026, 10, 5) + timedelta(days=weekday)  # 5 Oct is a Monday
+    days = [(start_day + timedelta(weeks=w)).isoformat() for w in range(3)]
+    mem = tag_memory(*(tag(d, name) for d in days))
+    now = start_day + timedelta(weeks=3)
+    assert P.memory_patterns(mem, now) == [(name, weekday)]
+    for back in range(14):
+        day = now - timedelta(days=back)
+        mem["said"] = {"door1": day.isoformat()}  # door 1 (a week on) is said today
+        door = P.memory_door(mem, day.isoformat(), 12)
+        tomorrow = (day + timedelta(days=1)).weekday()
+        if door is not None:
+            assert door == ("door10", {"kind": "door10", "tag": name})
+            assert (name, tomorrow) in P.memory_patterns(mem, day)
+        else:
+            assert (name, tomorrow) not in P.memory_patterns(mem, day)
+
+
+def test_door_ten_fires_only_for_a_pair_the_page_lists() -> None:
+    mem = tag_memory(
+        *(tag(d, "match") for d in SATURDAYS[:3]),
+        *(tag(d, "show") for d in ("2026-10-04", "2026-10-11", "2026-10-18")),
+        tag("2026-10-20", "lesson"),
+        tag("2026-10-27", "lesson"),
+    )
+    now = date(2026, 9, 1)
+    fired = set()
+    for _ in range(120):
+        mem["said"] = {"door1": now.isoformat(), "door3": now.isoformat()}
+        door = P.memory_door(mem, now.isoformat(), 12)
+        if door is not None and door[0] == "door10":
+            tomorrow = (now + timedelta(days=1)).weekday()
+            assert (door[1]["tag"], tomorrow) in P.memory_patterns(mem, now)
+            fired.add(door[1]["tag"])
+        now += timedelta(days=1)
+    assert fired == {"match", "show"}  # lesson's two Tuesdays are no pattern
+
+
+def test_a_stale_pattern_is_not_listed_and_the_gap_hides_none() -> None:
+    stale = tag_memory(
+        *(tag(d, "lesson") for d in ("2026-08-22", "2026-08-29", "2026-09-05"))
+    )
+    assert P.memory_patterns(stale, date.fromisoformat(FRI)) == []
+    fresh = tag_memory(
+        *(tag(d, "lesson") for d in ("2026-08-29", "2026-09-05", "2026-09-12")),
+        door10="2026-11-01",  # said 5 days ago: door 10 holds back, the page does not
+    )
+    assert P.memory_door(fresh, FRI, 12) is None
+    assert P.memory_patterns(fresh, date.fromisoformat(FRI)) == [("lesson", 5)]

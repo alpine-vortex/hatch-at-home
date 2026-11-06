@@ -2515,6 +2515,20 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 await self.people.forget_memory(user)
         self._push_everywhere()  # their mine.memory_on
 
+    def memory_get(self, user: str) -> dict[str, Any]:
+        """The "things you told me" page (memory plan M3a): this person's memory as
+        `People.memory_view` builds it. Refused (ValueError) where this pet's option
+        is off or their memory is off: reads are not exempt, erases are (FM
+        2026-11-05). Reads only."""
+        view = (
+            self.people.memory_view(user, self._today(self._now())[0])
+            if self.memory_allowed
+            else None
+        )
+        if view is None:
+            raise ValueError("Not on this pet")
+        return view
+
     async def async_set_my_day(self, user: str, enabled: bool) -> None:
         """Let the pets notice this person's day (steps, sleep, where they've
         been...), or stop. One switch per person, for every pet."""

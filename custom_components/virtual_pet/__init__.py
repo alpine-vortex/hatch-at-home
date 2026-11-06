@@ -248,6 +248,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_birthday_phone)
     websocket_api.async_register_command(hass, websocket_baby_talk)
     websocket_api.async_register_command(hass, websocket_memory)
+    websocket_api.async_register_command(hass, websocket_memory_get)
     websocket_api.async_register_command(hass, websocket_photos)
     websocket_api.async_register_command(hass, websocket_forget_me)
     websocket_api.async_register_command(hass, websocket_ask_again)
@@ -697,6 +698,51 @@ async def websocket_memory(
         connection.send_error(msg["id"], "not_asked", "Not on this pet")
         return
     connection.send_result(msg["id"])
+
+
+def _memory_pet(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> PetCoordinator | None:
+    """The memory page's commands (plan M3a): refused unless `shared` is False,
+    before the pet lookup; then the pet. None: the error is sent."""
+    if msg["shared"] is not False:
+        connection.send_error(
+            msg["id"], "shared", "That is changed on its person's own screen"
+        )
+        return None
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+    return pet
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/memory_get",
+        vol.Required("entity_id"): cv.entity_id,
+        # Any value passes the schema (so its failure log echoes none); refused
+        # unless False, before anything else (memory plan R3, M3a).
+        vol.Required("shared"): object,
+    }
+)
+@websocket_api.async_response
+async def websocket_memory_get(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """The signed-in person's memory, for the card's "things you told me" page
+    (memory plan M3a): theirs only, fetched on open and kept by no one. Refused
+    where this pet's option is off. A websocket command, so nothing is on the bus."""
+    if (pet := _memory_pet(hass, connection, msg)) is None:
+        return
+    try:
+        view = pet.memory_get(connection.user.id)
+    except ValueError:
+        connection.send_error(msg["id"], "not_asked", "Not on this pet")
+        return
+    connection.send_result(msg["id"], view)
 
 
 @websocket_api.websocket_command(

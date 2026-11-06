@@ -1,0 +1,19 @@
+{
+  "today": "2026-11-06",
+  "since": "2026-09-01",
+  "tags": [
+    {"day": "2026-10-03", "kind": "big_day", "tag": "match"},
+    {"day": "2026-10-10", "kind": "big_day", "tag": "match"},
+    {"day": "2026-10-17", "kind": "big_day", "tag": "match"},
+    {"day": "2026-10-24", "kind": "weekend", "tag": "trip"},
+    {"day": "2026-10-29", "kind": "big_day", "tag": "exam"}
+  ],
+  "picks": {
+    "dream": [{"day": "2026-10-30", "pick": "sea"}],
+    "game": [{"day": "2026-10-31", "pick": "dig"}],
+    "guess": [{"day": "2026-11-01", "pick": "rain"}],
+    "great": [{"day": "2026-11-02", "ask": "how_day"}]
+  },
+  "since_told": {"fav_weather": "2026-09-12", "fav_season": "2026-09-13"},
+  "patterns": [{"tag": "match", "weekday": 5}]
+}
