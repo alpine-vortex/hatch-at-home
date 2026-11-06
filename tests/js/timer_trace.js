@@ -21,7 +21,7 @@ const grab = (re, what) => {
   if (!m) throw new Error(`timer_trace: not in the card: ${what || re}`);
   return m[0];
 };
-const methodText = (name) => grab(new RegExp(`\\n  ${name}\\([^\\n]*\\{\\n[\\s\\S]*?\\n  \\}\\n`), name);
+const methodText = (name) => grab(new RegExp(`\\n  (?:async )?${name}\\([^\\n]*\\{\\n[\\s\\S]*?\\n  \\}\\n`), name);
 const constText = (name) => grab(new RegExp(`\\nconst ${name} = [^\\n]*\\n`), name);
 const DIRECTOR = grab(/\nconst HATCH_DIRECTOR = Object\.freeze\([\s\S]*?\n {2}\}\)\(\)\n\);\n/, "HATCH_DIRECTOR");
 // Every method name the card has: a call to one that is not loaded is a stub; any other `this._x` read
