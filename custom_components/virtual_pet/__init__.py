@@ -156,21 +156,35 @@ PLAY_GAME_SCHEMA = vol.Schema(
 # it played to the nest, replayed and paid. `id`, `moves` and `shared` are the
 # settle's; board ignores them. `moves` may be one letter over the cap, so the
 # server answers too_long, while a huge string is refused here.
-HOP_SCHEMA = vol.Schema(
+_HOP_FIELDS = vol.Schema(
     {
         vol.Required(ATTR_ENTITY_ID): cv.entity_id,
         vol.Required(ATTR_ACTION): vol.In(["board", "settle"]),
         vol.Optional("id"): vol.All(cv.string, vol.Length(max=32)),
-        vol.Optional("moves"): vol.All(cv.string, vol.Length(max=R.HOP_MAX_MOVES + 1)),
+        vol.Optional("moves"): vol.All(
+            cv.string, vol.Length(max=max(R.HOP_MAX_MOVES, crate_push.MAX_MOVES) + 1)
+        ),  # the longer cap here; _hop_moves_fit holds Hop to its own
         vol.Optional("shared", default=False): cv.boolean,
-        # The crate-push board game (slice 2: board only). Absent is Hop.
+        # The crate-push board game: the board (round absent = the next one to
+        # pay) and its settle (`id`, `moves`, `round`). Absent is Hop.
         vol.Optional("game", default="hop"): vol.In(["hop", "crate-push"]),
         vol.Optional("level", default="normal"): vol.In(crate_push.LEVELS),
-        vol.Optional("round", default=1): vol.All(
+        vol.Optional("round"): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=crate_push.MAX_ROUND)
         ),
     }
 )
+
+
+def _hop_moves_fit(data: dict[str, Any]) -> dict[str, Any]:
+    """Hop's move list keeps its own, shorter cap (one letter over, so the
+    server answers too_long); crate push's cap is its own (crate_push.py)."""
+    if data["game"] == "hop" and len(data.get("moves", "")) > R.HOP_MAX_MOVES + 1:
+        raise vol.Invalid("the move list is too long", path=["moves"])
+    return data
+
+
+HOP_SCHEMA = vol.All(_HOP_FIELDS, _hop_moves_fit)
 SHARE_NEWS_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
@@ -377,10 +391,16 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def hop(call: ServiceCall) -> ServiceResponse:
         if call.data["game"] == "crate-push":
-            if call.data[ATTR_ACTION] != "board":
-                return {"result": "unsupported"}  # settle is slice 4
+            if call.data[ATTR_ACTION] == "settle":
+                return await pet_of(call).async_crate_push_settle(
+                    call.data["level"],
+                    call.data.get("round"),
+                    call.data.get("id", ""),
+                    call.data.get("moves", ""),
+                    call.context,
+                )
             return await pet_of(call).async_crate_push_board(
-                call.data["level"], call.data["round"]
+                call.data["level"], call.data.get("round")
             )
         if call.data[ATTR_ACTION] == "settle":
             # A settle with no id or no moves is answered, not raised: no id

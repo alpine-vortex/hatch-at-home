@@ -110,3 +110,5 @@ async def test_nothing_personal_is_recorded(
     assert all('"sleep_times"' not in shared for shared in stage)
     # Nor Hop of the Day's day: the card's, not the history's (ship 3a).
     assert all('"hop_day"' not in shared for shared in stage)
+    # Nor crate push's day (slice 4): the card's, not the history's.
+    assert all('"crate_day"' not in shared for shared in stage)

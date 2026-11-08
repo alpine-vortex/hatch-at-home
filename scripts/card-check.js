@@ -5310,7 +5310,9 @@ async function main() {
   {
     const fx = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "tests", "fixtures", "crate_push_cases.json"), "utf8")).boards.push;
     const reply = { result: "ok", day: "2026-11-09", id: "crate-check-1", w: fx.w, h: fx.h, grid: fx.grid, par: fx.par };
-    await card.evaluate((el, r) => { el.__crateAsks = []; el._crateFetch = async (id, level, round) => { el.__crateAsks.push([level, round]); return { ...r, id: `crate-check-${round}` }; }; }, reply);
+    await card.evaluate((el, r) => { el.__crateAsks = []; el.__crateSettles = []; el.__crateRound = 1;
+      el._crateFetch = async (id, level, round) => { el.__crateAsks.push([level, round]); return { ...r, round: el.__crateRound, id: `crate-check-${el.__crateRound}` }; };
+      el._crateSend = async (id, g) => { el.__crateSettles.push([g.level, g.round, g.id, g.moves.join("")]); el.__crateRound += 1; return { result: "ok", paid: 24, found: false, next_round: el.__crateRound }; }; }, reply);
     const KEYS = ["left", "up", "down", "right", "special", "undo", "restart", "quit"];
     const key = (k) => button(KEYS.indexOf(k));
     const state = () => card.evaluate((el) => {
@@ -5344,7 +5346,7 @@ async function main() {
     await cur().locator('.gpick [data-crate="normal"]').click();
     await page.waitForTimeout(600);
     let st = await state();
-    check("crate: a level opens its board (round 1) on Hop's overlay with one crate", st?.kind === "crate" && st.asks[0].join() === "normal,1" &&
+    check("crate: a level opens its board (round 1) on Hop's overlay with one crate", st?.kind === "crate" && st.asks[0].join() === "normal," &&
       st.crateCells === 1 && st.pet === 5, JSON.stringify(st));
     check("crate: only the directions that move, no special, undo off, restart off, quit on",
       (await live()).join() === "up,down,right,quit", JSON.stringify(await live()));
@@ -5372,19 +5374,20 @@ async function main() {
     check("crate: the last push solves it; the keys go and restart reads next",
       st.done && st.crates.join() === "8" && (await live()).join() === "restart,quit" &&
         (await card.evaluate((el) => el._slides[el._index].game.keys.restart.cap)) === "next", JSON.stringify([st, await live()]));
-    check("crate: the solved letters are parked on this device", (await card.evaluate(() => Object.entries(localStorage)
-      .find(([k]) => k.startsWith("hatch-crate|"))?.[1])) === "rr");
-    // Next board: round 2 is asked for.
+    check("crate: the solve is sent to the server once (level, round, id, letters), then the parked letters go",
+      (await card.evaluate((el) => JSON.stringify(el.__crateSettles))) === '[["normal",1,"crate-check-1","rr"]]' &&
+      (await card.evaluate(() => Object.entries(localStorage).find(([k]) => k.startsWith("hatch-crate|"))?.[1])) == null);
+    // Next board: the server gives round 2 (no round is sent).
     await key("restart").click();
     await page.waitForTimeout(600);
     st = await state();
-    check("crate: next asks for round 2 of the same level and opens it fresh", st?.kind === "crate" && st.asks.at(-1).join() === "normal,2" &&
+    check("crate: next asks for round 2 of the same level and opens it fresh", st?.kind === "crate" && st.asks.at(-1).join() === "normal," && (await card.evaluate((el) => el._slides[el._index].game.round)) === 2 &&
       st.moves === "" && !st.done, JSON.stringify(st));
     await key("quit").click();
     await page.waitForTimeout(300);
     check("crate: quit ends the board and gives the care buttons back", (await card.evaluate((el) => el._slides[el._index].game)) == null &&
       (await cur().locator(".device.moded").count()) === 0);
-    await card.evaluate((el) => { delete el._crateFetch; delete el.__crateAsks; for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-crate")) localStorage.removeItem(k); });
+    await card.evaluate((el) => { delete el._crateFetch; delete el._crateSend; delete el.__crateAsks; delete el.__crateSettles; for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-crate")) localStorage.removeItem(k); });
   }
   }
   if (enter("shellmode")) {

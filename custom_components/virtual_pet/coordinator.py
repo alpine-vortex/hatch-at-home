@@ -3441,13 +3441,15 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._publish()
         return info
 
-    async def async_crate_push_board(self, level: str, rnd: int) -> dict[str, Any]:
-        """A crate-push round's board for this pet (slice 2: read only). A
-        pure function of (pet, day, world, level, round): the same on every
-        screen, no pin, no write, no person, no care log. Built off the loop
-        (hard can take most of a second) and kept for the day. Refused as a
-        game is when the pet could not play now. Which round may be played,
-        and the pay, are slice 4's."""
+    async def async_crate_push_board(
+        self, level: str, rnd: int | None = None
+    ) -> dict[str, Any]:
+        """A crate-push round's board for this pet: a pure function of (pet,
+        day, world, level, round), the same on every screen, with no pin, no
+        write, no person and no care log. With no round asked for, the next
+        one to pay today (the rounds paid so far, plus one). Built off the
+        loop (hard can take most of a second). Refused as a game is when the
+        pet could not play now; "enough" once the day's rounds are all paid."""
         assert self.state is not None
         now = self._now()
         self._advance(now)
@@ -3455,6 +3457,26 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if refusal is not None:
             return {"result": refusal}
         day = self._today(now)[0]
+        paid = model.crate_rounds(self.state, day)
+        if rnd is None:
+            rnd = paid[level] + 1
+        if rnd > model.CRATE_MAX_ROUND:
+            return {"result": "enough"}
+        board = await self._crate_round_board(day, level, rnd)
+        return {
+            "result": model.OK,
+            "game": "crate-push",
+            "day": day,
+            "level": level,
+            "round": rnd,
+            "rounds": paid,
+            **board.to_dict(),
+        }
+
+    async def _crate_round_board(
+        self, day: str, level: str, rnd: int
+    ) -> crate_push.Board:
+        """A round's board, built once off the loop and kept for the day."""
         key = (day, self.world, level, rnd)
         for old in [k for k in self._crate_boards if k[0] != day]:
             del self._crate_boards[old]
@@ -3472,19 +3494,85 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
             future.add_done_callback(failed)
         try:
-            board = await asyncio.shield(future)
+            return await asyncio.shield(future)
         except Exception:
             if self._crate_boards.get(key) is future:
                 del self._crate_boards[key]
             raise
-        return {
-            "result": model.OK,
-            "game": "crate-push",
-            "day": day,
-            "level": level,
-            "round": rnd,
-            **board.to_dict(),
-        }
+
+    async def async_crate_push_settle(
+        self,
+        level: str,
+        rnd: int | None,
+        board_id: str,
+        moves: str,
+        context: Context | None,
+    ) -> dict[str, Any]:
+        """A crate-push round the card played to the end: replay its letters
+        on the round's board and pay (plan 2026-11-08-crate-push §5). The
+        card's claim is never trusted, only the replay. Only the next round
+        of a level can be settled (the rounds paid so far, plus one), so a
+        round pays once and a stale screen is `board_changed`. Everything that
+        awaits comes first; then one block with no await re-checks and pays,
+        so two screens settling at once pay once."""
+        state = self.state
+        assert state is not None
+        now = self._now()
+        self._advance(now)
+        refusal = model.refuse_hop_settle(state)  # a game's, never too_tired
+        if refusal is not None:
+            return {"result": refusal}
+        day = self._today(now)[0]
+        if rnd is None or rnd != model.crate_rounds(state, day)[level] + 1:
+            return {"result": "board_changed"}
+        if rnd > model.CRATE_MAX_ROUND:
+            return {"result": "enough"}
+        by = await self._who(context)
+        person = await self._person(context)
+        board = await self._crate_round_board(day, level, rnd)
+        if board.id != board_id:
+            return {"result": "board_changed"}
+        replay = crate_push.replay(board, moves)
+        if replay["too_long"]:
+            return {"result": "too_long"}
+        if not replay["legal"]:
+            return {"result": "illegal", "bad_index": replay["bad_index"]}
+        if not replay["solved"]:
+            return {"result": "not_won"}
+        # No await from here: what the awaits could have changed is checked
+        # again (the build can take most of a second).
+        state = self.state
+        assert state is not None
+        now = self._now()
+        self._advance(now)
+        refusal = model.refuse_hop_settle(state)
+        if refusal is not None:
+            return {"result": refusal}
+        today = self._today(now)[0]
+        if today != day or model.crate_rounds(state, today)[level] + 1 != rnd:
+            return {"result": "board_changed"}
+        info, events = model.settle_crate_push(
+            state,
+            now,
+            day,
+            level,
+            replay["neat"],
+            by,
+            self.world,
+            self.finds,
+            self._find_flags,
+            self.known_finds,
+            self.rng,
+        )
+        events += self._bond(person, "game", "crate-push")
+        self._actor = person
+        try:
+            self._fire(events)
+        finally:
+            self._actor = None
+        self._save()
+        self._publish()
+        return info
 
     async def async_hop_day_board(
         self, day: str, family: str, specials: int, w: int, h: int

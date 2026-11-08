@@ -137,6 +137,12 @@ DELETE = object()
             {"day": "2026-10-26", "stage": "elder", "done": False, "tidy": False},
         ),
         ("hop_day", {"day": "2026-10-26", "stage": "child", "done": 1, "tidy": False}),
+        # Crate push's day (slice 4): dropped whole, the pet loads.
+        ("crate_day", "x"),
+        ("crate_day", {"day": "2026-13-40", "rounds": {}, "neat": False}),
+        ("crate_day", {"day": "2026-10-26", "rounds": {"easy": "x"}, "neat": False}),
+        ("crate_day", {"day": "2026-10-26", "rounds": {"easy": 1000}, "neat": False}),
+        ("crate_day", {"day": "2026-10-26", "rounds": {}, "neat": 1}),
     ],
 )
 async def test_a_damaged_field_never_stops_a_pet_loading(

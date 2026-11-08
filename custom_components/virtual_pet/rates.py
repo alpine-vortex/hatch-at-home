@@ -124,6 +124,10 @@ HOP_MAX_MOVES = 200
 # The day's first win pays the dig's 23 (once a day, so it can't be farmed);
 # the day's first tidy also pays one find of the pet's world.
 HOP_WIN_HAPPINESS = 23.0
+# Crate push (crate_push.py; plan 2026-11-08-crate-push §5): every solved round pays by its level and costs
+# a finished game, like any game; the energy it costs is what limits the rounds. The player-trait bonus is
+# on top, so the hardest level stays at the 30 the left/right game pays (nothing should beat it, above).
+CRATE_PUSH_WIN_HAPPINESS = {"easy": 14.0, "normal": 20.0, "hard": 26.0}
 HOP_CANDIDATES = 60
 HOP_STATE_CAP = 100_000
 

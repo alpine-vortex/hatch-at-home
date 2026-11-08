@@ -633,6 +633,10 @@ class PetState:
     # paid}. {} until the first board. Only `board` (the day's pin) and the
     # settle's pay block write it. Nothing personal: no move list, no person.
     hop_day: dict[str, Any] = field(default_factory=dict)
+    # Crate push's day (plan 2026-11-08-crate-push §5): {"day": local date,
+    # "rounds": {level: rounds paid today}, "neat": the day's neat find paid}.
+    # {} until the first settle; only the settle's pay block writes it.
+    crate_day: dict[str, Any] = field(default_factory=dict)
     sick_unannounced: str | None = (
         None  # cause, if it fell sick asleep (told on waking)
     )
@@ -802,12 +806,13 @@ class PetState:
             kind: {
                 k: int(n) if isinstance(n, int | float) else 0
                 for k, n in {"played": 0, "won": 0, **counts}.items()
-                if k in ("played", "won", "dropped", "tidy")
+                if k in ("played", "won", "dropped", "tidy", "neat")
             }
             for kind, counts in _mapping(kwargs.get("games")).items()
             if isinstance(counts, dict)
         }
         kwargs["hop_day"] = _hop_day(kwargs.get("hop_day"))
+        kwargs["crate_day"] = _crate_day(kwargs.get("crate_day"))
         kwargs["temperament"] = {
             t: float(f)
             for t, f in _mapping(kwargs.get("temperament")).items()
@@ -3044,6 +3049,120 @@ def settle_hop(
         "paid": paid,
         "found": found,
         "already": not (paid or found),
+    }
+    return info, events
+
+
+# --- Crate push: the day's rounds and the settle's pay ---------------------------
+# (plan 2026-11-08-crate-push §5; the rules, the board and the replay are crate_push.py's)
+
+CRATE_LEVELS = ("easy", "normal", "hard")
+CRATE_MAX_ROUND = 99  # rounds a day per level (crate_push.MAX_ROUND)
+
+
+def _crate_day(value: Any) -> dict[str, Any]:
+    """A saved crate_day, checked: a canonical ISO date, a rounds map of the
+    known levels with whole counts, a neat bool. Anything else drops the whole
+    map (no round paid today)."""
+    if not isinstance(value, dict):
+        return {}
+    day, rounds, neat = value.get("day"), value.get("rounds"), value.get("neat")
+    if not (
+        isinstance(day, str) and isinstance(rounds, dict) and isinstance(neat, bool)
+    ):
+        return {}
+    try:
+        if date.fromisoformat(day).isoformat() != day:
+            return {}
+    except ValueError:
+        return {}
+    out = {}
+    for level in CRATE_LEVELS:
+        n = rounds.get(level, 0)
+        if (
+            isinstance(n, bool)
+            or not isinstance(n, int)
+            or not 0 <= n <= CRATE_MAX_ROUND
+        ):
+            return {}
+        out[level] = n
+    return {"day": day, "rounds": out, "neat": neat}
+
+
+def crate_rounds(state: PetState, today: str) -> dict[str, int]:
+    """The rounds paid today per level (zeros on a new day or none yet)."""
+    if state.crate_day.get("day") == today:
+        return dict(state.crate_day["rounds"])
+    return dict.fromkeys(CRATE_LEVELS, 0)
+
+
+def settle_crate_push(
+    state: PetState,
+    now: float,
+    day: str,
+    level: str,
+    neat: bool,
+    by: str | None,
+    world: str,
+    finds: list[dict[str, Any]],
+    flags: dict[str, bool | None] | None,
+    known: dict[str, set[str]],
+    rng: random.Random,
+) -> tuple[dict[str, Any], list[Event]]:
+    """A solved crate-push round, replayed by the caller on the round's board,
+    after its refusals and its round check. It pays the level's happiness and
+    costs a finished game (played and won are counted per round). The day's
+    first neat solve on normal or hard also pays one find of the world,
+    outside the find clock (easy is neat too often to count). The map rolls to
+    today first."""
+    events: list[Event] = []
+    if state.crate_day.get("day") != day:
+        state.crate_day = {
+            "day": day,
+            "rounds": dict.fromkeys(CRATE_LEVELS, 0),
+            "neat": False,
+        }
+    state.crate_day["rounds"][level] += 1
+    find_due = neat and level != "easy" and not state.crate_day["neat"]
+    found = False
+    if find_due:
+        find = pick_find(state, world, finds, flags or {}, rng)
+        if find is not None:
+            found = True
+            if add_find(state, day, world, find["id"], known):
+                events.append({"type": "found", "id": find["id"], "world": world})
+        state.crate_day["neat"] = True
+    counts = state.games.setdefault("crate-push", {"played": 0, "won": 0})
+    counts["played"] += 1
+    counts["won"] += 1
+    if find_due:
+        counts["neat"] = counts.get("neat", 0) + 1
+    _pay_game(
+        state,
+        R.CRATE_PUSH_WIN_HAPPINESS[level],
+        True,
+        now,
+        by,
+        "neat" if neat else "win",
+        {
+            "type": "game_finished",
+            "game": "crate-push",
+            "won": True,
+            "neat": neat,
+            "level": level,
+        },
+        events,
+    )
+    done = state.crate_day["rounds"][level]
+    info = {
+        "result": OK,
+        "won": True,
+        "neat": neat,
+        "paid": True,
+        "found": found,
+        "level": level,
+        "round": done,
+        "next_round": done + 1,
     }
     return info, events
 

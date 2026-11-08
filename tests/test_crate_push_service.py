@@ -1,7 +1,7 @@
 """virtual_pet.hop with game "crate-push", action board (crate-push plan slice 2,
 docs/plan-2026-11-08-crate-push.md): a pure, read-only board per (pet, day,
 world, level, round). The reply, the rounds, the refusals, the schema, and that
-nothing is written. Settle is slice 4."""
+nothing is written. Settle is tests/test_crate_push_settle.py."""
 
 from __future__ import annotations
 
@@ -72,12 +72,6 @@ async def test_schema_refuses_bad_level_and_round(hass, now, hass_storage):
     for bad in ({"level": "egg"}, {"round": 0}, {"round": S.MAX_ROUND + 1}):
         with pytest.raises(vol.Invalid):
             await call(hass, **bad)
-
-
-async def test_settle_is_not_built_yet(hass, now, hass_storage):
-    await ready(hass, now, hass_storage)
-    reply = await call(hass, action="settle", id="x", moves="u")
-    assert reply == {"result": "unsupported"}
 
 
 async def test_hop_is_the_default_game(hass, now, hass_storage):
