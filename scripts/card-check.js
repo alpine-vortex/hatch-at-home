@@ -5313,6 +5313,8 @@ async function main() {
     await card.evaluate((el, r) => { el.__crateAsks = []; el.__crateSettles = []; el.__crateRound = 1;
       el._crateFetch = async (id, level, round) => { el.__crateAsks.push([level, round]); return { ...r, round: el.__crateRound, id: `crate-check-${el.__crateRound}` }; };
       el._crateSend = async (id, g) => { el.__crateSettles.push([g.level, g.round, g.id, g.moves.join("")]); el.__crateRound += 1; return { result: "ok", paid: 24, found: false, next_round: el.__crateRound }; }; }, reply);
+    // The board section's "flag off" harness may leave a no-op _hopRow shadowing the prototype (no Hop row).
+    await card.evaluate((el) => { delete el._hopRow; });
     const KEYS = ["left", "up", "down", "right", "special", "undo", "restart", "quit"];
     const key = (k) => button(KEYS.indexOf(k));
     const state = () => card.evaluate((el) => {
