@@ -42,7 +42,7 @@ def cell(c: str) -> str:
 
 def sheet(per_stage: int) -> str:
     out = []
-    for stage in S.STAGES:
+    for stage in S.LEVELS:
         out.append(f"<h2>{stage}</h2><div class=row>")
         d0 = date(2026, 11, 9)
         for i in range(per_stage):

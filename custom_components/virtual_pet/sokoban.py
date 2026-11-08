@@ -40,21 +40,21 @@ CELLS = ".#~PpbnB"
 BLOCKED = "#~"
 PAR_SLACK = 2  # par is the fewest moves plus this
 
-# stage -> (crates, width, height)
-STAGES = {
-    "baby": (1, 4, 3),
-    "child": (2, 5, 4),
-    "teen": (2, 6, 4),
-    "adult": (3, 6, 4),
+# level -> (crates, width, height). The player picks the level (plan section 0); the
+# pet's level no longer sets the board, only its specials (a later slice).
+LEVELS = {
+    "easy": (2, 5, 4),
+    "normal": (2, 6, 4),
+    "hard": (3, 6, 4),
 }
 
 
-def params_for(stage: str) -> tuple[int, int, int]:
-    """(crates, width, height) for a stage. An egg (or any stage not in STAGES)
-    has no board: ValueError, so the caller refuses an egg before it asks."""
-    if stage not in STAGES:
-        raise ValueError(f"no board for stage {stage!r}")
-    return STAGES[stage]
+def params_for(level: str) -> tuple[int, int, int]:
+    """(crates, width, height) for a level. An unknown level has no board:
+    ValueError, so the caller refuses it before it asks."""
+    if level not in LEVELS:
+        raise ValueError(f"no board for level {level!r}")
+    return LEVELS[level]
 
 
 class TooBig(RuntimeError):
@@ -311,18 +311,17 @@ def greedy_bot(board: Board, budget: int = 300) -> tuple[str, bool]:
 
 # --- The generator ---------------------------------------------------------------
 
-# stage -> (fewest moves, most moves, fewest pushes, wall count range)
+# level -> (fewest moves, most moves, fewest pushes, wall count range)
 GATES = {
-    "baby": (4, 12, 2, (0, 0)),
-    "child": (12, 40, 3, (1, 3)),
-    "teen": (15, 60, 4, (2, 4)),
-    "adult": (18, 90, 6, (3, 5)),
+    "easy": (12, 40, 3, (1, 3)),
+    "normal": (15, 60, 4, (2, 4)),
+    "hard": (20, 120, 7, (3, 5)),
 }
-PULLS = {"baby": 4, "child": 8, "teen": 12, "adult": 16}  # reverse pulls made
+PULLS = {"easy": 8, "normal": 12, "hard": 18}  # reverse pulls made
 
 
-def _seed(pet_id: str, day: str, world: str | None, stage: str, n: int) -> str:
-    return f"sokoban|{GEN_VERSION}|{pet_id}|{day}|{world}|{stage}|{n}"
+def _seed(pet_id: str, day: str, world: str | None, level: str, n: int) -> str:
+    return f"sokoban|{GEN_VERSION}|{pet_id}|{day}|{world}|{level}|{n}"
 
 
 def board_id(
@@ -358,12 +357,12 @@ def _connected(w: int, h: int, walls: set[int]) -> bool:
     return len(seen) == len(free)
 
 
-def _candidate(rng: random.Random, stage: str) -> Board | None:
+def _candidate(rng: random.Random, level: str) -> Board | None:
     """One candidate, built backwards: crates on the spots, then random pulls
     (the reverse of a push), so it is solvable by construction. None if the
     walls cut the floor apart."""
-    crates_n, w, h = params_for(stage)
-    lo, hi = GATES[stage][3]
+    crates_n, w, h = params_for(level)
+    lo, hi = GATES[level][3]
     walls = set(rng.sample(range(w * h), rng.randint(lo, hi)))
     if not _connected(w, h, walls):
         return None
@@ -375,7 +374,7 @@ def _candidate(rng: random.Random, stage: str) -> Board | None:
     pet = rng.choice([i for i in free if i not in crates])
 
     last = -1  # the crate just pulled (and where it is now): not pulled again at once
-    for _ in range(PULLS[stage]):
+    for _ in range(PULLS[level]):
         # the pet's reach (it cannot walk through a crate or a wall)
         reach = {pet}
         todo = [pet]
@@ -442,10 +441,10 @@ class Verdict:
     solve: Solve | None = None
 
 
-def check(board: Board, stage: str) -> Verdict:
+def check(board: Board, level: str) -> Verdict:
     """Is a candidate worth a day? Solvable, long enough, not too long, enough
     pushes, and not mostly solved already."""
-    lo, hi, pushes, _ = GATES[stage]
+    lo, hi, pushes, _ = GATES[level]
     done = sum(1 for c in board.cells if c == "B")
     crates = board.cells.count("b") + done
     if done > crates // 2 or done == crates:
@@ -465,28 +464,27 @@ def check(board: Board, stage: str) -> Verdict:
     return Verdict(True, "", s)
 
 
-# One hand-made board per stage stands in if no candidate is accepted (it
+# One hand-made board per level stands in if no candidate is accepted (it
 # should never happen; the tests count it). Each is solvable and passes no gate.
 FALLBACK = {
-    "baby": ("....", "Pb.n", "...."),
-    "child": ("....n", ".Pb.n", ".b...", "....."),
-    "teen": ("#...n.", ".Pb.n.", ".b....", "......"),
-    "adult": (".#.n#n", "..bPb.", "#..b..", "..#n.."),
+    "easy": ("....n", ".Pb.n", ".b...", "....."),
+    "normal": ("#...n.", ".Pb.n.", ".b....", "......"),
+    "hard": (".#.n#n", "..bPb.", "#..b..", "..#n.."),
 }
 TRIES = 400
 
 
-def sokoban_board(pet_id: str, day: str, world: str | None, stage: str) -> Board:
-    """The day's board for a pet: a function of (pet, day, world, stage). The
+def sokoban_board(pet_id: str, day: str, world: str | None, level: str) -> Board:
+    """The day's board for a pet: a function of (pet, day, world, level). The
     first accepted candidate of a seeded stream, with its par set. If none is
-    accepted in TRIES, the stage's hand-made board (fallback=True)."""
-    params_for(stage)  # an egg has no board
+    accepted in TRIES, the level's hand-made board (fallback=True)."""
+    params_for(level)  # an unknown level has no board
     for n in range(TRIES):
-        rng = random.Random(_seed(pet_id, day, world, stage, n))
-        cand = _candidate(rng, stage)
+        rng = random.Random(_seed(pet_id, day, world, level, n))
+        cand = _candidate(rng, level)
         if cand is None:
             continue
-        verdict = check(cand, stage)
+        verdict = check(cand, level)
         if not verdict.ok or verdict.solve is None:
             continue
         cand.par = len(verdict.solve.moves) + PAR_SLACK
@@ -494,7 +492,7 @@ def sokoban_board(pet_id: str, day: str, world: str | None, stage: str) -> Board
         cand.tries = n + 1
         cand.id = board_id(pet_id, day, world, cand.w, cand.h, cand.grid, n)
         return cand
-    grid = FALLBACK[stage]
+    grid = FALLBACK[level]
     board = Board(
         len(grid[0]), len(grid), grid, world=world, fallback=True, tries=TRIES
     )

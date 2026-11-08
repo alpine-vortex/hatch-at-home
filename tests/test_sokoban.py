@@ -1,8 +1,8 @@
 """Sokoban's engine, generator, solver and bots (sokoban.py; plan
 docs/plan-2026-11-08-sokoban-board.md, slice 1).
 
-The generator runs on 5 seeded boards per stage here; SOKOBAN_FULL=1 runs 300
-per stage and prints the table the slice's report quotes (pytest -s). The tests
+The generator runs on 5 seeded boards per level here; SOKOBAN_FULL=1 runs 300
+per level and prints the table the slice's report quotes (pytest -s). The tests
 count solver states, never wall-clock time.
 """
 
@@ -24,7 +24,7 @@ CASES = json.loads(
 )
 FULL = bool(os.environ.get("SOKOBAN_FULL"))
 N = 300 if FULL else 5
-STAGES = list(S.STAGES)
+LEVELS = list(S.LEVELS)
 
 
 def _board(name: str) -> S.Board:
@@ -62,8 +62,8 @@ def test_bad_boards_are_refused(name):
 
 
 def test_a_push_never_changes_the_crate_count():
-    for stage in STAGES:
-        board = S.sokoban_board("pet", "2026-11-09", "woodland", stage)
+    for level in LEVELS:
+        board = S.sokoban_board("pet", "2026-11-09", "woodland", level)
         state = S.start_state(board)
         rng = random.Random(1)
         n = len(state.crates)
@@ -92,8 +92,8 @@ def test_an_unsolvable_board_returns_none():
 
 
 def test_a_solution_replays_as_solved():
-    for stage in STAGES:
-        board = S.sokoban_board("pet", "2026-11-09", None, stage)
+    for level in LEVELS:
+        board = S.sokoban_board("pet", "2026-11-09", None, level)
         s = S.solve(board)
         out = S.replay(board, s.moves)
         assert out["legal"] and out["solved"] and out["neat"]
@@ -107,14 +107,14 @@ def _days(n: int):
     return [(d + timedelta(days=i)).isoformat() for i in range(n)]
 
 
-@pytest.mark.parametrize("stage", STAGES)
-def test_the_generator_accepts_and_the_board_passes_its_gate(stage):
-    crates_n, w, h = S.params_for(stage)
-    lo, hi, pushes, _ = S.GATES[stage]
+@pytest.mark.parametrize("level", LEVELS)
+def test_the_generator_accepts_and_the_board_passes_its_gate(level):
+    crates_n, w, h = S.params_for(level)
+    lo, hi, pushes, _ = S.GATES[level]
     fallbacks = 0
     tries = []
     for day in _days(N):
-        board = S.sokoban_board("pet", day, "woodland", stage)
+        board = S.sokoban_board("pet", day, "woodland", level)
         fallbacks += board.fallback
         tries.append(board.tries)
         assert (board.w, board.h) == (w, h) or board.fallback
@@ -124,37 +124,37 @@ def test_the_generator_accepts_and_the_board_passes_its_gate(stage):
             assert lo <= len(s.moves) <= hi and s.pushes >= pushes
             assert board.cells.count("b") + board.cells.count("B") == crates_n
             assert board.par == len(s.moves) + S.PAR_SLACK
-    assert fallbacks == 0, f"{stage}: the hand-made board stood in"
+    assert fallbacks == 0, f"{level}: the hand-made board stood in"
     if FULL:
-        print(f"\n{stage}: tries mean {sum(tries) / len(tries):.1f} max {max(tries)}")
+        print(f"\n{level}: tries mean {sum(tries) / len(tries):.1f} max {max(tries)}")
 
 
-def test_a_board_is_a_function_of_pet_day_world_stage():
-    a = S.sokoban_board("pet", "2026-11-09", "woodland", "teen")
-    b = S.sokoban_board("pet", "2026-11-09", "woodland", "teen")
+def test_a_board_is_a_function_of_pet_day_world_level():
+    a = S.sokoban_board("pet", "2026-11-09", "woodland", "normal")
+    b = S.sokoban_board("pet", "2026-11-09", "woodland", "normal")
     assert a.grid == b.grid and a.id == b.id and a.par == b.par
     others = {
-        S.sokoban_board("pet2", "2026-11-09", "woodland", "teen").id,
-        S.sokoban_board("pet", "2026-11-10", "woodland", "teen").id,
-        S.sokoban_board("pet", "2026-11-09", "hearth", "teen").id,
+        S.sokoban_board("pet2", "2026-11-09", "woodland", "normal").id,
+        S.sokoban_board("pet", "2026-11-10", "woodland", "normal").id,
+        S.sokoban_board("pet", "2026-11-09", "hearth", "normal").id,
     }
     assert a.id not in others and len(others) == 3
 
 
-def test_an_egg_has_no_board():
+def test_an_unknown_level_has_no_board():
     with pytest.raises(ValueError):
         S.sokoban_board("pet", "2026-11-09", None, "egg")
 
 
-@pytest.mark.parametrize("stage", STAGES)
-def test_the_fallback_board_is_valid_and_solvable(stage):
-    grid = S.FALLBACK[stage]
+@pytest.mark.parametrize("level", LEVELS)
+def test_the_fallback_board_is_valid_and_solvable(level):
+    grid = S.FALLBACK[level]
     board = S.Board(len(grid[0]), len(grid), grid)
     assert S.solve(board) is not None
 
 
 def test_the_board_reply_has_no_pet_id():
-    board = S.sokoban_board("secret-entry-id", "2026-11-09", None, "child")
+    board = S.sokoban_board("secret-entry-id", "2026-11-09", None, "easy")
     assert "secret-entry-id" not in json.dumps(board.to_dict())
 
 
@@ -163,9 +163,9 @@ def test_the_board_reply_has_no_pet_id():
 
 def test_the_bots_win_rarely_on_hard_boards_and_never_break_the_rules():
     wins_casual = wins_greedy = total = 0
-    for stage in ("teen", "adult"):
+    for level in ("normal", "hard"):
         for day in _days(max(N, 10)):
-            board = S.sokoban_board("pet", day, None, stage)
+            board = S.sokoban_board("pet", day, None, level)
             for bot in (lambda b: S.casual_bot(b, random.Random(7)), S.greedy_bot):
                 moves, won = bot(board)
                 out = S.replay(board, moves)
