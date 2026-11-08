@@ -54,7 +54,7 @@ const OUT = path.join(__dirname, "..", "dev", "card-check");
 const results = [];
 
 // The gated sections of main(), in file order.
-const SECTIONS = ["shelf", "shell", "play", "resume", "board", "shellmode", "moments", "photos", "personality", "types",
+const SECTIONS = ["shelf", "shell", "play", "resume", "board", "crate", "shellmode", "moments", "photos", "personality", "types",
   "egg", "sharedscreen", "memorytags", "memorypage", "forget", "prefs", "channel", "devicefx", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "winter", "care",
   "editor", "boot", "infrared", "lowbattery", "restart", "gifts", "finds", "collection", "oldcard"];
 // oldcard asserts restart's seeded bond; finds taps the basket restart seeds; collection
@@ -5300,6 +5300,92 @@ async function main() {
     await page.waitForTimeout(400);
   }
   await unpinAwake(card);
+  }
+  if (enter("crate")) {
+  // Crate push, slice 3 (docs/plan-2026-11-08-crate-push.md): the row beside Hop's, the three levels, the board
+  // on Hop's overlay, the eight shell buttons, tap-next-to-the-pet, undo, restart, solve, the parked letters.
+  // The `hop` service is stubbed on the card (_crateFetch) with the plan's fixture board "push"; the rules
+  // run for real. No settle and no pay yet (slice 4).
+  await pinAwake(card, "crate");
+  {
+    const fx = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "tests", "fixtures", "crate_push_cases.json"), "utf8")).boards.push;
+    const reply = { result: "ok", day: "2026-11-09", id: "crate-check-1", w: fx.w, h: fx.h, grid: fx.grid, par: fx.par };
+    await card.evaluate((el, r) => { el.__crateAsks = []; el._crateFetch = async (id, level, round) => { el.__crateAsks.push([level, round]); return { ...r, id: `crate-check-${round}` }; }; }, reply);
+    const KEYS = ["left", "up", "down", "right", "special", "undo", "restart", "quit"];
+    const key = (k) => button(KEYS.indexOf(k));
+    const state = () => card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const g = s.game;
+      return g && { kind: g.kind, moves: g.moves?.join(""), pet: g.st?.pet, crates: g.st?.crates, done: g.done, picking: !!g.picking,
+        levels: !!g.levels, asks: el.__crateAsks, crateCells: s.gameBox.querySelectorAll(".hc.crate").length };
+    });
+    const live = () => card.evaluate((el, names) => el._modeButtons(el._slides[el._index])
+      .map((b, i) => [names[i], b.getAttribute("aria-disabled") !== "true" && !b.disabled]).filter(([, on]) => on).map(([n]) => n), KEYS);
+    await injectUntil(pet["sensor.energy"], { state: "80" }, null, { settle: 400 });
+    await card.evaluate(() => { for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-crate")) localStorage.removeItem(k); });
+    await button(2).click();
+    await page.waitForTimeout(500);
+    const row = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const c = s.gameBox.querySelector(".gcrate");
+      const h = s.gameBox.querySelector(".ghop");
+      const rc = c?.getBoundingClientRect();
+      const rh = h?.getBoundingClientRect();
+      return { text: c?.textContent, apart: !!(rc && rh && rh.right <= rc.left + 0.5), sameLine: !!(rc && rh && Math.abs(rc.bottom - rh.bottom) < 2) };
+    });
+    check("crate: the Crates row sits beside Hop's, not over it", row.text === "Crates" && row.apart && row.sameLine, JSON.stringify(row));
+    await shot("crate-a-picker");
+    await cur().locator(".gcrate").click();
+    await page.waitForTimeout(300);
+    await shot("crate-b-levels");
+    const lv = await card.evaluate((el) => [...el._slides[el._index].gameBox.querySelectorAll(".gpick [data-crate]")].map((b) => b.dataset.crate));
+    check("crate: the picker shows the three levels, and no board was asked for yet", lv.join() === "easy,normal,hard" &&
+      (await card.evaluate((el) => el.__crateAsks.length)) === 0, JSON.stringify(lv));
+    await cur().locator('.gpick [data-crate="normal"]').click();
+    await page.waitForTimeout(600);
+    let st = await state();
+    check("crate: a level opens its board (round 1) on Hop's overlay with one crate", st?.kind === "crate" && st.asks[0].join() === "normal,1" &&
+      st.crateCells === 1 && st.pet === 5, JSON.stringify(st));
+    check("crate: only the directions that move, no special, undo off, restart off, quit on",
+      (await live()).join() === "up,down,right,quit", JSON.stringify(await live()));
+    await shot("crate-c-board");
+    await key("right").click();
+    await page.waitForTimeout(250);
+    st = await state();
+    check("crate: right pushes the crate one cell and the pet follows", st.moves === "r" && st.pet === 6 && st.crates.join() === "7", JSON.stringify(st));
+    await key("undo").click();
+    await page.waitForTimeout(200);
+    st = await state();
+    check("crate: undo takes the push back", st.moves === "" && st.pet === 5 && st.crates.join() === "6", JSON.stringify(st));
+    // A tap on the cell next to the pet pushes; a tap far away does nothing.
+    await cur().locator('.hc[data-i="14"]').click({ force: true });
+    st = await state();
+    check("crate: a tap on a far cell does nothing", st.moves === "", JSON.stringify(st));
+    await cur().locator('.hc[data-i="6"]').click({ force: true });
+    await page.waitForTimeout(250);
+    st = await state();
+    check("crate: a tap on the cell beside the pet pushes", st.moves === "r", JSON.stringify(st));
+    await key("right").click();
+    await page.waitForTimeout(300);
+    st = await state();
+    await shot("crate-d-solved");
+    check("crate: the last push solves it; the keys go and restart reads next",
+      st.done && st.crates.join() === "8" && (await live()).join() === "restart,quit" &&
+        (await card.evaluate((el) => el._slides[el._index].game.keys.restart.cap)) === "next", JSON.stringify([st, await live()]));
+    check("crate: the solved letters are parked on this device", (await card.evaluate(() => Object.entries(localStorage)
+      .find(([k]) => k.startsWith("hatch-crate|"))?.[1])) === "rr");
+    // Next board: round 2 is asked for.
+    await key("restart").click();
+    await page.waitForTimeout(600);
+    st = await state();
+    check("crate: next asks for round 2 of the same level and opens it fresh", st?.kind === "crate" && st.asks.at(-1).join() === "normal,2" &&
+      st.moves === "" && !st.done, JSON.stringify(st));
+    await key("quit").click();
+    await page.waitForTimeout(300);
+    check("crate: quit ends the board and gives the care buttons back", (await card.evaluate((el) => el._slides[el._index].game)) == null &&
+      (await cur().locator(".device.moded").count()) === 0);
+    await card.evaluate((el) => { delete el._crateFetch; delete el.__crateAsks; for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-crate")) localStorage.removeItem(k); });
+  }
   }
   if (enter("shellmode")) {
   // Shell modes, slice 1 (docs/plan-2026-11-04-shell-modes.md, acceptance 5-9): the mode engine

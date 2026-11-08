@@ -539,6 +539,22 @@ const STYLE = `
   .game .ghop.tight { padding: 0 6px; font-size: 11px; white-space: nowrap; }
   .game .ghop.snug { min-height: 36px; line-height: 1.05; white-space: normal; }
   .game .ghop:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
+  /* Crate push (crate-push plan, slice 3): its row sits beside Hop's (each half the strip), the picker's
+     buttons become the three levels, the cells are plain CSS (a spot is a ring, a crate a box). */
+  .game .ghop.pair { right: 51%; }
+  .game .gcrate { position: absolute; left: 51%; right: 3%; bottom: 2%; min-height: 44px; width: auto;
+    border-radius: 14px; padding: 4px 10px; font: inherit; font-size: 14px; box-shadow: 0 4px 0 #3a2a1a;
+    background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a; cursor: pointer; }
+  .game .gcrate[hidden] { display: none; }
+  .game .gcrate:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
+  .game .hopb.crate .hc.floor { background: rgba(255, 253, 245, .86); }
+  .game .hopb.crate .hc.water { background: rgba(70, 130, 190, .72); }
+  .game .hopb.crate .hc.spot { background: rgba(255, 253, 245, .86) radial-gradient(circle, transparent 0 28%,
+    rgba(58, 42, 26, .55) 30% 40%, transparent 42%); }
+  .game .hopb.crate .hc.crate::after { content: ""; position: absolute; inset: 14%; background: #b9854b;
+    border: 2px solid #3a2a1a; box-shadow: inset 0 0 0 3px rgba(255, 253, 245, .35); }
+  .game .hopb.crate .hc { position: relative; }
+  .game .hopb.crate .hc.spot.crate::after { background: #d9a85a; }
   /* The board: the grid, centred in the whole overlay (the keys are the shell's eight buttons).
      Sizes are set in JS (_hopLayout) from the overlay: --c the cell. No new art:
      the cells are CSS. The real pet stays under the board, still, and the piece wears its frame. */

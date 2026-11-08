@@ -95,6 +95,39 @@ function shellHop() {
   };
 }
 
+// Crate push (slice 3): the same eight as Hop without the special: the four directions, undo, restart (it
+// reads "next" on a solved board) and quit. The keys' state is `s.game.keys`, written by _crateDraw.
+function shellCrate() {
+  const key = (name, icon, cap, keys) => ({
+    icon, cap, keys,
+    aria: (s) => s.game?.keys?.[name]?.label || name,
+    enabled: (s) => !!s.game?.keys?.[name]?.enabled,
+    act: (card, s) => card._crateKey(s, name),
+  });
+  return {
+    id: "crate",
+    slots: [
+      key("left", "icon_mode_left", "left", ["ArrowLeft"]), key("up", "icon_mode_up", "up", ["ArrowUp"]),
+      key("down", "icon_mode_down", "down", ["ArrowDown"]), key("right", "icon_mode_right", "right", ["ArrowRight"]),
+      null,
+      key("undo", "icon_mode_undo", "undo", ["z"]),
+      { ...key("restart", "icon_mode_restart", (s) => s.game?.keys?.restart?.cap || "restart", ["r"]) },
+      { icon: "icon_mode_quit", cap: "quit", aria: "Stop the game", act: (card, s) => card._quitGame(s, card._quitLine(s)) },
+    ],
+    tint: "game",
+    announce: "game buttons on",
+    exit: {
+      slot: 8, escape: true, status: "end", on: ["asleep", "egg"],
+      idleMs: GAME_IDLE_MS, idleAt: (s) => s.game?.lastAt,
+      idleHold: (s) => !!(s.game?.crateLoading || s.game?.busy),
+    },
+    onExit: (card, s, reason) => {
+      if (reason === "game" || reason === "replace" || !s.game) return;
+      card._endGame(s, null);
+    },
+  };
+}
+
 // The shipped modes, by id. A probe (the bench's, card-check's, the node test's) is an
 // object passed to _modeEnter, not an entry.
 const SHELL_MODES = Object.freeze({
@@ -108,6 +141,7 @@ const SHELL_MODES = Object.freeze({
     { icon: "icon_mode_keep", cap: "keep", aria: "Keep the basket", keys: ["ArrowLeft"], enabled: (s) => !s.game?.busy && !!s.game?.basket },
     { icon: "icon_mode_dig", cap: "dig", aria: "Dig a leaf", keys: ["ArrowRight"] }, GAME_COPY.idle)),
   hop: shellFreeze(shellHop()),
+  crate: shellFreeze(shellCrate()),
 });
 
 // A cap's icon: a frontend/ui pixel icon ("icon_mode_left"), drawn at 24 px (the size the care caps' own pixel

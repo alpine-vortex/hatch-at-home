@@ -47,6 +47,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     s.gameBox.querySelector(".gpick").innerHTML = games.map((g) =>
       `<button data-game="${g.key}">${g.label}</button>`).join("");
     this._hopRow(s); // the Hop of the Day row, outside .gpick (plan section 5)
+    this._crateRow(s); // beside it: the crate push levels (crate-push plan, slice 3)
     this._gameView(s, "pick");
     // A narrow card has room for one short line beside the close button.
     this._pickerSay(s, s.game, s.game.prompt);
@@ -237,6 +238,8 @@ class HatchPetCardGames extends HatchPetCardCare {
     box.querySelector(".gpick").hidden = view !== "pick";
     const row = box.querySelector(".ghop");
     if (row) row.hidden = view !== "pick";
+    const crow = box.querySelector(".gcrate");
+    if (crow) crow.hidden = view !== "pick";
     const hopb = box.querySelector(".hopb");
     if (hopb) hopb.hidden = view !== "hop";
     s.gameNum.hidden = view !== "higher_lower" && view !== "dig";

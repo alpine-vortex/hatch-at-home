@@ -31,8 +31,8 @@ const gameOf = (name) => {
 test("the part sits between card-games and card-season, which extends it", () => {
   const manifest = read("src/card/manifest.txt").split("\n");
   assert.strictEqual(manifest.indexOf("card-board.js"), manifest.indexOf("card-games.js") + 1);
-  assert.strictEqual(manifest.indexOf("card-season.js"), manifest.indexOf("card-board.js") + 1);
-  assert.match(read("src/card/card-season.js"), /^class HatchPetCardSeason extends HatchPetCardBoard \{/);
+  assert.strictEqual(manifest.indexOf("card-season.js"), manifest.indexOf("card-crate.js") + 1);
+  assert.match(read("src/card/card-season.js"), /^class HatchPetCardSeason extends HatchPetCardCrate \{/);
   assert.match(src, /class HatchPetCardBoard extends HatchPetCardGames/);
 });
 

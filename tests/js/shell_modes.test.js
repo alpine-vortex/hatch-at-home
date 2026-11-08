@@ -134,7 +134,7 @@ test("every SHELL_MODES entry: 8 slots, captions and labels, functions, exit fie
     if (m.exit) assert.ok(Object.isFrozen(m.exit) && (!m.exit.on || Object.isFrozen(m.exit.on)), `${id} exit frozen`);
   }
   // slice 2: the three server games; slice 3: hop
-  assert.deepStrictEqual(Object.keys(M.SHELL_MODES), ["left_right", "higher_lower", "dig", "hop"]);
+  assert.deepStrictEqual(Object.keys(M.SHELL_MODES), ["left_right", "higher_lower", "dig", "hop", "crate"]);
   assert.deepStrictEqual(Object.keys(M.SHELL_TINTS), ["game"]);
   assert.match(M.SHELL_TINTS.game, /^#[0-9a-f]{6}$/);
 });

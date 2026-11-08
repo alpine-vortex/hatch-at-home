@@ -28,6 +28,7 @@ card-mode.js
 card-care.js
 card-games.js
 card-board.js
+card-crate.js
 card-season.js
 card-visitors.js
 card-link.js

@@ -59,6 +59,7 @@ Where things live:
 | card-care | `SCENES` (one entry per care scene: medicine, clean, feed), the bowl clip (`bowlCuts`), `_sceneFrames`, `_sceneArt` |
 | card-games | games, dig |
 | card-board | Hop of the Day's board mode (`HatchPetCardBoard`): the picker row, the board in the `gameBox` overlay (its keys are the shell's eight, the `hop` mode), park/resume, undo |
+| card-crate | Crate push's board mode (`HatchPetCardCrate`, after card-board): the picker row beside Hop's, the three levels, the board on Hop's overlay, letter moves parked locally, the `crate` shell mode; no settle yet (slice 4) |
 | card-season | seasons, party, costume |
 | card-visitors | world visitors, basket, reveal |
 | card-link | infrared link |

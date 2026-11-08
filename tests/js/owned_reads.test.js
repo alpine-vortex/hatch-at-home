@@ -11,7 +11,7 @@ const DIR = path.join(__dirname, "..", "..", "src", "card");
 // The game parts read their own state as they like. So does shell-modes.js, but only its game entries
 // (shellGame, slice 2: a slot function is the game's copy of its own state, plan 3.1); the node test in
 // shell_modes.test.js holds the rest of that part to "no game words".
-const GAME_PARTS = new Set(["card-games.js", "card-board.js", "card-flair.js", "shell-modes.js"]);
+const GAME_PARTS = new Set(["card-games.js", "card-board.js", "card-crate.js", "card-flair.js", "shell-modes.js"]);
 
 // [file, a snippet of the line, why it stays a game read]
 const ALLOWED = [
