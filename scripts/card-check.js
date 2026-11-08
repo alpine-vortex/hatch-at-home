@@ -5355,6 +5355,16 @@ async function main() {
       st.crateCells === 1 && st.pet === 5, JSON.stringify(st));
     check("crate: only the directions that move, no special, undo off, restart off, quit on",
       (await live()).join() === "up,down,right,quit", JSON.stringify(await live()));
+    {
+      const sk = await card.evaluate((el) => {
+        const s = el._slides[el._index];
+        const c = s.gameBox.querySelector(".hc.crate");
+        const cs = c && getComputedStyle(c, "::after");
+        return { world: s.gameBox.querySelector(".hopb.crate")?.dataset.world, bg: cs?.backgroundImage, glow: cs?.filter };
+      });
+      check("crate: the pushed thing wears the world's skin (ui/crate_<world>.png)",
+        !!sk.world && sk.bg.includes(`/ui/crate_${sk.world}.png`), JSON.stringify(sk));
+    }
     await shot("crate-c-board");
     await key("right").click();
     await page.waitForTimeout(250);

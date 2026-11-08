@@ -28,6 +28,14 @@ const hopArtStyle = () => Object.entries(HOP_ART).map(([world, tiles]) => {
     `url(${BASE}/ui/hop_${world}_${t}.png?v=${VERSION}) 0 0 / 100% 100% no-repeat border-box; }`).join("\n");
 }).join("\n");
 
+// Crate push's skins (slice 5): each world's pushed thing replaces the plain crate (ui/crate_<world>.png, 20 art px);
+// on its spot it glows (the ring is hidden under it).
+const CRATE_WORLDS = ["woodland", "terrarium", "hearth", "tidepool", "pond", "nightsky"];
+const crateSkinStyle = () => CRATE_WORLDS.map((w) => `.game .hopb.crate[data-world="${w}"] .hc.crate::after { inset: 2%; ` +
+  `background: url(${BASE}/ui/crate_${w}.png?v=${VERSION}) center / 100% 100% no-repeat; border: 0; box-shadow: none; ` +
+  `image-rendering: pixelated; }\n  .game .hopb.crate[data-world="${w}"] .hc.spot.crate::after { ` +
+  `filter: drop-shadow(0 0 3px #ffeb8c) brightness(1.08); }`).join("\n  ");
+
 const STYLE = `
   :host { display: block; --hp-backdrop: var(--card-background-color, #2f4a3a);
     --hp-ground: transparent; --hp-ink: var(--primary-text-color, #222);
@@ -602,6 +610,7 @@ const STYLE = `
   .game .hc.lantern:not(.sunk) { background: radial-gradient(circle, #ffd76a 0 15%, rgba(255, 196, 80, .6) 16% 32%,
     transparent 36%), rgba(255, 253, 245, .86); }
   ${hopArtStyle()}
+  ${crateSkinStyle()}
   .game .hpath { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none;
     z-index: 1; }
   .game .hpath path { fill: none; stroke: #3a2a1a; stroke-width: 2; stroke-dasharray: 2 4; stroke-linecap: round; }
