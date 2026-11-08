@@ -1228,6 +1228,19 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
 - **Device queue:** fixture: dev pet, `left_right` and `higher_lower`, and Hop if `experimental_hop`.
   `qa_screen`: the game screen. Look at: the flip-clock digit, a round's end pause and the next prompt, quit
   mid-game (nothing late appears), the pet's line a few seconds after a win.
+- **Shipped, and where it differed from the draft:** `games_trace.test.js` has 14 cases that pass before and after (the card's own
+  `_gameLater`, `_flipNumber`, `_gameEndType` and `_endGame` on the fake clock): a step at its time and not before; the guard in the
+  wrapper; order of several steps; `_endGame` cancels all and leaves nothing on the clock; a replaced game with and without an
+  `_endGame`; a chained step and a quit in the pause; the flip swap at 80 and its `dataset.n` guard; calm; the flavour line at 4000,
+  dropped when a game is on, not cancelled by `_endGame`, unkeyed (two ends give two lines). The move: `_gameLater` is one
+  `this._later(s, ms, () => { if (s.game === g) fn(); }, { group: "game" })`, R23 the same group, R24 a bare `_later`;
+  `_endGame` is `this._stop(s, { group: "game" })`; `s.gameTimers` and the dead `cancelAnimationFrame` are gone. **Difference from
+  the draft:** R23 now joins the group, so an `_endGame` inside the 80 ms drops the digit swap that used to write into the
+  already hidden box (invisible; the trace does not pin it). The plan's `:3834,3841,3844` and `:3864-3866` and `:5685` card-check
+  lines had moved (`:3834`, `:3841`, `:3864`, `:3866`, `:5684`); they read `(el._director.inspect(s)?.timers || []).filter(group === "game")`
+  (`inspect` returns null with no timer, so the `?.` stays). `motion_ship2.test.js`'s flip-clock case reads `_later`'s call. Ratchet:
+  `card-games` (`setTimeout` 3 -> 0) and `card-flair` (`clearTimeout` 1 -> 0, `cancelAnimationFrame` 1 -> 0) reached zero and their
+  rows are deleted. No bench edit (it reads no game field).
 - **Timings:** identical. **Rollback:** revert.
 
 ### 5.11 Slice 11: visitors, reveal, swipe grace

@@ -306,12 +306,7 @@ class HatchPetCardGames extends HatchPetCardCare {
   // A delayed step of game `g`: dropped if the game ended or was replaced, and
   // cleared with the game (_endGame).
   _gameLater(s, g, ms, fn) {
-    const timers = s.gameTimers ??= new Set();
-    const id = setTimeout(() => {
-      timers.delete(id);
-      if (s.game === g) fn();
-    }, ms);
-    timers.add(id);
+    this._later(s, ms, () => { if (s.game === g) fn(); }, { group: "game" });
   }
 
   _showNumber(s, n) {
@@ -327,7 +322,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     s.gameNum.dataset.n = String(n);
     s.gameNum.classList.toggle("win", win);
     this._animate(s, s.gameNum, "flip", win ? 500 : 250);
-    setTimeout(() => { if (s.gameNum.dataset.n === String(n)) s.gameNum.innerHTML = digit(n, 3); }, FLIP_SWAP_MS);
+    this._later(s, FLIP_SWAP_MS, () => { if (s.gameNum.dataset.n === String(n)) s.gameNum.innerHTML = digit(n, 3); }, { group: "game" });
   }
 
   // One play_game call; ends the game (with a line) on a failure or refusal.
@@ -476,7 +471,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     const own = this._persona(s)?.[key];
     if (!own || Math.random() >= GAME_TYPE_ODDS) return;
     const line = this._fresh(s, key, own);
-    setTimeout(() => { if (!s.game) this._line(s, FLAVOUR, line, 3500); }, GAME_TYPE_MS);
+    this._later(s, GAME_TYPE_MS, () => { if (!s.game) this._line(s, FLAVOUR, line, 3500); });
   }
 
   // D-a: a walking day visitor that came by here today watches a dig on a day screen:

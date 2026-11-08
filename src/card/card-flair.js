@@ -191,7 +191,6 @@ class HatchPetCard extends HatchPetCardLink {
   }
 
   _endGame(s, line) {
-    cancelAnimationFrame(s.game?.cur?.raf);
     s.gameBox.querySelector(".gwatch")?.remove(); // D-a's visitor goes with the game
     s.propEl.hidden = true;
     s.propEl.style.bottom = ""; // the dig's bee sits higher
@@ -199,8 +198,7 @@ class HatchPetCard extends HatchPetCardLink {
     s.gameNum.removeAttribute("aria-label"); // the dig's "n leaves left"
     this._hopEnd(s); // the board's grid, keys and observers (card-board.js)
     s.game = null;
-    s.gameTimers?.forEach(clearTimeout);
-    s.gameTimers?.clear();
+    this._stop(s, { group: "game" }); // every delayed step and the flip swap
     // Focus inside the overlay (the picker, the close button) goes back to the play button, not the page's
     // start. A server game's inputs are on the shell: _modeExit puts the focus back from there.
     const focused = s.gameBox.contains(this.shadowRoot?.activeElement);

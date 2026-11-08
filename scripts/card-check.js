@@ -3831,14 +3831,14 @@ async function main() {
     await page.waitForTimeout(300);
     await stop();
     check("stopping a game clears its timers",
-      await page.locator("hatch-pet-card").evaluate((el) => el._slides[el._index].gameTimers.size === 0));
+      await page.locator("hatch-pet-card").evaluate((el) => (el._director.inspect(el._slides[el._index])?.timers || []).filter((t) => t.group === "game").length === 0));
     await button(2).click();
     await page.waitForTimeout(400);
     await cur().locator('.gpick [data-game="higher_lower"]').click();
     await page.waitForTimeout(1500);
     const fresh2 = await page.locator("hatch-pet-card").evaluate((el) => {
       const s = el._slides[el._index];
-      return { busy: s.game?.busy, score: s.gameScore.textContent, timers: s.gameTimers.size };
+      return { busy: s.game?.busy, score: s.gameScore.textContent, timers: (el._director.inspect(s)?.timers || []).filter((t) => t.group === "game").length };
     });
     check("a game started inside the old window is untouched",
       fresh2.busy === false && /^round \d\/5 · \d right$/.test(fresh2.score) && fresh2.timers === 0,
@@ -3861,9 +3861,9 @@ async function main() {
     await button(0).click();
     const timersLeft = await page.locator("hatch-pet-card").evaluate((el) => {
       const s = el._slides[el._index];
-      const before = s.gameTimers?.size || 0;
+      const before = (el._director.inspect(s)?.timers || []).filter((t) => t.group === "game").length;
       el._endGame(s, null);
-      return { before, after: s.gameTimers?.size || 0 };
+      return { before, after: (el._director.inspect(s)?.timers || []).filter((t) => t.group === "game").length };
     });
     await page.waitForTimeout(100);
     await button(2).click();
@@ -5681,7 +5681,7 @@ async function main() {
       // After an exit: no mode, no game, the overlay shut, the eight as before, the tint and the live node gone.
       sm.gone = (s, label, kind, extra = {}) => {
         const out = { kind, label, mode: !!s.mode, game: !!s.game, diff: sm.diff(sm.before, sm.snap(s)), moded: s.device.classList.contains("moded"),
-          live: s.modeLive.textContent, hidden: s.gameBox.hidden, timers: s.gameTimers?.size || 0, focus: sm.focus(s),
+          live: s.modeLive.textContent, hidden: s.gameBox.hidden, timers: (el._director.inspect(s)?.timers || []).filter((t) => t.group === "game").length, focus: sm.focus(s),
           ended: sm.calls.includes("virtual_pet.play_game"), ...extra };
         out.again = el._modeExit(s, "again");
         out.ok = !out.mode && !out.game && !out.diff.length && !out.moded && out.live === "" && out.hidden && out.again === false && out.timers === 0;

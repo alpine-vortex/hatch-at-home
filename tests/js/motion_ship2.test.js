@@ -103,9 +103,9 @@ test("the game counter is a flip-clock: rotateX away and back in two steps, the 
     const timers = [];
     const num = Object.assign(classes(), { dataset: {}, innerHTML: "old" });
     const animated = [];
-    const ctx = { calm: () => isCalm, digit: (n) => `d${n}`, FLIP_SWAP_MS: 80, setTimeout: (fn, ms) => timers.push([fn, ms]) };
+    const ctx = { calm: () => isCalm, digit: (n) => `d${n}`, FLIP_SWAP_MS: 80 };
     vm.runInNewContext(`const o = {${method("_flipNumber")}}; this.flip = o._flipNumber;`, ctx);
-    const self = { _showNumber: (s, n) => { num.innerHTML = `d${n}`; num.dataset.n = String(n); }, _animate: (...a) => animated.push(a) };
+    const self = { _showNumber: (s, n) => { num.innerHTML = `d${n}`; num.dataset.n = String(n); }, _animate: (...a) => animated.push(a), _later: (_s, ms, fn, o) => timers.push([fn, ms, o]) };
     ctx.flip.call(self, { gameNum: num }, 7, true);
     return { num, timers, animated };
   };
@@ -115,6 +115,7 @@ test("the game counter is a flip-clock: rotateX away and back in two steps, the 
   assert.ok(live.num.set.has("win"));
   assert.strictEqual(live.animated[0][2], "flip");
   assert.strictEqual(live.timers[0][1], 80);
+  assert.deepStrictEqual({ ...live.timers[0][2] }, { group: "game" }, "slice 10: the swap is in the game group, _endGame stops it");
   live.timers[0][0]();
   assert.strictEqual(live.num.innerHTML, "d7");
   const still = run(true);
