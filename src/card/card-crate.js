@@ -7,8 +7,11 @@ const CRATE_KEY = "hatch-crate"; // + |device|day|id: the parked letters
 const CRATE_WARNED = new Set();
 const CRATE_LEVELS = [["easy", "Easy"], ["normal", "Normal"], ["hard", "Hard"]];
 const CRATE_COPY = {
-  row: "Crates",
-  rowAria: "Play crate push",
+  row: "Today's boards",
+  rowAria: "Today's boards: Hop of the Day or Crate Push",
+  boards: "Crate Push",
+  boardsAria: "Crate Push, three levels",
+  pickBoard: "which board?",
   pick: "which level?",
   level: { easy: "Easy +14", normal: "Normal +20", hard: "Hard +26" },
   levelAria: { easy: "Easy crates", normal: "Normal crates", hard: "Hard crates" },
@@ -42,23 +45,36 @@ const crateRead = (key) => {
 };
 
 class HatchPetCardCrate extends HatchPetCardBoard {
-  // The row beside Hop's (built when the picker opens): it swaps the picker's games for the three levels.
-  _crateRow(s) {
-    let row = s.gameBox.querySelector(".gcrate");
-    if (!row) {
-      row = document.createElement("button");
-      row.className = "gcrate";
-      row.type = "button";
-      row.textContent = CRATE_COPY.row;
-      row.setAttribute("aria-label", CRATE_COPY.rowAria);
-      row.addEventListener("click", () => {
-        this._tapped(row, s);
-        this._crateLevels(s);
+  // One row for the day's boards (the Hop row's place): it offers Hop of the Day and Crate Push in the picker's
+  // own area, so the picker's layout never has a second row to fit.
+  _hopRowTap(s) {
+    this._boardsChoose(s);
+  }
+
+  _hopRowSet(s, row) {
+    const changed = super._hopRowSet(s, row);
+    row.textContent = CRATE_COPY.row;
+    row.setAttribute("aria-label", CRATE_COPY.rowAria);
+    return changed;
+  }
+
+  _boardsChoose(s) {
+    const picking = s.game;
+    if (!picking?.picking || picking.crateLoading) return;
+    const state = s.gameBox.querySelector(".ghop")?.dataset.state || "open";
+    const pick = s.gameBox.querySelector(".gpick");
+    pick.innerHTML = `<button data-board="hop" aria-label="${HOP_COPY.rowStateAria[state]}">${HOP_COPY.rowState[state]}</button>` +
+      `<button data-board="crate" aria-label="${CRATE_COPY.boardsAria}">${CRATE_COPY.boards}</button>`;
+    for (const b of pick.querySelectorAll("[data-board]")) {
+      b.addEventListener("click", () => {
+        this._tapped(b, s);
+        if (b.dataset.board === "hop") this._hopOpen(s);
+        else this._crateLevels(s);
       });
-      s.gameBox.append(row);
     }
-    row.hidden = false;
-    s.gameBox.querySelector(".ghop")?.classList.add("pair");
+    picking.prompt = CRATE_COPY.pickBoard;
+    this._pickerSay?.(s, picking, CRATE_COPY.pickBoard);
+    pick.querySelector("[data-board]")?.focus({ preventScroll: true });
   }
 
   // The level choice: the picker's own area shows the levels instead of the games; any way out of the

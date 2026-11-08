@@ -4526,6 +4526,7 @@ async function main() {
       await stub(reply);
       await picker();
       await cur().locator(".ghop").click();
+      await cur().locator('[data-board="hop"]').click(); // the row offers the boards; Hop is the first
       await page.waitForTimeout(500);
     };
     // The board's keys are the shell's eight buttons (the `hop` mode, shell modes slice 3).
@@ -4571,8 +4572,8 @@ async function main() {
         aria: row?.getAttribute("aria-label"), calls: el.__hopCalls };
     });
     check("flag on: the Hop row sits outside .gpick, the picker still counts three, and Play asked for no board",
-      (await cur().locator(".gpick button").count()) === 3 && rowAt.sibling && !rowAt.inPick && rowAt.text === "Hop of the Day" &&
-        rowAt.aria === "Play Hop of the Day" && rowAt.calls === 0, JSON.stringify(rowAt));
+      (await cur().locator(".gpick button").count()) === 3 && rowAt.sibling && !rowAt.inPick && rowAt.text === "Today's boards" &&
+        rowAt.aria === "Today's boards: Hop of the Day or Crate Push" && rowAt.calls === 0, JSON.stringify(rowAt));
     await quit();
 
     // At each width (the viewport's, as every section here: a card in it is narrower, 226 px at 300), the Hop row
@@ -4992,6 +4993,7 @@ async function main() {
         }, [reply, then || null]);
         await picker();
         await cur().locator(".ghop").click();
+      await cur().locator('[data-board="hop"]').click(); // the row offers the boards; Hop is the first
         await page.waitForTimeout(500);
       };
       const play = (letters) => card.evaluate((el, l) => {
@@ -5185,8 +5187,10 @@ async function main() {
 
       // The row: open / solved / tidy from the sensor's attribute, a stale day, no attribute, and the local settle.
       const rowText = () => card.evaluate((el) => {
-        const row = el._slides[el._index].gameBox.querySelector(".ghop");
-        return row && { text: row.textContent, aria: row.getAttribute("aria-label") };
+        const box = el._slides[el._index].gameBox;
+        box.querySelector(".ghop")?.click(); // the row offers the boards: Hop's choice carries the day's state
+        const b = box.querySelector('[data-board="hop"]');
+        return b && { text: b.textContent, aria: b.getAttribute("aria-label") };
       });
       const attr = async (hop_day) => { await inject(pet["sensor.life_stage"], { attributes: { hop_day } }); await page.waitForTimeout(500); };
       const day = await today();
@@ -5231,6 +5235,7 @@ async function main() {
     await card.evaluate((el) => { const s = el._slides[el._index]; el._startGame(s, s.buttons.play); });
     await page.waitForTimeout(300);
     await cur().locator(".ghop").click();
+      await cur().locator('[data-board="hop"]').click(); // the row offers the boards; Hop is the first
     await page.waitForTimeout(500);
     const clean = await card.evaluate((el) => {
       const s = el._slides[el._index];
@@ -5285,6 +5290,7 @@ async function main() {
     await flag(true);
     await picker();
     await cur().locator(".ghop").click();
+      await cur().locator('[data-board="hop"]').click(); // the row offers the boards; Hop is the first
     await page.waitForTimeout(1500);
     const real = await card.evaluate((el) => {
       const s = el._slides[el._index];
@@ -5329,20 +5335,13 @@ async function main() {
     await card.evaluate(() => { for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-crate")) localStorage.removeItem(k); });
     await button(2).click();
     await page.waitForTimeout(500);
-    const rowAt = () => card.evaluate((el) => {
-      const s = el._slides[el._index];
-      const c = s.gameBox.querySelector(".gcrate");
-      const h = s.gameBox.querySelector(".ghop");
-      const rc = c?.getBoundingClientRect();
-      const rh = h?.getBoundingClientRect();
-      return { text: c?.textContent, apart: !!(rc && rh && rh.right <= rc.left + 0.5), sameLine: !!(rc && rh && Math.abs(rc.bottom - rh.bottom) < 2) };
-    });
-    // The picker may still be opening (it eases in): take the geometry once it holds still.
-    let row = await rowAt();
-    for (let i = 0; i < 10 && !(row.apart && row.sameLine); i++) { await page.waitForTimeout(300); row = await rowAt(); }
-    check("crate: the Crates row sits beside Hop's, not over it", row.text === "Crates" && row.apart && row.sameLine, JSON.stringify(row));
+    const rowTxt = await card.evaluate((el) => el._slides[el._index].gameBox.querySelector(".ghop")?.textContent);
     await shot("crate-a-picker");
-    await cur().locator(".gcrate").click();
+    await cur().locator(".ghop").click();
+    await page.waitForTimeout(200);
+    const boards = await card.evaluate((el) => [...el._slides[el._index].gameBox.querySelectorAll(".gpick [data-board]")].map((b) => b.dataset.board));
+    check("crate: one row, \"Today's boards\", offers Hop and Crate Push", rowTxt === "Today's boards" && boards.join() === "hop,crate", JSON.stringify([rowTxt, boards]));
+    await cur().locator('.gpick [data-board="crate"]').click();
     await page.waitForTimeout(300);
     await shot("crate-b-levels");
     const lv = await card.evaluate((el) => [...el._slides[el._index].gameBox.querySelectorAll(".gpick [data-crate]")].map((b) => b.dataset.crate));

@@ -125,12 +125,17 @@ class HatchPetCardBoard extends HatchPetCardGames {
       row.type = "button";
       row.addEventListener("click", () => {
         this._tapped(row, s);
-        this._hopOpen(s);
+        this._hopRowTap(s);
       });
       s.gameBox.append(row);
     }
     this._hopRowSet(s, row);
     row.hidden = false;
+  }
+
+  // What the row does (card-crate.js: it offers the board games).
+  _hopRowTap(s) {
+    this._hopOpen(s);
   }
 
   // The row's day: the life-stage sensor's `hop_day` and the last board reply this card saw, read

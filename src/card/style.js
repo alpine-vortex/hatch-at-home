@@ -549,12 +549,6 @@ const STYLE = `
   .game .ghop:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
   /* Crate push (crate-push plan, slice 3): its row sits beside Hop's (each half the strip), the picker's
      buttons become the three levels, the cells are plain CSS (a spot is a ring, a crate a box). */
-  .game .ghop.pair { right: 51%; }
-  .game .gcrate { position: absolute; left: 51%; right: 3%; bottom: 2%; min-height: 44px; width: auto;
-    border-radius: 14px; padding: 4px 10px; font: inherit; font-size: 14px; box-shadow: 0 4px 0 #3a2a1a;
-    background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a; cursor: pointer; }
-  .game .gcrate[hidden] { display: none; }
-  .game .gcrate:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
   .game .hopb.crate .hc.floor { background: rgba(255, 253, 245, .86); }
   .game .hopb.crate .hc.water { background: rgba(70, 130, 190, .72); }
   .game .hopb.crate .hc.spot { background: rgba(255, 253, 245, .86) radial-gradient(circle, transparent 0 28%,
