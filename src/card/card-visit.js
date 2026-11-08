@@ -539,7 +539,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
       box.append(img);
     });
     s.screen.append(box);
-    this._later(s, 2800, () => box.remove(), { group: "fx", undo: () => box.remove() });
+    this._later(s, 2800, () => box.remove(), { group: "fx", hidden: "tab", undo: () => box.remove() });
   }
 
   // The frames to draw now: a reaction pose while one runs, else the mood's.
@@ -605,14 +605,14 @@ class HatchPetCardVisit extends HatchPetCardLooks {
   // One house effect at a time: a new one replaces the last.
   _houseFx(s, cls) {
     s.screen.classList.remove("fx-heat", "fx-cool", "fx-suds", "fx-tumble", "fx-chime");
-    this._hold(s, s.screen, [cls], 2500, { key: "housefx" });
+    this._hold(s, s.screen, [cls], 2500, { key: "housefx", hidden: "tab" });
   }
 
   // The robot vacuum's stand-in (fx-robot, 6 s across the floor line) until the art
   // (house_robot) lands; the screen's width sets how far it goes.
   _robotFx(s) {
     s.screen.style.setProperty("--robot-w", `${(s.screen.clientWidth || 400) - 22}px`);
-    this._hold(s, s.screen, ["fx-robot"], 6000, { key: "robot" });
+    this._hold(s, s.screen, ["fx-robot"], 6000, { key: "robot", hidden: "tab" });
   }
 
   // --- The device-alive rain adapter (plan 2026-11-03, slice 3B) --------------------------
@@ -655,8 +655,8 @@ class HatchPetCardVisit extends HatchPetCardLooks {
   }
 
   // The tab went hidden ("tab"), or the card scrolled away ("offscreen"): nothing runs; the state is
-  // painted on return. The ledger hears which (G6): "tab" drains its `hidden: "tab"` entries (none until
-  // slice X1), "offscreen" drains nothing.
+  // painted on return. The ledger hears which (G6): "tab" drains its tab-policy entries (the
+  // decorative one-shots, slice X1), "offscreen" drains nothing.
   _dirPause(why) {
     for (const s of this._slides || []) this._director?.cancel(s, "paused", ["shellImpulse"]);
     this._director?.hidden(why);
@@ -772,7 +772,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     const ring = document.createElement("span");
     ring.className = "burst big";
     s.screen.append(ring);
-    this._later(s, 600, () => ring.remove(), { group: "fx", undo: () => ring.remove() });
+    this._later(s, 600, () => ring.remove(), { group: "fx", hidden: "tab", undo: () => ring.remove() });
   }
 }
 

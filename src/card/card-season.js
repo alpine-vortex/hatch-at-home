@@ -195,7 +195,7 @@ class HatchPetCardSeason extends HatchPetCardBoard {
       box.append(bit);
     }
     s.screen.append(box);
-    this._later(s, 3600, () => box.remove(), { group: "season", undo: () => box.remove() });
+    this._later(s, 3600, () => box.remove(), { group: "season", hidden: "tab", undo: () => box.remove() });
   }
 
   // Where a hat sits: the top of the head in the frame on show, found by going
@@ -304,7 +304,7 @@ class HatchPetCardSeason extends HatchPetCardBoard {
     s.flairUntil = Date.now() + FLAIR_MS + 1800;
     this._speak(s, line, 4000, { catch: catchy });
     this._animate(s, s.pet, "perk", 320);
-    this._later(s, FLAIR_MS + 1800, () => box.remove(), { group: "season", undo: () => box.remove() });
+    this._later(s, FLAIR_MS + 1800, () => box.remove(), { group: "season", hidden: "tab", undo: () => box.remove() });
   }
 
   // Trick or treat: a sweet pops up at its feet. At Thanksgiving, the pet
@@ -352,7 +352,7 @@ class HatchPetCardSeason extends HatchPetCardBoard {
       `<img src="${BASE}/ui/season_${season.key}_${n}.png?v=${VERSION}" alt="">`).join("");
     if (frames.length > 1) el.classList.add("flap");
     s.seasonBox.append(el);
-    this._later(s, ms + 200, () => el.remove(), { group: "season", undo: () => el.remove() });
+    this._later(s, ms + 200, () => el.remove(), { group: "season", hidden: "tab", undo: () => el.remove() });
     return el;
   }
 

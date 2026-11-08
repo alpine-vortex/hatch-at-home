@@ -452,7 +452,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
       const ring = document.createElement("span");
       ring.className = "burst";
       R.el.append(ring);
-      this._later(s, 600, () => ring.remove(), { group: "reveal", undo: () => ring.remove() });
+      this._later(s, 600, () => ring.remove(), { group: "reveal", hidden: "tab", undo: () => ring.remove() });
     }
     if (R.quiet) return;
     // The reveal's own line still up doesn't hold the next one; anyone else's does.

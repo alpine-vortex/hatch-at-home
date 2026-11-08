@@ -736,7 +736,7 @@ Ordered low risk to high, each independently shippable and revertible. "Tier" is
 | 12 | The infrared link | R29-R33 | high | B1 (`_forget` ends the link, owner decision 2026-11-07) |
 | 13 | Channel waits, memory page, confirm | R8, R9, R38, R39, R56 | high | none |
 | 14 | Close-out: final allowlist, `_forget` becomes one drain plus the named closers, docs. **Needs slice 12 merged** | none (deletes dead fields) | low | B1 (global test; the answer resend is a disclosed exception) |
-| X1 | Hidden policy: flip the listed entries to `tab`. **After 2, 3, 6 and 11** | policy only | low-med | **B2** |
+| X1 | Hidden policy: flip the listed entries to `tab`. **After 2, 3, 6 and 11. Built 2026-11-08 (branch director-x1, 11 sites)** | policy only | low-med | **B2** |
 
 Slice 14's `forget_drain.test.js` is the global proof of B1. X1 is outside the numbered ladder because it
 is the only slice that changes what the player can see (a stale effect no longer shows on return) and it

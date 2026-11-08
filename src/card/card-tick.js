@@ -499,7 +499,7 @@ class HatchPetCardTick extends HatchPetCardSitter {
       s.screen.append(speck);
       this._moving(s, 2700);
       this._later(s, rtl ? 1200 : 0, () => this._look(s, 1300), { group: "speck" }); // follows it across
-      this._later(s, 2700, () => speck.remove(), { group: "speck", undo: () => speck.remove() });
+      this._later(s, 2700, () => speck.remove(), { group: "speck", hidden: "tab", undo: () => speck.remove() });
     } else {
       const words = this._words(s);
       const lines = this._babySet(s, `idle.${IDLE_LINES.has(s.moodState) ? s.moodState : "default"}`) || {

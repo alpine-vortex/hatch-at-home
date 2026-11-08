@@ -584,7 +584,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
     img.alt = "";
     img.src = `${BASE}/ui/prop_bubbles_1.png?v=${VERSION}`;
     s.prop.after(img);
-    this._later(s, 1300, () => img.remove(), { group: "fx", undo: () => img.remove() });
+    this._later(s, 1300, () => img.remove(), { group: "fx", hidden: "tab", undo: () => img.remove() });
     return { img };
   }
 
