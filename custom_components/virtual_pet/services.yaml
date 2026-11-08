@@ -111,6 +111,7 @@ hop:
           options:
             - board
             - settle
+            - hint
     id:
       required: false
       example: 3f2a9c01be

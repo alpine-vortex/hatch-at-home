@@ -223,7 +223,11 @@ class Solve:
 def solve(board: Board, cap: int = 400_000) -> Solve | None:
     """Breadth-first over (pet, crates): a fewest-moves solution, or None if the
     board cannot be solved. Raises TooBig past `cap` states."""
-    start = start_state(board)
+    return solve_from(board, start_state(board), cap)
+
+
+def solve_from(board: Board, start: State, cap: int = 400_000) -> Solve | None:
+    """`solve`, from any state (the hint's, mid-round)."""
     if is_solved(board, start):
         return Solve("", 0, 1)
     seen: dict[State, tuple[State, str] | None] = {start: None}
@@ -250,6 +254,52 @@ def solve(board: Board, cap: int = 400_000) -> Solve | None:
                 raise TooBig(f"over {cap} states")
             queue.append(nxt)
     return None
+
+
+# --- The hint --------------------------------------------------------------------
+
+
+def hint(board: Board, moves: str, cap: int = 400_000) -> dict[str, Any]:
+    """What to tell a player who has played `moves` (empty is fine). One of
+    {result: too_long}, {result: illegal, bad_index}, or {result: ok, kind}
+    with kind `solved`; `step` (letter, push: the first move of a fewest-moves
+    solution from here, and whether it pushes); `stuck` (back: how many of the
+    moves to take back to reach a state that can still be solved); `unknown`
+    (the solver passed its cap). The solution's tail is never returned.
+
+    Solvability is monotone along the list (a state that can be solved came
+    from one that can), so the longest solvable prefix is found by bisect."""
+    if len(moves) > MAX_MOVES:
+        return {"result": "too_long"}
+    states = [start_state(board)]
+    for i, letter in enumerate(moves):
+        nxt = apply_move(board, states[-1], letter)
+        if nxt is None:
+            return {"result": "illegal", "bad_index": i}
+        states.append(nxt)
+    if is_solved(board, states[-1]):
+        return {"result": "ok", "kind": "solved"}
+    try:
+        here = solve_from(board, states[-1], cap)
+        if here is None:
+            lo, hi = 0, len(moves) - 1  # states[0] is solvable; [-1] is not
+            while lo < hi:
+                mid = (lo + hi + 1) // 2
+                if solve_from(board, states[mid], cap) is None:
+                    hi = mid - 1
+                else:
+                    lo = mid
+            return {"result": "ok", "kind": "stuck", "back": len(moves) - lo}
+    except TooBig:
+        return {"result": "ok", "kind": "unknown"}
+    letter = here.moves[0]
+    nxt = apply_move(board, states[-1], letter)
+    return {
+        "result": "ok",
+        "kind": "step",
+        "letter": letter,
+        "push": nxt is not None and nxt.crates != states[-1].crates,
+    }
 
 
 # --- The bots --------------------------------------------------------------------

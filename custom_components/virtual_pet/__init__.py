@@ -159,7 +159,7 @@ PLAY_GAME_SCHEMA = vol.Schema(
 _HOP_FIELDS = vol.Schema(
     {
         vol.Required(ATTR_ENTITY_ID): cv.entity_id,
-        vol.Required(ATTR_ACTION): vol.In(["board", "settle"]),
+        vol.Required(ATTR_ACTION): vol.In(["board", "settle", "hint"]),
         vol.Optional("id"): vol.All(cv.string, vol.Length(max=32)),
         vol.Optional("moves"): vol.All(
             cv.string, vol.Length(max=max(R.HOP_MAX_MOVES, crate_push.MAX_MOVES) + 1)
@@ -179,6 +179,8 @@ _HOP_FIELDS = vol.Schema(
 def _hop_moves_fit(data: dict[str, Any]) -> dict[str, Any]:
     """Hop's move list keeps its own, shorter cap (one letter over, so the
     server answers too_long); crate push's cap is its own (crate_push.py)."""
+    if data["game"] == "hop" and data[ATTR_ACTION] == "hint":
+        raise vol.Invalid("a hint is for crate push", path=[ATTR_ACTION])
     if data["game"] == "hop" and len(data.get("moves", "")) > R.HOP_MAX_MOVES + 1:
         raise vol.Invalid("the move list is too long", path=["moves"])
     return data
@@ -398,6 +400,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     call.data.get("id", ""),
                     call.data.get("moves", ""),
                     call.context,
+                )
+            if call.data[ATTR_ACTION] == "hint":
+                return await pet_of(call).async_crate_push_hint(
+                    call.data["level"],
+                    call.data.get("round"),
+                    call.data.get("id", ""),
+                    call.data.get("moves", ""),
                 )
             return await pet_of(call).async_crate_push_board(
                 call.data["level"], call.data.get("round")

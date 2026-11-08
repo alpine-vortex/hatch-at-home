@@ -786,3 +786,19 @@ test("4B: the engine builds the map from the table and names no key or game; the
   assert.match(build, /<div class="device" tabindex="-1">/);
   assert.match(read("src/card/style.js"), /\.device:focus \{ outline: none; \}/);
 });
+
+// ---- crate push, slice 6a: slot 5 is the hint ----
+
+test("crate entry: slot 5 is the hint (key h, the special's icon), enabled from g.keys.hint", () => {
+  const m = M.SHELL_MODES.crate;
+  assert.deepStrictEqual(entryProblems(m), []);
+  assert.deepStrictEqual([...m.slots].map((x) => x.cap), ["left", "up", "down", "right", "hint", "undo", "restart", "quit"].map((c, i) => (i === 6 ? m.slots[6].cap : c)));
+  const hint = m.slots[4];
+  assert.strictEqual(hint.icon, "icon_mode_special");
+  assert.deepStrictEqual([...hint.keys], ["h"]);
+  const s = { game: { keys: { hint: { enabled: true, label: "Show a hint" } } } };
+  assert.strictEqual(hint.enabled(s), true);
+  assert.strictEqual(M.shellText(hint.aria, s), "Show a hint");
+  assert.strictEqual(hint.enabled({ game: { keys: { hint: { enabled: false } } } }), false);
+  assert.strictEqual(hint.enabled({ game: { keys: {} } }), false);
+});

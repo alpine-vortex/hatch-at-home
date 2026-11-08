@@ -202,3 +202,48 @@ def test_golden_boards_do_not_drift():
         for lv in LEVELS
     }
     assert got == GOLDEN
+
+
+# --- The hint (slice 6a) ---------------------------------------------------------
+
+HINT_BOARD = S.Board(4, 3, ("....", "Pb.n", "...."))
+
+
+def test_solve_from_starts_where_it_is_told():
+    start = S.start_state(HINT_BOARD)
+    assert S.solve_from(HINT_BOARD, start).moves == S.solve(HINT_BOARD).moves
+    state = S.apply_move(HINT_BOARD, start, "r")
+    assert S.solve_from(HINT_BOARD, state).moves == "r"
+
+
+def test_hint_gives_the_next_step_and_whether_it_pushes():
+    assert S.hint(HINT_BOARD, "") == {
+        "result": "ok",
+        "kind": "step",
+        "letter": "r",
+        "push": True,
+    }
+    walk = S.hint(HINT_BOARD, "d")
+    assert walk["kind"] == "step" and walk["push"] is False
+    assert set(walk) == {"result", "kind", "letter", "push"}  # never the tail
+
+
+def test_hint_counts_back_to_the_last_state_that_can_be_solved():
+    # d, r walk to under the crate (still solvable); u pushes it into the top
+    # edge, dead. Take back the push; a walk after it is taken back as well.
+    assert S.hint(HINT_BOARD, "dr")["kind"] == "step"
+    assert S.hint(HINT_BOARD, "dru") == {"result": "ok", "kind": "stuck", "back": 1}
+    assert S.hint(HINT_BOARD, "drud")["back"] == 2
+    assert S.hint(HINT_BOARD, "drudl")["back"] == 3
+
+
+def test_hint_on_a_solved_illegal_and_long_list():
+    assert S.hint(HINT_BOARD, "rr") == {"result": "ok", "kind": "solved"}
+    assert S.hint(HINT_BOARD, "rrr") == {"result": "illegal", "bad_index": 2}
+    assert S.hint(HINT_BOARD, "uu") == {"result": "illegal", "bad_index": 1}
+    assert S.hint(HINT_BOARD, "z") == {"result": "illegal", "bad_index": 0}
+    assert S.hint(HINT_BOARD, "u" * (S.MAX_MOVES + 1)) == {"result": "too_long"}
+
+
+def test_hint_on_a_solver_that_gives_up_is_unknown():
+    assert S.hint(HINT_BOARD, "", cap=1) == {"result": "ok", "kind": "unknown"}

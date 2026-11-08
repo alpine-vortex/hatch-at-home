@@ -95,8 +95,8 @@ function shellHop() {
   };
 }
 
-// Crate push (slice 3): the same eight as Hop without the special: the four directions, undo, restart (it
-// reads "next" on a solved board) and quit. The keys' state is `s.game.keys`, written by _crateDraw.
+// Crate push (slice 3, hint in 6a): the same eight as Hop with the hint in place of the special: the four
+// directions, hint (slot 5, key h, the special's icon), undo, restart (it reads "next" on a solved board) and quit. The keys' state is `s.game.keys`, written by _crateDraw.
 function shellCrate() {
   const key = (name, icon, cap, keys) => ({
     icon, cap, keys,
@@ -109,7 +109,7 @@ function shellCrate() {
     slots: [
       key("left", "icon_mode_left", "left", ["ArrowLeft"]), key("up", "icon_mode_up", "up", ["ArrowUp"]),
       key("down", "icon_mode_down", "down", ["ArrowDown"]), key("right", "icon_mode_right", "right", ["ArrowRight"]),
-      null,
+      key("hint", "icon_mode_special", "hint", ["h"]),
       key("undo", "icon_mode_undo", "undo", ["z"]),
       { ...key("restart", "icon_mode_restart", (s) => s.game?.keys?.restart?.cap || "restart", ["r"]) },
       { icon: "icon_mode_quit", cap: "quit", aria: "Stop the game", act: (card, s) => card._quitGame(s, card._quitLine(s)) },

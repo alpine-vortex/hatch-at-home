@@ -5321,7 +5321,7 @@ async function main() {
       el._crateSend = async (id, g) => { el.__crateSettles.push([g.level, g.round, g.id, g.moves.join("")]); el.__crateRound += 1; return { result: "ok", paid: 24, found: false, next_round: el.__crateRound }; }; }, reply);
     // The board section's "flag off" harness may leave a no-op _hopRow shadowing the prototype (no Hop row).
     await card.evaluate((el) => { delete el._hopRow; });
-    const KEYS = ["left", "up", "down", "right", "special", "undo", "restart", "quit"];
+    const KEYS = ["left", "up", "down", "right", "hint", "undo", "restart", "quit"];
     const key = (k) => button(KEYS.indexOf(k));
     const state = () => card.evaluate((el) => {
       const s = el._slides[el._index];
@@ -5352,8 +5352,8 @@ async function main() {
     let st = await state();
     check("crate: a level opens its board (round 1) on Hop's overlay with one crate", st?.kind === "crate" && st.asks[0].join() === "normal," &&
       st.crateCells === 1 && st.pet === 5, JSON.stringify(st));
-    check("crate: only the directions that move, no special, undo off, restart off, quit on",
-      (await live()).join() === "up,down,right,quit", JSON.stringify(await live()));
+    check("crate: only the directions that move, hint on, undo off, restart off, quit on",
+      (await live()).join() === "up,down,right,hint,quit", JSON.stringify(await live()));
     {
       const sk = await card.evaluate((el) => {
         const s = el._slides[el._index];
@@ -5373,6 +5373,42 @@ async function main() {
     await page.waitForTimeout(200);
     st = await state();
     check("crate: undo takes the push back", st.moves === "" && st.pet === 5 && st.crates.join() === "6", JSON.stringify(st));
+    // Slice 6a: the hint key (slot 5). The hint service is stubbed on the card (_crateHintSend).
+    await card.evaluate((el) => { el.__hintAsks = []; el.__hintReply = { result: "ok", kind: "step", letter: "r", push: true };
+      el._crateHintSend = async (id, g, sent) => { el.__hintAsks.push([g.level, g.round, g.id, sent]);
+        if (el.__hintHold) await el.__hintHold; return el.__hintReply; }; });
+    const hinted = () => card.evaluate((el) => { const s = el._slides[el._index];
+      return { btn: el._modeButtons(s).map((b, i) => b.classList.contains("hint") ? i : -1).filter((i) => i >= 0),
+        cells: [...s.gameBox.querySelectorAll(".hc.hint")].map((c) => +c.dataset.i), busy: !!s.game.busy,
+        key: s.game.keys.hint.label, aria: el._modeButtons(s)[4].getAttribute("aria-label") }; });
+    await key("hint").click();
+    await page.waitForTimeout(150);
+    let hs = await hinted();
+    check("crate: hint pulses the matching direction button and the cell it steps to, no sentence",
+      hs.btn.join() === "3" && hs.cells.join() === "6" && hs.aria === "Show a hint" &&
+        (await card.evaluate((el) => JSON.stringify(el.__hintAsks))) === '[["normal",1,"crate-check-1",""]]', JSON.stringify(hs));
+    await page.waitForTimeout(1800);
+    hs = await hinted();
+    check("crate: the pulse ends by itself", hs.btn.length === 0 && hs.cells.length === 0, JSON.stringify(hs));
+    // A move made while the hint is in flight drops the reply.
+    await card.evaluate((el) => { el.__hintAsks.length = 0; el.__hintHold = new Promise((r) => { el.__hintRelease = r; }); });
+    await key("hint").click();
+    await page.waitForTimeout(100);
+    check("crate: a hint in flight turns slot 5 off", !(await live()).includes("hint"), JSON.stringify(await live()));
+    await key("right").click();
+    await page.waitForTimeout(250);
+    await card.evaluate((el) => { el.__hintRelease(); el.__hintHold = null; });
+    await page.waitForTimeout(300);
+    hs = await hinted();
+    check("crate: a hint for letters no longer played is dropped", hs.btn.length === 0 && hs.cells.length === 0 && !hs.busy &&
+      (await live()).includes("hint"), JSON.stringify(hs));
+    await key("undo").click();
+    await page.waitForTimeout(200);
+    await card.evaluate((el) => { el.__hintReply = { result: "ok", kind: "stuck", back: 2 }; });
+    await key("hint").click();
+    await page.waitForTimeout(200);
+    check("crate: a stuck board says how far to take back", (await card.evaluate((el) => el._slides[el._index].bubble.textContent)).includes("take back 2"), "bubble text");
+    await card.evaluate((el) => { delete el._crateHintSend; delete el.__hintAsks; delete el.__hintReply; });
     // A tap on the cell next to the pet pushes; a tap far away does nothing.
     await cur().locator('.hc[data-i="14"]').click({ force: true });
     st = await state();

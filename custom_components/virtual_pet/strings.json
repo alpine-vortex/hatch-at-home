@@ -429,7 +429,7 @@
       "fields": {
         "game": {
           "name": "Game",
-          "description": "hop (default) or crate-push, the crate-pushing board game. Crate-push answers the board action only for now."
+          "description": "hop (default) or crate-push, the crate-pushing board game. Crate-push answers board, settle and hint."
         },
         "level": {
           "name": "Level",
@@ -445,15 +445,15 @@
         },
         "action": {
           "name": "Action",
-          "description": "board: return today's board. settle: replay and pay a board played to the nest."
+          "description": "board: return today's board. settle: replay and pay a board played to the nest. hint: crate-push only; the next step for the moves played so far (a step with letter and push, stuck with back N, unknown, or solved). A hinted round is not neat."
         },
         "id": {
           "name": "Board",
-          "description": "Settle: the id of the board that was played, from the board action's reply."
+          "description": "Settle or hint: the id of the board that was played, from the board action's reply."
         },
         "moves": {
           "name": "Moves",
-          "description": "Settle: the moves from the start, one letter per move: the cell stepped on, a to x in reading order."
+          "description": "Settle or hint: the moves from the start, one letter per move: the cell stepped on, a to x in reading order."
         },
         "shared": {
           "name": "Shared screen",

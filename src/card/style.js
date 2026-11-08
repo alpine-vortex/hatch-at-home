@@ -557,6 +557,14 @@ const STYLE = `
     border: 2px solid #3a2a1a; box-shadow: inset 0 0 0 3px rgba(255, 253, 245, .35); }
   .game .hopb.crate .hc { position: relative; }
   .game .hopb.crate .hc.spot.crate::after { background: #d9a85a; }
+  /* The hint (slice 6a): the matching direction button and the cell the pet steps to. A still ring; the
+     pulse is added only when motion is allowed (calm() in JS, the OS rule here). One shot, no loop. */
+  .game .hopb.crate .hc.hint { box-shadow: inset 0 0 0 3px #e8a317; }
+  .toy.hint { box-shadow: 0 0 0 3px #ffd34d, 0 0 0 5px #3a2a1a; }
+  @keyframes hint-pulse { 0%, 100% { box-shadow: 0 0 0 3px #ffd34d, 0 0 0 5px #3a2a1a; } 50% { box-shadow: 0 0 0 6px #ffd34d, 0 0 0 8px #3a2a1a; } }
+  @keyframes hint-pulse-cell { 0%, 100% { box-shadow: inset 0 0 0 3px #e8a317; } 50% { box-shadow: inset 0 0 0 7px #ffd34d; } }
+  .toy.hint.pulse { animation: hint-pulse .8s ease-in-out 2; }
+  .game .hopb.crate .hc.hint.pulse { animation: hint-pulse-cell .8s ease-in-out 2; }
   /* The board: the grid, centred in the whole overlay (the keys are the shell's eight buttons).
      Sizes are set in JS (_hopLayout) from the overlay: --c the cell. No new art:
      the cells are CSS. The real pet stays under the board, still, and the piece wears its frame. */

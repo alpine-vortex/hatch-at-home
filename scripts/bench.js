@@ -533,6 +533,18 @@ const PRESETS = {
     return out;
   },
 
+  // Crate push hints (slice 6a): the pulse on the matching direction button and the target cell, 320 and 420.
+  cratehint() {
+    const out = [];
+    for (const width of [320, 420]) {
+      for (const level of ["easy", "normal", "hard"]) {
+        out.push({ width, world: "woodland", group: `cratehint-${width}`, view: "crate", name: `cratehint/${width}-${level}`,
+          label: `${level}: a hint step`, crate: { level, hint: { kind: "step", letter: "r", push: true } } });
+      }
+    }
+    return out;
+  },
+
   hop() {
     const out = [];
     const families = ["hop", "glide", "swim", "dig", "climb", "squeeze"];

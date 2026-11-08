@@ -25,8 +25,12 @@ const CRATE_COPY = {
   changed: "that board moved on, here is the next one",
   enough: "that's plenty of crates for today",
   failed: "hmm, that didn't work",
+  hint: "Show a hint",
+  stuck: (n) => `this one is stuck, take back ${n}`,
+  notNeat: "a hinted board is not neat",
 };
 const CRATE_CELLS = { ".": "floor", "#": "wall", "~": "water", P: "floor", p: "floor spot", b: "floor", n: "floor spot", B: "floor spot" };
+const CRATE_DELTA = { u: [0, -1], d: [0, 1], l: [-1, 0], r: [1, 0] };
 const CRATE_DIRS = [["left", "l"], ["up", "u"], ["down", "d"], ["right", "r"]];
 const crateStore = (key, val) => {
   try {
@@ -147,6 +151,67 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     return res?.response;
   }
 
+  // The `hop` service's `hint` answer: the next step for the letters played so far (the seam a check stubs).
+  async _crateHintSend(id, g, sent) {
+    const res = await this._hass.callService("virtual_pet", "hop",
+      { entity_id: id, action: "hint", game: "crate-push", level: g.level, round: g.round, id: g.id,
+        moves: sent }, undefined, false, true);
+    return res?.response;
+  }
+
+  // The hint key: asks the server for the next step from where the letters stand. The reply is used only if
+  // the letters are still the ones sent (a move or an undo meanwhile drops it). A step pulses the matching
+  // direction button and the cell the pet would step to, with no sentence; a stuck board says how far to take back.
+  async _crateHint(s) {
+    const g = s.game;
+    const id = s.ids?.["sensor.mood"];
+    if (g?.kind !== "crate" || !id || g.done || g.settling || g.crateLoading || g.busy) return;
+    const sent = g.moves.join("");
+    g.busy = true;
+    g.lastAt = Date.now();
+    this._crateDraw(s, false);
+    let reply;
+    try {
+      reply = await this._crateHintSend(id, g, sent);
+    } catch (err) {
+      reply = null;
+    }
+    if (s.game !== g) return;
+    g.busy = false;
+    g.lastAt = Date.now();
+    if (g.moves.join("") === sent) this._crateHintShow(s, reply);
+    this._crateDraw(s, false);
+  }
+
+  _crateHintShow(s, reply) {
+    const g = s.game;
+    if (reply?.result !== "ok") {
+      const line = REFUSALS[reply?.result];
+      if (reply?.result === "board_changed") crateStore(g.key, null);
+      if (line && typeof line === "string") this._write(s, line, 6000);
+      return;
+    }
+    const first = !g.hinted;
+    if (reply.kind === "step") g.hinted = true;
+    if (reply.kind === "stuck") {
+      g.hinted = true;
+      this._write(s, CRATE_COPY.stuck(reply.back), 6000);
+      return;
+    }
+    if (reply.kind !== "step") return;
+    const dir = CRATE_DIRS.findIndex(([, letter]) => letter === reply.letter);
+    if (dir < 0) return;
+    if (first && g.neatOpen) this._write(s, CRATE_COPY.notNeat, 6000);
+    const [dx, dy] = CRATE_DELTA[reply.letter];
+    const { w } = g.board;
+    const to = g.st.pet + dy * w + dx;
+    const classes = calm() ? ["hint"] : ["hint", "pulse"];
+    const button = this._modeButtons(s)[dir];
+    if (button) this._hold(s, button, classes, 1600, { key: "crate.hint.btn" });
+    const cell = g.el?.cells[to];
+    if (cell) this._hold(s, cell, classes, 1600, { key: "crate.hint.cell" });
+  }
+
   // A solved board goes to the server, which replays it and pays. The letters stay parked until it says
   // ok, so a closed card or a lost connection settles on the next open.
   async _crateSettle(s) {
@@ -190,7 +255,8 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     const board = { w: reply.w, h: reply.h, grid: reply.grid, par: reply.par };
     const key = `${CRATE_KEY}|${s.ids?.device}|${reply.day}|${reply.id}`;
     const g = s.game = { kind: "crate", board, level, round, key, id: reply.id, day: reply.day, moves: [],
-      st: HATCH_CRATE_PUSH.start(board), done: false, cell: 0, keys: {} };
+      st: HATCH_CRATE_PUSH.start(board), done: false, cell: 0, keys: {},
+      hinted: !!reply.hinted, neatOpen: !!reply.neat_open };
     const parked = crateRead(key);
     if (parked) {
       const run = HATCH_CRATE_PUSH.replay(board, [...parked]);
@@ -286,6 +352,7 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     const keys = {};
     for (const [name, letter] of CRATE_DIRS) keys[name] = { enabled: !g.done && legal.has(letter), label: CRATE_COPY.step[name] };
     keys.undo = { enabled: !g.done && g.moves.length > 0, label: CRATE_COPY.undo };
+    keys.hint = { enabled: !g.done && !g.settling && !g.crateLoading && !g.busy, label: CRATE_COPY.hint };
     keys.restart = { enabled: g.moves.length > 0, label: g.done ? CRATE_COPY.next : CRATE_COPY.restart,
       cap: g.done ? "next" : "restart" };
     g.keys = keys;
@@ -298,6 +365,7 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     g.lastAt = Date.now();
     const dir = CRATE_DIRS.find(([name]) => name === k);
     if (dir) this._crateMove(s, dir[1]);
+    else if (k === "hint") this._crateHint(s);
     else if (k === "undo") this._crateReplay(s, g.moves.slice(0, -1));
     else if (k === "restart") {
       if (g.done) this._crateNext(s);

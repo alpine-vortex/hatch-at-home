@@ -3108,13 +3108,16 @@ def settle_crate_push(
     flags: dict[str, bool | None] | None,
     known: dict[str, set[str]],
     rng: random.Random,
+    hinted: bool = False,
 ) -> tuple[dict[str, Any], list[Event]]:
     """A solved crate-push round, replayed by the caller on the round's board,
     after its refusals and its round check. It pays the level's happiness and
     costs a finished game (played and won are counted per round). The day's
     first neat solve on normal or hard also pays one find of the world,
     outside the find clock (easy is neat too often to count). The map rolls to
-    today first."""
+    today first. A round the player asked a hint on is not neat (pay is
+    unchanged): `hinted` turns `neat` off."""
+    neat = neat and not hinted
     events: list[Event] = []
     if state.crate_day.get("day") != day:
         state.crate_day = {

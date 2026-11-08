@@ -1169,6 +1169,13 @@
       for (const letter of [...list].slice(0, b.take ?? 1e9)) card._crateMove(cur, letter);
       card._cratePlace(cur, false);
       await new Promise((r) => setTimeout(r, 250));
+      // `crate.hint`: a hint reply ({kind: "step", letter, push} or {kind: "stuck", back}) answered to the
+      // hint key, then the pulse is shot while it runs (it lasts 1.6 s).
+      if (b.hint) {
+        card._crateHintSend = async () => ({ result: "ok", ...b.hint });
+        await card._crateHint(cur);
+        await new Promise((r) => setTimeout(r, 120));
+      }
     }
     // `game: "dig"`: a Berry dig started through the card's own picker, then `digTaps`
     // ("dig" or "keep") played, each answered by the next of `digReplies` (scripted).

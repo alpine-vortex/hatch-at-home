@@ -351,6 +351,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # run the generator once (ship 3a's settle reads the same cache).
         self._hop_boards: dict[tuple, asyncio.Future[hop.Board]] = {}
         self._crate_boards: dict[tuple, asyncio.Future[crate_push.Board]] = {}
+        # Rounds the player took a hint on (day, world, level, round): kept in
+        # memory only, swept with the boards; a restart forgets (plan 6a).
+        self._crate_hinted: set[tuple] = set()
+        self._crate_hint_lock = asyncio.Lock()
         self._visits: dict[str, float] = {}
         # People (HA user IDs) whose person entity just came home, and when the
         # pet last cheered for each (in memory).
@@ -3470,6 +3474,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "level": level,
             "round": rnd,
             "rounds": paid,
+            "hinted": (day, self.world, level, rnd) in self._crate_hinted,
+            "neat_open": level != "easy"
+            and not (
+                self.state.crate_day.get("day") == day
+                and self.state.crate_day.get("neat")
+            ),
             **board.to_dict(),
         }
 
@@ -3480,6 +3490,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         key = (day, self.world, level, rnd)
         for old in [k for k in self._crate_boards if k[0] != day]:
             del self._crate_boards[old]
+        self._crate_hinted = {k for k in self._crate_hinted if k[0] == day}
         future = self._crate_boards.get(key)
         if future is None:
             future = self.hass.async_add_executor_job(
@@ -3563,6 +3574,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._find_flags,
             self.known_finds,
             self.rng,
+            (day, self.world, level, rnd) in self._crate_hinted,
         )
         events += self._bond(person, "game", "crate-push")
         self._actor = person
@@ -3573,6 +3585,51 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._save()
         self._publish()
         return info
+
+    async def async_crate_push_hint(
+        self, level: str, rnd: int | None, board_id: str, moves: str
+    ) -> dict[str, Any]:
+        """A hint for the round in play: checked as the settle is (the round
+        is the next to pay, the id matches), solved off the loop from where the
+        moves stand, one at a time. Answers the next step only, never the
+        solution. Refusals are the settle's, so a tiring pet keeps its hints.
+        An `ok` answer marks the round hinted (this round's neat find is
+        given up; pay is unchanged)."""
+        state = self.state
+        assert state is not None
+        now = self._now()
+        self._advance(now)
+        refusal = model.refuse_hop_settle(state)
+        if refusal is not None:
+            return {"result": refusal}
+        day = self._today(now)[0]
+        if rnd is None or rnd != model.crate_rounds(state, day)[level] + 1:
+            return {"result": "board_changed"}
+        if rnd > model.CRATE_MAX_ROUND:
+            return {"result": "enough"}
+        board = await self._crate_round_board(day, level, rnd)
+        if board.id != board_id:
+            return {"result": "board_changed"}
+        async with self._crate_hint_lock:
+            answer = await self.hass.async_add_executor_job(
+                crate_push.hint, board, moves
+            )
+        if answer["result"] != model.OK:
+            return answer
+        # What the awaits could have changed is checked again.
+        state = self.state
+        assert state is not None
+        now = self._now()
+        self._advance(now)
+        refusal = model.refuse_hop_settle(state)
+        if refusal is not None:
+            return {"result": refusal}
+        today = self._today(now)[0]
+        if today != day or model.crate_rounds(state, today)[level] + 1 != rnd:
+            return {"result": "board_changed"}
+        if answer["kind"] != "solved":
+            self._crate_hinted.add((day, self.world, level, rnd))
+        return answer
 
     async def async_hop_day_board(
         self, day: str, family: str, specials: int, w: int, h: int
