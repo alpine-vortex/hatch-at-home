@@ -24,7 +24,14 @@ Format: `~/dotfiles/claude/docs/todos.md`.
 
 ### Art
 
-- [ ] Wire the drafted art: effects pack (35 x 4), world visitor studies (24 x 4), seasonal/props/conservation/item sheets — inventory in `docs/art-wiring-status.md` once the art agent lands it
+- [ ] Review branch `art-wiring-effects-pack` (`sparkle` wired; card-check, ci-gate and a bench look not run yet) and merge — inventory in its `docs/art-wiring-status.md`
+- [ ] Sign off the effects pack look at card size, and decide on palette reduction of the `fx_*` frames [owner]
+- [ ] Wire emotion badges (10 effects): decide the trigger first
+- [ ] Wire weather effects: `rainbow` after rain, plus `sunny`, `hail`, `sleet`, `overcast`
+- [ ] Wire `shimmer` and `swirl` as trait-flair moments
+- [ ] Care-action effects (feed, snack, play...) only if the owner prefers them to today's props [owner]
+- [ ] Find `art/conservation` and `art/item-sheets` (not in the committed tree; maybe only in the Codex checkout) [owner]
+- [ ] The 24 world-visitor studies are superseded by the 18-visitor v1 set; wire only if the roster grows [someday]
 - [ ] Art reviews plan phases 1-3 — `docs/plan-2026-10-28-art-reviews.md` (its status says "plan only"; check what already landed)
 
 ### Dev and housekeeping
