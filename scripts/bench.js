@@ -515,6 +515,24 @@ const PRESETS = {
   // cell (the first tap of a two-tap commit), a spent special, the solved view (a plain win) and the tidy view
   // (both pinned by the bench's `board.moves`, not by a reply's done/tidy), and a blocked key (a corner:
   // the keys' on/off and aria are in each shot's .json, with the measured cell and key size).
+  // Crate push (slice 3c/5): each world's skin at 300/330/420 (the board at the start, and solved), and the
+  // three levels at each width in woodland. Boards are dev/bench/crate-boards.json (scripts/crate_bench_boards.py).
+  crate() {
+    const out = [];
+    for (const width of [300, 330, 420]) {
+      for (const world of ["woodland", "terrarium", "hearth", "tidepool", "pond", "nightsky"]) {
+        const at = { width, world, group: `crate-${width}-worlds`, view: "crate" };
+        out.push({ ...at, name: `crate/${width}-${world}`, label: `${world}: the board`, crate: { level: "normal" } });
+        out.push({ ...at, name: `crate/${width}-${world}-solved`, label: `${world}: solved`, crate: { level: "normal", moves: "win" } });
+      }
+      for (const level of ["easy", "normal", "hard"]) {
+        out.push({ width, world: "woodland", group: `crate-${width}-levels`, view: "crate", name: `crate/${width}-${level}`,
+          label: `${level}: the board`, crate: { level } });
+      }
+    }
+    return out;
+  },
+
   hop() {
     const out = [];
     const families = ["hop", "glide", "swim", "dig", "climb", "squeeze"];
@@ -1645,7 +1663,7 @@ async function runShots(browser, base, shots, outDir, workers) {
           }, shot.lines);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(n));
         }
-        if (shot.costume || shot.deviceFx || shot.glassMark || shot.momentCue || shot.gift || shot.look || shot.care || shot.lightsAlign || shot.mode || shot.view === "board" || shot.view === "games") {
+        if (shot.costume || shot.deviceFx || shot.glassMark || shot.momentCue || shot.gift || shot.look || shot.care || shot.lightsAlign || shot.mode || shot.view === "crate" || shot.view === "board" || shot.view === "games") {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
         }

@@ -1,0 +1,74 @@
+{
+ "gen": 1,
+ "boards": {
+  "easy": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-11-09",
+    "id": "bce983a465",
+    "round": 1,
+    "rounds": {
+     "easy": 0,
+     "normal": 0,
+     "hard": 0
+    },
+    "w": 5,
+    "h": 4,
+    "grid": [
+     ".....",
+     "n...n",
+     ".b.bP",
+     "....#"
+    ],
+    "par": 14
+   },
+   "win": "ldluldlururr"
+  },
+  "normal": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-11-09",
+    "id": "6b5d5881dc",
+    "round": 1,
+    "rounds": {
+     "easy": 0,
+     "normal": 0,
+     "hard": 0
+    },
+    "w": 6,
+    "h": 4,
+    "grid": [
+     "...Pn.",
+     "n..b#.",
+     ".b#..#",
+     "......"
+    ],
+    "par": 20
+   },
+   "win": "dlllddrudrruullurr"
+  },
+  "hard": {
+   "reply": {
+    "result": "ok",
+    "day": "2026-11-09",
+    "id": "ce155155ca",
+    "round": 1,
+    "rounds": {
+     "easy": 0,
+     "normal": 0,
+     "hard": 0
+    },
+    "w": 6,
+    "h": 4,
+    "grid": [
+     "n#n.#P",
+     ".b...B",
+     ".b.##.",
+     "......"
+    ],
+    "par": 22
+   },
+   "win": "dllldldluurdruddrrru"
+  }
+ }
+}

@@ -781,6 +781,18 @@
   // `special` the special key armed; `reply` replaces the fixture's (a malformed one); ship 4b: `parity` (0 or 1)
   // pins the move count's parity (a pool's phase on the next move), `lantern: "lit"` sinks the lantern (lit is
   // derived: sunk or under the pet; "unlit" leaves it).
+  // Crate push (`view: "crate"`, `crate: {level, moves, take}`): dev/bench/crate-boards.json (scripts/crate_bench_boards.py)
+  // names one canned `board` reply and its fewest-moves solution per level; `moves` is "win" or letters,
+  // played through the card's own _crateMove. The shot's `world` picks the skin.
+  let CRATE_FIXTURES;
+  async function crateBoard(shot) {
+    CRATE_FIXTURES ||= await (await realFetch("/dev/bench/crate-boards.json")).json();
+    for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-crate")) localStorage.removeItem(k);
+    const level = shot.crate?.level || "normal";
+    const fx = CRATE_FIXTURES.boards[level];
+    if (!fx) throw new Error(`no crate fixture ${level}`);
+    return { level, fx };
+  }
   let HOP_FIXTURES;
   async function hopBoard(shot) {
     HOP_FIXTURES ||= await (await realFetch("/dev/bench/hop-boards.json")).json();
@@ -883,6 +895,7 @@
     Card.findsShown = shot.findsShown === undefined ? FINDS_DEFAULT : !!shot.findsShown;
 
     if (shot.view === "board") await hopBoard(shot);
+    const crateFx = shot.view === "crate" ? await crateBoard(shot) : null;
     const card = document.createElement("hatch-pet-card");
     // Hop is on for every card; `hop: true` only marks a picker shot that is about the Hop row.
     card.setConfig({ seasonal: shot.season === "auto" ? undefined : shot.season,
@@ -1145,6 +1158,18 @@
       if (b.special || b.lit !== undefined || b.parity !== undefined || b.lantern) card._hopDraw(cur, false);
       card._hopPlace(cur, false); // the piece is on its cell, not on its way
     }
+    if (shot.view === "crate") {
+      const { level, fx } = crateFx;
+      card._crateFetch = async () => ({ ...fx.reply, rounds: { ...fx.reply.rounds } });
+      card._crateSend = async () => ({ result: "ok", paid: 24, found: false, next_round: 2 });
+      card._startGame(cur, cur.buttons.play);
+      await card._crateOpen(cur, level);
+      const b = shot.crate || {};
+      const list = b.moves === "win" ? fx.win : b.moves || "";
+      for (const letter of [...list].slice(0, b.take ?? 1e9)) card._crateMove(cur, letter);
+      card._cratePlace(cur, false);
+      await new Promise((r) => setTimeout(r, 250));
+    }
     // `game: "dig"`: a Berry dig started through the card's own picker, then `digTaps`
     // ("dig" or "keep") played, each answered by the next of `digReplies` (scripted).
     // Held on the last reply, before its pause (a bee still shows).
@@ -1346,7 +1371,7 @@
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     await settled(card);
     window.bench.screenClass = cur.screen.className;
-    if (shot.view === "board" || shot.view === "games") (window.bench.info ||= {}).hop = hopInfo(card, cur);
+    if (shot.view === "board" || shot.view === "games" || shot.view === "crate") (window.bench.info ||= {}).hop = hopInfo(card, cur);
     if (shot.lightsAlign) (window.bench.info ||= {}).lights = lightsInfo(cur);
     if (shot.mode) (window.bench.info ||= {}).mode = await modeInfo(card, cur, shot);
     return true;
