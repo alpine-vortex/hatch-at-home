@@ -1,7 +1,7 @@
 # Plan: Sokoban, a crate-pushing board for the pet (working title, 2026-11-08)
 
 **Status:** DRAFT 1, 2026-11-08. Plan only (tier 0); no code. The owner asked (2026-11-08) for a minigame at
-Hop's level of depth, "sokoban style" but **not** themed as berry-pushing, and something more original.
+Hop's level of depth, "sokoban style", then (same day) plain crates with the pet's own sprite, the name Sokoban, and world push objects only as a later skin.
 Everything under "Proposed" is this draft's suggestion for the owner to change; "Questions" lists what needs
 an answer before slice 1. Written from `docs/plan-2026-11-02-hop-of-the-day.md` (read sections 0, 2, 6, 7);
 file and line cites are **not** yet re-checked against the code, recheck when a slice starts.
@@ -122,7 +122,7 @@ bench (the way Hop's art was judged on the bench) before any card work starts.
 | 0 | Owner answers Q1-Q6; this plan is folded and gets a review pass | 0 | low | none |
 | 1 | `sokoban.py`, `sokoban-engine.js`, shared fixtures, generator, solver, two bots, 20-board contact sheet for the owner | 1 | med | 0 |
 | 2 | The `board` service takes `game: "sokoban"`; deterministic per day | 1 | low | 1 |
-| 3 | The card: crate and spot cells, push, `shellSokoban`, undo and restart, park, keyboard, a plain CSS stand-in crate and the pet's own sprite, bench `view: "board"` for snug | 1 | med | 2 |
+| 3 | The card: crate and spot cells, push, `shellSokoban`, undo and restart, park, keyboard, a plain CSS stand-in crate and the pet's own sprite, bench `view: "board"` for Sokoban | 1 | med | 2 |
 | 4 | Settle, pay, `sokoban_day`, the journal line; a replay test shared with the card's engine | 2 | med | 3 |
 | 5 | Optional skins: the world's push objects replace the crate (art, lines) | 1, owner-gated art | low | 3 |
 | 6 | Optional: per-world twists (a rug that slides a crate, a tide that flips a spot), hints and practice boards | 1 | med | 4 |
