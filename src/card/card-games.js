@@ -166,7 +166,7 @@ class HatchPetCardGames extends HatchPetCardCare {
         pick.style.top = `${Math.round(gx.getBoundingClientRect().bottom - box.top + gap)}px`;
         rows();
       }
-      if (rowOn && !rows()) clear = this._fitHopSlot(s, row, pick, box, rows) && clear;
+      if (rowOn && !rows() && !row.classList.contains("pair")) clear = this._fitHopSlot(s, row, pick, box, rows) && clear;
       row?.classList.toggle("snug", pick.classList.contains("snug"));
       return clear;
     };

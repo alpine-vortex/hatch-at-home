@@ -5327,7 +5327,7 @@ async function main() {
     await card.evaluate(() => { for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-crate")) localStorage.removeItem(k); });
     await button(2).click();
     await page.waitForTimeout(500);
-    const row = await card.evaluate((el) => {
+    const rowAt = () => card.evaluate((el) => {
       const s = el._slides[el._index];
       const c = s.gameBox.querySelector(".gcrate");
       const h = s.gameBox.querySelector(".ghop");
@@ -5335,6 +5335,9 @@ async function main() {
       const rh = h?.getBoundingClientRect();
       return { text: c?.textContent, apart: !!(rc && rh && rh.right <= rc.left + 0.5), sameLine: !!(rc && rh && Math.abs(rc.bottom - rh.bottom) < 2) };
     });
+    // The picker may still be opening (it eases in): take the geometry once it holds still.
+    let row = await rowAt();
+    for (let i = 0; i < 10 && !(row.apart && row.sameLine); i++) { await page.waitForTimeout(300); row = await rowAt(); }
     check("crate: the Crates row sits beside Hop's, not over it", row.text === "Crates" && row.apart && row.sameLine, JSON.stringify(row));
     await shot("crate-a-picker");
     await cur().locator(".gcrate").click();
