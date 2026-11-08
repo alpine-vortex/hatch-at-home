@@ -52,7 +52,7 @@ F here); **N1-N11** its nits. Section 10 lists what was rejected or changed in f
 | **F17** slice 12 notes | `L.hideAt`/`L.endAt` handle cancels named; the bench shots need the group stop | 3.7, 5.12 |
 | **F18** `dueAt` clock | `deviceNow` | 1.3 G7, L14 |
 | **F19** a revert conflicts in the ratchet | A rule: a revert restores its counts by hand | 2 |
-| **N1-N11** | N1 `card-link.js` cites; N2 slice 12 has no B1; N3 R83 once; N4 counts 85 and 8; N5 wrappers; N6 two commits; N7 one test name; N8 `getAnimations` not counted; N9 `finish` dropped; N10 tick-polled state out; N11 leak measured late | 3.7, 5.12, 5.13, 3.12, 3.6, 1.3, 2, 7.2, App. A, G1, 4.8, G9 |
+| **N1-N11** | N1 `card-link.js` cites; N2 slice 12 has no B1 (wrong: R3-1); N3 R83 once; N4 counts 85 and 8; N5 wrappers; N6 two commits; N7 one test name; N8 `getAnimations` not counted; N9 `finish` dropped; N10 tick-polled state out; N11 leak measured late | 3.7, 5.12, 5.13, 3.12, 3.6, 1.3, 2, 7.2, App. A, G1, 4.8, G9 |
 
 **Second pass (re-check s2978, SOUND WITH FIXES: 0 blockers, 7 fixes, 5 nits).** A1-A4 were confirmed
 fixed. Each finding below was checked against `origin/main` `531cd101` first; all twelve reproduced
@@ -76,6 +76,21 @@ disclosed change (section 0, D1-D4).
 | **R2-11** (nit 4) `_animate`'s key namespace | key is `"anim:" + cls` | 5.7 |
 | **R2-12** (nit 5) R19's undo never runs at a forget | R17-R20 row says closer (`_drapeStop` runs first and sets `drapeAnim = false`) | 3.14 |
 
+
+**Third pass (slice 12 review, s2999: SOUND IN OUTLINE, 1 player-facing gap, 2 trace gaps).** Read against
+`origin/main` `06487893`. Findings 1-6 and 9 are folded into 3.7, 3.14, 5 (table), 5.12 and the R29 row;
+the rest are notes in 5.12. One needs an owner line (Q13).
+
+| Finding | What changed | Where |
+|---|---|---|
+| **R3-1** (high) N2 was wrong: `_forget(s)` has no `_linkEnd` | A forget of the host or guest slide mid-visit leaves `L` live; `_linkEnd` then runs on the new pet (restores the old `hostScale`, strips classes, blanks the bubble). Slice 12 adds `_forget(s)` -> `_linkEnd()` when `this._link` has `s` as host or guest, before `detach` (as `_visitorEnd`, R2-1); B1 column set; a forget trace case; disclosed as D5; Q13 | 0 (D5), 3.14, 5 table, 5.12, Q13 |
+| **R3-2** anchors | The R29-R33 rows hold; 5.12 now names functions (`_linkStart`'s `then`, `_linkBeam`) and the re-arm is `:160-170` (clears `:166-167`); re-check with `grep -n` at ship time | 5.12 |
+| **R3-3** `_linkBeam` pushes into `L.timers` | After the move `_linkBeam` takes the scope from `this._dirCard`; the bench `irBeam` shot goes through a built card (a bare card has no `_dirCard`), noted in the bench README | 5.12 |
+| **R3-4** the `this._link === L` guard is lost by `_later` | Each moved `fn` keeps `this._link === L &&`; a late `then` after a cut-short would otherwise add an entry nobody stops; trace case | 5.12 |
+| **R3-5** the pre-move trace cannot assert ledger counts | The characterization commit records bare timers with `timer_trace.js` (live set on the fake clock); the move commit adds the key and group assertions; `timer_rule.test.js` sets card-link to 0 in the same commit | 5.12 |
+| **R3-6** guards other code reads | `s.linking`, `this._link`, `_linkEndedAt` and the `_linkEnd` callers stay; `visitors_trace.test.js` joins the checks; `leak_guard.test.js` gets a link case | 5.12 |
+| **R3-7** timings | Calm ends at `200 + 3600 = 3.8 s`, not 3.6 s; non-calm at `2500 + 4600 = 7.1 s`, plus the stretch (1000 ms for an extra, `LINK_NEWS_MS` 1500 for news). "About 5.6 s" was wrong; the leak check waits past 7.1 s + stretch | 3.7 R29, 5.12 |
+| **R3-8** device row | The worker cannot do Q8; the PR says "needs owner phone row" and stays out of the batch until done | 5.12, Q8 |
 
 ## 0. The shape of the answer
 
@@ -108,6 +123,7 @@ the slice (review s2978, fixes 1, 3, 4):
 | D2 | A forgotten pet's leftovers no longer land on the next pet (B1): a class a one-shot would strip, an old visitor's art, a flock | `_forget` | B1; 3.14; slice 11 for the visitor (`_forget` ends it, R2-1) |
 | D3 | The clean scene's 1.3 s `rock2` shake-off is cut when the scene ends **quietly**: at a forget, at a disconnect (G9, Q11), and when Hop's board loads over a live clean scene (`card-board.js:166`, on every card: Hop was ungated in 9b99ed51; R2-4) | the scene lives past 1800 ms | B4; slice 9; Q11 |
 | D4 | A swipe away from a care scene on a card with **two or more** pets cuts `rock2` on the slide being left. A one-pet swipe or a tap on the current dot goes `_go(to)` with `to === i`, the visible slide, and keeps `rock2` as now (`{ swipe: i !== to }`, R2-3) | a swipe or a dot tap | B4; slice 9; Q12 |
+| D5 | A forget of the host or guest slide mid-visit ends the infrared link at once; today the link runs on and `_linkEnd` later touches the next pet (B1) | `_forget` | B1; 3.14; slice 12 (R3-1); Q13 |
 
 ### The four audit bugs (named here so the slices can cite them)
 
@@ -522,7 +538,7 @@ impression.
 
 | ID | file:line | Effect | Duration | Cancel today | Target | Risk | Reach |
 |---|---|---|---|---|---|---|---|
-| R29 | card-link.js:89 | `at(ms, fn)`: all steps of the visit (11 calls, `:126-219`), each guarded by `this._link === L`. Two of them, `L.hideAt` and `L.endAt` (`:166-168`), are re-armed with a per-handle `clearTimeout` inside a queued line's `then` | up to ≈ 5.6 s (3.6 s calm) | `L.timers`, `_linkEnd` (`:303-305`), disconnect; `:166,167` the two handles | `_later(this._dirCard, ..., { group: "link" })`; `_linkEnd` stops the group. `L.hideAt` and `L.endAt` get keys `link.hide`, `link.end` and the `:166,167` clears become `_stop(this._dirCard, { key })`: a **handle** stop, named so the slice does not stop at the group | high | cc `infrared` (71 refs); `link_lines.test.js` |
+| R29 | card-link.js:89 | `at(ms, fn)`: all steps of the visit (11 calls, `:126-219`), each guarded by `this._link === L`. Two of them, `L.hideAt` and `L.endAt` (`:166-168`), are re-armed with a per-handle `clearTimeout` inside a queued line's `then` | up to 7.1 s + the stretch (3.8 s calm), R3-7 | `L.timers`, `_linkEnd` (`:303-305`), disconnect; `:166,167` the two handles | `_later(this._dirCard, ..., { group: "link" })`; `_linkEnd` stops the group. `L.hideAt` and `L.endAt` get keys `link.hide`, `link.end` and the `:166,167` clears become `_stop(this._dirCard, { key })`: a **handle** stop, named so the slice does not stop at the group | high | cc `infrared` (71 refs); `link_lines.test.js` |
 | R30 | card-link.js:154 | guest frame swap (not under calm) | 700 ms interval | `L.swap`, `_linkEnd` (`:304`) | `every(..., { group: "link" })` | high | cc `infrared` |
 | R31 | card-link.js:290 | head flap | 200 ms interval | `L.flap`, `_linkEnd` (`:305`) | `every(..., { group: "link" })` | high | same |
 | R32 | card-link.js:291 | beam `gone` | `ms + 500` | `L.timers` | `_later` group `link` | high | same |
@@ -652,7 +668,7 @@ checks the field after a forget mid-flight.
 | R76-R77 ask end | closer `_clearAsk` (drops `s.queue`) | keep: the question stays up through a re-attach and `done` clears `s.asking` at 60 s |
 | R37 gift pop | closer `_giftPopEnd` | closer `_giftPopEnd` |
 | R12-R13 boot (card scope) | n/a | keep: the fill timer clears `_booting` |
-| R29-R33 link (card scope) | n/a | closer `_linkEnd` |
+| R29-R33 link (card scope) | **closer `_linkEnd`**, called by `_forget(s)` before `detach` when `this._link` has `s` as host or guest (slice 12, R3-1, D5); a pair on other slides is untouched | closer `_linkEnd` |
 | R50 season visit | **closer `_seasonVisitEnd(s)`**, called by `_forget` before `detach` (slice 6): it clears `s.seasonVisit` and takes the flyer away; a "drop" would leave `s.seasonVisit` set (harmless, `_visitorTick:117` tidies it, but cleaner as a closer) | keep |
 | R85 visitor steps | **closer `_visitorEnd(s)`**, called by `_forget` before `detach` (slice 11): it is the only code that sets `s.visitor = null`, and today the visitor's own last step (`card-visitors.js:222`) or the swipe grace (`card-build.js:1023-1025`) does it within `total`. A "drop" would leave `s.visitor` set: a busy owner (`BUSY_OWNERS`, `interaction-director.js:62`) that blocks `_free` (`card-tick.js:138`), idle life (`:448`) and the next visitor (`card-visitors.js:99`), and the old visitor's art stays over the new pet | keep |
 | R14 swipe grace | **closer `_visitorEnd(s)`** (the same call; the grace's guard `x.visitor === V` is moot once `s.visitor` is null; its entry is then dropped by `detach`) | keep |
@@ -734,7 +750,7 @@ Ordered low risk to high, each independently shippable and revertible. "Tier" is
 | 9 | Care scene stragglers and the drape | R15-R20 | med-high | **B4** |
 | 10 | Games | R22-R24 | med | B1 |
 | 11 | Visitors, reveal, swipe grace | R14, R85-R87 | med-high | B1 |
-| 12 | The infrared link | R29-R33 | high | B1 |
+| 12 | The infrared link | R29-R33 | high | **B1** (R3-1) |
 | 13 | Channel waits, memory page, confirm | R8, R9, R38, R39, R56 | high | none |
 | 14 | Close-out: final allowlist, `_forget` becomes one drain, docs | none (deletes dead fields) | low | B1 (global test) |
 | X1 | Hidden policy: flip the listed entries to `tab`. **After 2, 3, 6 and 11** | policy only | low-med | **B2** |
@@ -1296,28 +1312,43 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
 - **Moves:** R29-R33, with `every` for the two intervals. `_linkEnd` stops the group `link` (its
   `L.timers`, `L.swap`, `L.flap` go). The card-level scope is `this._dirCard` (the link outlives a slide).
   **Named, not left to the group:** `L.hideAt` and `L.endAt` are re-armed with a per-handle clear inside
-  a queued line's `then` (`card-link.js:162-168`): keys `link.hide` and `link.end`, and the two
+  a queued line's `then` (`_linkStart`'s `then`, `card-link.js:160-170`, the clears at `:166-167`): keys `link.hide` and `link.end`, and the two
   `clearTimeout` lines become `_stop(this._dirCard, { key })`; the re-arm after them is a new entry in
   the same group. `_linkEnd` stays the closer at a disconnect, as now; nothing else is drained.
-- **Characterization first:** `link_trace.test.js`: the 11 `at` offsets for a calm and a non-calm visit,
+- **`_forget` (R3-1, D5):** `_forget(s)` calls `_linkEnd()` before `detach` when `this._link` has `s` as host
+  or guest. Today it does not, and a forget at ~2 s leaves `L` live: `_linkEnd` later runs on the new pet
+  (restores the old `hostScale`, strips `linking`/`look`, blanks `guest.bubble`). This is B1. `disconnect`
+  keeps its order: `_linkEnd()` then `reset()`. `_linkBeam` takes its scope from `this._dirCard`.
+  Every moved `fn` keeps `this._link === L &&` (`_later` has no such guard; a `then` that fires late after a
+  cut-short would add an entry nobody stops). Kept as they are: `s.linking`, `this._link`, `_linkEndedAt`
+  (read by card-build, card-tick, card-visitors) and the `_linkEnd` callers (disconnect, swipe, Status).
+- **Characterization first:** `link_trace.test.js`, on the unmoved code through `timer_trace.js` (bare timers
+  on the fake clock; there is no ledger yet, so pending counts are the clock's live set and the key and group
+  assertions arrive in the move commit): the 11 `at` offsets for a calm and a non-calm visit,
   with and without a stretch (`L.beamMs`), the frame swap every 700 ms (none under calm), the head flap
   every 200 ms, beam `gone` at `ms + 500` and removed at `ms + 900`; `_linkEnd(true)` at the end; a cut
-  short (a sleep, a tap on Status) cancels everything and leaves no interval (the fake clock's pending count
-  is 0); a queued line that moves the end (the `then` at `:162-168`) leaves one `link.hide` and one
-  `link.end` entry, not two. Reach: cc `infrared` (71 refs), `link_lines.test.js`.
+  short (a sleep, a tap on Status) cancels everything and leaves no interval (the live set is 0); a queued
+  line that moves the end (the `then`) leaves one hide and one end timer live, not two (the move commit
+  asserts one `link.hide`, one `link.end`); the `then` firing after a cut-short adds nothing; a forget of
+  the host at ~2 s, and of the guest (R3-1: link null, `s.linking` false, nothing pending, the new pet's
+  scale untouched). Calm ends at 3800 ms, non-calm at 7100 ms plus the stretch. Reach: cc `infrared` (71 refs), `link_lines.test.js`.
 - **Edits outside `src`:** `dev/bench/page.js:697` (`card._link.timers.forEach(clearTimeout)`) becomes
   `stop(card._dirCard, { group: "link" })`; `:726-734` (`irBeam` builds `card._link = { timers: [] }`,
   then `_linkBeam` pushes into it, then `L.timers.forEach(clearTimeout)`) builds `card._link = {}` and
-  stops the group. The shots `irBeam` and `link.say` need the group stop.
-- **Checks:** trace tests; `leak_guard.test.js` (no live interval after the card leaves, measured after
-  the longest due time: N11); `scripts/ci-gate` (iterate with `gate --auto`: `infrared`, `restart`,
-  `oldcard`).
+  stops the group; `_linkBeam` now needs `this._dirCard`, so `irBeam` runs on a built card (a bare card has
+  none; say so in `dev/bench/README.md`). The shots `irBeam` and `link.say` need the group stop.
+  `tests/js/timer_rule.test.js`: card-link goes from `ST 3, SI 2, CT 3, CI 2` to 0 (it leaves the table) in
+  the move commit.
+- **Checks:** trace tests; `visitors_trace.test.js` (it relies on `_linkEndedAt`); `leak_guard.test.js`
+  gets a link case (no live interval after the card leaves, measured after the longest due time, 7.1 s +
+  stretch: N11); `scripts/ci-gate` (iterate with `gate --auto`: `infrared`, `restart`, `oldcard`).
 - **Device queue:** fixture: two dev pets on one card, a kindred pair and a stranger pair
   (`scripts/dev-seed`). `qa_screen`: the shelf with two pets, then the visit. Look at: the whole visit start
-  to end (about 5.6 s, 3.6 s with reduced motion), the beam, the guest's frame swap, the host's line; swipe
-  mid-visit; open Status mid-visit.
-- **Timings:** identical. No B1 here (N2): the link lives on the card scope and `_forget` never reached it.
-  **Rollback:** revert.
+  to end (about 7.1 s, 3.8 s with reduced motion, plus the stretch), the beam, the guest's frame swap, the host's line; swipe
+  mid-visit; open Status mid-visit. The worker has no device: the PR says "needs owner phone row" (Q8) and
+  stays out of the batch until it is done.
+- **Timings:** identical. **B1 here (R3-1; N2 was wrong):** `_forget` of a host or guest slide ends the
+  link, today it does not (D5, Q13). **Rollback:** revert.
 
 ### 5.13 Slice 13: channel waits, the memory page and the confirm lapse
 
@@ -1514,6 +1545,7 @@ and the reasoning stay in the revision history (`git log -p` on this file); what
 12. **Q12. Slide switch: (a).** Keep: a swipe drains nothing new except `rock2` on a slide being left
     (D4). The intent doc's item 6 and acceptance 10 are amended to "a forgotten pet, a quit game, a closed
     scene" (done, 2026-11-06). (First mate.)
+13. **Q13. A forget ends the link (slice 12, R3-1, D5).** Recommended: yes, `_forget` calls `_linkEnd()` for a host or guest slide, as slice 11 does for the visitor. The alternative is to leave today's behaviour and keep the stale `_linkEnd` on the next pet, which B1 names as a bug. Open: first mate or owner to record the answer here before slice 12 ships.
 
 ## Appendix A: every cancel line on `531cd101`
 
