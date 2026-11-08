@@ -10616,8 +10616,7 @@ async function main() {
         let unsubbed = false;
         const realUnsub = s.unsub;
         s.unsub = () => { unsubbed = true; return realUnsub?.(); };
-        s.screen.classList.add("breezy");
-        two._later(s, 60000, () => {}, { key: "breezy" }); // a ledger entry a forget must end (director migration slice 2)
+        two._hold(s, s.screen, ["breezy"], 60000, { key: "breezy" }); // the fan's hold, as the card makes it: a forget drains it (its undo takes the class off; slice 14)
         out.breezePlanted = two._has(s, { key: "breezy" });
         two.setConfig({ ...two._config, devices: devices.slice(0, 1) });
         two.hass = two._hass;
