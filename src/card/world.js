@@ -33,6 +33,10 @@ function linkedToday(day = new Date()) {
   }
   return [...(oncePerDay.seen || [])].some((key) => key.startsWith("hatch-link-") && key.endsWith(end));
 }
+// The shared effects pack's shipped loops (art/effects; the rest are drafts, docs/art-wiring-status.md): name -> frame
+// count, as ui/fx_<name>_<n>.png. A loop runs twice at .2 s a frame (the .fxpack CSS), so it lives FX_PACK_MS.
+const FX_PACK = { sparkle: 4 };
+const FX_PACK_MS = 1700;
 const FLAIR_EVERY_MS = [50000, 70000]; // between moments (random in this range)
 const FLAIR_MS = 4200; // how long a moment lasts
 // A first look's one early move (fresh-moment 7): this long after the look begins (the

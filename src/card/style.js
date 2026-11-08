@@ -767,7 +767,7 @@ const STYLE = `
   .compact .game .gscore.two { font-size: 10px; padding: 1px 3px; bottom: 3%; letter-spacing: -.3px; }
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
   .screen.show-status .flash, .screen.show-status .speck, .screen.show-status .lcd, .screen.show-status .glow,
-  .screen.show-status .bondhearts, .screen.show-status .linkhearts, .screen.show-status .carehearts,
+  .screen.show-status .fxpack, .screen.show-status .bondhearts, .screen.show-status .linkhearts, .screen.show-status .carehearts,
   .screen.show-status .basket, .screen.show-status .reveal { display: none !important; }
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
@@ -1773,6 +1773,12 @@ const STYLE = `
     opacity: 0; image-rendering: pixelated; pointer-events: none; z-index: 2; animation: bondheart 1.6s ease-out forwards; }
   @keyframes bondheart { 0% { transform: translateY(0) scale(.7); opacity: 0; } 20% { opacity: 1; }
     100% { transform: translateY(-70px) scale(1); opacity: 0; } }
+  /* The shared effects pack (_fxPack): four stacked frames, each lit for .2 s in turn, the loop twice. */
+  .screen .fxpack { position: absolute; left: 50%; top: 38%; width: 120px; height: 120px; margin: -60px 0 0 -60px;
+    pointer-events: none; z-index: 2; }
+  .screen .fxpack img { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; image-rendering: pixelated;
+    animation: fxpack-frame .8s steps(1) 2 backwards; }
+  @keyframes fxpack-frame { 0% { opacity: 1; } 25% { opacity: 0; } 100% { opacity: 0; } }
   .pet.perk { animation: perk .3s ease-out; }
   .pet.spin { animation: spin .9s ease-in-out; } /* an adult's trick (fresh-expand LS-a) */
   .pet.bighop { animation: bighop .7s ease-in-out 2; } /* the promise's payoff (F3): 1.4x a hop */

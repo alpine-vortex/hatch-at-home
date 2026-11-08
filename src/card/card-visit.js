@@ -291,7 +291,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
       if (!note.quiet && name) line = `happy birthday, ${name}!! ♥`;
       (s.queue ??= []).push({ text: line, ms: 5000, personal: true, cls: KEPT, perk: true, then: () => {
         if (!note.quiet) this._chirp(s, "birthday");
-        this._sparkle(s);
+        this._sparkleFx(s);
       } });
       return;
     }
@@ -301,7 +301,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     }
     this._queue(s, line, 5000, { personal: true });
     if (note.kind === "friends_for") {
-      this._sparkle(s);
+      this._sparkleFx(s);
       if (!calm()) this._bondHearts(s);
     }
   }
@@ -773,6 +773,31 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     ring.className = "burst big";
     s.screen.append(ring);
     this._later(s, 600, () => ring.remove(), { group: "fx", undo: () => ring.remove() });
+  }
+
+  // A celebration: the ring, and the shared effects pack's sparkle on top of it (art/effects, FX_PACK).
+  _sparkleFx(s) {
+    this._sparkle(s);
+    this._fxPack(s, "sparkle");
+  }
+
+  // One effect from the shared pack (ui/fx_<name>_<1..4>.png; FX_PACK says which ship): a four-frame loop played
+  // twice over the screen, then gone. Cosmetic only; none when calm (a still card), or for a name not shipped.
+  _fxPack(s, name) {
+    if (calm() || !FX_PACK[name]) return;
+    s.screen.querySelector(".fxpack")?.remove(); // one loop at a time
+    const box = document.createElement("div");
+    box.className = `fxpack ${name}`;
+    box.setAttribute("aria-hidden", "true");
+    for (let n = 1; n <= FX_PACK[name]; n++) {
+      const img = document.createElement("img");
+      img.src = `${BASE}/ui/fx_${name}_${n}.png?v=${VERSION}`;
+      img.alt = "";
+      img.style.animationDelay = `${((n - 1) * 0.2).toFixed(1)}s`;
+      box.append(img);
+    }
+    s.screen.append(box);
+    this._later(s, FX_PACK_MS, () => box.remove(), { group: "fx", undo: () => box.remove() });
   }
 }
 

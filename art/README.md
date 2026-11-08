@@ -181,7 +181,7 @@ are in `art/<id>/<id>_probe.png`.
 
 Creature-agnostic four-frame reaction, care-action, flair and weather loops are in
 [`effects/`](effects/README.md). They are draft assets kept separate from the live
-frontend; the preview and atlas cutter are included there.
+frontend (only `sparkle` is wired so far; see `docs/art-wiring-status.md`); the preview and atlas cutter are included there.
 
 ## World visitors
 

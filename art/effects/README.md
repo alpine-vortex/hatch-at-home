@@ -1,8 +1,8 @@
 # Shared effects art pack
 
 Creature-agnostic pixel-art effects for care actions, emotional reactions, ambient
-flair and weather. These are draft art assets; they are **not installed in the
-Lovelace card or wired to behavior**.
+flair and weather. These are draft art assets; only `sparkle` is installed in the
+Lovelace card (docs/art-wiring-status.md); the rest are not wired.
 
 Each effect has four consecutive frames, numbered `_1.png` through `_4.png`, in
 `frames/`. Frames use a transparent 256×256 canvas with nearest-neighbour scaling.
