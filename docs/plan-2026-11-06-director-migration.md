@@ -481,8 +481,8 @@ impression.
 | ID | file:line | Effect | Duration | Cancel today | Target | Risk | Reach |
 |---|---|---|---|---|---|---|---|
 | R7 | card-base.js:138 | `_tick` interval | 700 ms | `clearInterval` `:182` | **stays out** (4.1) | n/a | all |
-| R8 | card-base.js:256 | subscribe wait: the first look waits for the channel | `SUBSCRIBE_WAIT_MS` 3000 | `:298,301`, `_unsubscribe` | `_later(s, ..., { key: "sub.wait" })`; the flag read `!s.waitTimer` (`:255`) and the `s.waitTimer` read at `:264` become `_has(s, { key: "sub.wait" })` | high | `subscribe_silence.test.js`; cc `channel` |
-| R9 | card-base.js:287 | subscribe retry | 2/5/15 s, then 60 s | `:347`, `_unsubscribe` | `_later(s, ..., { key: "sub.retry" })`; the reads of `s.retryTimer` (`:246`, `:264`) become `_has(s, { key: "sub.retry" })` | high | same |
+| R8 | card-base.js `_subscribe` | subscribe wait: the first look waits for the channel | `SUBSCRIBE_WAIT_MS` 3000 | `_unsubscribe`, **and `_channel`'s first full snapshot** (right after `s.subscribed = true`: `clearTimeout(s.waitTimer)`) | `_later(s, ..., { key: "sub.wait" })`; the flag read `!s.waitTimer` (in `_subscribe`) and the `s.waitTimer` read in the wait's own fn become `_has(s, { key: "sub.wait" })`; `_channel`'s clear becomes `_stop(s, { key: "sub.wait" })` | high | `subscribe_silence.test.js`; cc `channel` |
+| R9 | card-base.js `_subscribe` (the catch) | subscribe retry | 2/5/15 s, then 60 s | `_unsubscribe` | `_later(s, ..., { key: "sub.retry" })`; the reads of `s.retryTimer` (`_subscribe`'s early return, the wait fn's `!s.retryTimer`) become `_has(s, { key: "sub.retry" })` | high | same |
 
 ### 3.4 card-build.js
 
@@ -536,8 +536,8 @@ impression.
 | R35 | card-looks.js:106 | the promise's payoff move | 600 ms | none | `_later(s, ...)`, unkeyed | low | `promise.test.js` |
 | R36 | card-looks.js:329 | an ask's text step ends | `ASK_MS` 60000 | `step.timer`, `_askTextEnd` (`:375`), hidden tab | `_later(s, ..., { key: "ask.text" })` | med | cc `memorytags`, `moments`, `visitors` |
 | R37 | card-looks.js:445 | the gift pop and its line end | `GIFT_LINE_MS` 5000 | `P.timer`, `_giftPopEnd` (`:455`), disconnect | `_later(s, ..., { key: "gift.pop" })` | med | cc `gifts`; `gift_lines.test.js` |
-| R38 | card-memory.js:71 | the memory page closes after idle | 120000 ms | `:56,70`, `_memoryPageClose` (5 paths) | `_later(s, ..., { key: "memory.idle" })` | med | `memory_page.test.js` |
-| R39 | card-memory.js:296 | redraw when the "sure?" confirm lapses | `CONFIRM_MS` 4000 | `clearTimeout` `:295` | `_later(s, ..., { key: "confirm" })` | low | `memory_page.test.js` |
+| R38 | card-memory.js (the idle arm) | the memory page closes after idle | 120000 ms | the re-arm's own clear, `_memoryPageClose` (5 paths) | `_later(s, ..., { key: "memory.idle" })` | med | `memory_page.test.js` |
+| R39 | card-memory.js (the confirm tap) | redraw when the "sure?" confirm lapses | **4050**: `s.confirm.at + CONFIRM_MS + 50 - Date.now()`, the same formula as R56 (less any ms since the tap; the review of s3003 found the first draft said 4000) | the clear just before it | `_later(s, ..., { key: "confirm" })` | low | `memory_page.test.js` |
 | R40 | card-mode.js:98 | remove `swap` from the eight buttons | 90 ms | `clearTimeout` `:96` | `_hold`-like, key `mode.swap`, eight targets in one entry (`_later` + undo) | low | `shell_modes.test.js`, `cap_press.test.js`; cc `shellmode` |
 
 ### 3.9 card-moment.js, card-season.js
@@ -564,7 +564,7 @@ impression.
 | R53 | card-sheets.js:306 | the lay wait, still reloading | 5000 ms | `_layDrop` (`:317`) | **stays out** (4.5; optional 13b, Q7) | n/a | cc `egg`, `types` (lay sheet) |
 | R54 | card-sheets.js:311 | the lay wait starts | `NAME_WAIT_MS` 30000 | same | **stays out** (same) | n/a | same |
 | R55 | card-sheets.js:460 | the rename's one retry delay (a promise) | `NAME_RETRY_MS` 2000 | `_clearNameTimers` (`:373`) | **stays out** (4.5): a promise's lifetime | n/a | cc `egg` (name sheet) |
-| R56 | card-sheets.js:492 | redraw when the "sure?" confirm lapses | `CONFIRM_MS` + 50 | `clearTimeout` `:491`, `_forget` (`card-build.js:805`) | `_later(s, ..., { key: "confirm" })` (same key as R39: one confirm at a time, as now) | low | cc `forget`; `memory_page.test.js` |
+| R56 | card-sheets.js (the confirm redraw) | redraw when the "sure?" confirm lapses | `CONFIRM_MS` + 50 | the clear just before it, `_forget` (`card-build.js`: `clearTimeout(s.confirmTimer)`, **this line goes**, `detach` takes the key) | `_later(s, ..., { key: "confirm" })` (same key as R39: one confirm at a time, as now; its `redraw` is **unguarded**, R39's is guarded by `memoryPage === "open"`) | low | cc `forget`; `memory_page.test.js` |
 
 ### 3.11 card-tick.js
 
@@ -1345,41 +1345,76 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
 
 ### 5.13 Slice 13: channel waits, the memory page and the confirm lapse
 
+(Folded from the s3003 review, 2026-11-08. **Anchors are function names**, not lines; re-verify with
+`grep -n` at ship time, as the slice 12 review advised.)
+
 - **Moves:** R8, R9 (subscribe wait and retry), R38 (memory idle), R39 and R56 (the "sure?" lapses). **Not
   moved:** R51-R55 (the sheets' call waits: section 4.5, Q7; the shell pick's race and the rename's retry
   are promises that must settle, and the lay wait shares their closers) and R83 (moved in slice 2). The
-  reads of the timer fields as flags become `_has` (`s.waitTimer`, `s.retryTimer`: `card-base.js:246,255,264`),
-  and the fields go. `_unsubscribe` stops both keys, as before, and stays the closer at a disconnect and
-  at `_forget`; `connectedCallback` subscribes again, as before.
+  reads of the timer fields as flags become `_has` (`s.waitTimer` and `s.retryTimer` in `_subscribe`: the
+  early return, the wait guard, the wait fn's `!s.retryTimer`), and the fields go.
+  **The wait has two closers, not one.** `_unsubscribe` stops `sub.wait` and `sub.retry`, as before, and
+  stays the closer at a disconnect and at `_forget`; `connectedCallback` subscribes again, as before.
+  **`_channel`'s first full snapshot also clears the wait** (right after `s.subscribed = true`), and
+  becomes `_stop(s, { key: "sub.wait" })`. If the mover misses it the wait fires at 3 s on a healthy
+  channel: `subscribeFailed` goes true (the first look and hello unblock early) and a second subscribe is
+  sent, on every cold load. The wait's fn guards a re-arm on `!_has(s, { key: "sub.wait" })`: inside the
+  firing fn that must read false (the entry is gone once it runs).
+  **`_forget`'s manual line goes too:** `card-build.js` `_forget` has `clearTimeout(s.confirmTimer)`
+  (R39/R56 "drop" on forget, 3.14); remove it, `detach` drains the key. The ratchet needs it.
 - **Characterization first:** `waits_trace.test.js`: the subscribe wait at 3000 then `subscribeFailed`;
-  the retry at 2000, 5000, 15000, then 60000; `_unsubscribe` stops both; a stale `subGen` ignores the
-  retry; `confirm` lapses at 4000 (R39) and 4050 (R56); memory idle closes at 120000 and a tap restarts it.
-  The sheets' waits (R51-R55) get a *characterization only* trace (they do not move): the shell pick
-  rejects at 10000 unless the call finishes; `shellPending` clears at +5000 after a success for the same
-  pet only; the lay wait at 30000, again at +5000 while reloading, up to 120000; `_layDrop` cancels; the
-  rename retry at 2000 once (code `not_ready`). **D-keep and D-reattach (A2):** disconnect while the shell
-  race is pending, reconnect, advance 10 s: the race rejects, the picker settles; disconnect during the
-  rename retry: `nameBusy` clears; disconnect while the lay wait runs: `layAt` is cleared at its time;
-  disconnect with a subscribe retry pending: it is stopped (as now), `connectedCallback` subscribes
-  again and the retry count restarts. Reach: `subscribe_silence.test.js`, `memory_page.test.js`, cc
-  `channel`, `shell`, `egg`, `forget`, `memorypage`.
-- **Edits outside `src`:** `scripts/card-check.js:11560,11566` read `!!s.retryTimer`: they read
-  `_has(s, { key: "sub.retry" })` through `page.evaluate`; `tests/js/subscribe_silence.test.js:63` counts
-  `setTimeout` calls with `ms === 3000` (the wait) and `:86` sets `s.retryTimer = 99` ("what the catch
-  sets"): they use the adapter stubs and the ledger; `tests/js/memory_page.test.js:153,171,228,254` call
-  `clearTimeout(s.confirmTimer)`: they `stop` the key; `:194` plants `memoryIdle: setTimeout(...)` and `:198`
-  asserts `s.memoryIdle === null`: both go (the field goes; assert `pending` for key `memory.idle` is 0).
+  **a first snapshot driven through `_channel` at 1 s stops `sub.wait`: advance 3 s, `subscribeFailed`
+  false, one ask** (the existing test only sets `s.subscribed = true` by hand); the retry at 2000, 5000,
+  15000, then 60000; `_unsubscribe` stops both; a stale `subGen` ignores the retry; `confirm` lapses at
+  **4050 for both R39 and R56** (less any ms since the tap; the fake clock pins the tap at t0); memory idle
+  closes at 120000 and a tap restarts it.
+  **The sheets' waits (R51-R55) get a *characterization only* trace (they do not move), and the worker
+  writes it first and reports what it shows, not what this plan predicts.** The plan's guesses, from
+  reading the code: the shell pick rejects at 10000 unless the call finishes; `shellPending` clears at
+  +5000 after a success for the same pet only; the lay wait at 30000, again at +5000 while reloading, up
+  to 120000; `_layDrop` cancels; the rename retry at 2000 once (code `not_ready`). **D-keep and
+  D-reattach (A2), same rule (write, then report):** disconnect while the shell race is pending,
+  reconnect, advance 10 s (guess: the race rejects, the picker settles); disconnect during the rename retry
+  (guess: `nameBusy` clears; `disconnectedCallback` calls none of `_clearNameTimers`, `_layDrop`,
+  `_shellSettled`, and `still()` is `s.nameSheet && s.nameGen === gen`); disconnect while the lay wait
+  runs (guess: `layAt` cleared at its time); disconnect with a subscribe retry pending: it is stopped (as
+  now), `connectedCallback` subscribes again and the retry count restarts. Reach:
+  `subscribe_silence.test.js`, `memory_page.test.js`, cc `channel`, `shell`, `egg`, `forget`, `memorypage`.
+- **Drain and leak cases (6.1.3a, G9):** `leak_guard.test.js` asserts `inspect(s).timers` is empty after
+  the longest due time (120 s here, for `memory.idle`). `_forget` drain cases for the four keys
+  (`sub.wait`, `sub.retry`, `memory.idle`, `confirm`): the entries are gone after `_forget`. **Kept, as
+  now:** disconnect with `memory.idle` armed stops it (`disconnectedCallback` calls
+  `_memoryPageClose(s, false)`); disconnect with a `confirm` pending lets it fire and redraw a detached
+  slide (R39 is guarded by `memoryPage === "open"`; R56's `redraw` is not). Pin both as characterization.
+- **Edits outside `src`:** `scripts/card-check.js` reads of `retryTimer` (two, near the `restart`/gone
+  checks; one is `!!s.retryTimer`, the other a three-way OR `s.unsub || s.subPending || s.retryTimer`):
+  they read `_has(s, { key: "sub.retry" })` through `page.evaluate`, and the OR keeps its other two terms;
+  `tests/js/subscribe_silence.test.js` finds the wait by `x.ms === 3000` among `setTimeout` calls and sets
+  `s.retryTimer = 99` ("what the catch sets"). **Its vm setup is the real director** (not hand adapters):
+  the vm card gets `_later`, `_stop`, `_has` from card-base's text plus a `HATCH_DIRECTOR` over the fake
+  clock, so `fire()` drives the clock, not a `timers` array; the "once only" check counts
+  `_has`/`inspect` entries for `sub.wait`; "what the catch sets" becomes a `_later` with key `sub.retry`.
+  It keeps a test-owned copy of `SUBSCRIBE_WAIT_MS` through the existing `grab`. `tests/js/memory_page.test.js`
+  calls `clearTimeout(s.confirmTimer)` four times: they `stop` the key; it plants `memoryIdle:
+  setTimeout(...)` and asserts `s.memoryIdle === null`: both go (assert `pending` for key `memory.idle`
+  is 0). **Bench: none** (`dev/bench` does not reference these fields; F1).
+- **Ratchet (same commit):** `timer_rule.test.js` pins on `origin/main` (bd9e1c63): `card-base` ST 2, CT 3
+  -> 0, 0 (the wait, the retry; the three clears in `_unsubscribe` x2 and `_channel`); `card-memory` ST 2,
+  CT 3 -> 0, 0; `card-sheets` ST 6, CT 5 -> 5, 4 (R56 only; R51-R55 stay); `card-build` CT 6 -> 5 (the
+  `confirmTimer` line). Appendix B's end state already shows this. Re-count with the test, not this line.
 - **Checks:** trace tests; `subscribe_silence.test.js`, `memory_page.test.js`, `leak_guard.test.js`;
   because `card-base.js` subscribe code changes, **`scripts/ci-gate`** on the slice's branch (the whole
   card-check, five shards) before it merges (as for every slice now); iterate with `gate --auto`
-  (`channel`, **`memorypage`**, `forget`; the prelude always runs).
+  (`channel`, **`memorypage`**, `forget`; the prelude always runs). **Flake (Q7, first mate's default
+  2026-11-08):** a FAIL that reproduces on a rerun in code the slice did not touch means **stop and ask**
+  (not drop, not ship past it); a FAIL that does not reproduce is a FLAKE line and is fine (AGENTS.md).
 - **Device queue:** fixture: dev HA, reload mid-session; airplane mode on the phone and back. `qa_screen`:
   the pet screen, the status page's memory page. Look at: the card loads on a cold start, comes back
   after a lost connection, the memory page closes after two idle minutes, a forget's "sure?" lapses.
-- **Timings:** identical. **Rollback:** revert.
-- **Slice 13b (optional, Q7):** R52-R54 (`shellPending`, the lay wait) under the keep policy, with the
-  lay sheet's `_layDrop` and `_shellSettled` as closers. Only if the owner says so; its own trace and
-  `ci-gate`.
+  **These rows ride the next device pass** (first mate's default 2026-11-08, Q8 as for slice 12): the worker
+  has no phone, the PR body says "needs owner phone row", and the two-minute idle and the 4.05 s lapse are
+  covered by the fake-clock trace and cc `memorypage`/`forget`.
+- **Timings:** identical (R39 and R56 both 4050). **Rollback:** revert.
 
 ### 5.14 Slice 14: close-out
 
@@ -1457,7 +1492,7 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
 | 3 | `motion_ship1.test.js:25`, `touch.test.js:101` | `_wander` pins the timer; the fake `this` has no `_hold` |
 | 5 | `memory_tags.test.js` (`load`, `makeCard`) | the text step's end timer was a stubbed `setTimeout`/`clearTimeout`; it is `_later`/`_stop` now, so the vm card takes `adapters()` |
 | 7 | `timer_trace.test.js:72`, `care_reactions.test.js:633,1433` | `:72` loaded `consts: ["ANIMATE_TIMERS"]`; `:633,1433` extracted it (shipped: `sitter_life`, `touch`, `motion_ship1/2` stub `_animate` itself and needed no edit) |
-| 13 | `subscribe_silence.test.js:63,86`, `memory_page.test.js:153,171,194,198,228,254` | `setTimeout` count; `s.retryTimer = 99`; `clearTimeout(s.confirmTimer)` |
+| 13 | `subscribe_silence.test.js` (the `ms === 3000` count, `s.retryTimer = 99`), `memory_page.test.js` (four `clearTimeout(s.confirmTimer)`, the `memoryIdle` plant and assert) | the vm card takes the real director with `_later`, `_stop`, `_has` (5.13); the fields go |
 | all | any vm test whose fake `this` lacks `_director`, `_later` or `_hold` | it throws once its method moves; the sandbox helper adds them |
 
 Each is edited in the move commit of its slice, by name; the slice section repeats the line.
@@ -1524,9 +1559,9 @@ and the reasoning stay in the revision history (`git log -p` on this file); what
    part. Add one sentence to the file's header for "and owns the timers of the card's own one-shots".
    (First mate.)
 7. **Q7. Network waits.** Move R8, R9, R38, R39 and R56 **last**, with `scripts/ci-gate`; drop that slice,
-   not the effort, if it flakes. R51-R55 stay out (allowlisted). **No slice 13b.** (First mate.)
+   not the effort, if it flakes. R51-R55 stay out (allowlisted). **No slice 13b.** "Flakes" means: a FAIL that reproduces on a rerun in code the slice did not touch is a stop-and-ask (first mate's default, 2026-11-08). (First mate.)
 8. **Q8. Device rows.** One owner phone row for slice 12 (the link) before its batch merges; the other rows
-   ride the next device pass. The slice's PR body says "needs owner phone row". (First mate.)
+   ride the next device pass. The slice's PR body says "needs owner phone row". Slice 13's rows ride the next pass too, same PR-body line (first mate's default, 2026-11-08). (First mate.)
 9. **Q9. Batching.** One PR per slice until slice 4 is in and quiet, then bundle low-risk neighbours.
    (First mate.)
 10. **Q10. The device queue tool.** The first mate maps each device row to the queue's real fields.
@@ -1605,6 +1640,11 @@ the `repeat` and `frame` cancels beside it; `card-tick` 1 `setInterval` + 1 `cle
 `card-visit` 1 `setTimeout`; `card-sheets` 5 `setTimeout` + 4 `clearTimeout`; `card-layout` 1 `clearTimeout` (`:433`, R52's
 `shellPendingTimer`, allowlisted with R52; with Q7b "yes" it goes in slice 13b); every other file 0. The
 exact numbers are set by slice 0's wrappers and checked by slice 14.
+
+**Slice 13 line (s3003 review, 2026-11-08), against the pins on `bd9e1c63`:** `card-base` ST 2 -> 0, CT 3 -> 0
+(`_channel`'s clear counts); `card-memory` ST 2 -> 0, CT 3 -> 0; `card-sheets` ST 6 -> 5, CT 5 -> 4;
+`card-build` CT 6 -> 5 (`_forget`'s `confirmTimer` line). The table above is the starting state, not the
+live pins.
 
 ## 10. Review response (s2976)
 
