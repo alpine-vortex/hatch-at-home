@@ -1,7 +1,9 @@
-# Plan: Sokoban, a crate-pushing board for the pet (working title, 2026-11-08)
+# Plan: Crate Push, a crate-pushing board for the pet (2026-11-08)
 
-**Status:** DRAFT 2, 2026-11-08 (slice 1 built on branch `sokoban-slice-1`; **internal name is `crate-push`**, owner 2026-11-08: Sokoban stays the working title, the trademark question is open; the owner then asked that the **player choose the difficulty** and that happiness rewards scale with it, folded below as section 3's levels and section 5). Plan, slice 1 code built (tier 0 so far; nothing merged). The owner asked (2026-11-08) for a minigame at
-Hop's level of depth, "sokoban style", then (same day) plain crates with the pet's own sprite, the name Sokoban, and world push objects only as a later skin.
+**Name (owner 2026-11-08): the player-facing title is "Crate Push", not Sokoban, to avoid the trademark.**
+
+**Status:** DRAFT 2, 2026-11-08 (slice 1 built on branch `sokoban-slice-1`; **internal name is `crate-push`**, owner 2026-11-08: Crate Push stays the working title, the trademark question is open; the owner then asked that the **player choose the difficulty** and that happiness rewards scale with it, folded below as section 3's levels and section 5). Plan, slice 1 code built (tier 0 so far; nothing merged). The owner asked (2026-11-08) for a minigame at
+Hop's level of depth, "sokoban style", then (same day) plain crates with the pet's own sprite, the name Crate Push, and world push objects only as a later skin.
 Everything under "Proposed" is this draft's suggestion for the owner to change; "Questions" lists what needs
 an answer before slice 1. Written from `docs/plan-2026-11-02-hop-of-the-day.md` (read sections 0, 2, 6, 7);
 file and line cites are **not** yet re-checked against the code, recheck when a slice starts.
@@ -10,7 +12,7 @@ file and line cites are **not** yet re-checked against the code, recheck when a 
 
 Each day the pet gets a second small board: a **crate board**. The pet (drawn as the pet's own sprite, the
 piece, as in Hop) pushes **crates** one cell at a time onto the marked **spots** on the floor. When every spot
-holds a crate the board is **solved**. It is Sokoban: the pet only pushes, never pulls, and a crate pushed into
+holds a crate the board is **solved**. It is Crate Push: the pet only pushes, never pulls, and a crate pushed into
 a corner is stuck. The difference from Hop is the goal: Hop is a path (visit everything, leave nothing
 standing); this is arrangement (move things to places). It reuses Hop's board mode, eight shell buttons,
 keyboard keys, undo, restart, daily seed and "card plays, server replays and pays" settle, so almost all the
@@ -25,9 +27,9 @@ and need longer solutions; the pay rises with them (section 5). Built in slice 1
 
 ### Theme (owner, 2026-11-08)
 
-- **Name:** the owner prefers **Sokoban**, ideally "the same thing" as the classic game. Working title in this
-  plan: **Sokoban** (Q1 flags that the name is a registered trademark in places, so the player-facing title
-  may need a plain alternative such as "Crates"; the code and docs can say Sokoban either way).
+- **Name:** the owner prefers **Crate Push**, ideally "the same thing" as the classic game. Working title in this
+  plan: **Crate Push** (Q1 flags that the name is a registered trademark in places, so the player-facing title
+  may need a plain alternative such as "Crates"; the code and docs can say Crate Push either way).
 - **Now:** plain **crates** and spots, with the pet's own sprite as the character. No world art needed for
   slices 1 to 4: a CSS or pixel stand-in crate, like Hop's early boards.
 - **Later (slice 5, optional):** the **world push objects** are fine as a skin. Only the sprite changes; the
@@ -84,17 +86,17 @@ Everything below follows Hop's pattern; its names are what the plan says exist a
   fixture file (`tests/fixtures/crate_push_cases.json`) both test suites run: boards, move lists, the expected result
   (legal or the first illegal index, solved, neat, final state), as Hop's `hop_cases.json` does.
 - **Board service:** Hop's service is `hop` with `action: board|settle` (`__init__.py:372`). This game adds a `game` field and `level`/`round` (schema, services.yaml and translations change)
-  ("hop" or "sokoban") rather than a second service; the service stays deterministic in (pet, day, world, family,
+  ("hop" or "crate-push") rather than a second service; the service stays deterministic in (pet, day, world, family,
   specials, game), so every screen of a pet gets the same board.
 - **Card:** board mode (`card-board.js`) already draws a grid, takes eight buttons or arrow keys, parks on ✕
   and undoes. This is **more than a second cell vocabulary**: `card-board.js` is Hop-specific (`kind !== "hop"` guards, `HATCH_HOP.*`, cell-target moves via `apply(board, st, cell)`), while moves here are u/d/l/r letters. Slice 3 is "generalize or fork card-board.js", and it must decide what a tap on a cell does (recommended: a tap on a cell next to the pet steps; a far tap does nothing).
-  `SHELL_MODES` gets a `shellSokoban` slot map: left, up, down, right, special (its cap is the uses left), undo,
+  `SHELL_MODES` gets a `shellCrate Push` slot map: left, up, down, right, special (its cap is the uses left), undo,
   restart, quit (the same as Hop's `shellHop`).
 - **Settle and pay:** the card plays locally and sends the move list once; the server replays it on its own
   copy and pays (Hop's section 6). A new `settle_crate_push` beside `settle_hop` shares the pay tail.
 - **Saved state:** one small map per pet, `crate_push_day` (day, highest level paid, neat paid), plus counts in `games`
   (Hop's `hop_day`). This is a saved field: **tier 2**, as Hop's ship 3a.
-- **The play screen:** Hop has a row outside the picker. Sokoban gets a second row, or one "Today's boards" row
+- **The play screen:** Hop has a row outside the picker. Crate Push gets a second row, or one "Today's boards" row
   that holds both (Q3). The picker itself stays as it is (shell-modes D2).
 - **Art:** one crate sprite and one spot mark, plain, as a CSS stand-in (as Hop's early boards). The world
   push objects and a "solved" line per world are the optional slice 5, a separate owner-gated art step.
@@ -120,7 +122,7 @@ hard is making a board **interesting** rather than trivially solved:
   spot). The card does **not** warn the player (that would solve it for them); a hint is a later slice (the
   Hop plan's ship 5).
 
-**Honest risk:** at most 3 crates on a 6 by 4 board, Sokoban gets hard fast or stays shallow. If the sample
+**Honest risk:** at most 3 crates on a 6 by 4 board, Crate Push gets hard fast or stays shallow. If the sample
 boards are dull the slice-1 acceptance fails and the answer is a 7 by 5 board on wider cards only, or fewer
 walls. This is the plan's biggest unknown, so slice 1 ends with the owner judging 20 generated boards on the
 bench (the way Hop's art was judged on the bench) before any card work starts.
@@ -155,7 +157,7 @@ player-trait bonus (4), stays at or under 30 on hard:
 | normal | 20 | the same as Play (median 16 moves) |
 | hard | 26 | longer, more crates, more traps (median 23 moves); 26 + 4 = 30 |
 
-(Numbers are a draft, in `rates.py` as `CRATE_PUSH_WIN_HAPPINESS`; the owner sets them at slice 4.)
+(In `rates.py` as `CRATE_PUSH_WIN_HAPPINESS`. **Owner 2026-11-08: the first mate's assessment stands, 14/20/26.** Easy sits below Play, normal equals it, hard tops Hop's 23; each round also costs energy and hunger, which is the natural limit on farming.)
 
 - **Each solved round pays its level** and takes the shared tail's `PLAY_ENERGY`, `PLAY_HUNGER` and `WEIGHT_GAME`,
   once per round, exactly like any game. `games["crate-push"].played` counts rounds. No unpaid practice.
@@ -171,12 +173,12 @@ player-trait bonus (4), stays at or under 30 on hard:
 
 ## 6. Questions for the owner (each with a recommendation)
 
-1. **Q1. Name and the "neat" word.** The owner wants **Sokoban**. Recommendation: use it in code and docs, check the trademark before it is the title on the play screen (plain "Crates" is the fallback), and **neat** for the within-par finish.
+1. **Q1. Name and the "neat" word.** The owner wants **Crate Push**. Recommendation: use it in code and docs, check the trademark before it is the title on the play screen (plain "Crates" is the fallback), and **neat** for the within-par finish.
 2. **Q2. Pay.** ANSWERED (owner, 2026-11-08): every round pays, Tamagotchi style (section 5). Still open: the
    14 / 20 / 26 numbers, and whether one neat find a day from this game on top of Hop's is fine.
-3. **Q3. Where it starts.** Recommendation: one "Today's boards" row that opens a two-choice (Hop, Sokoban), so
+3. **Q3. Where it starts.** Recommendation: one "Today's boards" row that opens a two-choice (Hop, Crate Push), so
    the play screen does not grow a row per game; the picker stays as it is.
-4. **Q4. Species families.** Recommendation: Sokoban uses its own six specials (section 1) mapped from the same
+4. **Q4. Species families.** Recommendation: Crate Push uses its own six specials (section 1) mapped from the same
    six Hop families, so the pet's special stays "its move" across both boards.
 5. **Q5. Board size.** Recommendation: 6 by 4 like Hop, and let the slice 1 contact sheet decide whether wider
    cards get 7 by 5.
