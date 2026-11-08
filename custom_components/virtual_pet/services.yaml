@@ -121,6 +121,31 @@ hop:
       example: abgh
       selector:
         text:
+    game:
+      required: false
+      example: crate-push
+      selector:
+        select:
+          options:
+            - hop
+            - crate-push
+    level:
+      required: false
+      example: normal
+      selector:
+        select:
+          options:
+            - easy
+            - normal
+            - hard
+    round:
+      required: false
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 99
+          mode: box
     shared:
       required: false
       default: false

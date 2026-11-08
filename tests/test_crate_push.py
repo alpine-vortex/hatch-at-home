@@ -179,3 +179,26 @@ def test_the_bots_win_rarely_on_hard_boards_and_never_break_the_rules():
         print(f"\ncasual wins {wins_casual}/{total}, greedy wins {wins_greedy}/{total}")
     assert wins_casual < total * 0.5, "a random walker should not win most hard boards"
     assert wins_greedy < total, "the greedy bot does not win every hard board"
+
+
+GOLDEN = {
+    "easy": ("..n..", "b#.bP", "n#...", "#...."),
+    "normal": ("nP#..n", ".b....", "...b..", "..#..#"),
+    "hard": ("n..##.", ".bb#..", ".....n", "Pb...n"),
+}
+
+
+def test_a_round_is_part_of_the_board():
+    a = S.crate_push_board("pet", "2026-11-09", "woodland", "normal", 1)
+    b = S.crate_push_board("pet", "2026-11-09", "woodland", "normal", 2)
+    assert a.id != b.id and a.grid != b.grid
+    assert a.id == S.crate_push_board("pet", "2026-11-09", "woodland", "normal").id
+
+
+def test_golden_boards_do_not_drift():
+    """A refactor must not silently change every pet's board (GEN_VERSION)."""
+    got = {
+        lv: S.crate_push_board("golden-pet", "2026-11-09", "woodland", lv, 1).grid
+        for lv in LEVELS
+    }
+    assert got == GOLDEN

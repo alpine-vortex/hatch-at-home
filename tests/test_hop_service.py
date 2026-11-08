@@ -296,7 +296,16 @@ def test_the_service_has_its_text_and_fields():
     fields = set(
         yaml.safe_load((package / "services.yaml").read_text())["hop"]["fields"]
     )
-    assert fields == {"entity_id", "action", "id", "moves", "shared"}
+    assert fields == {
+        "entity_id",
+        "action",
+        "id",
+        "moves",
+        "shared",
+        "game",
+        "level",
+        "round",
+    }
     for name in ("strings.json", "translations/en.json"):
         service = json.loads((package / name).read_text())["services"]["hop"]
         assert service["name"] and service["description"]

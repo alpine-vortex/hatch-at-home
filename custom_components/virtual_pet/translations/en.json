@@ -427,6 +427,18 @@
       "name": "Hop of the Day",
       "description": "Hop of the Day, the pet's daily board game. The board action returns today's board for the pet: the same on every screen all day, built once and kept until midnight, and refused (result egg, asleep or too_tired) when the pet could not play a game now. The settle action sends the moves of a board played to the nest; the server replays them and pays the day's first win, and one find for the day's first tidy win. A later settle the same day answers ok with already true. Other results: illegal, not_won, too_long, board_changed (load today's board), egg or asleep.",
       "fields": {
+        "game": {
+          "name": "Game",
+          "description": "hop (default) or crate-push, the crate-pushing board game. Crate-push answers the board action only for now."
+        },
+        "level": {
+          "name": "Level",
+          "description": "Crate-push: easy, normal or hard."
+        },
+        "round": {
+          "name": "Round",
+          "description": "Crate-push: the round of the day (1 to 99). Each round is a new board."
+        },
         "entity_id": {
           "name": "Pet",
           "description": "Any entity of the pet."

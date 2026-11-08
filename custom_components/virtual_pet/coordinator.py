@@ -43,7 +43,16 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import TemperatureConverter
 
-from . import channel, hop, model, notify, people as P, rates as R, wellbeing
+from . import (
+    channel,
+    crate_push,
+    hop,
+    model,
+    notify,
+    people as P,
+    rates as R,
+    wellbeing,
+)
 from .backup import (
     NOTHING,
     async_backup,
@@ -341,6 +350,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # (day, world, family, specials, w, h), so two screens calling at once
         # run the generator once (ship 3a's settle reads the same cache).
         self._hop_boards: dict[tuple, asyncio.Future[hop.Board]] = {}
+        self._crate_boards: dict[tuple, asyncio.Future[crate_push.Board]] = {}
         self._visits: dict[str, float] = {}
         # People (HA user IDs) whose person entity just came home, and when the
         # pet last cheered for each (in memory).
@@ -3430,6 +3440,51 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._save()
         self._publish()
         return info
+
+    async def async_crate_push_board(self, level: str, rnd: int) -> dict[str, Any]:
+        """A crate-push round's board for this pet (slice 2: read only). A
+        pure function of (pet, day, world, level, round): the same on every
+        screen, no pin, no write, no person, no care log. Built off the loop
+        (hard can take most of a second) and kept for the day. Refused as a
+        game is when the pet could not play now. Which round may be played,
+        and the pay, are slice 4's."""
+        assert self.state is not None
+        now = self._now()
+        self._advance(now)
+        refusal = model._refuse_play(self.state)
+        if refusal is not None:
+            return {"result": refusal}
+        day = self._today(now)[0]
+        key = (day, self.world, level, rnd)
+        for old in [k for k in self._crate_boards if k[0] != day]:
+            del self._crate_boards[old]
+        future = self._crate_boards.get(key)
+        if future is None:
+            future = self.hass.async_add_executor_job(
+                crate_push.crate_push_board, self.pet_id, day, self.world, level, rnd
+            )
+            self._crate_boards[key] = future
+
+            def failed(done: asyncio.Future[crate_push.Board]) -> None:
+                if done.cancelled() or done.exception() is not None:
+                    if self._crate_boards.get(key) is done:
+                        del self._crate_boards[key]
+
+            future.add_done_callback(failed)
+        try:
+            board = await asyncio.shield(future)
+        except Exception:
+            if self._crate_boards.get(key) is future:
+                del self._crate_boards[key]
+            raise
+        return {
+            "result": model.OK,
+            "game": "crate-push",
+            "day": day,
+            "level": level,
+            "round": rnd,
+            **board.to_dict(),
+        }
 
     async def async_hop_day_board(
         self, day: str, family: str, specials: int, w: int, h: int

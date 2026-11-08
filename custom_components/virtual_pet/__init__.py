@@ -31,7 +31,7 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
-from . import channel, notify, rates as R
+from . import channel, crate_push, notify, rates as R
 from .const import (
     ATTR_ACTION,
     ATTR_CATEGORY,
@@ -163,6 +163,12 @@ HOP_SCHEMA = vol.Schema(
         vol.Optional("id"): vol.All(cv.string, vol.Length(max=32)),
         vol.Optional("moves"): vol.All(cv.string, vol.Length(max=R.HOP_MAX_MOVES + 1)),
         vol.Optional("shared", default=False): cv.boolean,
+        # The crate-push board game (slice 2: board only). Absent is Hop.
+        vol.Optional("game", default="hop"): vol.In(["hop", "crate-push"]),
+        vol.Optional("level", default="normal"): vol.In(crate_push.LEVELS),
+        vol.Optional("round", default=1): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=crate_push.MAX_ROUND)
+        ),
     }
 )
 SHARE_NEWS_SCHEMA = vol.Schema(
@@ -370,6 +376,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         )
 
     async def hop(call: ServiceCall) -> ServiceResponse:
+        if call.data["game"] == "crate-push":
+            if call.data[ATTR_ACTION] != "board":
+                return {"result": "unsupported"}  # settle is slice 4
+            return await pet_of(call).async_crate_push_board(
+                call.data["level"], call.data["round"]
+            )
         if call.data[ATTR_ACTION] == "settle":
             # A settle with no id or no moves is answered, not raised: no id
             # matches no board (board_changed), no moves is illegal at 0.

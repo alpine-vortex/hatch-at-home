@@ -131,7 +131,7 @@ bench (the way Hop's art was judged on the bench) before any card work starts.
 |---|---|---|---|---|
 | 0 | Owner answers Q1-Q6; this plan is folded and gets a review pass | 0 | low | none |
 | 1 | `crate_push.py`, `crate-push-engine.js`, shared fixtures, generator by level, solver, two bots, a contact sheet for the owner. **Built** (branch `sokoban-slice-1`) | 1 | med | 0 |
-| 2 | The `board` service takes `game: "sokoban"` and a `level`; deterministic per day, three boards a day | 1 | low | 1 |
+| 2 | The `hop` service (action `board`) takes `game: "crate-push"`, a `level` and a `round`; pure and read-only, a fresh board per round, built off the loop and cached for the day; settle answers `unsupported` until slice 4. **Built** (2987 tests pass) | 1 | low | 1 |
 | 3 | The card: a level picker (easy, normal, hard, with what each pays and a practice note), crate and spot cells, push, `shellSokoban`, undo and restart, park, keyboard, a plain CSS stand-in crate and the pet's own sprite, bench `view: "board"` for Sokoban | 1 | med | 2 |
 | 4 | Settle, pay, `crate_push_day`, the journal line; a replay test shared with the card's engine | 2 | med | 3 |
 | 5 | Optional skins: the world's push objects replace the crate (art, lines) | 1, owner-gated art | low | 3 |

@@ -33,6 +33,7 @@ import random
 from typing import Any
 
 GEN_VERSION = 1
+MAX_ROUND = 99  # rounds a day per level the board service will build
 MAX_MOVES = 400  # a longer list is too_long, decided before any replay
 MOVES = "udlr"
 DIRS = {"u": (0, -1), "d": (0, 1), "l": (-1, 0), "r": (1, 0)}
@@ -320,14 +321,18 @@ GATES = {
 PULLS = {"easy": 8, "normal": 12, "hard": 18}  # reverse pulls made
 
 
-def _seed(pet_id: str, day: str, world: str | None, level: str, n: int) -> str:
-    return f"crate-push|{GEN_VERSION}|{pet_id}|{day}|{world}|{level}|{n}"
+def _seed(
+    pet_id: str, day: str, world: str | None, level: str, rnd: int, n: int
+) -> str:
+    return f"crate-push|{GEN_VERSION}|{pet_id}|{day}|{world}|{level}|{rnd}|{n}"
 
 
 def board_id(
     pet_id: str,
     day: str,
     world: str | None,
+    level: str,
+    rnd: int,
     w: int,
     h: int,
     grid: tuple[str, ...] | list[str],
@@ -336,7 +341,8 @@ def board_id(
     """The board's id: a hash, so the pet id (an entry id) never leaves the
     server. Binds the pet, the day, the world, the generator and the board."""
     text = json.dumps(
-        [GEN_VERSION, pet_id, day, world, w, h, list(grid), n], separators=(",", ":")
+        [GEN_VERSION, pet_id, day, world, level, rnd, w, h, list(grid), n],
+        separators=(",", ":"),
     )
     return hashlib.sha256(text.encode()).hexdigest()[:10]
 
@@ -474,13 +480,16 @@ FALLBACK = {
 TRIES = 400
 
 
-def crate_push_board(pet_id: str, day: str, world: str | None, level: str) -> Board:
-    """The day's board for a pet: a function of (pet, day, world, level). The
+def crate_push_board(
+    pet_id: str, day: str, world: str | None, level: str, rnd: int = 1
+) -> Board:
+    """A round's board for a pet: a function of (pet, day, world, level, round),
+    so no two rounds of a day repeat. The
     first accepted candidate of a seeded stream, with its par set. If none is
     accepted in TRIES, the level's hand-made board (fallback=True)."""
     params_for(level)  # an unknown level has no board
     for n in range(TRIES):
-        rng = random.Random(_seed(pet_id, day, world, level, n))
+        rng = random.Random(_seed(pet_id, day, world, level, rnd, n))
         cand = _candidate(rng, level)
         if cand is None:
             continue
@@ -490,7 +499,7 @@ def crate_push_board(pet_id: str, day: str, world: str | None, level: str) -> Bo
         cand.par = len(verdict.solve.moves) + PAR_SLACK
         cand.world = world
         cand.tries = n + 1
-        cand.id = board_id(pet_id, day, world, cand.w, cand.h, cand.grid, n)
+        cand.id = board_id(pet_id, day, world, level, rnd, cand.w, cand.h, cand.grid, n)
         return cand
     grid = FALLBACK[level]
     board = Board(
@@ -498,5 +507,7 @@ def crate_push_board(pet_id: str, day: str, world: str | None, level: str) -> Bo
     )
     s = solve(board)
     board.par = (len(s.moves) if s else 0) + PAR_SLACK
-    board.id = board_id(pet_id, day, world, board.w, board.h, board.grid, TRIES)
+    board.id = board_id(
+        pet_id, day, world, level, rnd, board.w, board.h, board.grid, TRIES
+    )
     return board
