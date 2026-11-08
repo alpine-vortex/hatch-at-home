@@ -1270,6 +1270,25 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
 - **Device queue:** fixture: dev pet with a world visitor due and a basket of finds
   (`scripts/dev-seed`). `qa_screen`: the pet screen with a visitor; the basket reveal. Look at: the visitor
   walks in, is greeted, leaves; swipe away and back quickly (it stays); the reveal shows each find 2.5 s.
+- **Shipped, and where it differed from the draft:** `visitors_trace.test.js` has 18 cases: 16 pass before and after, and the two
+  forget cases (`_forget` at +500, and inside a swipe grace) were written against today's behaviour in the trace commit (the visitor
+  ran on to `total` or the grace) and read "ended on the spot" in the move. The card's own `_visitorStart`, `_visitorEnd`,
+  `_revealStart`, `_revealFind`, `_revealEnd`, `_go`, `_forget` and `_dropFinds` run on the fake clock: a walking visitor's look (1400), pair
+  (1500), greet (2400), out (5400) and end (6800); a crosser (greet 1080, off 1800, end 4080); calm (pair 0, greet 600, end 5000, no look);
+  each step re-checks `_visitorLive`; a new visit drops the old one's steps; the swipe grace (away at +100 and back at +400 stays; not back
+  goes at +700; a crosser the same; calm ends at its 600 step, before the grace; two swipes away end at the first + 600; away at 1300 ends
+  at the 1400 step, not 1900); the reveal's find *i* at `i * 2500`, the end at 7500, a dead `_visitorLive` ends it, a new find's ring at
+  +600; `_dropFinds` does not stop the reveal. **Scout's review of this section (s2997), applied:** (1) anchored by function name, not line
+  (R14 is `_go`'s `x.visitor && i !== to`); (2) `_forget` calls `_visitorEnd(s)` next to `_seasonVisitEnd`, before `detach`, and before
+  anything resets `flairUntil`/`visitUntil`: the forget trace asserts both are 0; (3) the swipe trace starts the away at +100 (so +600 beats
+  the 1400 step) and has the 1300 case, for a walking, a `cross` and a calm visitor; (4) ratchet: the `card-visitors` row is deleted
+  (`setTimeout` 3 -> 0, `clearTimeout` 2 -> 0) and `card-build` `setTimeout` 2 -> 1 (the one left is the director's own schedule);
+  (5) `dev/bench/page.js` (`revealShot`, `visitorShot`) call `card._stop(s, { group: "reveal" })` / `{ group: "visitor" }` in place of
+  `R.timers`/`V.timers`, and `visitorShot` keeps its wait for the pair step; (6) the `_dropFinds` assertion is in the trace. The move:
+  `at` in `_visitorStart` and `_revealStart` is `this._later(s, ms, ..., { group })`; R87's ring is `{ group: "reveal", undo: ring.remove }`;
+  `_visitorEnd` and `_revealEnd` stop their group; the swipe grace is an unkeyed `this._later(x, ...)`; `V.timers` and `R.timers` are gone.
+  No card-check edit (it reads neither field). **Device queue (first mate's decision): no new dev-seed fixture; bench shots (`visitor`,
+  `reveal`) plus the card-check `visitors` and `finds` sections.**
 - **Timings:** identical. B1. **Rollback:** revert.
 
 ### 5.12 Slice 12: the infrared link

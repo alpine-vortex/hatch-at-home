@@ -252,22 +252,17 @@ const forgetAt = (ms, { swiped = false } = {}) => {
   return w;
 };
 
-// Today (the unmoved code) _forget does not end the visitor: it runs on to its own last step (or the swipe grace) over the new pet. The
-// move commit has _forget call _visitorEnd before detach, and these two cases then read "ended on the spot" (plan 5.11, fix 1).
-test("_forget at +500 of a walking visitor: today the visitor runs on to total", () => {
+// _forget ends the visitor itself, before detach (plan 5.11, review s2978 fix 1): without that, detach alone drops the steps silently and
+// s.visitor (a BUSY_OWNERS entry) would stay set over the new pet.
+test("_forget at +500 of a walking visitor: ended on the spot: s.visitor null, flairUntil and visitUntil 0, the elements gone, nothing pending", () => {
   const w = forgetAt(500);
-  assert.notStrictEqual(w.slide.visitor, null);
-  assert.strictEqual(w.slide.flairUntil - w.base, 6800);
-  w.run(6299);
-  assert.notStrictEqual(w.slide.visitor, null);
-  w.run(1);
   assert.deepStrictEqual([clean(w), w.pendingTimers()], [[null, 0, 0, 0], 0]);
+  w.run(8000);
+  assert.deepStrictEqual([at(w, "_look"), at(w, "_visitorGreet")], [[], []], "nothing of the old one fires later");
 });
 
-test("_forget inside a swipe grace: today the grace (or the next step that finds the slide off show) ends it", () => {
+test("_forget inside a swipe grace: the same, and the grace is dropped with it", () => {
   const w = forgetAt(500, { swiped: true });
-  assert.notStrictEqual(w.slide.visitor, null);
-  w.run(200);
   assert.deepStrictEqual([clean(w), w.pendingTimers()], [[null, 0, 0, 0], 0]);
 });
 

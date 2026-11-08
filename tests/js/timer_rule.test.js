@@ -16,7 +16,7 @@ const PINNED = {
   // + slice 0: `.animate(` 1, in the _waapi adapter
   "card-base": { [ST]: 2, [SI]: 1, [CT]: 3, [CI]: 1, [AN]: 1 },
   // + slice 0: the director's repeat and frame wrappers (setInterval, clearInterval, rAF, cancel 1 each)
-  "card-build": { [ST]: 2, [SI]: 1, [RAF]: 1, [CT]: 6, [CI]: 1, [CAF]: 1 }, // slice 5: R76-R77's closer _clearAsk moved (clearTimeout 9 -> 8); slice 8: R11-R13 moved (setTimeout 5 -> 2, clearTimeout 8 -> 6)
+  "card-build": { [ST]: 1, [SI]: 1, [RAF]: 1, [CT]: 6, [CI]: 1, [CAF]: 1 }, // slice 5: R76-R77's closer _clearAsk moved (clearTimeout 9 -> 8); slice 8: R11-R13 moved (setTimeout 5 -> 2, clearTimeout 8 -> 6); slice 11: R14 the swipe grace moved (setTimeout 2 -> 1; the 1 left is the director's own schedule)
   // slice 1: card-journal (R25) and card-mode (R40) have no bare timer left; card-base clearTimeout 4 -> 3 (R27's closer)
   "card-layout": { [CT]: 1 }, // slice 1: R26, R27, R28 moved (setTimeout 2 -> 0, rAF 1 -> 0, clearTimeout 2 -> 1)
   "card-link": { [ST]: 3, [SI]: 2, [CT]: 3, [CI]: 2 },
@@ -28,7 +28,6 @@ const PINNED = {
   "card-sheets": { [ST]: 6, [CT]: 5 },
   "card-tick": { [SI]: 1, [CI]: 1 }, // slice 3: R60-R68, R70, R73 moved (setTimeout 15 -> 4); slice 4: R57-R58, R71, R72, R74, R75 (setTimeout 4 -> 0, clearTimeout 5 -> 0, .animate( 2 -> 0)
   "card-visit": { [ST]: 1, [CT]: 0 }, // slice 2: R79, R81-R84 moved (setTimeout 9 -> 4, clearTimeout 7 -> 3); slice 5: R76, R77 (setTimeout 4 -> 2, clearTimeout 3 -> 1); slice 7: R80 `_animate` (setTimeout 2 -> 1, clearTimeout 1 -> 0)
-  "card-visitors": { [ST]: 3, [CT]: 2 },
 };
 
 test("the counter: comments go, strings, templates and regex literals stay whole", () => {

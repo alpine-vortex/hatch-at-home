@@ -831,6 +831,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     // Device-alive: another pet's glass, ring and first view are not this one's (the house view that
     // follows sets the ambient state again).
     this._seasonVisitEnd(s); // closer (3.14, R50): clears s.seasonVisit, takes the flyer away; before detach
+    this._visitorEnd(s); // closer (3.14, R85, R14): the only code that clears s.visitor, flairUntil and visitUntil; before detach
     this._director?.detach(s);
     s.dirViewed = false;
     s.dirRecent = null;
@@ -1030,9 +1031,9 @@ class HatchPetCardBuild extends HatchPetCardBase {
       this._sceneEnd(x, { swipe: i !== to }); // a swipe ends a care scene, showing how things are now (the slide stayed on keeps its shake-off)
       if (x.visitor && i !== to) { // a world visitor goes too, after a grace: a slip of the finger keeps it (UX8 F11)
         const V = x.visitor;
-        setTimeout(() => {
+        this._later(x, VISIT_SWIPE_GRACE_MS, () => { // unkeyed: two swipes away end it at the first + 600 (F4)
           if (x.visitor === V && this._slides[this._index] !== x) this._visitorEnd(x);
-        }, VISIT_SWIPE_GRACE_MS);
+        });
       }
       if (x.picker) { // and leaves the shell picker unsaved: the sheet again
         this._closePicker(x);

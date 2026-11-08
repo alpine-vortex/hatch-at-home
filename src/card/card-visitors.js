@@ -183,7 +183,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
       `<img src="${BASE}/ui/visitor_${world}_${v.id}_${n}.png?v=${VERSION}" alt="">`).join("");
     s.seasonBox.append(el);
     const now = Date.now();
-    const V = s.visitor = { el, els: [el], v, timers: [], until: now + total, greetAt, guest: guest ? world : null };
+    const V = s.visitor = { el, els: [el], v, until: now + total, greetAt, guest: guest ? world : null };
     if (!v.cross && !guest) { // seen here today, for the evening's today line (fresh-moment 4)
       try {
         localStorage.setItem(`hatch-visitseen-${s.ids?.device}`, JSON.stringify({ day: this._visitDay(s).toDateString(), name: v.name }));
@@ -193,11 +193,11 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
     }
     s.flairUntil = s.visitUntil = V.until; // nothing else meanwhile; a pat wiggles, no line
     s.nextVisitor = Math.max(s.nextVisitor || 0, now + total + VISIT_AFTER_MS); // a seasonal one later
-    const at = (ms, fn) => V.timers.push(setTimeout(() => {
+    const at = (ms, fn) => this._later(s, ms, () => {
       if (s.visitor !== V) return;
       if (this._visitorLive(s)) fn();
       else this._visitorEnd(s);
-    }, ms));
+    }, { group: "visitor" });
     // The art faces right, so only a visitor on the left is faced (UX8 F2): held through
     // the greet and the stay, never turned away from one coming in on the right.
     if (!isCalm && !v.cross && ltr) at(inMs, () => this._look(s, greetAt + stay - inMs));
@@ -318,7 +318,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
     const V = s.visitor;
     if (!V) return;
     s.visitor = null;
-    V.timers.forEach(clearTimeout);
+    this._stop(s, { group: "visitor" });
     (V.els || [V.el]).forEach((x) => x.remove());
     if (s.flairUntil === V.until) s.flairUntil = 0;
     if (s.visitUntil === V.until) s.visitUntil = 0;
@@ -423,14 +423,14 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
       '<img class="rf" alt="" hidden>';
     s.screen.append(el);
     const total = finds.length * FIND_STEP_MS;
-    const R = s.reveal = { el, finds, timers: [], until: Date.now() + total, quiet: false, said: null, shown: [] };
+    const R = s.reveal = { el, finds, until: Date.now() + total, quiet: false, said: null, shown: [] };
     s.flairUntil = s.visitUntil = R.until; // a pat wiggles, no line; nothing else meanwhile
     s.basket.hidden = true;
-    const at = (ms, fn) => R.timers.push(setTimeout(() => {
+    const at = (ms, fn) => this._later(s, ms, () => {
       if (s.reveal !== R) return;
       if (this._visitorLive(s)) fn();
       else this._revealEnd(s);
-    }, ms));
+    }, { group: "reveal" });
     finds.forEach((f, i) => at(i * FIND_STEP_MS, () => this._revealFind(s, R, f, isCalm)));
     at(total, () => this._revealEnd(s));
     return R;
@@ -452,7 +452,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
       const ring = document.createElement("span");
       ring.className = "burst";
       R.el.append(ring);
-      setTimeout(() => ring.remove(), 600);
+      this._later(s, 600, () => ring.remove(), { group: "reveal", undo: () => ring.remove() });
     }
     if (R.quiet) return;
     // The reveal's own line still up doesn't hold the next one; anyone else's does.
@@ -484,7 +484,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
     const R = s.reveal;
     if (!R) return;
     s.reveal = null;
-    R.timers.forEach(clearTimeout);
+    this._stop(s, { group: "reveal" });
     R.el.remove();
     if (s.flairUntil === R.until) s.flairUntil = 0;
     if (s.visitUntil === R.until) s.visitUntil = 0;

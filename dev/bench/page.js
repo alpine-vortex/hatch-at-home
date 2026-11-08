@@ -216,7 +216,7 @@
     for (const f of finds) if (!findOf(card._worlds, f.world, f.id)) throw new Error(`no find ${f.world}/${f.id}`);
     Object.assign(s, { sayUntil: 0, queue: [] }); // the greeting's line gives way
     const R = card._revealStart(s, finds);
-    R.timers.forEach(clearTimeout);
+    card._stop(s, { group: "reveal" }); // the beat is frozen: the ledger entries go, the card does not move on
     const last = Math.min(rv.at ?? finds.length - 1, finds.length - 1);
     for (let i = 0; i <= last; i++) card._revealFind(s, R, finds[i], calm());
     await settled(card);
@@ -642,7 +642,7 @@
     if (vis.pair && !V.pair) throw new Error(`no pair for ${v.id} in ${s.worldKey}`);
     // The friend comes in on its own timer (PAIR_BEHIND_MS; before the greet's).
     if (vis.pair) for (let i = 0; i < 80 && V.els.length < 2; i++) await new Promise((r) => setTimeout(r, 25));
-    V.timers.forEach(clearTimeout);
+    card._stop(s, { group: "visitor" }); // frozen as above (the pair step has run)
     const beat = vis.beat || "greet";
     if (beat === "leave") V.el.classList.replace("in", "out");
     const random = Math.random;
