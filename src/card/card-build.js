@@ -832,6 +832,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     // follows sets the ambient state again).
     this._seasonVisitEnd(s); // closer (3.14, R50): clears s.seasonVisit, takes the flyer away; before detach
     this._visitorEnd(s); // closer (3.14, R85, R14): the only code that clears s.visitor, flairUntil and visitUntil; before detach
+    if (this._link && (this._link.host === s || this._link.guest === s)) this._linkEnd(); // closer (R29-R33; owner 2026-11-07): a link on this pet ends before detach, not up to 7 s later on the new one
     this._director?.detach(s);
     s.dirViewed = false;
     s.dirRecent = null;

@@ -694,7 +694,7 @@
     // `link.say`: "host" or "extra", the host's queued line on show (the tick is stopped,
     // so the bench says it through the card's own _sayQueued). The visit is held there.
     if (link.say) {
-      card._link.timers.forEach(clearTimeout);
+      card._director.stop(card._dirCard, { group: "link" }); // the visit is held: its steps, swap and flap go from the ledger
       for (let n = link.say === "extra" ? 2 : 1; n > 0; n--) {
         host.sayUntil = 0;
         card._sayQueued(host);
@@ -722,14 +722,14 @@
   }
 
   // The infrared beam held mid-flight (400 ms of 1100: the head over the host's
-  // shell, its trail behind it). Drawn by the card's own _linkBeam, no visit around it.
+  // shell, its trail behind it). Drawn by the card's own _linkBeam, no visit around it. _linkBeam
+  // takes its timers from the card's ledger (`_dirCard`), so this needs a card that has been built.
   function irBeam(card) {
     const [host, guest] = card._slides;
-    card._link = { timers: [] };
+    card._link = {};
     card._linkBeam(host, guest, true);
     const L = card._link;
-    clearInterval(L.flap);
-    L.timers.forEach(clearTimeout);
+    card._director.stop(card._dirCard, { group: "link" }); // the flap and the beam's two timers: the beam is held
     for (const a of L.beam.getAnimations({ subtree: true })) { a.pause(); a.currentTime = 400; }
     card._link = null;
   }

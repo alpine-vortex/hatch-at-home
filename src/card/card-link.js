@@ -84,12 +84,12 @@ class HatchPetCardLink extends HatchPetCardVisitors {
   _linkStart(host, guest) {
     if (this._link) return false;
     const isCalm = calm();
-    const L = this._link = { host, guest, timers: [], hostScale: host.pet.style.scale };
-    const at = (ms, fn) => {
-      const t = setTimeout(() => this._link === L && fn(), ms);
-      L.timers.push(t);
-      return t;
-    };
+    const L = this._link = { host, guest, hostScale: host.pet.style.scale };
+    // Group "link" on the card's own scope (the link outlives a slide); _linkEnd stops the group. The guard stays in
+    // each step: a late step after _linkEnd must not touch a dead L, nor (the `then` below) add an entry nobody stops.
+    const at = (ms, fn, key) => this._later(this._dirCard, ms, () => {
+      if (this._link === L) fn();
+    }, { group: "link", key });
     const hostName = this._linkName(host);
     const guestName = this._linkName(guest);
     const hello = this._lines(host, "link_host", this._pick(["hi, {guest}!", "oh! {guest}! hello hello ♪"])
@@ -151,7 +151,11 @@ class HatchPetCardLink extends HatchPetCardVisitors {
       L.box.append(img);
       L.img = img;
       let f = 0;
-      if (!isCalm) L.swap = setInterval(() => gFrames.length && this._show(guest, img, gFrames[++f % gFrames.length]), 700);
+      if (!isCalm) {
+        this._director.every(this._dirCard, 700, () => {
+          if (this._link === L && gFrames.length) this._show(guest, img, gFrames[++f % gFrames.length]);
+        }, { group: "link" });
+      }
       // Both host lines queued now, in order; neither is said once the visit is over.
       const still = () => this._link === L;
       if (!extra) this._queue(host, hello, 3400, { still });
@@ -160,13 +164,14 @@ class HatchPetCardLink extends HatchPetCardVisitors {
         this._queue(host, hello, 3300, { still });
         // Said late (the first line typed slowly): the visit waits for it to be read.
         this._queue(host, extra, 1600, { still, then: () => {
+          if (this._link !== L) return; // cut short: nothing to stretch, and no entry to leave behind
           L.say.hidden = true; // the guest's reply has had its turn: the bubbles would overlap
           const left = host.sayUntil - Date.now();
           if (left <= L.endsIn - Date.now()) return;
-          clearTimeout(L.hideAt);
-          clearTimeout(L.endAt);
-          L.hideAt = at(Math.max(0, left - 600), hide);
-          L.endAt = at(left, () => this._linkEnd(true));
+          this._stop(this._dirCard, { key: "link.hide" });
+          this._stop(this._dirCard, { key: "link.end" });
+          at(Math.max(0, left - 600), hide, "link.hide");
+          at(left, () => this._linkEnd(true), "link.end");
         } });
       }
       const say = document.createElement("div");
@@ -215,8 +220,8 @@ class HatchPetCardLink extends HatchPetCardVisitors {
       L.img.classList.add("out");
     };
     const endMs = t0 + (isCalm ? 3600 : 4600) + stretch;
-    L.hideAt = at(t0 + 4000 + stretch, hide);
-    L.endAt = at(endMs, () => this._linkEnd(true));
+    at(t0 + 4000 + stretch, hide, "link.hide");
+    at(endMs, () => this._linkEnd(true), "link.end");
     L.endsIn = Date.now() + endMs; // when the visit ends, unless the extra stretches it
     return true;
   }
@@ -287,9 +292,11 @@ class HatchPetCardLink extends HatchPetCardVisitors {
     this._track.append(beam);
     L.beam = beam;
     let f = 0;
-    L.flap = setInterval(() => head.setAttribute("src", `${BASE}/ui/ir_head_${(++f % 2) + 1}.png?v=${VERSION}`), 200);
-    L.timers.push(setTimeout(() => beam.classList.add("gone"), ms + 500));
-    L.timers.push(setTimeout(() => beam.remove(), ms + 900));
+    this._director.every(this._dirCard, 200, () => {
+      if (this._link === L) head.setAttribute("src", `${BASE}/ui/ir_head_${(++f % 2) + 1}.png?v=${VERSION}`);
+    }, { group: "link" });
+    this._later(this._dirCard, ms + 500, () => { if (this._link === L) beam.classList.add("gone"); }, { group: "link" });
+    this._later(this._dirCard, ms + 900, () => { if (this._link === L) beam.remove(); }, { group: "link" });
   }
 
   // The visit is over (or cut short): leave nothing behind.
@@ -300,9 +307,7 @@ class HatchPetCardLink extends HatchPetCardVisitors {
     if (!L) return;
     this._link = null;
     this._linkEndedAt = Date.now(); // a world visitor waits VISIT_AFTER_MS
-    L.timers.forEach(clearTimeout);
-    clearInterval(L.swap);
-    clearInterval(L.flap);
+    this._stop(this._dirCard, { group: "link" }); // the steps, the swap, the flap, the beam's two
     L.beam?.remove();
     L.box?.remove();
     const { host, guest } = L;

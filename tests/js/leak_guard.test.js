@@ -126,6 +126,30 @@ test("a card that leaves leaves no interval, no rAF loop and no window/document 
   });
 });
 
+// Slice 12 (plan 5.12, N11): a visit's swap (700 ms) and head flap (200 ms) are intervals on the ledger; the card leaving while the link is
+// on ends it (disconnectedCallback's _linkEnd), and nothing is left once the visit's longest due time (7.1 s) is past.
+test("a card that leaves mid-link leaves no interval, measured after the visit's longest due time", { skip, timeout: 120000 }, async () => {
+  await withPage(async ({ page, mount }) => {
+    const base = await state(page);
+    await mount(3);
+    await page.evaluate(() => {
+      const c = document.querySelector("hatch-pet-card");
+      c._tick = () => {}; // the page's tick would end or start visits of its own
+      window.__started = c._linkStart(c._slides[0], c._slides[1]);
+    });
+    assert.strictEqual(await page.evaluate(() => window.__started), true);
+    await page.waitForTimeout(2800); // past the pose (2.5 s): the swap and the flap both run
+    const during = await state(page);
+    assert.ok(during.intervals >= base.intervals + 3, "the card's tick, the head flap and the guest's swap");
+    assert.strictEqual(await page.evaluate(() => document.querySelector("hatch-pet-card")._director.inspect(document.querySelector("hatch-pet-card")._dirCard)?.timers.some((t) => t.group === "link")), true);
+    await page.evaluate(() => document.querySelector("hatch-pet-card").remove());
+    await page.waitForTimeout(7500);
+    const after = await state(page);
+    assert.strictEqual(after.intervals, base.intervals, "no interval left after the longest due time");
+    assert.deepStrictEqual(after.listeners, base.listeners);
+  });
+});
+
 test("the page's AudioContext is suspended after the last card leaves and after the page is hidden, and a sound resumes it", { skip, timeout: 120000 }, async () => {
   await withPage(async ({ page, mount }) => {
     const ctxState = () => page.evaluate(() => (window.__ctxs || []).map((c) => c.state));

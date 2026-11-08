@@ -19,7 +19,6 @@ const PINNED = {
   "card-build": { [ST]: 1, [SI]: 1, [RAF]: 1, [CT]: 6, [CI]: 1, [CAF]: 1 }, // slice 5: R76-R77's closer _clearAsk moved (clearTimeout 9 -> 8); slice 8: R11-R13 moved (setTimeout 5 -> 2, clearTimeout 8 -> 6); slice 11: R14 the swipe grace moved (setTimeout 2 -> 1; the 1 left is the director's own schedule)
   // slice 1: card-journal (R25) and card-mode (R40) have no bare timer left; card-base clearTimeout 4 -> 3 (R27's closer)
   "card-layout": { [CT]: 1 }, // slice 1: R26, R27, R28 moved (setTimeout 2 -> 0, rAF 1 -> 0, clearTimeout 2 -> 1)
-  "card-link": { [ST]: 3, [SI]: 2, [CT]: 3, [CI]: 2 },
   // slice 5: card-looks (R34-R37) and card-moment (R41, R44) have no bare timer left; their rows are gone
   // slice 6: card-season (R45-R50) has no bare timer left; its row is gone
   // slice 10: card-games (R22-R24: setTimeout 3 -> 0) and card-flair (_endGame's forEach(clearTimeout) and the dead cancelAnimationFrame) have no bare timer left; their rows are gone

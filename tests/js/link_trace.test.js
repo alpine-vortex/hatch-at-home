@@ -4,7 +4,8 @@
 // at t0 + 3600 (t0 = 200, 3.8 s) and a non-calm one at 2500 + 4600 (7.1 s), plus 1000 (a kindred extra) or LINK_NEWS_MS (news) of stretch;
 // the swap every 700 ms (none under calm), the flap every 200 ms; a cut-short leaves nothing running; a queued line whose `then` moves the
 // end; and _forget of the host ends the link (owner decision 2026-11-07, plan Section 9 line 13).
-// node --test tests/js
+// The move commit adds the ledger's side: group "link" has nothing pending after an end, one link.hide and one link.end entry through a stretch,
+// the stale `then` adds no entry, and the forget case is the owner's decision. node --test tests/js
 const test = require("node:test");
 const assert = require("node:assert");
 const { world } = require("./timer_trace");
@@ -64,6 +65,7 @@ const make = ({ calm = false, kind = null } = {}) => {
   w.host = host;
   w.guest = guest;
   w.start = () => w.card._linkStart(host, guest);
+  w.link = () => (w.director.inspect(w.card._dirCard)?.timers || []).filter((t) => t.group === "link");
   w.intervals = () => w.timers.filter((x) => x.live && x.kind === "interval").length;
   w.stamps = (name) => w.calls.filter((c) => c.name === name).map((c) => c.t);
   w.when = (op, arg, el) => w.log.filter((e) => e.op === op && (arg === undefined || e.arg === arg) && (el === undefined || e.el === el)).map((e) => e.t);
@@ -100,7 +102,7 @@ test("a non-calm visit: the screen at 1400, the pose at 2500, the hop at 3700, t
   assert.strictEqual(w.host.linking, true);
   w.run(10);
   assert.strictEqual(w.card._link, null, "over at 2500 + 4600");
-  assert.deepStrictEqual([w.host.linking, w.host.pet.style.scale, w.intervals(), w.pendingTimers()], [false, "1", 0, 0]);
+  assert.deepStrictEqual([w.host.linking, w.host.pet.style.scale, w.intervals(), w.pendingTimers(), w.link().length], [false, "1", 0, 0, 0]);
   assert.ok(w.card._linkEndedAt, "the stamp for a world visitor");
 });
 
@@ -182,7 +184,7 @@ test("cut short at 3 s (a sleep, a tap on Status): everything is cleared, nothin
   w.run(3000);
   assert.strictEqual(w.intervals(), 2);
   w.card._linkEnd();
-  assert.deepStrictEqual([w.card._link, w.host.linking, w.intervals(), w.pendingTimers()], [null, false, 0, 0]);
+  assert.deepStrictEqual([w.card._link, w.host.linking, w.intervals(), w.pendingTimers(), w.link().length], [null, false, 0, 0, 0]);
   assert.strictEqual(w.guest.sayUntil, 0);
   const n = w.log.length;
   w.run(9000);
@@ -197,7 +199,10 @@ test("a queued line whose `then` stretches the visit: the end and the hide move 
   const q = w.calls.find((c) => c.name === "_queue" && c.args[1] === "and how was your day");
   assert.ok(q, "the extra is queued at the pose");
   w.host.sayUntil = w.base + w.now + 9000; // the line is long: left 9000 > 8100 - 3000
+  const keys = () => [...w.link().map((t) => t.key).filter((k) => k === "link.hide" || k === "link.end").sort()];
+  assert.deepStrictEqual(keys(), ["link.end", "link.hide"]);
   q.args[3].then();
+  assert.deepStrictEqual(keys(), ["link.end", "link.hide"], "re-armed: one hide and one end, not two");
   assert.strictEqual(w.card._link.say.hidden, true, "the guest's reply has had its turn");
   // left = 9000 at t = 3000: the hide moves from 7500 to 3000 + 9000 - 600 = 11400, the end from 8100 to 12000
   w.run(8390);
@@ -221,20 +226,35 @@ test("the `then` firing after a cut-short changes nothing the player sees", () =
   w.host.sayUntil = w.base + w.now + 9000;
   q.args[3].then();
   w.run(12000);
-  assert.deepStrictEqual([w.card._link, w.host.linking, w.intervals()], [null, false, 0]);
+  assert.deepStrictEqual([w.card._link, w.host.linking, w.intervals(), w.link().length], [null, false, 0, 0]);
   assert.deepStrictEqual(w.log.slice(n), [], "no class, no remove, no append from the stale line");
 });
 
-// TODAY _forget does not reach the link (plan 5.12, B1): a pet-changed or removed-pet forget mid-visit leaves L live to its own end. The move
-// commit flips this case to the owner decision (2026-11-07, Section 9 line 13): _forget ends the link before detach.
-test("forget the host at ~2 s (today): the link is not touched; it runs to its own end at 7100", () => {
+// _forget ends the link before detach (plan 5.12, B1; owner decision 2026-11-07, Section 9 line 13). Before the move a forget mid-visit left the
+// link live to its own end (7100), restoring the old host's scale and blanking the guest's bubble on whatever pet the slide held by then.
+test("forget the host at ~2 s: the link ends on the spot: this._link null, linking false, group empty, the scale the host's own", () => {
   const w = make();
   w.start();
   w.run(2000);
+  assert.ok(w.card._link);
   w.card._forget(w.host);
-  assert.ok(w.card._link, "today the link outlives the forget");
-  assert.strictEqual(w.host.linking, true);
-  w.run(5100);
-  assert.strictEqual(w.card._link, null);
-  assert.deepStrictEqual([w.host.linking, w.intervals(), w.pendingTimers()], [false, 0, 0]);
+  assert.deepStrictEqual([w.card._link, w.host.linking, w.intervals(), w.pendingTimers(), w.link().length], [null, false, 0, 0, 0]);
+  assert.strictEqual(w.host.pet.style.scale, "1");
+  const n = w.log.length;
+  w.run(9000);
+  assert.strictEqual(w.log.length, n, "nothing of the visit fires later");
+});
+
+test("forget the guest: the same; forget a slide that is neither: the visit goes on", () => {
+  const w = make();
+  w.start();
+  w.run(2000);
+  const other = () => ({ ...w.host, ids: { device: "other" }, screen: Object.assign(w.el("o"), { querySelector: () => null }), status: Object.assign(w.el("os"), { querySelector: () => null }) });
+  w.card._forget(other());
+  assert.ok(w.card._link, "a third slide's forget leaves the visit");
+  w.guest.status = Object.assign(w.el("gst"), { querySelector: () => null });
+  w.guest.seasonBox = w.el("gsb");
+  w.guest.basket = w.el("gb");
+  w.card._forget(w.guest);
+  assert.deepStrictEqual([w.card._link, w.host.linking, w.link().length], [null, false, 0]);
 });

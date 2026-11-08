@@ -13930,7 +13930,7 @@ async function main() {
     if (setup === "game") set(s, "game", { cur: null });
     if (setup === "scene") set(s, "scene", { kind: "clean" });
     if (setup === "linking") set(s, "linking", true);
-    if (setup === "link running") set(el, "_link", { timers: [] });
+    if (setup === "link running") set(el, "_link", {});
     if (setup === "calling") set(s, "calling", true);
     if (setup === "power") set(s, "power", { timers: [] });
     if (setup === "status open") s.screen.classList.add("show-status");
