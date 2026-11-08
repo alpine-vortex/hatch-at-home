@@ -12959,7 +12959,23 @@ async function main() {
   const patSaid = (t) => spoke(t, PAT.content) || spoke(t, PAT.excited);
   const spoke = (said, line) => said.replace(/^\S+ /, "") === line || said === line || said.endsWith(` ${line}`);
   await patReset();
-  const placed = await patState();
+  // The box is the pet's resting place: a pet mid-hop, wander, greeting or breath (its box moves
+  // through transforms, the pat's does not) is not where the box sits, so wait it out (CI flake
+  // 2026-11-06, 11-08: the first section of a fresh run caught the greeting hop). Only the
+  // verdict waits; a pet that never settles within 5 s fails with what it was doing.
+  let placed = await patState();
+  for (let i = 0; i < 33 && !placed.onPet; i++) {
+    await page.waitForTimeout(150);
+    placed = await patState();
+  }
+  if (!placed.onPet) {
+    placed.petNow = await card.evaluate((el) => {
+      const p = el._slides[el._index].pet;
+      const r = p.getBoundingClientRect();
+      return { cls: p.className, scale: p.style.scale, rect: [r.left, r.top, r.width, r.height].map((n) => Math.round(n * 10) / 10),
+        anims: p.getAnimations().map((a) => a.animationName || a.transitionProperty) };
+    });
+  }
   check("the pat box sits on the pet's box, shown, named for the pet",
     placed.shown && placed.onPet && /^pat \S/.test(placed.label), JSON.stringify(placed));
   // Focus on the pat box when a game (the tick hides it) or a question (the CSS hides it
