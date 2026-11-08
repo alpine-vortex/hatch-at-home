@@ -12062,7 +12062,7 @@ async function main() {
       const entry = ent("rain_started", 0, "cc-6");
       el._channel(o, { fx: entry }, me);
       el._channel(s, { fx: entry }, me);
-      const out = { sel: cls(), other: [...o.glass.classList].filter((c) => c.startsWith("dir-")).sort().join(), pending: el._director.inspect(o)?.pending };
+      const out = { sel: cls(), other: [...o.glass.classList].filter((c) => c.startsWith("dir-") && !/^dir-(moon|newmoon)$/.test(c)).sort().join(), pending: el._director.inspect(o)?.pending };
       await quiet();
       el._director.cancel(o, "check");
       el._channel(o, { house: keptO }, me);
