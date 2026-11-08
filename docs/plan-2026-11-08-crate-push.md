@@ -137,7 +137,9 @@ bench (the way Hop's art was judged on the bench) before any card work starts.
 | 3 | The card (**forked, not generalized**: `card-crate.js` reuses Hop's overlay, cells, piece and shell plumbing; `card-board.js` gets only a row-tap hook): one "Today's boards" row (owner, Q3) offering Hop and Crate Push, three levels, crate and spot cells in CSS, the pet's sprite, the `crate` shell mode (four directions, undo, restart that reads "next" when solved, quit; slot 5 empty until specials), tap-beside-the-pet pushes and a far tap does nothing, parked letters, next round asks for round n+1. **3a built** (13 card-check checks, screenshots in dev/card-check/crate-*). 3b done (one row, so the narrow-width fit is the Hop row's own). 3c done (bench preset `crate`) | 1 | med | 2 |
 | 4 | Settle, pay, `crate_day` (saved state, in the sensor), the card's settle and pay text on the level buttons; the server counts rounds, only the next round settles. **Built** (pay numbers 14/20/26 still the draft; the journal line is not built). Left: journal line | 2 | med | 3 |
 | 5 | Optional skins: the world's push objects replace the crate. **Built**: six `ui/crate_<world>.png` (Luna, one call), CSS skin per world with a glow on a spot; the per-world "solved" lines are not built | 1, owner-gated art | low | 3 |
-| 6 | Optional: per-world twists (a rug that slides a crate, a tide that flips a spot), hints and practice boards | 1 | med | 4 |
+| 6a | Hints: the `hop` service's `hint` action (game crate-push, the player's move list, level, round) solves from the current position and answers the next push or "take back N" (a stuck board); slot 5 of the `crate` shell mode becomes the hint button. A hinted round pays in full but is never neat (kept in memory per round next to `_crate_boards`, no saved field; if it must survive a restart, `crate_day` gains `hinted` and the slice is tier 2). Python gains `solve_from` and `hint`; the JS twin gets no solver. Copy needed (listed, not written): button label, "try pushing this way", "this one is stuck, take back N", "no hints once solved", "a hinted board is not neat", a refusal line. Device queue: slot 5 on easy, normal and hard; a hint on a stuck board; a hint after undo. Needs a hint shell icon (owner-gated art if none exists) | 1 | med | 4 |
+| 6b | Practice: a "Practice" button in the level picker opens a tiny 1-crate board (4 by 3 or 5 by 4, 0-2 walls, floor of 6 moves and 2 pushes), unpaid, no energy or hunger cost, no `games` count, no neat, no settle. Own `PRACTICE_LEVEL` (not in `CRATE_LEVELS`, so `crate_day` is untouched) and its own seed stem, so ids never match a paid board; the service takes `practice: true` and still refuses an egg or a sleeping pet. Rejection rate of the 1-crate generator is measured in the slice. Copy needed: "Practice", "practice board, no pay", "nice! one more?", picker aria. Device queue: practice at the narrow width, the picker's fit with 4 buttons | 1 | low | 3 |
+| 6c | One twist, the rug (owner Q-D; ship only if the owner likes hints on bench boards, Q-E): an arrow cell on normal and hard, 1-2 per board; a crate pushed onto it slides one more cell if that cell is free, else stays; the slide costs no move. `CELLS` gains `^v<>`, both engine twins and fixtures (slide, blocked slide, slide onto a spot, slide into a wall, a rug that is also a start or spot), the generator becomes forward-random plus solve (about 0.6 s per hard board off the loop, prototype), `GEN_VERSION` bump (old parked letters drop). Draw first, no slide animation (a crate is a cell class). Copy needed: one rug line per world, a first-time tip. Device queue: arrows readable at 44 px, a slide next to a wall, a hint that crosses a rug. The scout's tide twist is dropped: it doubles the state, needs a "pet standing on the tile when it floods" patch, and asks the player to count pushes in their head | 1 (2 if a saved field is needed) | high | 6a |
 
 Each slice follows the migration's method: a characterization test first, a card-check section, `ci-gate`,
 a device queue for the phone. Slice 1 may use a worker session; slices 3 and 4 are the first mate's.
@@ -160,7 +162,7 @@ player-trait bonus (4), stays at or under 30 on hard:
 (In `rates.py` as `CRATE_PUSH_WIN_HAPPINESS`. **Owner 2026-11-08: the first mate's assessment stands, 14/20/26.** Easy sits below Play, normal equals it, hard tops Hop's 23; each round also costs energy and hunger, which is the natural limit on farming.)
 
 - **Each solved round pays its level** and takes the shared tail's `PLAY_ENERGY`, `PLAY_HUNGER` and `WEIGHT_GAME`,
-  once per round, exactly like any game. `games["crate-push"].played` counts rounds. No unpaid practice.
+  once per round, exactly like any game. `games["crate-push"].played` counts rounds. No unpaid practice, except the tiny 1-crate practice board the owner allowed on 2026-11-08 (Q-B, slice 6b): no energy cost, no pay, no count.
 - **Every round is a fresh board.** The board is a function of (pet, day, world, level, **round**), so a
   round never repeats; the server counts the rounds taken today per level. Slice 2's service takes the
   round number; the server accepts only the next one (a replay of an old round pays nothing).
@@ -184,6 +186,12 @@ player-trait bonus (4), stays at or under 30 on hard:
    cards get 7 by 5.
 6. **Q6. Build order.** Recommendation: slice 1 first as a worker task, owner judges the 20 boards, and only
    then the card. If the boards are dull we stop at a cheap point.
+
+7. **Slice 6 answers (owner, 2026-11-08, all taking the scout's recommendations; scout in slice 6a-6c rows).**
+   **Q-A** the hint takes shell slot 5 now; specials stay unscheduled. **Q-B** practice is allowed as a tiny
+   1-crate board with no energy cost, and waives section 5's "no unpaid practice". **Q-C** a hint costs no pay,
+   only that round's neat find. **Q-D** the rug only, normal and hard, 1-2 rugs; the tide is dropped.
+   **Q-E** order 6a, 6b, then 6c only if the owner likes hints on bench boards.
 
 ## 7. Not verified
 
