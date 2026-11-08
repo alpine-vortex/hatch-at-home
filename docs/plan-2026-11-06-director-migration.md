@@ -481,8 +481,8 @@ impression.
 | ID | file:line | Effect | Duration | Cancel today | Target | Risk | Reach |
 |---|---|---|---|---|---|---|---|
 | R7 | card-base.js:138 | `_tick` interval | 700 ms | `clearInterval` `:182` | **stays out** (4.1) | n/a | all |
-| R8 | card-base.js:256 | subscribe wait: the first look waits for the channel | `SUBSCRIBE_WAIT_MS` 3000 | `:298,301`, `_unsubscribe` | `_later(s, ..., { key: "sub.wait" })`; the flag read `!s.waitTimer` (`:255`) and the `s.waitTimer` read at `:264` become `_has(s, { key: "sub.wait" })` | high | `subscribe_silence.test.js`; cc `channel` |
-| R9 | card-base.js:287 | subscribe retry | 2/5/15 s, then 60 s | `:347`, `_unsubscribe` | `_later(s, ..., { key: "sub.retry" })`; the reads of `s.retryTimer` (`:246`, `:264`) become `_has(s, { key: "sub.retry" })` | high | same |
+| R8 | card-base.js `_subscribe` | subscribe wait: the first look waits for the channel | `SUBSCRIBE_WAIT_MS` 3000 | `_unsubscribe`, **and `_channel`'s first full snapshot** (right after `s.subscribed = true`: `clearTimeout(s.waitTimer)`) | `_later(s, ..., { key: "sub.wait" })`; the flag read `!s.waitTimer` (in `_subscribe`) and the `s.waitTimer` read in the wait's own fn become `_has(s, { key: "sub.wait" })`; `_channel`'s clear becomes `_stop(s, { key: "sub.wait" })` | high | `subscribe_silence.test.js`; cc `channel` |
+| R9 | card-base.js `_subscribe` (the catch) | subscribe retry | 2/5/15 s, then 60 s | `_unsubscribe` | `_later(s, ..., { key: "sub.retry" })`; the reads of `s.retryTimer` (`_subscribe`'s early return, the wait fn's `!s.retryTimer`) become `_has(s, { key: "sub.retry" })` | high | same |
 
 ### 3.4 card-build.js
 
@@ -536,8 +536,8 @@ impression.
 | R35 | card-looks.js:106 | the promise's payoff move | 600 ms | none | `_later(s, ...)`, unkeyed | low | `promise.test.js` |
 | R36 | card-looks.js:329 | an ask's text step ends | `ASK_MS` 60000 | `step.timer`, `_askTextEnd` (`:375`), hidden tab | `_later(s, ..., { key: "ask.text" })` | med | cc `memorytags`, `moments`, `visitors` |
 | R37 | card-looks.js:445 | the gift pop and its line end | `GIFT_LINE_MS` 5000 | `P.timer`, `_giftPopEnd` (`:455`), disconnect | `_later(s, ..., { key: "gift.pop" })` | med | cc `gifts`; `gift_lines.test.js` |
-| R38 | card-memory.js:71 | the memory page closes after idle | 120000 ms | `:56,70`, `_memoryPageClose` (5 paths) | `_later(s, ..., { key: "memory.idle" })` | med | `memory_page.test.js` |
-| R39 | card-memory.js:296 | redraw when the "sure?" confirm lapses | `CONFIRM_MS` 4000 | `clearTimeout` `:295` | `_later(s, ..., { key: "confirm" })` | low | `memory_page.test.js` |
+| R38 | card-memory.js (the idle arm) | the memory page closes after idle | 120000 ms | the re-arm's own clear, `_memoryPageClose` (5 paths) | `_later(s, ..., { key: "memory.idle" })` | med | `memory_page.test.js` |
+| R39 | card-memory.js (the confirm tap) | redraw when the "sure?" confirm lapses | **4050**: `s.confirm.at + CONFIRM_MS + 50 - Date.now()`, the same formula as R56 (less any ms since the tap; the review of s3003 found the first draft said 4000) | the clear just before it | `_later(s, ..., { key: "confirm" })` | low | `memory_page.test.js` |
 | R40 | card-mode.js:98 | remove `swap` from the eight buttons | 90 ms | `clearTimeout` `:96` | `_hold`-like, key `mode.swap`, eight targets in one entry (`_later` + undo) | low | `shell_modes.test.js`, `cap_press.test.js`; cc `shellmode` |
 
 ### 3.9 card-moment.js, card-season.js
@@ -564,7 +564,7 @@ impression.
 | R53 | card-sheets.js:306 | the lay wait, still reloading | 5000 ms | `_layDrop` (`:317`) | **stays out** (4.5; optional 13b, Q7) | n/a | cc `egg`, `types` (lay sheet) |
 | R54 | card-sheets.js:311 | the lay wait starts | `NAME_WAIT_MS` 30000 | same | **stays out** (same) | n/a | same |
 | R55 | card-sheets.js:460 | the rename's one retry delay (a promise) | `NAME_RETRY_MS` 2000 | `_clearNameTimers` (`:373`) | **stays out** (4.5): a promise's lifetime | n/a | cc `egg` (name sheet) |
-| R56 | card-sheets.js:492 | redraw when the "sure?" confirm lapses | `CONFIRM_MS` + 50 | `clearTimeout` `:491`, `_forget` (`card-build.js:805`) | `_later(s, ..., { key: "confirm" })` (same key as R39: one confirm at a time, as now) | low | cc `forget`; `memory_page.test.js` |
+| R56 | card-sheets.js (the confirm redraw) | redraw when the "sure?" confirm lapses | `CONFIRM_MS` + 50 | the clear just before it, `_forget` (`card-build.js`: `clearTimeout(s.confirmTimer)`, **this line goes**, `detach` takes the key) | `_later(s, ..., { key: "confirm" })` (same key as R39: one confirm at a time, as now; its `redraw` is **unguarded**, R39's is guarded by `memoryPage === "open"`) | low | cc `forget`; `memory_page.test.js` |
 
 ### 3.11 card-tick.js
 
@@ -695,8 +695,7 @@ each with the nearest thing the migration can still do for it. Everything else i
    leaves it unsettled (`set_shell` hung, `nameBusy` stuck). That is the argument that keeps R78 out.
    R52-R54 (`shellPending`, the lay wait) share the flow and the closers (`_shellSettled`, `_layDrop`,
    `_clearNameTimers`, which `_forget` calls) and have no promise; under the keep policy they could move
-   without harm, but they stay with their neighbours, and Q7 asks whether to move them as an optional
-   late slice 13b. Their `clearTimeout` lines (`card-sheets.js:143,146,317,373`) stay with them.
+   without harm, but they stay with their neighbours (Q7: no slice 13b). Their `clearTimeout` lines (`card-sheets.js:143,146,317,373`) stay with them.
 6. **CSS `infinite` animations** (the 45-odd rules the audit listed: breathe, hop, dance, shiver, rainfall,
    lightning, leaf, ripple, ...). They are not timers; each is gated by a class that **something removes**.
    The plan moves the thing that removes the class (the rows above), not the CSS. The reduced-motion kill
@@ -736,7 +735,7 @@ Ordered low risk to high, each independently shippable and revertible. "Tier" is
 | 11 | Visitors, reveal, swipe grace | R14, R85-R87 | med-high | B1 |
 | 12 | The infrared link | R29-R33 | high | B1 (`_forget` ends the link, owner decision 2026-11-07) |
 | 13 | Channel waits, memory page, confirm | R8, R9, R38, R39, R56 | high | none |
-| 14 | Close-out: final allowlist, `_forget` becomes one drain, docs | none (deletes dead fields) | low | B1 (global test) |
+| 14 | Close-out: final allowlist, `_forget` becomes one drain plus the named closers, docs. **Needs slice 12 merged** | none (deletes dead fields) | low | B1 (global test; the answer resend is a disclosed exception) |
 | X1 | Hidden policy: flip the listed entries to `tab`. **After 2, 3, 6 and 11** | policy only | low-med | **B2** |
 
 Slice 14's `forget_drain.test.js` is the global proof of B1. X1 is outside the numbered ladder because it
@@ -1345,61 +1344,171 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
 
 ### 5.13 Slice 13: channel waits, the memory page and the confirm lapse
 
+(Folded from the s3003 review, 2026-11-08. **Anchors are function names**, not lines; re-verify with
+`grep -n` at ship time, as the slice 12 review advised.)
+
 - **Moves:** R8, R9 (subscribe wait and retry), R38 (memory idle), R39 and R56 (the "sure?" lapses). **Not
   moved:** R51-R55 (the sheets' call waits: section 4.5, Q7; the shell pick's race and the rename's retry
   are promises that must settle, and the lay wait shares their closers) and R83 (moved in slice 2). The
-  reads of the timer fields as flags become `_has` (`s.waitTimer`, `s.retryTimer`: `card-base.js:246,255,264`),
-  and the fields go. `_unsubscribe` stops both keys, as before, and stays the closer at a disconnect and
-  at `_forget`; `connectedCallback` subscribes again, as before.
+  reads of the timer fields as flags become `_has` (`s.waitTimer` and `s.retryTimer` in `_subscribe`: the
+  early return, the wait guard, the wait fn's `!s.retryTimer`), and the fields go.
+  **The wait has two closers, not one.** `_unsubscribe` stops `sub.wait` and `sub.retry`, as before, and
+  stays the closer at a disconnect and at `_forget`; `connectedCallback` subscribes again, as before.
+  **`_channel`'s first full snapshot also clears the wait** (right after `s.subscribed = true`), and
+  becomes `_stop(s, { key: "sub.wait" })`. If the mover misses it the wait fires at 3 s on a healthy
+  channel: `subscribeFailed` goes true (the first look and hello unblock early) and a second subscribe is
+  sent, on every cold load. The wait's fn guards a re-arm on `!_has(s, { key: "sub.wait" })`: inside the
+  firing fn that must read false (the entry is gone once it runs).
+  **`_forget`'s manual line goes too:** `card-build.js` `_forget` has `clearTimeout(s.confirmTimer)`
+  (R39/R56 "drop" on forget, 3.14); remove it, `detach` drains the key. The ratchet needs it.
 - **Characterization first:** `waits_trace.test.js`: the subscribe wait at 3000 then `subscribeFailed`;
-  the retry at 2000, 5000, 15000, then 60000; `_unsubscribe` stops both; a stale `subGen` ignores the
-  retry; `confirm` lapses at 4000 (R39) and 4050 (R56); memory idle closes at 120000 and a tap restarts it.
-  The sheets' waits (R51-R55) get a *characterization only* trace (they do not move): the shell pick
-  rejects at 10000 unless the call finishes; `shellPending` clears at +5000 after a success for the same
-  pet only; the lay wait at 30000, again at +5000 while reloading, up to 120000; `_layDrop` cancels; the
-  rename retry at 2000 once (code `not_ready`). **D-keep and D-reattach (A2):** disconnect while the shell
-  race is pending, reconnect, advance 10 s: the race rejects, the picker settles; disconnect during the
-  rename retry: `nameBusy` clears; disconnect while the lay wait runs: `layAt` is cleared at its time;
-  disconnect with a subscribe retry pending: it is stopped (as now), `connectedCallback` subscribes
-  again and the retry count restarts. Reach: `subscribe_silence.test.js`, `memory_page.test.js`, cc
-  `channel`, `shell`, `egg`, `forget`, `memorypage`.
-- **Edits outside `src`:** `scripts/card-check.js:11560,11566` read `!!s.retryTimer`: they read
-  `_has(s, { key: "sub.retry" })` through `page.evaluate`; `tests/js/subscribe_silence.test.js:63` counts
-  `setTimeout` calls with `ms === 3000` (the wait) and `:86` sets `s.retryTimer = 99` ("what the catch
-  sets"): they use the adapter stubs and the ledger; `tests/js/memory_page.test.js:153,171,228,254` call
-  `clearTimeout(s.confirmTimer)`: they `stop` the key; `:194` plants `memoryIdle: setTimeout(...)` and `:198`
-  asserts `s.memoryIdle === null`: both go (the field goes; assert `pending` for key `memory.idle` is 0).
+  **a first snapshot driven through `_channel` at 1 s stops `sub.wait`: advance 3 s, `subscribeFailed`
+  false, one ask** (the existing test only sets `s.subscribed = true` by hand); the retry at 2000, 5000,
+  15000, then 60000; `_unsubscribe` stops both; a stale `subGen` ignores the retry; `confirm` lapses at
+  **4050 for both R39 and R56** (less any ms since the tap; the fake clock pins the tap at t0); memory idle
+  closes at 120000 and a tap restarts it.
+  **The sheets' waits (R51-R55) get a *characterization only* trace (they do not move), and the worker
+  writes it first and reports what it shows, not what this plan predicts.** The plan's guesses, from
+  reading the code: the shell pick rejects at 10000 unless the call finishes; `shellPending` clears at
+  +5000 after a success for the same pet only; the lay wait at 30000, again at +5000 while reloading, up
+  to 120000; `_layDrop` cancels; the rename retry at 2000 once (code `not_ready`). **D-keep and
+  D-reattach (A2), same rule (write, then report):** disconnect while the shell race is pending,
+  reconnect, advance 10 s (guess: the race rejects, the picker settles); disconnect during the rename retry
+  (guess: `nameBusy` clears; `disconnectedCallback` calls none of `_clearNameTimers`, `_layDrop`,
+  `_shellSettled`, and `still()` is `s.nameSheet && s.nameGen === gen`); disconnect while the lay wait
+  runs (guess: `layAt` cleared at its time); disconnect with a subscribe retry pending: it is stopped (as
+  now), `connectedCallback` subscribes again and the retry count restarts. Reach:
+  `subscribe_silence.test.js`, `memory_page.test.js`, cc `channel`, `shell`, `egg`, `forget`, `memorypage`.
+- **Drain and leak cases (6.1.3a, G9):** `leak_guard.test.js` asserts `inspect(s).timers` is empty after
+  the longest due time (120 s here, for `memory.idle`). `_forget` drain cases for the four keys
+  (`sub.wait`, `sub.retry`, `memory.idle`, `confirm`): the entries are gone after `_forget`. **Kept, as
+  now:** disconnect with `memory.idle` armed stops it (`disconnectedCallback` calls
+  `_memoryPageClose(s, false)`); disconnect with a `confirm` pending lets it fire and redraw a detached
+  slide (R39 is guarded by `memoryPage === "open"`; R56's `redraw` is not). Pin both as characterization.
+- **Edits outside `src`:** `scripts/card-check.js` reads of `retryTimer` (two, near the `restart`/gone
+  checks; one is `!!s.retryTimer`, the other a three-way OR `s.unsub || s.subPending || s.retryTimer`):
+  they read `_has(s, { key: "sub.retry" })` through `page.evaluate`, and the OR keeps its other two terms;
+  `tests/js/subscribe_silence.test.js` finds the wait by `x.ms === 3000` among `setTimeout` calls and sets
+  `s.retryTimer = 99` ("what the catch sets"). **Its vm setup is the real director** (not hand adapters):
+  the vm card gets `_later`, `_stop`, `_has` from card-base's text plus a `HATCH_DIRECTOR` over the fake
+  clock, so `fire()` drives the clock, not a `timers` array; the "once only" check counts
+  `_has`/`inspect` entries for `sub.wait`; "what the catch sets" becomes a `_later` with key `sub.retry`.
+  It keeps a test-owned copy of `SUBSCRIBE_WAIT_MS` through the existing `grab`. `tests/js/memory_page.test.js`
+  calls `clearTimeout(s.confirmTimer)` four times: they `stop` the key; it plants `memoryIdle:
+  setTimeout(...)` and asserts `s.memoryIdle === null`: both go (assert `pending` for key `memory.idle`
+  is 0). **Bench: none** (`dev/bench` does not reference these fields; F1).
+- **Ratchet (same commit):** `timer_rule.test.js` pins on `origin/main` (bd9e1c63): `card-base` ST 2, CT 3
+  -> 0, 0 (the wait, the retry; the three clears in `_unsubscribe` x2 and `_channel`); `card-memory` ST 2,
+  CT 3 -> 0, 0; `card-sheets` ST 6, CT 5 -> 5, 4 (R56 only; R51-R55 stay); `card-build` CT 6 -> 5 (the
+  `confirmTimer` line). Appendix B's end state already shows this. Re-count with the test, not this line.
 - **Checks:** trace tests; `subscribe_silence.test.js`, `memory_page.test.js`, `leak_guard.test.js`;
   because `card-base.js` subscribe code changes, **`scripts/ci-gate`** on the slice's branch (the whole
   card-check, five shards) before it merges (as for every slice now); iterate with `gate --auto`
-  (`channel`, **`memorypage`**, `forget`; the prelude always runs).
+  (`channel`, **`memorypage`**, `forget`; the prelude always runs). **Flake (Q7, first mate's default
+  2026-11-08):** a FAIL that reproduces on a rerun in code the slice did not touch means **stop and ask**
+  (not drop, not ship past it); a FAIL that does not reproduce is a FLAKE line and is fine (AGENTS.md).
 - **Device queue:** fixture: dev HA, reload mid-session; airplane mode on the phone and back. `qa_screen`:
   the pet screen, the status page's memory page. Look at: the card loads on a cold start, comes back
   after a lost connection, the memory page closes after two idle minutes, a forget's "sure?" lapses.
-- **Timings:** identical. **Rollback:** revert.
-- **Slice 13b (optional, Q7):** R52-R54 (`shellPending`, the lay wait) under the keep policy, with the
-  lay sheet's `_layDrop` and `_shellSettled` as closers. Only if the owner says so; its own trace and
-  `ci-gate`.
+  **These rows ride the next device pass** (first mate's default 2026-11-08, Q8 as for slice 12): the worker
+  has no phone, the PR body says "needs owner phone row", and the two-minute idle and the 4.05 s lapse are
+  covered by the fake-clock trace and cc `memorypage`/`forget`.
+- **Timings:** identical (R39 and R56 both 4050). **Rollback:** revert.
 
 ### 5.14 Slice 14: close-out
 
-- **Moves:** nothing new. Replaces the ratchet table with the allowlist (7.1) and adds the field rule (no
-  `\w+Timers?\s*=` outside the allowlist). `_forget` loses the manual `clearTimeout` lines
-  (`card-build.js:805,852-858`) now that `detach` drains; `disconnectedCallback` loses
-  `clearTimeout(this._headTimer)` (it is `_stop(this._dirCard, { key: "head" })` since slice 1).
-  Adds `forget_drain.test.js` (B1, global) and `reattach_keeps.test.js` (A2, global) and extends
-  `leak_guard.test.js` with `director.pending() === 0` **after the longest due time** (N11). AGENTS.md:
-  the "Where things live" row for `interaction-director` gets the ledger; a short "Timers on the card"
-  rule (a new timer goes through `_later`/`_hold`; the allowlist is the only exception). This plan is
-  marked done.
-- **Characterization first:** the global trace: every migrated trigger run once, then `_forget(s)`, then
-  `pending(s) === 0` and the clock advanced by 10 s changes nothing on the next pet (`class`, `style`,
-  child count unchanged); and the re-attach: every trigger, `disconnectedCallback`, `connectedCallback`
-  100 ms later, the clock to the longest due time: the end state equals the unmoved code's, field by
-  field (`s.asking`, `layAt`, `nameBusy`, `_booting`, `drapeAnim`, retries).
+(Folded from the s3010 review, 2026-11-08. **Anchors are function names**, not lines; re-verify with
+`grep -n` at ship time. Slices 0-13 move lines under this slice.)
+
+- **Precondition: slice 12 is merged** (13 already is). Slice 12's branch removes the `card-link` row
+  from `timer_rule.test.js` and adds the N11 mid-link case to `leak_guard.test.js`; on a main without it
+  `card-link` still has 3/2/3/2 bare timers and the allowlist test fails. Check `git log` for slice 12
+  before starting; do not start on an unmerged 12. Slice 12's branch and slice 13 both touched the
+  `card-build` `PINNED` comment line, so a merge conflict on that one line is expected and is resolved
+  by the rewrite below.
+- **Moves:** nothing new. Replaces the ratchet table with the allowlist (7.1).
+  - **`_forget`'s four dead clears** (`clearTimeout(s.breezeTimer | litTimer | flairTimer |
+    statusMessageTimer)` in `card-build.js` `_forget`, under "Its other timers"): no setter exists
+    anywhere in `src` or `tests`, so each clear is dead. Their sibling lines are **not** dead, and they
+    run after `detach`. Verdict per line, checked against the code: `breezeTimer` clear **delete**, and
+    `classList.remove("breezy")` **delete** (covered by key `breezy`: `_hold(..., { key: "breezy" })` in
+    `card-moment.js`; its undo removes the class on a drain, and a hold that fired has removed it);
+    `litTimer` clear **delete**, `remove("lit")` **delete** (covered by key `lit`: `_hold` in
+    `card-tick.js`); `flairTimer` clear **delete**, the `.flair` `remove()` **delete** (covered by key
+    `flair`, whose undo is `box.remove()`, in `card-flair.js`); `statusMessageTimer` clear **delete**, and
+    the `.status-feedback` hide plus `textContent = ""` **delete** (covered by key `status.note`, whose
+    undo is that same hide, in `card-journal.js` `_statusMessage`; a note whose timer fired is already
+    hidden). A "delete" is allowed only with its pin: a `forget_drain` case per key (arm it, `_forget`,
+    assert the class or node is gone and `pending(s) === 0`). If a pin fails, the line **stays**, with a
+    comment naming the key that does not cover it. `card-build` `clearTimeout` goes 5 -> 1 (the
+    `schedule` wrapper's cancel).
+  - `disconnectedCallback` already lost `clearTimeout(this._headTimer)` (slice 1: it is
+    `_stop(this._dirCard, { key: "head" })`); nothing to do there.
+  - **`_forget` becomes one drain plus the named closers, not "one drain".** What `detach` cannot reach
+    stays manual, on the allowlist (7.1), and slice 14 tests each: `_layDrop` (`s.layTimer`),
+    `_clearNameTimers` (`s.nameRetry`), `_shellSettled` (`s.shellPendingTimer`, in `card-layout.js`),
+    plus the closers that end an owner (`_clearAsk`, `_revealEnd`, `_dropPhotos`, `_seasonVisitEnd`,
+    `_visitorEnd`, and `_linkEnd` from slice 12). The slice deletes none of them.
+  - **The field rule is replaced.** The first draft's `\w+Timers?\s*=` matches `s.layTimer =` and
+    `s.shellPendingTimer =` but misses `s.nameRetry =`, `sc.raf =`, `job.timer =` and `this._timer =`,
+    and its `\s*=` also matches the front of `==`. The bare-identifier count in 7.1 already catches every
+    setter; a field rule adds only the **named fields**: an explicit list, one entry per allowlist row
+    (`layTimer`, `shellPendingTimer`, `nameRetry`, `sc.raf`, `job.timer`, `_timer`), matched as
+    `\.(name)\s*=(?!=)` on comment-stripped text (reuse `timer_count.js` `stripComments`), failing when
+    one is assigned in a part not on its row. The rule has its own test with the false positives pinned:
+    `x.layTimer == y`, `x.layTimer === y`, `// s.layTimer = 1`, `const timer = setTimeout(...)` and a
+    string containing `layTimer =` do not match; `s.nameRetry = setTimeout(...)` in the wrong part does.
+    If the worker finds the list adds nothing the count misses, drop the rule and say so in the PR.
+  - **`timer_rule.test.js` is rewritten, not trimmed.** The `PINNED` object's per-slice history comments
+    ("slice 5: ... 9 -> 8; slice 8: ...") are replaced: each remaining entry carries the 7.1 reason and
+    its count, and the header's "Slice 14 replaces this table" line goes. An unused entry fails (7.1).
+  - Adds `forget_drain.test.js` (B1, global) and `reattach_keeps.test.js` (A2, global), both on the
+    `timer_trace.js` node sandbox (the harness of the per-slice traces: fake clock, fake `schedule`),
+    not the Playwright bench. Extends `leak_guard.test.js`, which slice 12 already extends with N11: the
+    new case covers the card as a whole (every trigger of slices 1-13 and the link) and **does not
+    duplicate** 12's mid-link case. Both new tests read `director.inspect()`.
+  - **References to deleted fields:** grep `dev/bench/page.js` and `scripts/card-check.js` for `L.timers`,
+    `breezeTimer`, `litTimer`, `flairTimer`, `statusMessageTimer`; none may be left (slice 12 did
+    `L.timers`; a leftover fails here).
+  - AGENTS.md: **edit the existing `interaction-director` row's last clause**, which says
+    "`timer_rule.test.js` pins the bare count per part, and a slice that moves one lowers it there" and
+    becomes false: the test is an allowlist with a reason and a count per entry, an unused entry fails,
+    and no slice lowers a number. The ledger API is already in that row (slice 0); no second "Timers on
+    the card" section, and nothing under "Motion on the card" (Q3). The card-base row already names the
+    adapters. This plan is marked done.
+- **The one disclosed B1 exception (first mate, 2026-11-08, reversible).** The answer resend
+  (`card-visit.js` `_keepAnswer`, R78, one `setTimeout`) is **not guarded** in this slice. Its retry
+  closure uses `s` and fires after a forget, so a reused slide can get the old pet's "hm, that one
+  slipped away" line (the `s.ids["sensor.life_stage"] === entity` test narrows it, but a same-entity
+  reuse passes). That is a known hole in B1: `forget_drain` cannot include it (it is not on the ledger),
+  and 7.3's "nothing else" reads "nothing else but this". The trace says so in a comment, with one pin
+  that records today's behaviour (the line appears); a guard is a later one-liner if the owner wants it.
+- **Characterization first:** the global trace, written on the unmoved code (main with slice 14
+  reverted) and reported as seen:
+  - **forget:** every migrated trigger run once, then `_forget(s)`, then `pending(s) === 0` **and
+    `pending(this._dirCard)` unchanged by the forget** (card-scope entries such as `boot.wait`, tapped
+    and pressed holds and `head` belong to the card, not the slide). The manual closers are asserted on
+    their own: after the forget `layTimer`/`layAt`, `nameRetry`/`nameBusy` and
+    `shellPendingTimer`/`shellPending` are cleared (`pending(s) === 0` says nothing about them, because
+    they are not on the ledger). Then the clock advances to the **longest delay in the trace** (computed
+    from its table, not a flat 10 s; the lay wait re-arms every 5 s while `s.reloading`, up to
+    `NAME_WAIT_MAX_MS`, so a `reloading` case is pinned) and nothing changes on the next pet (`class`,
+    `style`, child count).
+  - **re-attach:** every trigger, `disconnectedCallback`, `connectedCallback` 100 ms later, the clock to
+    the longest due time. The end state equals the **pre-slice-14** end state, field by field
+    (`s.asking`, `layAt`, `nameBusy`, `_booting`, `drapeAnim`, retries): run the same trace on main
+    with slice 14 reverted and compare. It is **not** compared with `531cd101`: that code differs by
+    design in D1-D4 (the B3 second flip, B1's forget, the `rock2` cut, the leaving swipe) and in slice
+    12's `_forget` ending the link (Section 9 line 13). Those differences are listed in the trace's
+    header and are the only ones allowed.
+  - **`director.pending()` scope:** `pending()` with no scope counts `entries.size` over every scope,
+    card-scope entries included. The leak case asserts `pending() === 0` only after the longest due time
+    of the whole trace, and notes that the card-scope boot and fill waits (`BOOT_WAIT_MS` 5 s) are inside
+    it.
 - **Checks:** all `tests/js`; `scripts/ci-gate` (the first mate's batch gate covers it too).
 - **Device queue:** none beyond a smoke of slices 1-13.
-- **Rollback:** revert (the earlier slices stand; they do not depend on it).
+- **Rollback:** revert (the earlier slices stand; they do not depend on it). A revert restores the
+  `PINNED` counts by hand (rule F19).
 
 ### 5.X1 Hidden policy (B2)
 
@@ -1457,7 +1566,7 @@ without one (G8), and a disconnect trace (D-keep and D-reattach, G9).
 | 3 | `motion_ship1.test.js:25`, `touch.test.js:101` | `_wander` pins the timer; the fake `this` has no `_hold` |
 | 5 | `memory_tags.test.js` (`load`, `makeCard`) | the text step's end timer was a stubbed `setTimeout`/`clearTimeout`; it is `_later`/`_stop` now, so the vm card takes `adapters()` |
 | 7 | `timer_trace.test.js:72`, `care_reactions.test.js:633,1433` | `:72` loaded `consts: ["ANIMATE_TIMERS"]`; `:633,1433` extracted it (shipped: `sitter_life`, `touch`, `motion_ship1/2` stub `_animate` itself and needed no edit) |
-| 13 | `subscribe_silence.test.js:63,86`, `memory_page.test.js:153,171,194,198,228,254` | `setTimeout` count; `s.retryTimer = 99`; `clearTimeout(s.confirmTimer)` |
+| 13 | `subscribe_silence.test.js` (the `ms === 3000` count, `s.retryTimer = 99`), `memory_page.test.js` (four `clearTimeout(s.confirmTimer)`, the `memoryIdle` plant and assert) | the vm card takes the real director with `_later`, `_stop`, `_has` (5.13); the fields go |
 | all | any vm test whose fake `this` lacks `_director`, `_later` or `_hold` | it throws once its method moves; the sandbox helper adds them |
 
 Each is edited in the move commit of its slice, by name; the slice section repeats the line.
@@ -1466,13 +1575,19 @@ Each is edited in the move commit of its slice, by name; the slice section repea
 
 1. **The grep rule is a test.** `tests/js/timer_rule.test.js`: no bare `setTimeout`, `setInterval`,
    `requestAnimationFrame`, `clearTimeout`, `clearInterval`, `cancelAnimationFrame` (counted as the bare
-   identifier, F12) or `.animate(` in `src/card/*.js` outside the allowlist: `card-base.js` (`_tick` and
-   its clear), `card-build.js` (the director's three injected wrappers: `schedule`, `repeat`, `frame`),
-   `card-tick.js` (the typing interval and its clear), `card-actions.js` (the scene rAF and its cancel),
-   `card-visit.js` (the answer resend), `card-sheets.js` (R51-R55: lines 141, 147, 306, 311, 460 and their
-   clears 143, 146, 317, 373) and `card-layout.js` (R52's `clearTimeout(s.shellPendingTimer)` in
-   `_shellSettled`, line 433: the one `card-layout` line left, 0 timers started there). Each entry has a comment with its reason and a count; an unused entry
-   fails. From slice 0 it is a ratchet (5.0). Appendix B has the starting counts.
+   identifier, F12) or `.animate(` in `src/card/*.js` outside the allowlist. Entries by file and function
+   (not by line; lines drift), with the count per column: `card-base.js` `connectedCallback` and
+   `disconnectedCallback` (the `_tick` interval and its clear: SI 1, CI 1) and `_waapi` (`el.animate(...)`:
+   AN 1, the one `.animate(` left); `card-build.js` `_build` (the director's three injected wrappers
+   `schedule`, `repeat`, `frame` and their cancels: ST 1, SI 1, RAF 1, CT 1, CI 1, CAF 1); `card-tick.js`
+   `_speak` and `_stopTyping` (the typing interval and its clear: SI 1, CI 1); `card-actions.js`
+   `_sceneStart` and `_sceneEnd` (the scene rAF loop and its cancel: RAF 2, CAF 1); `card-visit.js`
+   `_keepAnswer` (the answer resend: ST 1); `card-sheets.js` (R51-R55: ST 5 = `_saveShell` 2 (the race and
+   `shellPendingTimer`), `_layWatch` 2 (`layTimer`), `_nameSave` 1 (`nameRetry`); CT 4 = `_saveShell` 2,
+   `_layDrop` 1, `_clearNameTimers` 1) and `card-layout.js` `_shellSettled` (R52's
+   `clearTimeout(s.shellPendingTimer)`: CT 1, 0 timers started there). Slice 12 leaves `card-link.js` at 0
+   (a precondition of slice 14). Each entry has a comment with its reason and a count; an unused entry
+fails. From slice 0 it is a ratchet (5.0). Appendix B has the starting counts.
 2. **B1-B4 each have a test:** B1 `forget_drain.test.js` (and the per-slice drain tests); B2
    `hidden_policy.test.js`; B3 `pet_oneshots_trace.test.js` (the two-flip case; one name, N7); B4
    `scene_stragglers.test.js`. **A1-A4 each have tests:** A1 L3, L4, L20 and the re-arm tests (6.4); A2
@@ -1480,11 +1595,17 @@ Each is edited in the move commit of its slice, by name; the slice section repea
    "no slide" traces.
 3. **The player sees no change:** every trace test in section 5 passes unchanged across its move; the
    device rows above show nothing new. The differences are exactly **D1-D4 of section 0**: the B3 second
-   flip, B1's forget (including the forgotten visitor), the `rock2` cut at a quiet end (forget,
-   disconnect, Hop's board load; B4) and a leaving swipe (B4). Nothing else.
+   flip, B1's forget (including the forgotten visitor and, from slice 12, the ended link), the `rock2` cut at a
+   quiet end (forget, disconnect, Hop's board load; B4) and a leaving swipe (B4). Nothing else, but the
+   **answer resend**, which stays unguarded (a disclosed B1 exception, 5.14). Checkable: slice 14's traces
+   run on main with slice 14 reverted and must be equal field by field; the D differences are listed in the
+   trace's header, and the global tests see ledger entries only.
 4. **No leaks:** `leak_guard.test.js` extended: **after the longest due time** (not at the leave: a
-   disconnect keeps entries running, G9), `director.pending() === 0`.
-5. **The docs:** AGENTS.md carries the ledger and the rule.
+   disconnect keeps entries running, G9), `director.pending() === 0` (unscoped, so card-scope entries count; the longest delay in the trace sets
+   the time), and right after a `_forget` `pending(s)` is 0 and `pending(_dirCard)` is unchanged.
+5. **The docs:** AGENTS.md's `interaction-director` row carries the ledger, and its last clause names the
+   allowlist (checkable: `grep -n 'allowlist' AGENTS.md` finds it, and `grep -c 'Timers on the card'
+   AGENTS.md` is 0).
 
 ## 8. How this inventory was checked
 
@@ -1524,9 +1645,9 @@ and the reasoning stay in the revision history (`git log -p` on this file); what
    part. Add one sentence to the file's header for "and owns the timers of the card's own one-shots".
    (First mate.)
 7. **Q7. Network waits.** Move R8, R9, R38, R39 and R56 **last**, with `scripts/ci-gate`; drop that slice,
-   not the effort, if it flakes. R51-R55 stay out (allowlisted). **No slice 13b.** (First mate.)
+   not the effort, if it flakes. R51-R55 stay out (allowlisted). **No slice 13b.** "Flakes" means: a FAIL that reproduces on a rerun in code the slice did not touch is a stop-and-ask (first mate's default, 2026-11-08). (First mate.)
 8. **Q8. Device rows.** One owner phone row for slice 12 (the link) before its batch merges; the other rows
-   ride the next device pass. The slice's PR body says "needs owner phone row". (First mate.)
+   ride the next device pass. The slice's PR body says "needs owner phone row". Slice 13's rows ride the next pass too, same PR-body line (first mate's default, 2026-11-08). (First mate.)
 9. **Q9. Batching.** One PR per slice until slice 4 is in and quiet, then bundle low-risk neighbours.
    (First mate.)
 10. **Q10. The device queue tool.** The first mate maps each device row to the queue's real fields.
@@ -1599,12 +1720,19 @@ Bare identifiers per file, comments stripped (`\bsetTimeout\b` and so on, plus t
 
 The seven `forEach(clearTimeout)` value uses are in these numbers (`card-build.js:508`, `card-care.js:970`,
 `card-flair.js:203`, `card-link.js:303`, `card-season.js:399`, `card-visitors.js:321,487`). The end state
-(7.1): `card-actions` 2 rAF + 1 cancel; `card-base` 1 `setInterval` + 1 `clearInterval`; `card-build` the
-three wrappers (`setTimeout` 1, `setInterval` 1, `requestAnimationFrame` 1) and `clearTimeout` 1 (`:58`),
-the `repeat` and `frame` cancels beside it; `card-tick` 1 `setInterval` + 1 `clearInterval` (typing);
-`card-visit` 1 `setTimeout`; `card-sheets` 5 `setTimeout` + 4 `clearTimeout`; `card-layout` 1 `clearTimeout` (`:433`, R52's
-`shellPendingTimer`, allowlisted with R52; with Q7b "yes" it goes in slice 13b); every other file 0. The
-exact numbers are set by slice 0's wrappers and checked by slice 14.
+(7.1), per file and function, which slice 14 recounts with `node tests/js/timer_count.js`: `card-actions`
+RAF 2 + CAF 1 (`_sceneStart`, `_sceneEnd`); `card-base` SI 1 + CI 1 (the `_tick` interval) and `.animate(` 1
+(`_waapi`); `card-build` ST 1, SI 1, RAF 1, CT 1, CI 1, CAF 1 (`_build`'s three wrappers and their cancels;
+the one `clearTimeout` left once `_forget`'s four dead clears go, 5 -> 1); `card-layout` CT 1
+(`_shellSettled`, R52's `shellPendingTimer`); `card-sheets` ST 5 + CT 4; `card-tick` SI 1 + CI 1 (typing);
+`card-visit` ST 1 (`_keepAnswer`); every other file 0, including `card-link` (slice 12) and `card-memory`
+(slice 13). There is no slice 13b (Section 9, Q7). The exact numbers are set by slice 0's wrappers and
+checked by slice 14, which recounts rather than copying this paragraph.
+
+**Slice 13 line (s3003 review, 2026-11-08), against the pins on `bd9e1c63`:** `card-base` ST 2 -> 0, CT 3 -> 0
+(`_channel`'s clear counts); `card-memory` ST 2 -> 0, CT 3 -> 0; `card-sheets` ST 6 -> 5, CT 5 -> 4;
+`card-build` CT 6 -> 5 (`_forget`'s `confirmTimer` line). The table above is the starting state, not the
+live pins.
 
 ## 10. Review response (s2976)
 

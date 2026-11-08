@@ -488,8 +488,7 @@ class HatchPetCardSheets extends HatchPetCardStatus {
     button.textContent = "sure? tap again"; // in place: a redraw would drop focus
     button.setAttribute("aria-label", CONFIRM_ARIA[key]);
     s.statusHtml = null; // the screen no longer matches it: the next redraw writes
-    clearTimeout(s.confirmTimer);
-    s.confirmTimer = setTimeout(redraw, s.confirm.at + CONFIRM_MS + 50 - Date.now());
+    this._later(s, s.confirm.at + CONFIRM_MS + 50 - Date.now(), redraw, { key: "confirm" });
     return false;
   }
 

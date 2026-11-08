@@ -4,7 +4,7 @@
 // (virtual_pet/memory_forget). This is the only part that names those two commands. Nothing
 // of it is kept: not in localStorage, not in `mine`, and not in `statusHtml` (the page's
 // HTML is a skeleton; every value goes in as textContent after it is drawn). Its fields
-// (s.memoryPage, s.memoryData, s.memoryLoad, s.memoryIdle) go on every one of the five
+// (s.memoryPage, s.memoryData, s.memoryLoad, and the "memory.idle" timer) go on every one of the five
 // teardown paths (section 9): the channel turning memory off (_channel), a shared-screen flip
 // (_goShared), the sheet closing or the slide changing (_toggleStatus, _forget, _go), a
 // reply landing late (memoryEpoch), and a hidden tab or 2 minutes idle (_onHidden, the timer).
@@ -53,8 +53,7 @@ class HatchPetCardMemory extends HatchPetCardJournal {
     s.memoryData = null;
     s.memoryLoad = null;
     s.memoryFailed = false;
-    clearTimeout(s.memoryIdle);
-    s.memoryIdle = null;
+    this._stop(s, { key: "memory.idle" });
     if (s.confirm?.key?.startsWith("memory_item")) s.confirm = null;
     s.statusHtml = null; // the cached copy of the DOM goes too
     if (!s.status) return open;
@@ -67,11 +66,7 @@ class HatchPetCardMemory extends HatchPetCardJournal {
 
   // The idle timer: one, reset by a tap in the page, cleared on close (FM 2026-11-05).
   _memoryTouch(s) {
-    clearTimeout(s.memoryIdle);
-    s.memoryIdle = setTimeout(() => {
-      s.memoryIdle = null;
-      this._memoryPageClose(s);
-    }, MEMORY_IDLE_MS);
+    this._later(s, MEMORY_IDLE_MS, () => this._memoryPageClose(s), { key: "memory.idle" }); // a same-key later replaces the last
   }
 
   _memoryRedraw(s) {
@@ -292,9 +287,8 @@ class HatchPetCardMemory extends HatchPetCardJournal {
       button.textContent = row.key.list === "pattern" ? P.forget_pattern_sure : P.forget_sure;
       button.setAttribute("aria-label", button.textContent);
       s.statusHtml = null;
-      clearTimeout(s.confirmTimer);
-      s.confirmTimer = setTimeout(() => { if (s.memoryPage === "open") this._memoryRedraw(s); },
-        s.confirm.at + CONFIRM_MS + 50 - Date.now());
+      this._later(s, s.confirm.at + CONFIRM_MS + 50 - Date.now(), () => { if (s.memoryPage === "open") this._memoryRedraw(s); },
+        { key: "confirm" }); // one confirm at a time (R56 shares the key)
       return;
     }
     if (button.classList.contains("pending")) return;

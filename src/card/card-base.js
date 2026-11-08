@@ -296,7 +296,7 @@ class HatchPetCardBase extends HTMLElement {
     if (!id || !conn?.subscribeMessage || !this.isConnected) return;
     const shared = sharedScreen();
     const key = `${id}|${shared}`;
-    if (!again && s.subKey === key && (s.unsub || s.subPending || s.retryTimer || s.gone)) return;
+    if (!again && s.subKey === key && (s.unsub || s.subPending || this._has(s, { key: "sub.retry" }) || s.gone)) return;
     this._unsubscribe(s, false);
     if (s.subKey !== key) s.retries = 0;
     s.subKey = key;
@@ -305,17 +305,16 @@ class HatchPetCardBase extends HTMLElement {
     const user = this._hass.user?.id;
     s.subPending = true;
     // The first look waits this long at most for the channel's first word.
-    if (!s.subscribed && !s.subscribeFailed && !s.waitTimer) {
-      s.waitTimer = setTimeout(() => {
-        s.waitTimer = null;
+    if (!s.subscribed && !s.subscribeFailed && !this._has(s, { key: "sub.wait" })) {
+      this._later(s, SUBSCRIBE_WAIT_MS, () => {
         if (s.subscribed) return;
         s.subscribeFailed = true;
         // Silence is not an error: a send lost on a socket that was closing
         // gets no reply and no catch. Ask once more, if the slide is still
         // on this subscription (not gone, not already waiting on the error
         // retry). subscribeFailed is set, so no second wait timer starts.
-        if (s.subKey && !s.gone && !s.retryTimer && this._slides?.includes(s)) this._subscribe(s, true);
-      }, SUBSCRIBE_WAIT_MS);
+        if (s.subKey && !s.gone && !this._has(s, { key: "sub.retry" }) && this._slides?.includes(s)) this._subscribe(s, true);
+      }, { key: "sub.wait" });
     }
     Promise.resolve(conn.subscribeMessage((msg) => {
       if (s.subGen === gen) this._channel(s, msg, user);
@@ -337,10 +336,9 @@ class HatchPetCardBase extends HTMLElement {
         s.subscribeFailed = true;
         const n = s.retries || 0;
         s.retries = n + 1;
-        s.retryTimer = setTimeout(() => {
-          s.retryTimer = null;
+        this._later(s, SUBSCRIBE_RETRY_MS[n] ?? SUBSCRIBE_RETRY_LAST_MS, () => {
           if (s.subGen === gen && this._slides?.includes(s)) this._subscribe(s, true);
-        }, SUBSCRIBE_RETRY_MS[n] ?? SUBSCRIBE_RETRY_LAST_MS);
+        }, { key: "sub.retry" });
       });
   }
 
@@ -348,11 +346,9 @@ class HatchPetCardBase extends HTMLElement {
   _unsubscribe(s, all = true) {
     s.subGen = (s.subGen || 0) + 1; // a reply still on its way is dropped
     s.subPending = false;
-    clearTimeout(s.retryTimer);
-    s.retryTimer = null;
+    this._stop(s, { key: "sub.retry" });
     if (all) {
-      clearTimeout(s.waitTimer);
-      s.waitTimer = null;
+      this._stop(s, { key: "sub.wait" });
       s.subKey = null;
     }
     s.unsub?.();
@@ -397,8 +393,7 @@ class HatchPetCardBase extends HTMLElement {
       s.subscribed = true;
       s.subscribeFailed = false;
       s.retries = 0;
-      clearTimeout(s.waitTimer);
-      s.waitTimer = null;
+      this._stop(s, { key: "sub.wait" }); // the channel has spoken: the wait for it is over
       this._dirView(s); // the first snapshot of a slide on show is its first view
     } else {
       if ("mine" in msg) s.mine = shared ? null : msg.mine || null;

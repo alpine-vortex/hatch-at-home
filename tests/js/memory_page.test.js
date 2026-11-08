@@ -11,6 +11,7 @@ const path = require("path");
 const vm = require("vm");
 
 const src = require("./card-source");
+const { adapters } = require("./timer_trace");
 const ROOT = path.join(__dirname, "..", "..");
 const PARTS = path.join(ROOT, "src", "card");
 const FIXTURE = JSON.parse(fs.readFileSync(path.join(ROOT, "tests", "fixtures", "memory_get.json"), "utf8"));
@@ -23,7 +24,9 @@ const grab = (re) => {
 const method = (name) => grab(new RegExp(`\\n  (?:async )?${name}\\([^)]*\\) \\{[\\s\\S]*?\\n  \\}\\n`)).trim();
 
 function load() {
-  const ctx = { setTimeout, clearTimeout, Date, Promise, sharedFlag: false };
+  // The card's real ledger adapters over the real director, on real timers (the "confirm" lapse is stopped by the test).
+  const ctx = { setTimeout, clearTimeout, Date, Promise, sharedFlag: false,
+    ledger: adapters((ms, fn) => { const t = setTimeout(fn, ms); return () => clearTimeout(t); }) };
   vm.runInNewContext([
     grab(/\nconst MEMORY_PAGE = \{[\s\S]*?\n\};\n/),
     grab(/\nconst MEMORY_TAG_CHIPS = \{[\s\S]*?\n\};\n/),
@@ -46,6 +49,7 @@ function load() {
         _statusMessage(s, text) { card.said.push(text); },
         _memoryRedraw() { card.redraws++; },
         _memoryTouch() {},
+        ...ledger,
         ${method("_memoryFetch")},
         ${method("_memoryDay")},
         ${method("_memoryRows")},
@@ -150,7 +154,7 @@ test("forget this: two taps, then one call with the item's key and shared false"
   // Then the page reads again, and says "done, it's gone" once.
   assert.strictEqual(card.calls.filter((c) => c.type === "virtual_pet/memory_get").length, 1);
   assert.deepStrictEqual(plain(card.said), [MEMORY_PAGE.forgot]);
-  clearTimeout(s.confirmTimer);
+  card._stop(s, { key: "confirm" });
 });
 
 test("a pattern's second tap says it forgets those days, and sends list pattern", async () => {
@@ -168,7 +172,7 @@ test("a pattern's second tap says it forgets those days, and sends list pattern"
     type: "virtual_pet/memory_forget", entity_id: "sensor.pip_life_stage", shared: false,
     list: "pattern", tag: "match", weekday: 5,
   });
-  clearTimeout(s.confirmTimer);
+  card._stop(s, { key: "confirm" });
 });
 
 test("path 4: a reply that lands after a close, a pet change or a shared flip draws nothing", async () => {
@@ -191,11 +195,13 @@ test("path 4: a reply that lands after a close, a pet change or a shared flip dr
 test("closing drops every field and the cached HTML", () => {
   const { makeCard } = load();
   const card = makeCard(FIXTURE);
-  const s = slide({ memoryData: FIXTURE, memoryEpoch: 3, statusHtml: "<div>x</div>", memoryIdle: setTimeout(() => {}, 1e6) });
+  const s = slide({ memoryData: FIXTURE, memoryEpoch: 3, statusHtml: "<div>x</div>" });
+  card._later(s, 1e6, () => {}, { key: "memory.idle" });
+  assert.strictEqual(card._director.pending(s), 1, "the idle count is on the ledger");
   assert.strictEqual(card._memoryPageClose(s, false), true);
   assert.strictEqual(s.memoryPage, false);
   assert.strictEqual(s.memoryData, null);
-  assert.strictEqual(s.memoryIdle, null);
+  assert.strictEqual(card._director.pending(s), 0, "closing stops the memory.idle timer");
   assert.strictEqual(s.statusHtml, null); // the DOM half is card-check's
   assert.strictEqual(s.memoryEpoch, 4);
 });
@@ -225,7 +231,7 @@ test("F1: a good forget drops the row at once, and a failed re-read keeps the re
   assert.ok(!s.memoryFailed);
   assert.strictEqual(card._memoryRows(s, s.memoryData).days.length, before.length - 1);
   assert.deepStrictEqual(plain(card.said), [MEMORY_PAGE.forgot]);
-  clearTimeout(s.confirmTimer);
+  card._stop(s, { key: "confirm" });
 });
 
 test("M3b P1: a pattern forget drops that tag's big_day entries on that weekday (the last five), and their stickers", async () => {
@@ -251,7 +257,7 @@ test("M3b P1: a pattern forget drops that tag's big_day entries on that weekday 
   assert.deepStrictEqual(plain(s.memoryData.tags.filter((e) => e.tag === "match" && e.kind === "big_day").map((e) => e.day)),
     ["2026-09-05", "2026-10-06", "2026-10-13"]);
   assert.strictEqual(s.memoryData.tags.length, 5); // the weekend entry and the show tag stay
-  clearTimeout(s.confirmTimer);
+  card._stop(s, { key: "confirm" });
 });
 
 test("M3b P2: a read that is not the latest is dropped, and a failed latest read keeps the rows", async () => {
