@@ -11590,13 +11590,13 @@ async function main() {
       localStorage.setItem("hatch-shared-screen", "off");
       s.mine = kept;
       el._channel(s, { gone: true }, me);
-      const gone = { unsub: s.unsub, gone: s.gone, retry: !!s.retryTimer };
+      const gone = { unsub: s.unsub, gone: s.gone, retry: el._has(s, { key: "sub.retry" }) };
       el._subscribe(s); // a no-op now: its pet is gone
       gone.asked = !!(s.unsub || s.subPending);
       const all = el._slides;
       el._slides = [s]; // a new socket, for this slide alone
       try { el._onReady(); } finally { el._slides = all; }
-      gone.askedOnReady = !!(s.unsub || s.subPending || s.retryTimer) || !s.gone;
+      gone.askedOnReady = !!(s.unsub || s.subPending || el._has(s, { key: "sub.retry" })) || !s.gone;
       el._subscribe(s, true); // (and back, for the checks after)
       for (let i = 0; i < 50 && !(s.unsub && s.subscribed); i++) await new Promise((r) => setTimeout(r, 100));
       return { shared, gone, back: !!s.unsub };

@@ -6,6 +6,7 @@ const assert = require("node:assert");
 const vm = require("vm");
 
 const src = require("./card-source");
+const { adapters } = require("./timer_trace");
 const grab = (re) => {
   const m = src.match(re);
   assert.ok(m, `not in the card: ${re}`);
@@ -13,12 +14,17 @@ const grab = (re) => {
 };
 const method = (name) => grab(new RegExp(`\\n  ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n  \\}\\n`)).trim();
 
+// The card's real ledger adapters (_later, _stop, _has) over the real director on a fake clock: `timers`
+// holds what was scheduled ({ fn, ms, live }), `fire(timers)` drives the wait through the director.
 function load() {
   const timers = [];
   const ctx = {
     localStorage: { getItem: () => null },
-    setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
-    clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].fn = null; },
+    ledger: adapters((ms, fn) => {
+      const t = { fn, ms, live: true };
+      timers.push(t);
+      return () => { t.live = false; };
+    }),
   };
   vm.runInNewContext([
     grab(/\nconst SHARED_KEY = [^\n]*\n/),
@@ -31,6 +37,7 @@ function load() {
         isConnected: true,
         _hass: { user: { id: "u" }, connection: { subscribeMessage: (cb, msg) => { asks.push({ cb, msg }); return new Promise(() => {}); } } },
         _slides: [],
+        ...ledger,
         ${method("_subscribe")},
         ${method("_unsubscribe")},
       };
@@ -42,11 +49,10 @@ function load() {
 }
 const slide = () => ({ ids: { "sensor.life_stage": "sensor.p_life_stage" } });
 const fire = (timers) => {
-  const t = timers.filter((x) => x.fn && x.ms === 3000).pop();
+  const t = timers.filter((x) => x.live && x.ms === 3000).pop();
   assert.ok(t, "the wait timer is set");
-  const fn = t.fn;
-  t.fn = null;
-  fn();
+  t.live = false;
+  t.fn();
 };
 
 test("silence for the whole wait asks once more, and only once", () => {
@@ -60,7 +66,8 @@ test("silence for the whole wait asks once more, and only once", () => {
   fire(timers);
   assert.equal(s.subscribeFailed, true, "the first look stops waiting");
   assert.equal(asks.length, 2, "asked again");
-  assert.equal(timers.filter((x) => x.fn && x.ms === 3000).length, 0, "no second wait timer: once only");
+  assert.equal(timers.filter((x) => x.live && x.ms === 3000).length, 0, "no second wait timer: once only");
+  assert.equal(card._has(s, { key: "sub.wait" }), false, "and none on the ledger");
 });
 
 test("a slide that has heard from the channel is not asked again", () => {
@@ -83,7 +90,7 @@ test("a refused ask keeps its own retry: the wait does not add a second ask", ()
   const s = slide();
   card._slides.push(s);
   card._subscribe(s);
-  s.retryTimer = 99; // what the catch sets
+  card._later(s, 2000, () => {}, { key: "sub.retry" }); // what the catch sets
   fire(timers);
   assert.equal(asks.length, 1);
 });

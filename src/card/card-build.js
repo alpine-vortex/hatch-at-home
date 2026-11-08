@@ -810,8 +810,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     this._sitterReset(s); // another pet's sitter: no beat carries over
     s.sit = null;
     s.voicedAt = 0;
-    s.confirm = null;
-    clearTimeout(s.confirmTimer);
+    s.confirm = null; // the "confirm" lapse goes with the slide's ledger (detach, below)
     s.lastMoment = s.lastLogAt = undefined;
     s.greeted = false;
     s.excitedSince = 0;
