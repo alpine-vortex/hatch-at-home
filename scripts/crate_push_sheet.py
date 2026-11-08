@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""A contact sheet of Sokoban boards for the owner to judge (plan slice 1).
+"""A contact sheet of Crate push boards for the owner to judge (plan slice 1).
 
-    PYTHONPATH=. .venv/bin/python scripts/sokoban_sheet.py OUT.html [per_stage]
+    PYTHONPATH=. .venv/bin/python scripts/crate_push_sheet.py OUT.html [per_stage]
 
 One small grid per board with its stage, fewest moves, pushes and par. Pure
 HTML and CSS, no scripts. Run with the dev venv (the package import needs it).
@@ -14,7 +14,7 @@ import html
 from pathlib import Path
 import sys
 
-from custom_components.virtual_pet import sokoban as S
+from custom_components.virtual_pet import crate_push as S
 
 GLYPH = {
     ".": "",
@@ -47,7 +47,7 @@ def sheet(per_stage: int) -> str:
         d0 = date(2026, 11, 9)
         for i in range(per_stage):
             day = (d0 + timedelta(days=i)).isoformat()
-            b = S.sokoban_board("pet", day, None, stage)
+            b = S.crate_push_board("pet", day, None, stage)
             s = S.solve(b)
             rows = "".join(
                 "<tr>" + "".join(cell(c) for c in r) + "</tr>" for r in b.grid
@@ -69,7 +69,7 @@ def sheet(per_stage: int) -> str:
         "figcaption{font-size:12px;color:#555;margin-top:3px}"
     )
     return (
-        f"<!doctype html><meta charset=utf-8><title>Sokoban boards</title><style>{css}</style>"
+        f"<!doctype html><meta charset=utf-8><title>Crate push boards</title><style>{css}</style>"
         + "".join(out)
     )
 

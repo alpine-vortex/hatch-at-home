@@ -1,5 +1,5 @@
 {
- "_": "Sokoban cases both engines run: tests/test_sokoban.py and tests/js/sokoban_engine.test.js. A move is a letter u d l r. expect is replay()'s answer; final.pet is the pet's cell and final.crates the crates' cells (reading order, a at 0). Each case's prefixes are also checked against a step-by-step apply (undo is a replay of the prefix). bad_boards are board replies both engines refuse (Board.from_dict raises ValueError; HATCH_SOKOBAN.valid is false).",
+ "_": "Crate push cases both engines run: tests/test_crate_push.py and tests/js/crate_push_engine.test.js. A move is a letter u d l r. expect is replay()'s answer; final.pet is the pet's cell and final.crates the crates' cells (reading order, a at 0). Each case's prefixes are also checked against a step-by-step apply (undo is a replay of the prefix). bad_boards are board replies both engines refuse (Board.from_dict raises ValueError; HATCH_CRATE_PUSH.valid is false).",
  "boards": {
   "push": {
    "w": 5,

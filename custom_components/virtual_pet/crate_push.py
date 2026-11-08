@@ -1,8 +1,8 @@
-"""Sokoban: the rules, the generator, the solver and the bots.
+"""Crate push: the rules, the generator, the solver and the bots.
 
-Pure: no Home Assistant here. The card's twin is src/card/sokoban-engine.js;
-tests/fixtures/sokoban_cases.json holds cases both engines must agree on.
-Plan: docs/plan-2026-11-08-sokoban-board.md (slice 1). The specials (the plan's
+Pure: no Home Assistant here. The card's twin is src/card/crate-push-engine.js;
+tests/fixtures/crate_push_cases.json holds cases both engines must agree on.
+Plan: docs/plan-2026-11-08-crate-push.md (slice 1). The specials (the plan's
 section 1) are not in this slice; a board here has none.
 
 A board is at most 6 wide by 4 tall, one character per cell, rows top first:
@@ -321,7 +321,7 @@ PULLS = {"easy": 8, "normal": 12, "hard": 18}  # reverse pulls made
 
 
 def _seed(pet_id: str, day: str, world: str | None, level: str, n: int) -> str:
-    return f"sokoban|{GEN_VERSION}|{pet_id}|{day}|{world}|{level}|{n}"
+    return f"crate-push|{GEN_VERSION}|{pet_id}|{day}|{world}|{level}|{n}"
 
 
 def board_id(
@@ -393,7 +393,7 @@ def _candidate(rng: random.Random, level: str) -> Board | None:
                     reach.add(j)
                     todo.append(j)
         pulls = []  # (cell the pet pulls from, the cell it steps to, the crate)
-        for q in reach:
+        for q in sorted(reach):
             qx, qy = q % w, q // w
             for dx, dy in DIRS.values():
                 cx, cy, ax, ay = qx - dx, qy - dy, qx + dx, qy + dy
@@ -465,16 +465,16 @@ def check(board: Board, level: str) -> Verdict:
 
 
 # One hand-made board per level stands in if no candidate is accepted (it
-# should never happen; the tests count it). Each is solvable and passes no gate.
+# should never happen; the tests count it). Each is solvable and passes its level's gate (a test checks).
 FALLBACK = {
     "easy": ("....n", ".Pb.n", ".b...", "....."),
     "normal": ("#...n.", ".Pb.n.", ".b....", "......"),
-    "hard": (".#.n#n", "..bPb.", "#..b..", "..#n.."),
+    "hard": ("...#P#", ".bb.b.", "nn#...", "..n..."),
 }
 TRIES = 400
 
 
-def sokoban_board(pet_id: str, day: str, world: str | None, level: str) -> Board:
+def crate_push_board(pet_id: str, day: str, world: str | None, level: str) -> Board:
     """The day's board for a pet: a function of (pet, day, world, level). The
     first accepted candidate of a seeded stream, with its par set. If none is
     accepted in TRIES, the level's hand-made board (fallback=True)."""

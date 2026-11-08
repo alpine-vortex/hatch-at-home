@@ -1,7 +1,7 @@
-"""Sokoban's engine, generator, solver and bots (sokoban.py; plan
-docs/plan-2026-11-08-sokoban-board.md, slice 1).
+"""Crate push's engine, generator, solver and bots (crate_push.py; plan
+docs/plan-2026-11-08-crate-push.md, slice 1).
 
-The generator runs on 5 seeded boards per level here; SOKOBAN_FULL=1 runs 300
+The generator runs on 5 seeded boards per level here; CRATE_PUSH_FULL=1 runs 300
 per level and prints the table the slice's report quotes (pytest -s). The tests
 count solver states, never wall-clock time.
 """
@@ -16,13 +16,13 @@ import random
 
 import pytest
 
-from custom_components.virtual_pet import sokoban as S
+from custom_components.virtual_pet import crate_push as S
 
 ROOT = Path(__file__).resolve().parent.parent
 CASES = json.loads(
-    (ROOT / "tests" / "fixtures" / "sokoban_cases.json").read_text(encoding="utf-8")
+    (ROOT / "tests" / "fixtures" / "crate_push_cases.json").read_text(encoding="utf-8")
 )
-FULL = bool(os.environ.get("SOKOBAN_FULL"))
+FULL = bool(os.environ.get("CRATE_PUSH_FULL"))
 N = 300 if FULL else 5
 LEVELS = list(S.LEVELS)
 
@@ -63,7 +63,7 @@ def test_bad_boards_are_refused(name):
 
 def test_a_push_never_changes_the_crate_count():
     for level in LEVELS:
-        board = S.sokoban_board("pet", "2026-11-09", "woodland", level)
+        board = S.crate_push_board("pet", "2026-11-09", "woodland", level)
         state = S.start_state(board)
         rng = random.Random(1)
         n = len(state.crates)
@@ -93,7 +93,7 @@ def test_an_unsolvable_board_returns_none():
 
 def test_a_solution_replays_as_solved():
     for level in LEVELS:
-        board = S.sokoban_board("pet", "2026-11-09", None, level)
+        board = S.crate_push_board("pet", "2026-11-09", None, level)
         s = S.solve(board)
         out = S.replay(board, s.moves)
         assert out["legal"] and out["solved"] and out["neat"]
@@ -114,7 +114,7 @@ def test_the_generator_accepts_and_the_board_passes_its_gate(level):
     fallbacks = 0
     tries = []
     for day in _days(N):
-        board = S.sokoban_board("pet", day, "woodland", level)
+        board = S.crate_push_board("pet", day, "woodland", level)
         fallbacks += board.fallback
         tries.append(board.tries)
         assert (board.w, board.h) == (w, h) or board.fallback
@@ -130,20 +130,20 @@ def test_the_generator_accepts_and_the_board_passes_its_gate(level):
 
 
 def test_a_board_is_a_function_of_pet_day_world_level():
-    a = S.sokoban_board("pet", "2026-11-09", "woodland", "normal")
-    b = S.sokoban_board("pet", "2026-11-09", "woodland", "normal")
+    a = S.crate_push_board("pet", "2026-11-09", "woodland", "normal")
+    b = S.crate_push_board("pet", "2026-11-09", "woodland", "normal")
     assert a.grid == b.grid and a.id == b.id and a.par == b.par
     others = {
-        S.sokoban_board("pet2", "2026-11-09", "woodland", "normal").id,
-        S.sokoban_board("pet", "2026-11-10", "woodland", "normal").id,
-        S.sokoban_board("pet", "2026-11-09", "hearth", "normal").id,
+        S.crate_push_board("pet2", "2026-11-09", "woodland", "normal").id,
+        S.crate_push_board("pet", "2026-11-10", "woodland", "normal").id,
+        S.crate_push_board("pet", "2026-11-09", "hearth", "normal").id,
     }
     assert a.id not in others and len(others) == 3
 
 
 def test_an_unknown_level_has_no_board():
     with pytest.raises(ValueError):
-        S.sokoban_board("pet", "2026-11-09", None, "egg")
+        S.crate_push_board("pet", "2026-11-09", None, "egg")
 
 
 @pytest.mark.parametrize("level", LEVELS)
@@ -151,10 +151,11 @@ def test_the_fallback_board_is_valid_and_solvable(level):
     grid = S.FALLBACK[level]
     board = S.Board(len(grid[0]), len(grid), grid)
     assert S.solve(board) is not None
+    assert S.check(board, level).ok, "the fallback must pass its own level's gates"
 
 
 def test_the_board_reply_has_no_pet_id():
-    board = S.sokoban_board("secret-entry-id", "2026-11-09", None, "easy")
+    board = S.crate_push_board("secret-entry-id", "2026-11-09", None, "easy")
     assert "secret-entry-id" not in json.dumps(board.to_dict())
 
 
@@ -165,7 +166,7 @@ def test_the_bots_win_rarely_on_hard_boards_and_never_break_the_rules():
     wins_casual = wins_greedy = total = 0
     for level in ("normal", "hard"):
         for day in _days(max(N, 10)):
-            board = S.sokoban_board("pet", day, None, level)
+            board = S.crate_push_board("pet", day, None, level)
             for bot in (lambda b: S.casual_bot(b, random.Random(7)), S.greedy_bot):
                 moves, won = bot(board)
                 out = S.replay(board, moves)

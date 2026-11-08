@@ -1,7 +1,7 @@
-// Sokoban's rules, the card's twin of custom_components/virtual_pet/sokoban.py (plan
-// 2026-11-08-sokoban-board, slice 1). The card plays a board locally; the server replays the move list
-// with its own copy and pays. tests/fixtures/sokoban_cases.json holds cases both engines must agree on
-// (tests/test_sokoban.py, tests/js/sokoban_engine.test.js). No generator and no solver here: the server
+// Crate push's rules, the card's twin of custom_components/virtual_pet/crate_push.py (plan
+// 2026-11-08-crate-push, slice 1). The card plays a board locally; the server replays the move list
+// with its own copy and pays. tests/fixtures/crate_push_cases.json holds cases both engines must agree on
+// (tests/test_crate_push.py, tests/js/crate_push_engine.test.js). No generator and no solver here: the server
 // builds the board. One frozen namespace, no loose globals: the card is a classic script, so a top-level
 // name is shared with every other card on the page.
 //
@@ -11,9 +11,9 @@
 // a spot with no wall and no other crate; otherwise the move is illegal. There is no pull. The board ends
 // when every spot holds a crate: a letter after that is illegal. Undo is a replay of the list without its
 // last move. A state is {pet, crates (sorted cell indexes)}.
-const HATCH_SOKOBAN = Object.freeze(
+const HATCH_CRATE_PUSH = Object.freeze(
   (() => {
-    const MAX_MOVES = 400; // sokoban.py MAX_MOVES
+    const MAX_MOVES = 400; // crate_push.py MAX_MOVES
     const CELLS = ".#~PpbnB";
     const BLOCKED = "#~";
     const DIRS = { u: [0, -1], d: [0, 1], l: [-1, 0], r: [1, 0] };
@@ -67,7 +67,7 @@ const HATCH_SOKOBAN = Object.freeze(
       return { pet: to, crates: state.crates.filter((c) => c !== to).concat(beyond).sort((a, b) => a - b) };
     };
     const legalMoves = (board, state) => [..."udlr"].filter((m) => apply(board, state, m) !== null);
-    // Replay a list from the start: {legal, bad_index, solved, neat, final, too_long}, as sokoban.py's replay.
+    // Replay a list from the start: {legal, bad_index, solved, neat, final, too_long}, as crate_push.py's replay.
     const replay = (board, moves) => {
       const out = { legal: false, bad_index: null, solved: false, neat: false, final: null, too_long: false };
       if (moves.length > MAX_MOVES) {

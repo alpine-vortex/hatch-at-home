@@ -1,6 +1,6 @@
 # Plan: Sokoban, a crate-pushing board for the pet (working title, 2026-11-08)
 
-**Status:** DRAFT 2, 2026-11-08 (slice 1 built on branch `sokoban-slice-1`; the owner then asked that the **player choose the difficulty** and that happiness rewards scale with it, folded below as section 3's levels and section 5). Plan only (tier 0); no code. The owner asked (2026-11-08) for a minigame at
+**Status:** DRAFT 2, 2026-11-08 (slice 1 built on branch `sokoban-slice-1`; **internal name is `crate-push`**, owner 2026-11-08: Sokoban stays the working title, the trademark question is open; the owner then asked that the **player choose the difficulty** and that happiness rewards scale with it, folded below as section 3's levels and section 5). Plan, slice 1 code built (tier 0 so far; nothing merged). The owner asked (2026-11-08) for a minigame at
 Hop's level of depth, "sokoban style", then (same day) plain crates with the pet's own sprite, the name Sokoban, and world push objects only as a later skin.
 Everything under "Proposed" is this draft's suggestion for the owner to change; "Questions" lists what needs
 an answer before slice 1. Written from `docs/plan-2026-11-02-hop-of-the-day.md` (read sections 0, 2, 6, 7);
@@ -80,19 +80,19 @@ Terrain, one character per cell, boards at most **6 wide by 4 tall** (the card's
 
 Everything below follows Hop's pattern; its names are what the plan says exist and are **to be rechecked**.
 
-- **Engines:** a pure `sokoban.py` (rules, generator, solver) and its twin `sokoban-engine.js`, with one shared
-  fixture file (`tests/fixtures/sokoban_cases.json`) both test suites run: boards, move lists, the expected result
+- **Engines:** a pure `crate_push.py` (rules, generator, solver) and its twin `crate-push-engine.js`, with one shared
+  fixture file (`tests/fixtures/crate_push_cases.json`) both test suites run: boards, move lists, the expected result
   (legal or the first illegal index, solved, neat, final state), as Hop's `hop_cases.json` does.
-- **Board service:** Hop's `board` service (ship 2a) serves the day's board. Sokoban adds a `game` field
+- **Board service:** Hop's service is `hop` with `action: board|settle` (`__init__.py:372`). This game adds a `game` field and `level`/`round` (schema, services.yaml and translations change)
   ("hop" or "sokoban") rather than a second service; the service stays deterministic in (pet, day, world, family,
   specials, game), so every screen of a pet gets the same board.
 - **Card:** board mode (`card-board.js`) already draws a grid, takes eight buttons or arrow keys, parks on ✕
-  and undoes. Sokoban needs a second cell vocabulary (crate, spot, push preview) and nothing more in the shell.
+  and undoes. This is **more than a second cell vocabulary**: `card-board.js` is Hop-specific (`kind !== "hop"` guards, `HATCH_HOP.*`, cell-target moves via `apply(board, st, cell)`), while moves here are u/d/l/r letters. Slice 3 is "generalize or fork card-board.js", and it must decide what a tap on a cell does (recommended: a tap on a cell next to the pet steps; a far tap does nothing).
   `SHELL_MODES` gets a `shellSokoban` slot map: left, up, down, right, special (its cap is the uses left), undo,
   restart, quit (the same as Hop's `shellHop`).
 - **Settle and pay:** the card plays locally and sends the move list once; the server replays it on its own
-  copy and pays (Hop's section 6). A new `settle_sokoban` beside `settle_hop` shares the pay tail.
-- **Saved state:** one small map per pet, `sokoban_day` (day, highest level paid, neat paid), plus counts in `games`
+  copy and pays (Hop's section 6). A new `settle_crate_push` beside `settle_hop` shares the pay tail.
+- **Saved state:** one small map per pet, `crate_push_day` (day, highest level paid, neat paid), plus counts in `games`
   (Hop's `hop_day`). This is a saved field: **tier 2**, as Hop's ship 3a.
 - **The play screen:** Hop has a row outside the picker. Sokoban gets a second row, or one "Today's boards" row
   that holds both (Q3). The picker itself stays as it is (shell-modes D2).
@@ -130,48 +130,50 @@ bench (the way Hop's art was judged on the bench) before any card work starts.
 | # | What | Tier | Risk | Depends on |
 |---|---|---|---|---|
 | 0 | Owner answers Q1-Q6; this plan is folded and gets a review pass | 0 | low | none |
-| 1 | `sokoban.py`, `sokoban-engine.js`, shared fixtures, generator by level, solver, two bots, a contact sheet for the owner. **Built** (branch `sokoban-slice-1`) | 1 | med | 0 |
+| 1 | `crate_push.py`, `crate-push-engine.js`, shared fixtures, generator by level, solver, two bots, a contact sheet for the owner. **Built** (branch `sokoban-slice-1`) | 1 | med | 0 |
 | 2 | The `board` service takes `game: "sokoban"` and a `level`; deterministic per day, three boards a day | 1 | low | 1 |
 | 3 | The card: a level picker (easy, normal, hard, with what each pays and a practice note), crate and spot cells, push, `shellSokoban`, undo and restart, park, keyboard, a plain CSS stand-in crate and the pet's own sprite, bench `view: "board"` for Sokoban | 1 | med | 2 |
-| 4 | Settle, pay, `sokoban_day`, the journal line; a replay test shared with the card's engine | 2 | med | 3 |
+| 4 | Settle, pay, `crate_push_day`, the journal line; a replay test shared with the card's engine | 2 | med | 3 |
 | 5 | Optional skins: the world's push objects replace the crate (art, lines) | 1, owner-gated art | low | 3 |
 | 6 | Optional: per-world twists (a rug that slides a crate, a tide that flips a spot), hints and practice boards | 1 | med | 4 |
 
 Each slice follows the migration's method: a characterization test first, a card-check section, `ci-gate`,
 a device queue for the phone. Slice 1 may use a worker session; slices 3 and 4 are the first mate's.
 
-## 5. Pay (proposed): by level, no farming
+## 5. Pay (revised by the owner, 2026-11-08): every round pays, Tamagotchi style
 
-Scale: Play pays 20, the dig 23, Hop 23, higher or lower 21, left or right 30 (`rates.py`). The easy level
-is deliberately below Play (it is short), normal matches Hop, hard pays more for the longer solution:
+Owner ruling: no once-a-day pay or pay-by-upgrade. As in a standard Tamagotchi, **more play rounds are simply
+more reward**; the costs of a round (energy, hunger, weight) are what limit it, as they limit Play today.
 
-| level | pay | why |
+Scale: Play pays 20, the dig 23, Hop 23, higher or lower 21, left or right 30 (`rates.py`), and `rates.py:106-110`
+says nothing above 30 should be the best happiness button. So the **whole round**, level pay plus the
+player-trait bonus (4), stays at or under 30 on hard:
+
+| level | pay per round | why |
 |---|---|---|
-| easy | 12 | median solve 14 moves; a warm-up |
-| normal | 23 | the same as Hop and the dig |
-| hard | 34 | median solve 27 moves, 3 crates; about 1.5 times normal |
+| easy | 14 | short (median 13 moves), a warm-up; below Play so it is not the farm |
+| normal | 20 | the same as Play (median 16 moves) |
+| hard | 26 | longer, more crates, more traps (median 23 moves); 26 + 4 = 30 |
 
-(Plus the player-trait bonus `PLAYER_WIN_HAPPINESS` as other games. The numbers are the first draft's; slice 4
-sets them in `rates.py` as `SOKOBAN_WIN_HAPPINESS = {easy: 12, normal: 23, hard: 34}`.)
+(Numbers are a draft, in `rates.py` as `CRATE_PUSH_WIN_HAPPINESS`; the owner sets them at slice 4.)
 
-- **Pays by upgrade, once a day:** the day's pay is the highest level solved that day. Solving easy pays 12;
-  solving hard later the same day pays the other **22**, so the day's total never passes the hard level's
-  34 and a pet that goes straight to hard gets 34 once. Solving a **lower level than one already paid is free
-  practice** and pays nothing (the card says so before it opens).
-- **Costs:** the shared tail's `PLAY_ENERGY`, `PLAY_HUNGER` and `WEIGHT_GAME` are charged on a **paid** settle
-  only (the first solve of the day and each upgrade), so practice is free in both directions.
-- **Neat** (within par) pays one find from the pet's world, once a day across all levels (not per level).
-- **Saved:** `sokoban_day` holds the day, the highest level paid, and whether neat was paid.
-- **Hop:** pays on its own, as it does today. Two daily boards can pay at most 23 + 34 = 57 a day together;
-  Q2 asks whether that is too much.
-- No loss, and the pay tail is Hop's (`settle_sokoban` beside `settle_hop`).
+- **Each solved round pays its level** and takes the shared tail's `PLAY_ENERGY`, `PLAY_HUNGER` and `WEIGHT_GAME`,
+  once per round, exactly like any game. `games["crate-push"].played` counts rounds. No unpaid practice.
+- **Every round is a fresh board.** The board is a function of (pet, day, world, level, **round**), so a
+  round never repeats; the server counts the rounds taken today per level. Slice 2's service takes the
+  round number; the server accepts only the next one (a replay of an old round pays nothing).
+- **Neat** (within par) pays one find from the pet's world, **once a day, normal and hard only** (easy is neat
+  almost always, so it would never be a choice). Hop and this game then give at most two finds a day outside
+  the find clock; Q2 asks whether that is fine.
+- **Saved:** `crate_push_day` holds the day, the rounds taken per level and whether neat was paid.
+- **Hop:** pays on its own, as it does today.
+- No loss, and the pay tail is Hop's (`settle_crate_push` beside `settle_hop`).
 
 ## 6. Questions for the owner (each with a recommendation)
 
 1. **Q1. Name and the "neat" word.** The owner wants **Sokoban**. Recommendation: use it in code and docs, check the trademark before it is the title on the play screen (plain "Crates" is the fallback), and **neat** for the within-par finish.
-2. **Q2. Pay.** Recommendation: the table in section 5 (12 / 23 / 34, paid by upgrade, once a day), with Hop
-   paying on its own. (Alternative: share one daily pay between Hop and Sokoban, so two boards cannot pass
-   34 a day together.)
+2. **Q2. Pay.** ANSWERED (owner, 2026-11-08): every round pays, Tamagotchi style (section 5). Still open: the
+   14 / 20 / 26 numbers, and whether one neat find a day from this game on top of Hop's is fine.
 3. **Q3. Where it starts.** Recommendation: one "Today's boards" row that opens a two-choice (Hop, Sokoban), so
    the play screen does not grow a row per game; the picker stays as it is.
 4. **Q4. Species families.** Recommendation: Sokoban uses its own six specials (section 1) mapped from the same
