@@ -136,7 +136,29 @@ function countParts(dir = CARD) {
   return table;
 }
 
-module.exports = { stripComments, countText, countParts, COLUMNS };
+// The same count by class method: { "card-tick": { _speak: {...}, ... } }. A count belongs to the last
+// method header (a two-space-indented `name(...) {` line) before it, which is how the allowlist names entries.
+function countByFunction(dir = CARD) {
+  const table = {};
+  for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".js") && f !== "style.js").sort()) {
+    const code = stripComments(fs.readFileSync(path.join(dir, file), "utf8"));
+    const heads = [...code.matchAll(/^ {2}(?:async |static |get |set )?([A-Za-z_$][\w$]*)\([^\n]*\{[ \t]*$/gm)]
+      .map((m) => ({ at: m.index, name: m[1] }));
+    const rows = {};
+    const hit = (at, col) => {
+      let name = "(outside any method)";
+      for (const h of heads) if (h.at <= at) name = h.name;
+      ((rows[name] ||= {})[col] ||= 0);
+      rows[name][col] += 1;
+    };
+    for (const name of NAMES) for (const m of code.matchAll(new RegExp(`(?<![\\w$])${name}(?![\\w$])`, "g"))) hit(m.index, name);
+    for (let at = code.indexOf(ANIMATE); at >= 0; at = code.indexOf(ANIMATE, at + 1)) hit(at, ANIMATE);
+    if (Object.keys(rows).length) table[file.replace(/\.js$/, "")] = rows;
+  }
+  return table;
+}
+
+module.exports = { stripComments, countText, countParts, countByFunction, COLUMNS };
 
 if (require.main === module) {
   const table = countParts();

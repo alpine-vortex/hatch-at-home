@@ -150,6 +150,36 @@ test("a card that leaves mid-link leaves no interval, measured after the visit's
   });
 });
 
+// Slice 14 (plan 5.14, 7.4): the card as a whole, not the link (the case above is slice 12's N11). Several of the migrated
+// one-shots are started on a slide (the backlight, a pat, a care action's hold, a reaction), the card leaves, and once the longest
+// due time is past the ledger is empty, card-scope entries included (a disconnect keeps entries running, G9, so the
+// check is after the wait, never at the leave).
+test("a card that leaves with one-shots running has an empty ledger after their longest due time", { skip, timeout: 120000 }, async () => {
+  await withPage(async ({ page, mount }) => {
+    const base = await state(page);
+    await mount(3);
+    await page.evaluate(() => {
+      const c = document.querySelector("hatch-pet-card");
+      c._tick = () => {};
+      const s = c._slides[0];
+      c._backlight(s); // lit, 3 s
+      c._hold(s, s.screen, ["breezy"], 2600, { key: "breezy" });
+      c._pat?.(s);
+      c._perk?.(s);
+      window.__card = c; // kept: the element leaves the page, its ledger is still readable
+      window.__armed = c._director.pending();
+    });
+    assert.ok(await page.evaluate(() => window.__armed) > 0, "the triggers made ledger entries");
+    await page.evaluate(() => document.querySelector("hatch-pet-card").remove());
+    await page.waitForTimeout(6500); // past the longest of these (3 s) and the card's 5 s boot wait
+    const left = await page.evaluate(() => window.__card._director.pending());
+    const after = await state(page);
+    assert.strictEqual(after.intervals, base.intervals);
+    assert.deepStrictEqual(after.listeners, base.listeners);
+    assert.strictEqual(left, 0, "director.pending() is 0 (unscoped: the card scope counts)");
+  });
+});
+
 test("the page's AudioContext is suspended after the last card leaves and after the page is hidden, and a sound resumes it", { skip, timeout: 120000 }, async () => {
   await withPage(async ({ page, mount }) => {
     const ctxState = () => page.evaluate(() => (window.__ctxs || []).map((c) => c.state));

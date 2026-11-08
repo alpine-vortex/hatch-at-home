@@ -1,7 +1,7 @@
 # Director migration: every card timer, one-shot and temporary class under the director
 
 **Date:** 2026-11-06
-**Status:** **Ready: slice 0 next.** Owner decisions recorded 2026-11-06 (section 9). Plan only (tier 0). The migration it describes is tier 2 in total, tier 1 per slice.
+**Status:** **Done: slices 0-14 are shipped (slice 14, the close-out, 2026-11-08).** Owner decisions recorded 2026-11-06 (section 9). Plan only (tier 0). The migration it describes is tier 2 in total, tier 1 per slice.
 No code under `src/` changes with this document. **Revised 2026-11-06 (s2977) after the adversarial
 review s2976**, which found the first draft UNSAFE (blockers A1-A4); every finding is resolved below or
 answered in section 10, and "Changes since review" says where. **Revised again 2026-11-06 (s2979) after the

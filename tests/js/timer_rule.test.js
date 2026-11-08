@@ -1,32 +1,57 @@
-// The timer ratchet (docs/plan-2026-11-06-director-migration.md 5.0, 7.1, Appendix B). Per card part, the
-// bare identifiers setTimeout, setInterval, requestAnimationFrame, clearTimeout, clearInterval,
-// cancelAnimationFrame and the member `.animate(`, comments stripped (tests/js/timer_count.js). The bare
-// word, not the call, so `forEach(clearTimeout)` and an alias (`const t = setTimeout`) count. It fails when a
-// count differs in either direction: a new bare timer fails at once, and a slice that moves one onto the
-// ledger lowers its number here in the same commit. `node tests/js/timer_count.js` prints the live table.
-// Slice 14 replaces this table with the allowlist (7.1). node --test tests/js
+// The timer allowlist (docs/plan-2026-11-06-director-migration.md 7.1, Appendix B). A card timer goes through
+// the director's ledger (this._later, _hold, _waapi, _stop; plan 1.4), not a bare one. In src/card/*.js the bare
+// identifiers setTimeout, setInterval, requestAnimationFrame, clearTimeout, clearInterval, cancelAnimationFrame
+// and the member `.animate(` (comments stripped, tests/js/timer_count.js; the bare word, so `forEach(clearTimeout)`
+// and an alias count) are allowed only in the entries below: one per part and method, each with a reason and a
+// count. A count that differs fails, an entry nothing uses fails, a bare timer elsewhere fails. Nothing here
+// is lowered by a slice any more: a new entry needs a reason a reviewer accepts. `node tests/js/timer_count.js`
+// prints the live table per part. node --test tests/js
 const test = require("node:test");
 const assert = require("node:assert");
-const { countParts, countText, stripComments, COLUMNS } = require("./timer_count");
+const { countParts, countByFunction, countText, stripComments, COLUMNS } = require("./timer_count");
 
 const [ST, SI, RAF, CT, CI, CAF, AN] = COLUMNS;
-// Appendix B's counts on 531cd101, recounted on 0d6abbea (the same), plus slice 0's own lines, marked.
-const PINNED = {
-  "card-actions": { [RAF]: 2, [CAF]: 1 }, // slice 1: R1-R5 moved (setTimeout 5 -> 0)
-  // + slice 0: `.animate(` 1, in the _waapi adapter
-  "card-base": { [SI]: 1, [CI]: 1, [AN]: 1 }, // slice 13: R8, R9 moved (setTimeout 2 -> 0, clearTimeout 3 -> 0)
-  // + slice 0: the director's repeat and frame wrappers (setInterval, clearInterval, rAF, cancel 1 each)
-  "card-build": { [ST]: 1, [SI]: 1, [RAF]: 1, [CT]: 5, [CI]: 1, [CAF]: 1 }, // slice 5: R76-R77's closer _clearAsk moved (clearTimeout 9 -> 8); slice 8: R11-R13 moved (setTimeout 5 -> 2, clearTimeout 8 -> 6); slice 11: R14 the swipe grace moved (setTimeout 2 -> 1; the 1 left is the director's own schedule); slice 13: _forget's confirmTimer clear went (clearTimeout 6 -> 5)
-  // slice 1: card-journal (R25) and card-mode (R40) have no bare timer left; card-base clearTimeout 4 -> 3 (R27's closer)
-  "card-layout": { [CT]: 1 }, // slice 1: R26, R27, R28 moved (setTimeout 2 -> 0, rAF 1 -> 0, clearTimeout 2 -> 1)
-  // slice 5: card-looks (R34-R37) and card-moment (R41, R44) have no bare timer left; their rows are gone
-  // slice 6: card-season (R45-R50) has no bare timer left; its row is gone
-  // slice 10: card-games (R22-R24: setTimeout 3 -> 0) and card-flair (_endGame's forEach(clearTimeout) and the dead cancelAnimationFrame) have no bare timer left; their rows are gone
-  // slice 9: card-care (R15-R20: setTimeout 6 -> 0, clearTimeout 1 -> 0) has no bare timer left; its row is gone
-  // slice 13: card-memory (R38, R39: setTimeout 2 -> 0, clearTimeout 3 -> 0) has no bare timer left; its row is gone
-  "card-sheets": { [ST]: 5, [CT]: 4 }, // slice 13: R56 moved (setTimeout 6 -> 5, clearTimeout 5 -> 4); R51-R55 stay
-  "card-tick": { [SI]: 1, [CI]: 1 }, // slice 3: R60-R68, R70, R73 moved (setTimeout 15 -> 4); slice 4: R57-R58, R71, R72, R74, R75 (setTimeout 4 -> 0, clearTimeout 5 -> 0, .animate( 2 -> 0)
-  "card-visit": { [ST]: 1, [CT]: 0 }, // slice 2: R79, R81-R84 moved (setTimeout 9 -> 4, clearTimeout 7 -> 3); slice 5: R76, R77 (setTimeout 4 -> 2, clearTimeout 3 -> 1); slice 7: R80 `_animate` (setTimeout 2 -> 1, clearTimeout 1 -> 0)
+// file -> method -> { counts, why }
+const ALLOWED = {
+  "card-actions": {
+    _sceneStart: { [RAF]: 2, why: "the care scene's frame loop; it does not move through frame() (Q4); its handle is sc.raf" },
+    _sceneEnd: { [CAF]: 1, why: "cancels that loop (sc.raf)" },
+  },
+  "card-base": {
+    connectedCallback: { [SI]: 1, why: "the card's own _tick interval (this._timer), the director's injection point" },
+    disconnectedCallback: { [CI]: 1, why: "stops that _tick interval" },
+    _waapi: { [AN]: 1, why: "the one `.animate(` call: the ledger's WAAPI adapter" },
+  },
+  "card-build": {
+    _build: { [ST]: 1, [SI]: 1, [RAF]: 1, [CT]: 1, [CI]: 1, [CAF]: 1,
+      why: "the director's three injected wrappers (schedule, repeat, frame) and their cancels" },
+  },
+  "card-layout": {
+    _shellSettled: { [CT]: 1, why: "R52: clears s.shellPendingTimer (a network wait, not on the ledger); no timer started here" },
+  },
+  "card-sheets": {
+    _saveShell: { [ST]: 2, [CT]: 2, why: "R51/R52: the 10 s race against the shell save and s.shellPendingTimer; promise waits, off the ledger (Q4)" },
+    _layWatch: { [ST]: 2, why: "R53: s.layTimer, the lay wait that re-arms every 5 s while reloading" },
+    _nameSave: { [ST]: 1, why: "R54: s.nameRetry, the name save's retry pause inside an awaited promise" },
+    _layDrop: { [CT]: 1, why: "the manual closer for s.layTimer (_forget calls it)" },
+    _clearNameTimers: { [CT]: 1, why: "the manual closer for s.nameRetry (_forget calls it)" },
+  },
+  "card-tick": {
+    _speak: { [SI]: 1, why: "the typing interval (job.timer), per line, ended by _stopTyping" },
+    _stopTyping: { [CI]: 1, why: "stops the typing interval" },
+  },
+  "card-visit": {
+    _keepAnswer: { [ST]: 1, why: "R78: the answer resend; disclosed exception, not guarded by a forget (5.14, forget_drain.test.js)" },
+  },
+};
+// Fields that hold an allowlisted handle: assigned only in the parts named (the false positives are pinned below).
+const NAMED_FIELDS = {
+  layTimer: ["card-sheets"], shellPendingTimer: ["card-sheets"], nameRetry: ["card-sheets"],
+  raf: ["card-actions"], timer: ["card-tick"], _timer: ["card-base"],
+};
+const fieldAssigns = (text) => {
+  const code = stripComments(text).replace(/(["'`])(?:\\.|(?!\1)[^\\\n])*\1/g, '""');
+  return Object.keys(NAMED_FIELDS).filter((f) => new RegExp(`\\.${f}\\s*=(?![=>])`).test(code));
 };
 
 test("the counter: comments go, strings, templates and regex literals stay whole", () => {
@@ -42,20 +67,65 @@ test("the counter: comments go, strings, templates and regex literals stay whole
   assert.strictEqual(stripComments("a // b\nc /* d\ne */ f").split("\n").length, 3, "line breaks kept");
 });
 
-test("the ratchet: every card part's bare timer count is pinned, in both directions", () => {
-  const live = countParts();
-  const rows = new Set([...Object.keys(PINNED), ...Object.keys(live)]);
+test("the allowlist: every bare timer is in an entry, with its count, and every entry is used", () => {
+  const live = countByFunction();
   const off = [];
-  for (const file of [...rows].sort()) {
-    for (const k of COLUMNS) {
-      const want = PINNED[file]?.[k] || 0;
-      const got = live[file]?.[k] || 0;
-      if (want !== got) off.push(`${file}.js ${k} ${got} (pinned ${want})`);
+  const keys = new Set();
+  for (const f of Object.keys({ ...live, ...ALLOWED })) {
+    for (const m of new Set([...Object.keys(live[f] || {}), ...Object.keys(ALLOWED[f] || {})])) {
+      const entry = ALLOWED[f]?.[m];
+      if (entry && !entry.why) off.push(`${f}.js ${m}: an entry needs a reason`);
+      if (entry && !live[f]?.[m]) off.push(`${f}.js ${m}: unused entry (remove it)`);
+      for (const k of COLUMNS) {
+        const want = entry?.[k] || 0;
+        const got = live[f]?.[m]?.[k] || 0;
+        if (want !== got) off.push(`${f}.js ${m} ${k}: ${got} (allowed ${want})`);
+      }
+      keys.add(`${f}.${m}`);
     }
   }
   assert.deepStrictEqual(off, [], [
-    "A bare timer count changed. A new one goes through the director's ledger (this._later, _hold, _waapi;",
-    "docs/plan-2026-11-06-director-migration.md 1.4), not a bare timer. A slice that moved one lowers its",
-    "number in PINNED in the same commit. Off:", ...off,
+    "A bare timer is outside the allowlist, or an entry is stale. A new timer goes through the director's ledger",
+    "(this._later, _hold, _waapi; docs/plan-2026-11-06-director-migration.md 1.4), not a bare one. Off:", ...off,
   ].join("\n"));
+});
+
+test("the per-part count agrees with the per-method count", () => {
+  const parts = countParts();
+  const byFn = countByFunction();
+  for (const f of Object.keys(parts)) {
+    for (const k of COLUMNS) {
+      const sum = Object.values(byFn[f] || {}).reduce((n, row) => n + (row[k] || 0), 0);
+      assert.strictEqual(sum, parts[f][k] || 0, `${f} ${k}`);
+    }
+  }
+});
+
+test("the named fields are assigned only in their allowlisted part", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const dir = path.join(__dirname, "..", "..", "src", "card");
+  const off = [];
+  for (const file of fs.readdirSync(dir).filter((x) => x.endsWith(".js") && x !== "style.js")) {
+    for (const f of fieldAssigns(fs.readFileSync(path.join(dir, file), "utf8"))) {
+      if (!NAMED_FIELDS[f].includes(file.replace(/\.js$/, ""))) off.push(`${file}: .${f} = ...`);
+    }
+  }
+  assert.deepStrictEqual(off, []);
+  // Every named field is still assigned somewhere it is allowed (a stale name fails like an unused entry).
+  const all = fs.readdirSync(dir).filter((x) => x.endsWith(".js") && x !== "style.js")
+    .flatMap((file) => fieldAssigns(fs.readFileSync(path.join(dir, file), "utf8")));
+  for (const f of Object.keys(NAMED_FIELDS)) assert.ok(all.includes(f), `${f} is no longer assigned anywhere`);
+});
+
+test("the named-field rule: false positives stay out, a stray assignment is caught", () => {
+  assert.deepStrictEqual(fieldAssigns("if (x.layTimer == y) {}"), []);
+  assert.deepStrictEqual(fieldAssigns("if (x.layTimer === y) {}"), []);
+  assert.deepStrictEqual(fieldAssigns("// s.layTimer = 1"), []);
+  assert.deepStrictEqual(fieldAssigns("/* s.layTimer = 1 */ a();"), []);
+  assert.deepStrictEqual(fieldAssigns("const timer = setTimeout(f, 1);"), []);
+  assert.deepStrictEqual(fieldAssigns('const m = "s.layTimer = 1";'), []);
+  assert.deepStrictEqual(fieldAssigns("const f = (s) => s.layTimer => 1;"), []);
+  assert.deepStrictEqual(fieldAssigns("s.nameRetry = setTimeout(f, 1);"), ["nameRetry"]);
+  assert.deepStrictEqual(fieldAssigns("sc.raf  =  x; this._timer = 0;"), ["raf", "_timer"]);
 });

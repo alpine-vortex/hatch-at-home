@@ -859,16 +859,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     this._dropPhotos(s);
     this._dropGift(s);
     this._dropFinds(s);
-    // Its other timers, and what each would have tidied away.
-    clearTimeout(s.breezeTimer);
-    s.screen?.classList.remove("breezy");
-    clearTimeout(s.litTimer);
-    s.screen?.classList.remove("lit");
-    clearTimeout(s.flairTimer);
-    s.screen?.querySelector(".flair")?.remove();
-    clearTimeout(s.statusMessageTimer);
-    const note = s.status?.querySelector(".status-feedback");
-    if (note) { note.hidden = true; note.textContent = ""; }
+    // breezy, lit, flair and status.note (keyed holds on the ledger) went with detach above; tests/js/forget_drain.test.js
     // The last pet's channel: nothing of it may open this one's first look
     // (its bond, its nickname, a wish aimed at the viewer). The server clock's
     // offset is the page's, not the pet's, so it stays.
