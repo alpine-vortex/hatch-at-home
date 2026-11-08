@@ -1,6 +1,7 @@
 prefs.js
 world.js
 hop-engine.js
+sokoban-engine.js
 interaction-director.js
 device-fx.js
 sitter-engine.js
