@@ -1526,7 +1526,7 @@ and the reasoning stay in the revision history (`git log -p` on this file); what
 7. **Q7. Network waits.** Move R8, R9, R38, R39 and R56 **last**, with `scripts/ci-gate`; drop that slice,
    not the effort, if it flakes. R51-R55 stay out (allowlisted). **No slice 13b.** (First mate.)
 8. **Q8. Device rows.** One owner phone row for slice 12 (the link) before its batch merges; the other rows
-   ride the next device pass. (First mate.)
+   ride the next device pass. The slice's PR body says "needs owner phone row". (First mate.)
 9. **Q9. Batching.** One PR per slice until slice 4 is in and quiet, then bundle low-risk neighbours.
    (First mate.)
 10. **Q10. The device queue tool.** The first mate maps each device row to the queue's real fields.
@@ -1538,6 +1538,9 @@ and the reasoning stay in the revision history (`git log -p` on this file); what
 12. **Q12. Slide switch: (a).** Keep: a swipe drains nothing new except `rock2` on a slide being left
     (D4). The intent doc's item 6 and acceptance 10 are amended to "a forgotten pet, a quit game, a closed
     scene" (done, 2026-11-06). (First mate.)
+13. **Slice 12: `_forget` ends the link (2026-11-07).** `_forget(s)` calls `_linkEnd()` when `this._link`
+    has `s` as host or guest, before `detach`. Today a forget mid-visit lets the link run on and restore
+    the old pet's scale on the new one; this is a disclosed change from today (B1). (**Owner.**)
 
 ## Appendix A: every cancel line on `531cd101`
 
