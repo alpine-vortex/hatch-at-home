@@ -172,6 +172,8 @@ _HOP_FIELDS = vol.Schema(
         vol.Optional("round"): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=crate_push.MAX_ROUND)
         ),
+        # A practice board (crate push only; `board` and `hint`, never `settle`).
+        vol.Optional("practice", default=False): cv.boolean,
     }
 )
 
@@ -179,6 +181,10 @@ _HOP_FIELDS = vol.Schema(
 def _hop_moves_fit(data: dict[str, Any]) -> dict[str, Any]:
     """Hop's move list keeps its own, shorter cap (one letter over, so the
     server answers too_long); crate push's cap is its own (crate_push.py)."""
+    if data["practice"] and (
+        data["game"] == "hop" or data[ATTR_ACTION] == "settle" or "round" not in data
+    ):
+        raise vol.Invalid("practice is a crate push board", path=["practice"])
     if data["game"] == "hop" and data[ATTR_ACTION] == "hint":
         raise vol.Invalid("a hint is for crate push", path=[ATTR_ACTION])
     if data["game"] == "hop" and len(data.get("moves", "")) > R.HOP_MAX_MOVES + 1:
@@ -393,6 +399,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def hop(call: ServiceCall) -> ServiceResponse:
         if call.data["game"] == "crate-push":
+            if call.data["practice"]:
+                if call.data[ATTR_ACTION] == "hint":
+                    return await pet_of(call).async_crate_practice_hint(
+                        call.data["round"],
+                        call.data.get("id", ""),
+                        call.data.get("moves", ""),
+                    )
+                return await pet_of(call).async_crate_practice_board(call.data["round"])
             if call.data[ATTR_ACTION] == "settle":
                 return await pet_of(call).async_crate_push_settle(
                     call.data["level"],

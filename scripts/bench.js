@@ -545,6 +545,12 @@ const PRESETS = {
     return out;
   },
 
+  // Crate push practice (slice 6b): the level picker with its fourth button, Practice, at narrow widths.
+  cratepractice() {
+    return [284, 300, 320, 420].map((width) => ({ width, world: "woodland", group: "cratepractice", view: "crate",
+      name: `cratepractice/${width}-picker`, label: "levels and Practice", crate: { level: "normal", picker: true } }));
+  },
+
   hop() {
     const out = [];
     const families = ["hop", "glide", "swim", "dig", "climb", "squeeze"];

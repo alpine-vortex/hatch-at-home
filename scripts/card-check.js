@@ -5317,7 +5317,7 @@ async function main() {
     const fx = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "tests", "fixtures", "crate_push_cases.json"), "utf8")).boards.push;
     const reply = { result: "ok", day: "2026-11-09", id: "crate-check-1", w: fx.w, h: fx.h, grid: fx.grid, par: fx.par };
     await card.evaluate((el, r) => { el.__crateAsks = []; el.__crateSettles = []; el.__crateRound = 1;
-      el._crateFetch = async (id, level, round) => { el.__crateAsks.push([level, round]); return { ...r, round: el.__crateRound, id: `crate-check-${el.__crateRound}` }; };
+      el._crateFetch = async (id, level, round) => { el.__crateAsks.push([level, round]); return { ...r, ...(level === "practice" ? { practice: true } : {}), round: level === "practice" ? round : el.__crateRound, id: `crate-check-${el.__crateRound}` }; };
       el._crateSend = async (id, g) => { el.__crateSettles.push([g.level, g.round, g.id, g.moves.join("")]); el.__crateRound += 1; return { result: "ok", paid: 24, found: false, next_round: el.__crateRound }; }; }, reply);
     // The board section's "flag off" harness may leave a no-op _hopRow shadowing the prototype (no Hop row).
     await card.evaluate((el) => { delete el._hopRow; });
@@ -5345,7 +5345,7 @@ async function main() {
     await page.waitForTimeout(300);
     await shot("crate-b-levels");
     const lv = await card.evaluate((el) => [...el._slides[el._index].gameBox.querySelectorAll(".gpick [data-crate]")].map((b) => b.dataset.crate));
-    check("crate: the picker shows the three levels, and no board was asked for yet", lv.join() === "easy,normal,hard" &&
+    check("crate: the picker shows the three levels and Practice, and no board was asked for yet", lv.join() === "easy,normal,hard,practice" &&
       (await card.evaluate((el) => el.__crateAsks.length)) === 0, JSON.stringify(lv));
     await cur().locator('.gpick [data-crate="normal"]').click();
     await page.waitForTimeout(600);
@@ -5407,7 +5407,7 @@ async function main() {
     await card.evaluate((el) => { el.__hintReply = { result: "ok", kind: "stuck", back: 2 }; });
     await key("hint").click();
     await page.waitForTimeout(200);
-    check("crate: a stuck board says how far to take back", (await card.evaluate((el) => el._slides[el._index].bubble.textContent)).includes("take back 2"), "bubble text");
+    check("crate: a stuck board says how far to take back", (await card.evaluate((el) => el._slides[el._index].bubble.textContent)).includes("Take back 2 moves."), "bubble text");
     await card.evaluate((el) => { delete el._crateHintSend; delete el.__hintAsks; delete el.__hintReply; });
     // A tap on the cell next to the pet pushes; a tap far away does nothing.
     await cur().locator('.hc[data-i="14"]').click({ force: true });
@@ -5437,6 +5437,32 @@ async function main() {
     await page.waitForTimeout(300);
     check("crate: quit ends the board and gives the care buttons back", (await card.evaluate((el) => el._slides[el._index].game)) == null &&
       (await cur().locator(".device.moded").count()) === 0);
+    // Practice: the fourth picker button, an unpaid one-crate board; no settle, nothing parked, a card-kept counter.
+    await button(2).click();
+    await page.waitForTimeout(500);
+    await cur().locator(".ghop").click();
+    await page.waitForTimeout(200);
+    await cur().locator('.gpick [data-board="crate"]').click();
+    await page.waitForTimeout(300);
+    await shot("crate-b2-levels-practice");
+    const pa = await card.evaluate((el) => el._slides[el._index].gameBox.querySelector('.gpick [data-crate="practice"]')?.getAttribute("aria-label"));
+    check("crate: the Practice button says it is a practice board with no pay", pa === "practice board, no pay", String(pa));
+    const asks0 = await card.evaluate((el) => el.__crateAsks.length);
+    await cur().locator('.gpick [data-crate="practice"]').click();
+    await page.waitForTimeout(600);
+    await key("right").click();
+    await page.waitForTimeout(250);
+    await key("right").click();
+    await page.waitForTimeout(400);
+    check("crate: a solved practice board sends no settle, parks nothing, and asks \"nice! one more?\"",
+      (await card.evaluate((el, n) => JSON.stringify([el.__crateAsks.slice(n), el.__crateSettles.length, el._slides[el._index].game.practice, el._slides[el._index].game.prompt,
+        Object.keys(localStorage).filter((k) => k.startsWith("hatch-crate|")).length]), asks0)) === '[[["practice",1]],0,true,"nice! one more?",0]');
+    await key("restart").click();
+    await page.waitForTimeout(600);
+    check("crate: next on a practice board asks for practice round 2, still unpaid",
+      (await card.evaluate((el) => JSON.stringify([el.__crateAsks.at(-1), el.__crateSettles.length, el._slides[el._index].game.moves.length]))) === '[["practice",2],0,0]');
+    await key("quit").click();
+    await page.waitForTimeout(300);
     await card.evaluate((el) => { delete el._crateFetch; delete el._crateSend; delete el.__crateAsks; delete el.__crateSettles; for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-crate")) localStorage.removeItem(k); });
   }
   }

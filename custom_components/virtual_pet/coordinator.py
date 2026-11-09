@@ -3483,6 +3483,51 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             **board.to_dict(),
         }
 
+    async def async_crate_practice_board(self, rnd: int) -> dict[str, Any]:
+        """A practice board (plan 6b): tiny, one crate, unpaid, no cost, no
+        count, nothing kept. Refused as a settle is (egg, asleep), never
+        too_tired. The card's own counter is the round."""
+        assert self.state is not None
+        now = self._now()
+        self._advance(now)
+        refusal = model.refuse_hop_settle(self.state)
+        if refusal is not None:
+            return {"result": refusal}
+        day = self._today(now)[0]
+        board = await self.hass.async_add_executor_job(
+            crate_push.practice_board, self.pet_id, day, self.world, rnd
+        )
+        return {
+            "result": model.OK,
+            "game": "crate-push",
+            "practice": True,
+            "day": day,
+            "level": crate_push.PRACTICE,
+            "round": rnd,
+            "hinted": False,
+            "neat_open": False,
+            **board.to_dict(),
+        }
+
+    async def async_crate_practice_hint(
+        self, rnd: int, board_id: str, moves: str
+    ) -> dict[str, Any]:
+        """A hint on a practice board: the same answer, recorded nowhere."""
+        assert self.state is not None
+        now = self._now()
+        self._advance(now)
+        refusal = model.refuse_hop_settle(self.state)
+        if refusal is not None:
+            return {"result": refusal}
+        day = self._today(now)[0]
+        board = await self.hass.async_add_executor_job(
+            crate_push.practice_board, self.pet_id, day, self.world, rnd
+        )
+        if board.id != board_id:
+            return {"result": "board_changed"}
+        async with self._crate_hint_lock:
+            return await self.hass.async_add_executor_job(crate_push.hint, board, moves)
+
     async def _crate_round_board(
         self, day: str, level: str, rnd: int
     ) -> crate_push.Board:

@@ -147,6 +147,11 @@ hop:
           min: 1
           max: 99
           mode: box
+    practice:
+      required: false
+      default: false
+      selector:
+        boolean:
     shared:
       required: false
       default: false

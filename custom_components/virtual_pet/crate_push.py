@@ -370,6 +370,13 @@ GATES = {
 }
 PULLS = {"easy": 8, "normal": 12, "hard": 18}  # reverse pulls made
 
+# Practice (plan 6b): one crate on 4 by 3 or 5 by 4, 0-2 walls, at least 6 moves and 2
+# pushes. Not a level: it is not in LEVELS, so settle and crate_day never see it.
+PRACTICE_SIZES = ((4, 3), (5, 4))
+PRACTICE_GATE = (6, 30, 2, (0, 2))
+PRACTICE_PULLS = 6
+PRACTICE = "practice"  # the level string of its seed and its cache key
+
 
 def _seed(
     pet_id: str, day: str, world: str | None, level: str, rnd: int, n: int
@@ -413,12 +420,20 @@ def _connected(w: int, h: int, walls: set[int]) -> bool:
     return len(seen) == len(free)
 
 
-def _candidate(rng: random.Random, level: str) -> Board | None:
+def _candidate(
+    rng: random.Random, level: str, size: tuple[int, int] | None = None
+) -> Board | None:
     """One candidate, built backwards: crates on the spots, then random pulls
     (the reverse of a push), so it is solvable by construction. None if the
     walls cut the floor apart."""
-    crates_n, w, h = params_for(level)
-    lo, hi = GATES[level][3]
+    if size is None:
+        crates_n, w, h = params_for(level)
+        lo, hi = GATES[level][3]
+        pulls_n = PULLS[level]
+    else:
+        crates_n, (w, h) = 1, size
+        lo, hi = PRACTICE_GATE[3]
+        pulls_n = PRACTICE_PULLS
     walls = set(rng.sample(range(w * h), rng.randint(lo, hi)))
     if not _connected(w, h, walls):
         return None
@@ -430,7 +445,7 @@ def _candidate(rng: random.Random, level: str) -> Board | None:
     pet = rng.choice([i for i in free if i not in crates])
 
     last = -1  # the crate just pulled (and where it is now): not pulled again at once
-    for _ in range(PULLS[level]):
+    for _ in range(pulls_n):
         # the pet's reach (it cannot walk through a crate or a wall)
         reach = {pet}
         todo = [pet]
@@ -497,10 +512,12 @@ class Verdict:
     solve: Solve | None = None
 
 
-def check(board: Board, level: str) -> Verdict:
+def check(
+    board: Board, level: str, gate: tuple[int, int, int, Any] | None = None
+) -> Verdict:
     """Is a candidate worth a day? Solvable, long enough, not too long, enough
     pushes, and not mostly solved already."""
-    lo, hi, pushes, _ = GATES[level]
+    lo, hi, pushes, _ = gate or GATES[level]
     done = sum(1 for c in board.cells if c == "B")
     crates = board.cells.count("b") + done
     if done > crates // 2 or done == crates:
@@ -559,5 +576,39 @@ def crate_push_board(
     board.par = (len(s.moves) if s else 0) + PAR_SLACK
     board.id = board_id(
         pet_id, day, world, level, rnd, board.w, board.h, board.grid, TRIES
+    )
+    return board
+
+
+PRACTICE_FALLBACK = ("n...", ".b..", ".P..")
+
+
+def practice_board(pet_id: str, day: str, world: str | None, rnd: int = 1) -> Board:
+    """A practice round's board: one crate, tiny, a function of (pet, day,
+    world, round) with its own seed stem, so its id never equals a paid
+    board's. Nothing is kept for it server-side."""
+    for n in range(TRIES):
+        rng = random.Random(_seed(pet_id, day, world, PRACTICE, rnd, n))
+        cand = _candidate(rng, PRACTICE, rng.choice(PRACTICE_SIZES))
+        if cand is None:
+            continue
+        verdict = check(cand, PRACTICE, PRACTICE_GATE)
+        if not verdict.ok or verdict.solve is None:
+            continue
+        cand.par = len(verdict.solve.moves) + PAR_SLACK
+        cand.world = world
+        cand.tries = n + 1
+        cand.id = board_id(
+            pet_id, day, world, PRACTICE, rnd, cand.w, cand.h, cand.grid, n
+        )
+        return cand
+    grid = PRACTICE_FALLBACK
+    board = Board(
+        len(grid[0]), len(grid), grid, world=world, fallback=True, tries=TRIES
+    )
+    s = solve(board)
+    board.par = (len(s.moves) if s else 0) + PAR_SLACK
+    board.id = board_id(
+        pet_id, day, world, PRACTICE, rnd, board.w, board.h, board.grid, TRIES
     )
     return board

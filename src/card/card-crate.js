@@ -26,13 +26,19 @@ const CRATE_COPY = {
   enough: "that's plenty of crates for today",
   failed: "hmm, that didn't work",
   hint: "Show a hint",
-  stuck: (n) => `this one is stuck, take back ${n}`,
-  notNeat: "a hinted board is not neat",
+  stuck: (n) => `This one's stuck. Take back ${n === 1 ? "1 move" : `${n} moves`}.`,
+  notNeat: "Using a hint means no neat find on this board.",
+  hintUnknown: "Hmm, I can't see a way from here. Try taking back a few moves.",
+  hintNo: "No hint right now.",
+  practice: "Practice",
+  practiceAria: "practice board, no pay",
+  practiceDone: "nice! one more?",
 };
 const CRATE_CELLS = { ".": "floor", "#": "wall", "~": "water", P: "floor", p: "floor spot", b: "floor", n: "floor spot", B: "floor spot" };
 const CRATE_DELTA = { u: [0, -1], d: [0, 1], l: [-1, 0], r: [1, 0] };
 const CRATE_DIRS = [["left", "l"], ["up", "u"], ["down", "d"], ["right", "r"]];
 const crateStore = (key, val) => {
+  if (!key) return; // a practice board parks nothing
   try {
     if (val) localStorage.setItem(key, val);
     else localStorage.removeItem(key);
@@ -41,6 +47,7 @@ const crateStore = (key, val) => {
   }
 };
 const crateRead = (key) => {
+  if (!key) return "";
   try {
     return localStorage.getItem(key) || "";
   } catch (err) {
@@ -88,7 +95,8 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     if (!picking?.picking || picking.crateLoading) return;
     const pick = s.gameBox.querySelector(".gpick");
     pick.innerHTML = CRATE_LEVELS.map(([key]) =>
-      `<button data-crate="${key}" aria-label="${CRATE_COPY.levelAria[key]}">${CRATE_COPY.level[key]}</button>`).join("");
+      `<button data-crate="${key}" aria-label="${CRATE_COPY.levelAria[key]}">${CRATE_COPY.level[key]}</button>`).join("") +
+      `<button data-crate="practice" aria-label="${CRATE_COPY.practiceAria}">${CRATE_COPY.practice}</button>`;
     for (const b of pick.querySelectorAll("[data-crate]")) {
       b.addEventListener("click", () => {
         this._tapped(b, s);
@@ -107,14 +115,15 @@ class HatchPetCardCrate extends HatchPetCardBoard {
 
   async _crateOpen(s, level) {
     const picking = s.game;
-    if (!picking?.picking || picking.crateLoading || !CRATE_LEVELS.some(([k]) => k === level)) return;
+    if (!picking?.picking || picking.crateLoading || !(level === "practice" || CRATE_LEVELS.some(([k]) => k === level))) return;
     const id = s.ids?.["sensor.mood"];
     if (!id) return;
     picking.crateLoading = true;
     if (s.scene) this._sceneEnd(s, { quiet: true });
     let reply;
     try {
-      reply = await this._crateFetch(id, level, null); // no round: the server gives the next one to pay
+      // no round: the server gives the next one to pay; a practice board has only the card's counter
+      reply = await this._crateFetch(id, level, level === "practice" ? this._cratePracticeRound() : null);
     } catch (err) {
       if (s.game === picking) this._endGame(s, CRATE_COPY.failed);
       return;
@@ -135,9 +144,19 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     this._crateStart(s, reply, level, reply.round);
   }
 
+  // Practice has no server round: the card counts its own (1..99, a page restart starts again).
+  _cratePracticeRound() {
+    this._cratePractice = (this._cratePractice % 99) + 1 || 1;
+    return this._cratePractice;
+  }
+
   // The `hop` service's `board` answer for crate push (the seam a check stubs).
   async _crateFetch(id, level, round) {
     const data = { entity_id: id, action: "board", game: "crate-push", level };
+    if (level === "practice") {
+      data.practice = true;
+      delete data.level;
+    }
     if (round) data.round = round;
     const res = await this._hass.callService("virtual_pet", "hop", data, undefined, false, true);
     return res?.response;
@@ -153,9 +172,13 @@ class HatchPetCardCrate extends HatchPetCardBoard {
 
   // The `hop` service's `hint` answer: the next step for the letters played so far (the seam a check stubs).
   async _crateHintSend(id, g, sent) {
-    const res = await this._hass.callService("virtual_pet", "hop",
-      { entity_id: id, action: "hint", game: "crate-push", level: g.level, round: g.round, id: g.id,
-        moves: sent }, undefined, false, true);
+    const data = { entity_id: id, action: "hint", game: "crate-push", level: g.level, round: g.round, id: g.id,
+      moves: sent };
+    if (g.practice) {
+      data.practice = true;
+      delete data.level;
+    }
+    const res = await this._hass.callService("virtual_pet", "hop", data, undefined, false, true);
     return res?.response;
   }
 
@@ -188,7 +211,7 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     if (reply?.result !== "ok") {
       const line = REFUSALS[reply?.result];
       if (reply?.result === "board_changed") crateStore(g.key, null);
-      if (line && typeof line === "string") this._write(s, line, 6000);
+      this._write(s, typeof line === "string" ? line : CRATE_COPY.hintNo, 6000);
       return;
     }
     const first = !g.hinted;
@@ -196,6 +219,10 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     if (reply.kind === "stuck") {
       g.hinted = true;
       this._write(s, CRATE_COPY.stuck(reply.back), 6000);
+      return;
+    }
+    if (reply.kind === "unknown") {
+      this._write(s, CRATE_COPY.hintUnknown, 6000);
       return;
     }
     if (reply.kind !== "step") return;
@@ -217,7 +244,7 @@ class HatchPetCardCrate extends HatchPetCardBoard {
   async _crateSettle(s) {
     const g = s.game;
     const id = s.ids?.["sensor.mood"];
-    if (g?.kind !== "crate" || !g.done || g.settled || g.settling || !id) return;
+    if (g?.kind !== "crate" || g.practice || !g.done || g.settled || g.settling || !id) return;
     g.settling = true;
     let reply;
     try {
@@ -253,10 +280,11 @@ class HatchPetCardCrate extends HatchPetCardBoard {
 
   _crateStart(s, reply, level, round) {
     const board = { w: reply.w, h: reply.h, grid: reply.grid, par: reply.par };
-    const key = `${CRATE_KEY}|${s.ids?.device}|${reply.day}|${reply.id}`;
+    const practice = reply.practice === true;
+    const key = practice ? null : `${CRATE_KEY}|${s.ids?.device}|${reply.day}|${reply.id}`;
     const g = s.game = { kind: "crate", board, level, round, key, id: reply.id, day: reply.day, moves: [],
       st: HATCH_CRATE_PUSH.start(board), done: false, cell: 0, keys: {},
-      hinted: !!reply.hinted, neatOpen: !!reply.neat_open };
+      hinted: !!reply.hinted, neatOpen: !practice && !!reply.neat_open, practice };
     const parked = crateRead(key);
     if (parked) {
       const run = HATCH_CRATE_PUSH.replay(board, [...parked]);
@@ -399,10 +427,10 @@ class HatchPetCardCrate extends HatchPetCardBoard {
       g.done = true;
       this._reactFrames(s, "praised", { inGame: true });
       this._chirp(s, "win");
-      g.prompt = CRATE_COPY.solved;
+      g.prompt = g.practice ? CRATE_COPY.practiceDone : CRATE_COPY.solved;
       this._write(s, g.prompt, 60000);
       s.sayUntil = Date.now() + 60000;
-      this._crateSettle(s);
+      if (!g.practice) this._crateSettle(s);
     } else this._chirp(s, "tap");
     this._crateDraw(s, true);
   }
@@ -424,14 +452,14 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     if (g?.kind !== "crate" || g.crateLoading) return;
     const id = s.ids?.["sensor.mood"];
     if (!id) return;
-    if (!g.settled) { // an unpaid board: settle first, so the next one is the one to pay
+    if (!g.settled && !g.practice) { // an unpaid board: settle first, so the next one is the one to pay
       await this._crateSettle(s);
       if (s.game !== g || !g.settled) return;
     }
     g.crateLoading = true;
     let reply;
     try {
-      reply = await this._crateFetch(id, g.level, null);
+      reply = await this._crateFetch(id, g.level, g.practice ? this._cratePracticeRound() : null);
     } catch (err) {
       g.crateLoading = false;
       return;

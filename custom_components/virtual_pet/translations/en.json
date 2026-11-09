@@ -439,6 +439,10 @@
           "name": "Round",
           "description": "Crate-push: the round of the day (1 to 99). Each round is a new board."
         },
+        "practice": {
+          "name": "Practice",
+          "description": "Crate-push board or hint only: a tiny one-crate practice board. Unpaid, no cost, not counted, never settled. The round is the card's own counter (1 to 99, required)."
+        },
         "entity_id": {
           "name": "Pet",
           "description": "Any entity of the pet."

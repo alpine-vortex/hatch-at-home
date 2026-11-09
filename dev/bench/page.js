@@ -1163,6 +1163,11 @@
       card._crateFetch = async () => ({ ...fx.reply, rounds: { ...fx.reply.rounds } });
       card._crateSend = async () => ({ result: "ok", paid: 24, found: false, next_round: 2 });
       card._startGame(cur, cur.buttons.play);
+      if (shot.crate?.picker) { // `crate.picker`: stop at the level choice (the three levels and Practice)
+        card._crateLevels(cur);
+        await new Promise((r) => setTimeout(r, 250));
+        return;
+      }
       await card._crateOpen(cur, level);
       const b = shot.crate || {};
       const list = b.moves === "win" ? fx.win : b.moves || "";
