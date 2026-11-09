@@ -1,0 +1,338 @@
+{
+ "item_ball": {
+  "sheet": "toys",
+  "art_px": [
+   24,
+   24
+  ]
+ },
+ "item_ring_stacker": {
+  "sheet": "toys",
+  "art_px": [
+   29,
+   36
+  ]
+ },
+ "item_chick": {
+  "sheet": "toys",
+  "art_px": [
+   39,
+   32
+  ]
+ },
+ "item_drum": {
+  "sheet": "toys",
+  "art_px": [
+   38,
+   35
+  ]
+ },
+ "item_rattle": {
+  "sheet": "toys",
+  "art_px": [
+   26,
+   41
+  ]
+ },
+ "item_snail": {
+  "sheet": "toys",
+  "art_px": [
+   44,
+   32
+  ]
+ },
+ "item_cloud_plush": {
+  "sheet": "toys",
+  "art_px": [
+   43,
+   30
+  ]
+ },
+ "item_cups": {
+  "sheet": "toys",
+  "art_px": [
+   26,
+   40
+  ]
+ },
+ "item_xylophone": {
+  "sheet": "toys",
+  "art_px": [
+   45,
+   34
+  ]
+ },
+ "item_pinwheel": {
+  "sheet": "toys",
+  "art_px": [
+   31,
+   43
+  ]
+ },
+ "item_boat": {
+  "sheet": "toys",
+  "art_px": [
+   39,
+   40
+  ]
+ },
+ "item_kite": {
+  "sheet": "toys",
+  "art_px": [
+   32,
+   42
+  ]
+ },
+ "hat_beanie": {
+  "sheet": "wearables",
+  "art_px": [
+   34,
+   34
+  ]
+ },
+ "hat_sunhat": {
+  "sheet": "wearables",
+  "art_px": [
+   46,
+   28
+  ]
+ },
+ "hat_flower_band": {
+  "sheet": "wearables",
+  "art_px": [
+   39,
+   23
+  ]
+ },
+ "hat_bunny_hood": {
+  "sheet": "wearables",
+  "art_px": [
+   42,
+   41
+  ]
+ },
+ "wear_bow_tie": {
+  "sheet": "wearables",
+  "art_px": [
+   34,
+   20
+  ]
+ },
+ "wear_scarf": {
+  "sheet": "wearables",
+  "art_px": [
+   34,
+   32
+  ]
+ },
+ "wear_glasses": {
+  "sheet": "wearables",
+  "art_px": [
+   43,
+   16
+  ]
+ },
+ "hat_leaf_crown": {
+  "sheet": "wearables",
+  "art_px": [
+   41,
+   24
+  ]
+ },
+ "hat_rain_hood": {
+  "sheet": "wearables",
+  "art_px": [
+   37,
+   38
+  ]
+ },
+ "wear_cape": {
+  "sheet": "wearables",
+  "art_px": [
+   46,
+   31
+  ]
+ },
+ "hat_chef": {
+  "sheet": "wearables",
+  "art_px": [
+   39,
+   38
+  ]
+ },
+ "wear_backpack": {
+  "sheet": "wearables",
+  "art_px": [
+   40,
+   33
+  ]
+ },
+ "deco_item_sprout": {
+  "sheet": "room-decor",
+  "art_px": [
+   22,
+   28
+  ]
+ },
+ "deco_item_clock": {
+  "sheet": "room-decor",
+  "art_px": [
+   28,
+   30
+  ]
+ },
+ "deco_item_frame": {
+  "sheet": "room-decor",
+  "art_px": [
+   32,
+   33
+  ]
+ },
+ "deco_item_lantern": {
+  "sheet": "room-decor",
+  "art_px": [
+   26,
+   46
+  ]
+ },
+ "deco_item_cushion": {
+  "sheet": "room-decor",
+  "art_px": [
+   37,
+   19
+  ]
+ },
+ "deco_item_plaque": {
+  "sheet": "room-decor",
+  "art_px": [
+   33,
+   22
+  ]
+ },
+ "deco_item_bookshelf": {
+  "sheet": "room-decor",
+  "art_px": [
+   33,
+   32
+  ]
+ },
+ "deco_item_star_lights": {
+  "sheet": "room-decor",
+  "art_px": [
+   37,
+   20
+  ]
+ },
+ "deco_item_aquarium": {
+  "sheet": "room-decor",
+  "art_px": [
+   32,
+   28
+  ]
+ },
+ "deco_item_basket": {
+  "sheet": "room-decor",
+  "art_px": [
+   32,
+   25
+  ]
+ },
+ "deco_item_lamp": {
+  "sheet": "room-decor",
+  "art_px": [
+   25,
+   30
+  ]
+ },
+ "deco_item_flower_box": {
+  "sheet": "room-decor",
+  "art_px": [
+   39,
+   24
+  ]
+ },
+ "food_tart": {
+  "sheet": "food-and-drink",
+  "art_px": [
+   33,
+   28
+  ]
+ },
+ "food_toast": {
+  "sheet": "food-and-drink",
+  "art_px": [
+   32,
+   28
+  ]
+ },
+ "food_rice_ball": {
+  "sheet": "food-and-drink",
+  "art_px": [
+   26,
+   24
+  ]
+ },
+ "food_fish_biscuit": {
+  "sheet": "food-and-drink",
+  "art_px": [
+   32,
+   23
+  ]
+ },
+ "food_cocoa": {
+  "sheet": "food-and-drink",
+  "art_px": [
+   33,
+   25
+  ]
+ },
+ "food_fruit_bowl": {
+  "sheet": "food-and-drink",
+  "art_px": [
+   33,
+   27
+  ]
+ },
+ "food_dumpling": {
+  "sheet": "food-and-drink",
+  "art_px": [
+   30,
+   27
+  ]
+ },
+ "food_pancakes": {
+  "sheet": "food-and-drink",
+  "art_px": [
+   34,
+   26
+  ]
+ },
+ "food_muffin": {
+  "sheet": "food-and-drink",
+  "art_px": [
+   28,
+   29
+  ]
+ },
+ "food_star_cookie": {
+  "sheet": "food-and-drink",
+  "art_px": [
+   30,
+   29
+  ]
+ },
+ "food_yogurt": {
+  "sheet": "food-and-drink",
+  "art_px": [
+   27,
+   30
+  ]
+ },
+ "food_onigiri": {
+  "sheet": "food-and-drink",
+  "art_px": [
+   31,
+   29
+  ]
+ }
+}
