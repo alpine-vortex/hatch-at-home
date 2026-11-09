@@ -15144,13 +15144,13 @@ async function main() {
       for (let d = 0; d < 5; d++) {
         globalThis.__hatchDayShift = (Number(was) || 0) + d;
         el.hass = el._hass;
-        await new Promise((r) => setTimeout(r, 50));
+        el._renderShelf(); await new Promise((r) => setTimeout(r, 50));
         seen.push(left());
       }
     } finally { globalThis.__hatchDayShift = was; }
     el.setConfig({ ...el._config, seasonal: "winter" });
     el.hass = el._hass;
-    await new Promise((r) => setTimeout(r, 50));
+    el._renderShelf(); await new Promise((r) => setTimeout(r, 50));
     const right = el.shadowRoot.querySelector(".deco.right").getAttribute("src");
     el.setConfig({ ...el._config, seasonal: false });
     el.hass = el._hass;
