@@ -597,14 +597,14 @@ test("slice 3: hop's slots read the keys the board wrote; a press runs _hopKey; 
 
 // ---- slice 4A: the pixel icons ----
 
-const MODE_ICONS = ["left", "right", "up", "down", "keep", "dig", "special", "undo", "restart", "quit"].map((n) => `icon_mode_${n}`);
+const MODE_ICONS = ["left", "right", "up", "down", "keep", "dig", "special", "undo", "restart", "quit", "hint"].map((n) => `icon_mode_${n}`);
 const pngSize = (file) => {
   const b = fs.readFileSync(file);
   assert.strictEqual(b.subarray(1, 4).toString(), "PNG", file);
   return [b.readUInt32BE(16), b.readUInt32BE(20)];
 };
 
-test("4A acceptance 1: every slot of every table mode names an icon_mode_* key whose PNG exists and is 96x96; the table uses exactly the ten", () => {
+test("4A acceptance 1: every slot of every table mode names an icon_mode_* key whose PNG exists and is 96x96; the table uses exactly the eleven", () => {
   const used = new Set();
   for (const [id, m] of Object.entries(M.SHELL_MODES)) {
     m.slots.forEach((slot, i) => {
@@ -794,7 +794,7 @@ test("crate entry: slot 5 is the hint (key h, the special's icon), enabled from 
   assert.deepStrictEqual(entryProblems(m), []);
   assert.deepStrictEqual([...m.slots].map((x) => x.cap), ["left", "up", "down", "right", "hint", "undo", "restart", "quit"].map((c, i) => (i === 6 ? m.slots[6].cap : c)));
   const hint = m.slots[4];
-  assert.strictEqual(hint.icon, "icon_mode_special");
+  assert.strictEqual(hint.icon, "icon_mode_hint");
   assert.deepStrictEqual([...hint.keys], ["h"]);
   const s = { game: { keys: { hint: { enabled: true, label: "Show a hint" } } } };
   assert.strictEqual(hint.enabled(s), true);
