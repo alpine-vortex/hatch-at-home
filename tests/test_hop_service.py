@@ -305,6 +305,7 @@ def test_the_service_has_its_text_and_fields():
         "game",
         "level",
         "round",
+        "practice",
     }
     for name in ("strings.json", "translations/en.json"):
         service = json.loads((package / name).read_text())["services"]["hop"]
