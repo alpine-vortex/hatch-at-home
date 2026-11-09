@@ -693,6 +693,7 @@ function snackSlide(opts = {}) {
   f.s.species.reactions = {};
   f.self._config = {};
   f.self._sceneArt = () => {};
+  f.self._snackArt = (_s, season) => (season?.snack ? `../ui/season_${season.key}_${season.snack}` : null); // the food pool has its own test (food_pool.test.js)
   return f;
 }
 const snackBox = { width: 330, height: 247, left: 0, top: 0 };

@@ -677,7 +677,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         said = [pick(HEAVY_SNACK), 3000];
       }
       if (spoiled) said = [this._lines(s, "REFUSALS.spoiled", REFUSALS.spoiled).text, 3500]; // "hehe, whining works"
-      const prop = candy || s.species?.props?.[key] || FALLBACK_PROPS[key];
+      const prop = (key === "snack" && this._snackArt(s, season)) || s.species?.props?.[key] || FALLBACK_PROPS[key];
       if (prop && !busy && entry.action !== "play") { // a play is the ball beat at the tap (_startGame), not a prop here
         // The star rises above the head, the finger wags above it, the fan slides in; else it drops.
         const cls = entry.action === "praise" ? "above rise" : entry.action === "scold" ? "above wag"

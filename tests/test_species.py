@@ -602,3 +602,18 @@ def test_field_notes_are_distinct_and_cover_every_ready_species() -> None:
 def test_banned_words_match_on_word_boundaries() -> None:
     assert not BANNED.search("a clover glove")
     assert BANNED.search("loves rain") and BANNED.search("fond of sun")
+
+
+FOODS = "tart toast rice_ball fish_biscuit cocoa fruit_bowl dumpling pancakes muffin star_cookie yogurt onigiri".split()
+
+
+@pytest.mark.parametrize("food", FOODS)
+def test_each_snack_food_is_a_palette_sprite_on_the_grid(food: str) -> None:
+    """Art S3: ui/food_<name>.png, 4 frame px per art px, at most 136 x 120."""
+    path = SPRITES.parent / "ui" / f"food_{food}.png"
+    assert path.exists(), path
+    with Image.open(path) as img:
+        assert img.mode == "P"
+        w, h = img.size
+    assert w % 4 == 0 and h % 4 == 0, (w, h)
+    assert w <= 136 and h <= 120, (w, h)
