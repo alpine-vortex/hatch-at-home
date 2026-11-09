@@ -395,6 +395,11 @@ const foundBit = (worlds, m) => {
 };
 const VISIT_FRIEND_AFTER = 3; // sighting days on this screen before a visitor is a friend (E3)
 // Rare visits, card only (E10): no credit, nothing kept but the guest's day flag.
+// The snack scene's food pool (art S3, owner 2026-11-08): cosmetic, card only. A snack scene adds one
+// of these to the species' snack prop 1 time in FOOD_ODDS' denominator (1/3); a season's candy wins;
+// it is not matched to likes. ui/food_<name>.png; never a season_ name.
+const FOODS = ["tart", "toast", "rice_ball", "fish_biscuit", "cocoa", "fruit_bowl", "dumpling", "pancakes", "muffin", "star_cookie", "yogurt", "onigiri"];
+const FOOD_ODDS = 1 / 3;
 const PAIR_ODDS = 15; // a planned visit brings a friend 1 day in this many (V-b)
 const GUEST_ODDS = 30; // a no-visit day brings a guest 1 day in this many (V-c)
 const PAIR_BEHIND_MS = 1500; // the friend comes in this far behind, from the other side

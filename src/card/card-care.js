@@ -460,7 +460,7 @@ const SCENES = {
       sc.ms = sc.settleAt + 200;
       this._careFrames(s, sc, "snack");
       sc.snack = add("img", "scene scene-snack");
-      this._sceneArt(s, sc.snack, sc.candy || s.species.props?.snack || "snack");
+      this._sceneArt(s, sc.snack, this._snackArt(s, season) || s.species.props?.snack || "snack");
       sc.pos = { x: 0, y: 0, rot: 0, shown: false };
     },
     render(s, sc, t, { sw, sh, ramp, ease }) {
@@ -1071,6 +1071,22 @@ class HatchPetCardCare extends HatchPetCardMode {
   // Scene art (props) on the world's grid: its PNG is 4 frame px per art px, and
   // an art px is 1/64 of the pet's 62% of the screen's height. That is the
   // pet's frame scale (256 frame px), whichever grid the creature is drawn on.
+  // The snack's art (art S3): the season's candy, else a food from FOODS (pinned by s.pinFood, or at
+  // FOOD_ODDS, never the one before), else null: the caller uses the species' own snack prop.
+  _snackArt(s, season) {
+    if (season?.snack) return `../ui/season_${season.key}_${season.snack}`;
+    let name = null;
+    if (s.pinFood === "none") return null;
+    if (FOODS.includes(s.pinFood)) name = s.pinFood;
+    else if (s.pinFood == null && Math.random() < FOOD_ODDS) {
+      const pool = FOODS.filter((f) => f !== s.lastFood);
+      name = pool[Math.floor(Math.random() * pool.length)];
+    }
+    if (!name) return null;
+    s.lastFood = name;
+    return `../ui/food_${name}`;
+  }
+
   _sceneArt(s, img, sprite) {
     const src = spriteSrc(s.speciesId, sprite);
     if (img.getAttribute("src") === src) return;

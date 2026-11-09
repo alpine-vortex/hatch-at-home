@@ -6836,6 +6836,21 @@ async function main() {
   check("halloween extras show", extras.bunting && extras.ghost && extras.witch && extras.eep === "eep!!",
     `bunting ${extras.bunting}, ghost ${extras.ghost} (${extras.eep}), witch ${extras.witch}`);
   check("snacks are candy at halloween", /season_halloween_candy/.test(extras.prop), extras.prop.split("/").pop());
+  // Art S3: with the season off, a pinned food is the snack's prop (the candy rows above stay as they are).
+  const food = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const was = el._config;
+    el._config = { ...was, seasonal: false };
+    s.pinFood = "dumpling";
+    try {
+      el._react(s, { action: "snack", result: "ok", at: Date.now() / 1000 });
+      return s.prop.getAttribute("src") || "";
+    } finally {
+      el._config = was;
+      delete s.pinFood;
+    }
+  });
+  check("a pinned food is the snack prop", /\/ui\/food_dumpling\.png/.test(food), food.split("/").pop());
   await shot("05-halloween-extras");
 
   // Thanksgiving: its dates move with the fourth Thursday of November (from

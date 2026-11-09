@@ -1381,6 +1381,30 @@ const PRESETS = {
     }
     return out;
   },
+  // Art S3, the snack scene's food pool: each of the 12 foods thrown (~400), held (700) and nibbled (variant C,
+  // one chew in), on a fox, a tall deer and a tiny firefly at 330, plus pancakes and yogurt at 300; and the
+  // reduced-motion prop of a snack reply with a food pinned.
+  foods() {
+    const out = [];
+    const foods = ["tart", "toast", "rice_ball", "fish_biscuit", "cocoa", "fruit_bowl", "dumpling", "pancakes", "muffin", "star_cookie", "yogurt", "onigiri"];
+    const shot = (food, name, label, extra) => out.push({ name: `foods/${name}`, group: `foods-${food}`, label, pinFood: food,
+      species: "fox", stage: "adult", world: "woodland", width: 330, care: "snack", answer: { at: 200, result: "ok" }, clip: "screen", say: "",
+      ...extra, pet: { hunger: 60 }, variant: { snack: "A", ...extra.variant } });
+    for (const food of foods) {
+      for (const species of ["fox", "deer", "firefly"]) {
+        const w = { species, world: worldOf(species) };
+        shot(food, `${food}-${species}-thrown`, `${food} ${species} thrown`, { ...w, careAt: 400 });
+        shot(food, `${food}-${species}-held`, `${food} ${species} held`, { ...w, careAt: 700 });
+        shot(food, `${food}-${species}-nibbled`, `${food} ${species} nibbled`, { ...w, careAt: 1000, variant: { snack: "C" } });
+      }
+    }
+    for (const food of ["pancakes", "yogurt"]) {
+      shot(food, `${food}-300-held`, `${food} 300 held`, { width: 300, careAt: 700 });
+      shot(food, `${food}-300-nibbled`, `${food} 300 nibbled`, { width: 300, careAt: 1000, variant: { snack: "C" } });
+    }
+    shot("tart", "tart-calm", "calm: the reply prop", { care: undefined, reactEntry: { action: "snack", result: "ok" }, motion: "reduce" });
+    return out;
+  },
   // Care D, the tuck and the wake (plan care-reactions 5.3, 13). An adult fox in woodland: the tuck and the
   // wake every beat, day and night, the refusal, the quiet exit, the hold, resting, a baby and a child, the
   // reduced-motion tap, the drape's alignment through a settle and a pat; and a drape sheet: every

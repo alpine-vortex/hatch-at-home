@@ -1297,6 +1297,9 @@
     // floor path (frames, move, prop, hearts, line); `variant` pins its picks (`{"refused.full": "shake"}`,
     // `{praise: "spin"}`, `{medicine: "sniff"}`); `reactAt` pauses every animation on the screen that many ms in.
     if (shot.variant) cur.pinVariant = shot.variant;
+    // `pinFood`: the snack scene's food (art S3): a name from FOODS, or "none" (the default: no draw, so
+    // every older snack shot is unchanged); `undefined` is never passed, so the odds never run on the bench.
+    cur.pinFood = shot.pinFood ?? "none";
     if (shot.reactEntry) {
       card._react(cur, { at: Date.now() / 1000, ...shot.reactEntry });
       await new Promise((r) => setTimeout(r, 80)); // the prop's sprite and any pose probe
