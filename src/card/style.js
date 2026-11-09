@@ -1672,6 +1672,7 @@ const STYLE = `
   .emblem { width: 32px; height: 32px; image-rendering: pixelated; }
   .deco { position: absolute; bottom: 6%; width: 48px; height: 48px; image-rendering: pixelated;
     pointer-events: none; transition: opacity .5s; }
+  .deco.big { width: 60px; height: 60px; } /* floor pieces: 160 canvas, art stands on its foot */
   .deco.left { left: 4%; } .deco.right { right: 4%; }
   .compact .deco { display: none; }
   .screen.faded .bg { filter: brightness(.55) saturate(.8); }

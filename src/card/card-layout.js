@@ -301,8 +301,12 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     }
     const season = seasonNow(this._config);
     this._card.querySelectorAll(".deco").forEach((img, i) => {
-      // In season, the right-hand decoration is the season's.
-      const name = season && i === 1 ? `season_${season.key}_deco` : world.deco?.[i];
+      // In season, the right-hand decoration is the season's; else the day's pick from the
+      // world's pool for that side (the first entry is the world's own, `deco[i]`).
+      const pool = world.deco_pool?.[i ? "right" : "left"];
+      const name = season && i === 1 ? `season_${season.key}_deco`
+        : (pool?.length ? turnPick(pool, `deco|${s.worldKey || ""}|${i}`) : null) ?? world.deco?.[i];
+      img.classList.toggle("big", !!name?.startsWith("deco_item_"));
       img.style.display = name ? "" : "none";
       const src = name && `${BASE}/ui/${name}.png?v=${VERSION}`;
       if (src && img.getAttribute("src") !== src) img.src = src;

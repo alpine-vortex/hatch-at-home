@@ -96,6 +96,35 @@ def test_the_first_ready_creature_of_each_world_brings_the_egg_and_scenes(
             assert (SPRITES.parent / "ui" / f"{name}.png").exists(), name
 
 
+@pytest.mark.parametrize("world", sorted(WORLDS))
+def test_each_worlds_deco_pools_are_three_distinct_floor_pieces(world: str) -> None:
+    from PIL import Image
+
+    w = WORLDS[world]
+    pool = w["deco_pool"]
+    assert set(pool) == {"left", "right"}
+    for i, side in enumerate(("left", "right")):
+        assert len(pool[side]) == 3, (world, side)
+        assert pool[side][0] == w["deco"][i], "the first is the world's own"
+    names = pool["left"] + pool["right"]
+    assert len(set(names)) == 6, f"{world}: a name sits in both pools"
+    for name in names:
+        assert not name.startswith("season_"), name
+        path = SPRITES.parent / "ui" / f"{name}.png"
+        assert path.exists(), name
+        im = Image.open(path)
+        assert im.width == im.height and im.width in (128, 160, 48, 64, 96), (
+            name,
+            im.size,
+        )
+        if name.startswith("deco_item_"):
+            assert im.size in ((160, 160), (128, 128)) and im.mode == "P", (
+                name,
+                im.size,
+                im.mode,
+            )
+
+
 @pytest.mark.parametrize("species", READY)
 def test_reactions_point_at_poses_the_species_has(species: str) -> None:
     sp = json.loads((SPRITES / species / "species.json").read_text())

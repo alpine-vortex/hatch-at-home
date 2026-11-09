@@ -888,6 +888,17 @@
       if (shot.shell.finish === "none") delete world.shell.finish;
     }
 
+    // `deco`: a name (left) or {left, right} pins the floor decor (a pool of one); without it the
+    // world's own pools stand, so the day's pick (the card's turnPick on the pinned date) shows.
+    for (const w of Object.values(WORLDS)) {
+      w.__pool ||= JSON.stringify(w.deco_pool || null);
+      w.deco_pool = JSON.parse(w.__pool);
+    }
+    if (shot.deco && world) {
+      const d = typeof shot.deco === "string" ? { left: shot.deco } : shot.deco;
+      for (const k of ["left", "right"]) if (d[k]) world.deco_pool = { ...world.deco_pool, [k]: [d[k]] };
+    }
+
     // FINDS_SHOWN (the card's release switch): `findsShown: true` turns it
     // on for this shot; every other shot gets the card's own default back.
     const Card = customElements.get("hatch-pet-card");

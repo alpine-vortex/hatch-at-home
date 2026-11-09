@@ -24,6 +24,18 @@
       "deco_moss",
       "deco_mushroom"
     ],
+    "deco_pool": {
+      "left": [
+        "deco_moss",
+        "deco_item_sprout",
+        "deco_item_basket"
+      ],
+      "right": [
+        "deco_mushroom",
+        "deco_item_flower_box",
+        "deco_item_bookshelf"
+      ]
+    },
     "trim": {
       "top": "trim_woodland_top",
       "plate": "trim_woodland_plate",
@@ -168,6 +180,18 @@
       "deco_pebbles",
       "deco_succulent"
     ],
+    "deco_pool": {
+      "left": [
+        "deco_pebbles",
+        "deco_item_sprout",
+        "deco_item_lamp"
+      ],
+      "right": [
+        "deco_succulent",
+        "deco_item_aquarium",
+        "deco_item_flower_box"
+      ]
+    },
     "trim": {
       "top": "trim_terrarium_top",
       "plate": "trim_terrarium_plate"
@@ -291,6 +315,18 @@
       "deco_yarn",
       "deco_cushion"
     ],
+    "deco_pool": {
+      "left": [
+        "deco_yarn",
+        "deco_item_bookshelf",
+        "deco_item_basket"
+      ],
+      "right": [
+        "deco_cushion",
+        "deco_item_lamp",
+        "deco_item_flower_box"
+      ]
+    },
     "trim": {
       "top": "trim_hearth_top",
       "plate": "trim_hearth_plate",
@@ -420,6 +456,18 @@
       "deco_starfish",
       "deco_anemone"
     ],
+    "deco_pool": {
+      "left": [
+        "deco_starfish",
+        "deco_item_aquarium",
+        "deco_item_sprout"
+      ],
+      "right": [
+        "deco_anemone",
+        "deco_item_basket",
+        "deco_item_lamp"
+      ]
+    },
     "trim": {
       "top": "trim_tidepool_top",
       "plate": "trim_tidepool_plate",
@@ -547,6 +595,18 @@
       "deco_cattail",
       "deco_lilypad"
     ],
+    "deco_pool": {
+      "left": [
+        "deco_cattail",
+        "deco_item_flower_box",
+        "deco_item_basket"
+      ],
+      "right": [
+        "deco_lilypad",
+        "deco_item_sprout",
+        "deco_item_aquarium"
+      ]
+    },
     "trim": {
       "top": "trim_pond_top",
       "plate": "trim_pond_plate",
@@ -673,6 +733,18 @@
       "deco_glowshroom",
       "deco_lantern"
     ],
+    "deco_pool": {
+      "left": [
+        "deco_glowshroom",
+        "deco_item_lamp",
+        "deco_item_flower_box"
+      ],
+      "right": [
+        "deco_lantern",
+        "deco_item_bookshelf",
+        "deco_item_sprout"
+      ]
+    },
     "trim": {
       "top": "trim_nightsky_top",
       "plate": "trim_nightsky_plate",

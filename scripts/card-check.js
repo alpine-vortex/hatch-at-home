@@ -55,7 +55,7 @@ const results = [];
 
 // The gated sections of main(), in file order.
 const SECTIONS = ["shelf", "shell", "play", "resume", "board", "crate", "shellmode", "moments", "photos", "personality", "types",
-  "egg", "sharedscreen", "memorytags", "memorypage", "forget", "prefs", "channel", "devicefx", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "winter", "care",
+  "egg", "sharedscreen", "memorytags", "memorypage", "forget", "prefs", "channel", "devicefx", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "decor", "winter", "care",
   "editor", "boot", "infrared", "lowbattery", "restart", "gifts", "finds", "collection", "oldcard"];
 // oldcard asserts restart's seeded bond; finds taps the basket restart seeds; collection
 // opens the finds page on the collection restart seeds; gifts uses restart's bounce (and
@@ -15116,6 +15116,33 @@ async function main() {
   });
   await holdVisits();
   await unpinAwake(card);
+  }
+  if (enter("decor")) {
+  // Art S5: the floor decor. The left piece is the day's pick from the world's pool (a new
+  // one as the turn day moves), the right one the season's in a season.
+  await calm();
+  const decor = await card.evaluate(async (el) => {
+    const left = () => el.shadowRoot.querySelector(".deco.left").getAttribute("src").replace(/^.*\/ui\/|\.png.*$/g, "");
+    const seen = [];
+    const was = globalThis.__hatchDayShift;
+    try {
+      for (let d = 0; d < 5; d++) {
+        globalThis.__hatchDayShift = (Number(was) || 0) + d;
+        el.hass = el._hass;
+        await new Promise((r) => setTimeout(r, 50));
+        seen.push(left());
+      }
+    } finally { globalThis.__hatchDayShift = was; }
+    el.setConfig({ ...el._config, seasonal: "winter" });
+    el.hass = el._hass;
+    await new Promise((r) => setTimeout(r, 50));
+    const right = el.shadowRoot.querySelector(".deco.right").getAttribute("src");
+    el.setConfig({ ...el._config, seasonal: false });
+    el.hass = el._hass;
+    return { seen, right };
+  });
+  check("decor: the left floor piece changes as the day moves (0..4)", new Set(decor.seen).size > 1, JSON.stringify(decor.seen));
+  check("decor: in a season the right piece is season_*_deco", /\/ui\/season_winter_deco\.png/.test(decor.right), decor.right);
   }
   if (enter("winter")) {
   // Winter lights (docs/plan-2026-10-31-winter-lights.md): 1-31 December after

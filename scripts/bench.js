@@ -1280,6 +1280,34 @@ const PRESETS = {
   // the exit with no reply, a 300 px card with its poops (one under the bowl), the child ladder (rung 1: hamster,
   // deer; rung 3: fox, bird), a water world (otter) and the night sky (owl), the end's extras,
   // breakfast and supper, a resting pet, big text and mono for the line, and reduced motion.
+  // Art S5: the floor decor. Every world's three items on the left, at 420 and 300, day and night
+  // (36 shots), then one in-season shot per season, and the feed and snack scenes with a piece on the left.
+  decor() {
+    const out = [];
+    const ITEMS = { woodland: ["sprout", "basket", "bookshelf"], terrarium: ["sprout", "lamp", "aquarium"],
+      hearth: ["bookshelf", "basket", "lamp"], tidepool: ["aquarium", "sprout", "basket"],
+      pond: ["flower_box", "basket", "sprout"], nightsky: ["lamp", "flower_box", "bookshelf"] };
+    for (const [world, items] of Object.entries(ITEMS)) {
+      for (const item of items) {
+        for (const width of [420, 300]) {
+          for (const scene of ["day", "night"]) {
+            out.push({ name: `decor/${world}-${item}-${width}-${scene}`, group: `decor-${width}-${scene}`, label: `${world} ${item} ${width} ${scene}`,
+              world, scene, width, deco: { left: `deco_item_${item}` } });
+          }
+        }
+      }
+    }
+    for (const season of ["halloween", "thanksgiving", "winter"]) {
+      out.push({ name: `decor/season-${season}`, group: "decor-season", label: `${season} (right is the season's)`,
+        world: "woodland", width: 330, season, deco: { left: "deco_item_basket" } });
+    }
+    for (const care of ["feed", "snack"]) {
+      out.push({ name: `decor/${care}`, group: "decor-care", label: `${care} with a piece on the left`,
+        world: "woodland", species: "fox", stage: "adult", width: 330, care, careAt: 1200, answer: { at: 200, result: "ok" },
+        clip: "screen", say: "", pet: { hunger: 60 }, deco: { left: "deco_item_bookshelf" } });
+    }
+    return out;
+  },
   feed() {
     const out = [];
     const ok = { at: 200, result: "ok" };
