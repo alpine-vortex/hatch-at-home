@@ -109,7 +109,7 @@ function shellCrate() {
     slots: [
       key("left", "icon_mode_left", "left", ["ArrowLeft"]), key("up", "icon_mode_up", "up", ["ArrowUp"]),
       key("down", "icon_mode_down", "down", ["ArrowDown"]), key("right", "icon_mode_right", "right", ["ArrowRight"]),
-      key("hint", "icon_mode_special", "hint", ["h"]),
+      key("hint", "icon_mode_hint", "hint", ["h"]),
       key("undo", "icon_mode_undo", "undo", ["z"]),
       { ...key("restart", "icon_mode_restart", (s) => s.game?.keys?.restart?.cap || "restart", ["r"]) },
       { icon: "icon_mode_quit", cap: "quit", aria: "Stop the game", act: (card, s) => card._quitGame(s, card._quitLine(s)) },

@@ -794,7 +794,7 @@ test("crate entry: slot 5 is the hint (key h, the special's icon), enabled from 
   assert.deepStrictEqual(entryProblems(m), []);
   assert.deepStrictEqual([...m.slots].map((x) => x.cap), ["left", "up", "down", "right", "hint", "undo", "restart", "quit"].map((c, i) => (i === 6 ? m.slots[6].cap : c)));
   const hint = m.slots[4];
-  assert.strictEqual(hint.icon, "icon_mode_special");
+  assert.strictEqual(hint.icon, "icon_mode_hint");
   assert.deepStrictEqual([...hint.keys], ["h"]);
   const s = { game: { keys: { hint: { enabled: true, label: "Show a hint" } } } };
   assert.strictEqual(hint.enabled(s), true);
