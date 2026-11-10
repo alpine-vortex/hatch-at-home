@@ -410,6 +410,14 @@ class HatchPetCardBoard extends HatchPetCardGames {
   // The cells' look from the board's, and the keys' state: written on `g.keys` (enabled, label) for the
   // `hop` entry's slot functions, then _modeSync paints the shell's buttons from them (blocked ones are
   // aria-disabled, as the dig's keep is). The one place that sets the keys' state.
+  // A cell that just changed state pops once (the individual `scale` property, so it composes with any
+  // keyframe on `transform`). Ledger-owned; reduced motion gets none.
+  _cellPop(s, el, from) {
+    if (!el || calm()) return;
+    el.getAnimations?.().forEach((a) => a.id === "cellpop" && a.cancel());
+    this._waapi(s, el, [{ scale: from }, { scale: 1 }], { duration: 240, easing: "ease-out", id: "cellpop" });
+  }
+
   _hopDraw(s, move = true) {
     const g = s.game;
     if (g?.kind !== "hop" || !g.el) return;
@@ -425,12 +433,18 @@ class HatchPetCardBoard extends HatchPetCardGames {
     const shine = HATCH_HOP.lit(grid, g.st.sunk, g.st.pos);
     cells.forEach((el, i) => {
       const ch = grid[i];
-      el.classList.toggle("sunk", ((g.st.sunk >> i) & 1) === 1);
+      const sinks = ((g.st.sunk >> i) & 1) === 1;
+      if (move && sinks !== el.classList.contains("sunk")) this._cellPop(s, el, sinks ? 0.78 : 1.16); // sinks, or comes back on undo
+      el.classList.toggle("sunk", sinks);
       el.classList.toggle("legal", legal.has(i) && (!g.special || targets.special.includes(i)));
       el.classList.toggle("lit", g.lit === i);
       el.classList.toggle("open", ch === "N" && open);
       if (ch === "%") el.classList.toggle("wet", wet);
-      if (ch === "c") el.classList.toggle("half", (((g.st.half || 0) >> i) & 1) === 1);
+      if (ch === "c") {
+        const half = (((g.st.half || 0) >> i) & 1) === 1;
+        if (move && half && !el.classList.contains("half")) this._cellPop(s, el, 0.9); // the crackle takes its first step
+        el.classList.toggle("half", half);
+      }
       if (ch === "?") el.classList.toggle("dark", !shine);
       const label = hopCellLabel(g.board, g.st, i);
       if (label) {

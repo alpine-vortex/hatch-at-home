@@ -33,11 +33,11 @@ class HatchPetCardMode extends HatchPetCardActions {
       this._modeSync(s);
       return;
     }
-    for (const b of this._modeButtons(s)) this._capWrite(b, care[b.dataset.action] || {}, false);
+    for (const b of this._modeButtons(s)) this._capWrite(s, b, care[b.dataset.action] || {}, false);
   }
 
   // One button's look, from a care state or a slot's (`tinted`: a mode's slot).
-  _capWrite(b, v, tinted) {
+  _capWrite(s, b, v, tinted) {
     b.disabled = !!v.disabled;
     b.classList.toggle("wanted", !!v.wanted);
     b.classList.toggle("on", !!v.on);
@@ -54,8 +54,14 @@ class HatchPetCardMode extends HatchPetCardActions {
     if (caption && caption.textContent !== (v.cap || "")) caption.textContent = v.cap || "";
     const key = v.icon || "";
     if (b.dataset.icon !== key) {
-      b.querySelector(".cap").innerHTML = shellIcon(key);
+      const cap = b.querySelector(".cap");
+      const swap = b.dataset.icon !== undefined && key && !calm(); // not the first paint, not a blank
+      cap.innerHTML = shellIcon(key);
       b.dataset.icon = key;
+      if (swap && cap.animate) {
+        cap.getAnimations().forEach((a) => a.id === "capswap" && a.cancel());
+        this._waapi(s, cap, [{ scale: 0.6, opacity: 0.2 }, { scale: 1, opacity: 1 }], { duration: 180, easing: "ease-out", id: "capswap" });
+      }
     }
   }
 
@@ -83,7 +89,7 @@ class HatchPetCardMode extends HatchPetCardActions {
   _modeSync(s) {
     const m = s.mode;
     if (!m) return;
-    this._modeButtons(s).forEach((b, i) => this._capWrite(b, this._slotState(s, m.slots[i]), true));
+    this._modeButtons(s).forEach((b, i) => this._capWrite(s, b, this._slotState(s, m.slots[i]), true));
     s.device.classList.add("moded");
     s.device.style.setProperty("--mode-tint", SHELL_TINTS[m.tint] || "");
   }
