@@ -29,7 +29,10 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts" / "art"))
-from palette import same_pixels, served_bytes  # noqa: E402  (the served copy is stored as an exact palette)
+from palette import (  # noqa: E402  (the served copy is stored as an exact palette)
+    same_pixels,
+    served_bytes,
+)
 
 ART = ROOT / "art" / "sitter"
 OUT = ROOT / "custom_components" / "virtual_pet" / "frontend" / "sitter"

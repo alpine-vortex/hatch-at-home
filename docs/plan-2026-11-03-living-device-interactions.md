@@ -135,6 +135,8 @@ The director is a lightweight client-side effect coordinator, not a second simul
 
 ### Suggested source placement
 
+> Superseded: `src/card/card-interaction.js` was never created; the director shipped as `interaction-director.js` and `device-fx.js` (see docs/plan-2026-11-06-director-migration.md).
+
 Add `src/card/card-interaction.js` as an inherited part early enough for all consumers, preferably after `card-base.js` and before `card-build.js` in `src/card/manifest.txt`. Its class extends `HatchPetCardBase`; subsequent class parts extend it in the existing chain. Keep world/shell configuration in data parts and CSS in `style.js`.
 
 Candidate internal methods (names are proposals):
