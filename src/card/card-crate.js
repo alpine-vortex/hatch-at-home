@@ -373,7 +373,11 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     const g = s.game;
     if (g?.kind !== "crate" || !g.el) return;
     const crates = new Set(g.st.crates);
-    g.el.cells.forEach((el, i) => el.classList.toggle("crate", crates.has(i)));
+    g.el.cells.forEach((el, i) => {
+      const has = crates.has(i);
+      if (move && has && !el.classList.contains("crate")) this._cellPop(s, el, 0.8); // a crate lands here
+      el.classList.toggle("crate", has);
+    });
     g.el.wrap.classList.toggle("won", g.done);
     this._cratePlace(s, move);
     const legal = new Set(HATCH_CRATE_PUSH.legalMoves(g.board, g.st));
