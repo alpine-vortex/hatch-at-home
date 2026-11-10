@@ -127,7 +127,7 @@ class HatchPetCardActions extends HatchPetCardMemory {
       return;
     }
     const held = {};
-    for (const [key, id] of Object.entries(s.ids || {})) {
+    for (const key of Object.keys(s.ids || {})) {
       if (key !== "sensor.last_care" && key !== "device") held[key] = this._live(s, key);
     }
     // answerAt (ms since the tap) and result come with the answer (_sceneAnswer); a scene with a

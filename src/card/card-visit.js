@@ -83,7 +83,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     const WEATHER_BITS = { rain_started: "watched the rain", snow_started: "saw snow", rainbow: "saw a rainbow", sun_out: "sunbathed" };
     const CARE_BITS = { feed: "had a meal", snack: "had a snack", play: "played", game: "played a game", clean: "had a bath", chore_treat: "got a chore treat" };
     let found = 0; // "found <a find>": one a find (V8), newest first, FOUND_BITS at most
-    for (const m of [...(lastCare.moments || [])].reverse()) {
+    for (const m of lastCare.moments || []) {
       if (!after(m.at)) continue;
       if (m.type === "found") {
         if (findsShown() && found < FOUND_BITS && foundBit(this._worlds, m)) {
@@ -97,7 +97,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
         : m.type === "season_start" ? Object.hasOwn(SEASON_START_BITS, m.season ?? "") && SEASON_START_BITS[m.season]
         : m.type === "house_moment" ? houseBit(m) : MOMENT_BITS[m.type]);
     }
-    for (const e of care ? [...(lastCare.log || [])].reverse() : []) {
+    for (const e of care ? (lastCare.log || []) : []) {
       if (after(e.at) && (e.result === "ok" || e.result === "won" || e.result === "lost")) {
         // The sitter's rows: only the away note reads them (a sitter_clean and a sitter_medicine add no bit: no copy for them).
         add(Object.hasOwn(SITTER_ROWS, e.action) ? sitter && SITTER_ROWS[e.action] : CARE_BITS[e.action]);

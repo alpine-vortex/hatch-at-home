@@ -466,7 +466,7 @@ const SCENES = {
     render(s, sc, t, { sw, sh, ramp, ease }) {
       const once = (key) => !sc.fired.has(key) && sc.fired.add(key);
       const v = sc.variant;
-      const { mouth, land } = sc;
+      const { land } = sc;
       // The snack: thrown from the bottom-left edge in a parabola (a turn and a half), then held at
       // the mouth (A, D), or bouncing once on the floor (B), or sitting there (C) under its nibbles.
       const k = ramp(100, 550);

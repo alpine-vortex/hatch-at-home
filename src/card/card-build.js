@@ -686,7 +686,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
           this._update();
         }).catch(() => {
           console.warn(`hatch-pet-card: missing sprites for ${speciesId}`); // the console, not the bubble (F11)
-          if (s.speciesId === speciesId) s.speciesId = null; // try again on the next update
+          if (s.speciesId === speciesId) { s.speciesId = null; this._sig = null; } // try again on the next update (the sig must not short-circuit it)
         });
       }
       // Only a slide whose own pet (or the sun) changed is drawn again.

@@ -429,7 +429,6 @@ const PAT_RUN_MAX_MS = 30000;
 const PAT_QUIET_MS = 8000;
 const PAT_FLOP_AT = 10;
 const PAT_HEAD = 0.4;
-const PAT_LEAN_DEG = 5;
 // A lean is let go this long after the last pat (a longer one at n 2-3).
 const PAT_LEAN_MS = 900;
 const PAT_LEAN_LONG_MS = 1500;

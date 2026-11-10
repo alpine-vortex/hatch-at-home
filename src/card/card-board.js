@@ -414,7 +414,6 @@ class HatchPetCardBoard extends HatchPetCardGames {
     const g = s.game;
     if (g?.kind !== "hop" || !g.el) return;
     const { cells } = g.el;
-    const { w } = g.board;
     const targets = g.done ? { plain: [], special: [] } : this._hopTargets(g);
     const legal = new Set([...targets.plain, ...targets.special]);
     const grid = g.board.grid.join("");
