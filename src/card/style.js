@@ -1666,7 +1666,7 @@ const STYLE = `
   .toy { display: flex; flex-direction: column; align-items: center; gap: 5px; border: none;
     background: none; padding: 0; cursor: pointer; font: 400 13px 'Tiny5', monospace;
     letter-spacing: .02em; border-radius: 12px;
-    color: var(--d-ink); -webkit-tap-highlight-color: transparent; }
+    color: var(--d-ink); -webkit-tap-highlight-color: transparent; transition: opacity .2s; }
   .picon { image-rendering: pixelated; display: block; pointer-events: none; }
   .title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .emblem { width: 32px; height: 32px; image-rendering: pixelated; }
