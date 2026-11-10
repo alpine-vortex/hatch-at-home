@@ -678,7 +678,6 @@ class HatchPetCardTick extends HatchPetCardSitter {
       for (let i = 1; i <= (sp.frames || 1); i++) out.push(`${s.drawn}_${name}_${i}`);
       return out;
     };
-    const mood = sp.moods?.includes(r.mood) ? r.mood : "content";
     const moodFrames = moodOf(r.mood);
     const own = this._actPose(sp, s.drawn, s.speciesId, STAGE_POSES[kind], () => {
       if (s.poseFrames !== own) return;

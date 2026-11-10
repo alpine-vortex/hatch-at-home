@@ -36,7 +36,7 @@ class HatchPetCardBase extends HTMLElement {
     if (this._resumedAt && !document.hidden && hass?.states !== this._resumeStates) {
       this._resumedAt = this._resumeStates = null; // fresh states: the look may begin
     }
-    this._listenReady(hass?.connection);
+    if (this.isConnected) this._listenReady(hass?.connection); // a detached card must not re-add it
     this._watchServerClock(hass);
     this._resendAnswers();
     this._update();
@@ -57,7 +57,8 @@ class HatchPetCardBase extends HTMLElement {
   async _resendAnswers() {
     const user = this._hass?.user?.id;
     if (!user || this._resending || sharedScreen() || Date.now() < (this._resendAfter || 0)) return;
-    let list = stashedAnswers(user);
+    const first = stashedAnswers(user);
+    let list = first;
     if (!list.length) return;
     this._resending = true;
     try {
@@ -75,7 +76,11 @@ class HatchPetCardBase extends HTMLElement {
         }
         list = list.filter((x) => x !== a);
       }
-      saveStashedAnswers(user, list);
+      // Re-read: an answer stashed during the awaits stays; only those sent or dropped go.
+      const key = (a) => `${a?.at}|${a?.entity}|${a?.question}`;
+      const keep = new Set(list.map(key));
+      const gone = new Set(first.map(key).filter((k) => !keep.has(k)));
+      saveStashedAnswers(user, stashedAnswers(user).filter((a) => !gone.has(key(a))));
     } finally {
       this._resending = false;
     }

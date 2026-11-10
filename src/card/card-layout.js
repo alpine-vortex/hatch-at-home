@@ -875,7 +875,10 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     const key = `${speciesId}/${stage}`;
     const known = this._waveOk.get(key);
     if (known === false) return excited;
-    if (known === undefined) {
+    if (!this._waveOk.has(key)) {
+      this._waveOk.set(key, undefined); // in flight: a call while it is out starts no second probe
+      this._waveWait ||= new Map();
+      this._waveWait.set(key, [apply]);
       const loads = waves.map((w) => new Promise((ok) => {
         const img = new Image();
         img.onload = () => ok(true);
@@ -884,8 +887,12 @@ class HatchPetCardLayout extends HatchPetCardBuild {
       }));
       Promise.all(loads).then((r) => {
         this._waveOk.set(key, r.every(Boolean));
-        if (!r.every(Boolean)) apply(excited);
+        const waiting = this._waveWait.get(key) || [];
+        this._waveWait.delete(key);
+        if (!r.every(Boolean)) waiting.forEach((fn) => fn(excited));
       });
+    } else if (known === undefined) {
+      this._waveWait?.get(key)?.push(apply);
     }
     return waves;
   }
