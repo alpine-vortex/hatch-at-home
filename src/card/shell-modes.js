@@ -119,7 +119,7 @@ function shellCrate() {
     exit: {
       slot: 8, escape: true, status: "end", on: ["asleep", "egg"],
       idleMs: GAME_IDLE_MS, idleAt: (s) => s.game?.lastAt,
-      idleHold: (s) => !!(s.game?.crateLoading || s.game?.busy),
+      idleHold: (s) => !!(s.game?.crateLoading || s.game?.busy || s.game?.settling),
     },
     onExit: (card, s, reason) => {
       if (reason === "game" || reason === "replace" || !s.game) return;
