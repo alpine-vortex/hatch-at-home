@@ -206,7 +206,7 @@ class HatchPetCardMode extends HatchPetCardActions {
     if (s.laySheet || s.screen.classList.contains("show-status")) return false;
     const at = (e.composedPath ? e.composedPath()[0] : null) || e.target;
     if (at && (/^(input|textarea|select)$/i.test(at.tagName || "") || at.isContentEditable)) return false;
-    const i = m.slots.findIndex((slot, n) => n < SHELL_SLOTS - 1 && slot?.keys?.includes(e.key.length === 1 && !e.shiftKey ? e.key.toLowerCase() : e.key));
+    const i = m.slots.findIndex((slot, n) => n < SHELL_SLOTS - 1 && slot?.keys?.includes(e.key.length === 1 && !e.shiftKey && e.getModifierState?.("CapsLock") ? e.key.toLowerCase() : e.key));
     if (i < 0) return false;
     if (!e.repeat) this._modeClick(s, i);
     return true;

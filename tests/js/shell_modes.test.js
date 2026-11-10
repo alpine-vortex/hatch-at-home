@@ -714,12 +714,13 @@ test("4B: a key presses its slot through _modeClick: the cap press, modeAt stamp
   assert.deepStrictEqual(exits, [["act", "back"], ["act", "back"], ["act", "star"], ["act", "next"]]);
   assert.strictEqual(card.log.filter((x) => x[0] === "tapped").length, 4, "each key is a cap press");
   assert.ok(s.modeAt > 0);
-  // a key the mode does not list is not handled; a letter matches in either case (Caps Lock)
+  // a key the mode does not list is not handled; a letter matches in either case only under Caps Lock
   exits.length = 0;
   assert.strictEqual(card._modeKey(s, press("ArrowUp")), false);
   assert.strictEqual(card._modeKey(s, press("x")), false);
   assert.deepStrictEqual(exits, []);
-  assert.strictEqual(card._modeKey(s, press("S")), true);
+  assert.strictEqual(card._modeKey(s, press("S")), false, "S without Caps Lock or with Shift is not s");
+  assert.strictEqual(card._modeKey(s, press("S", { getModifierState: (k) => k === "CapsLock" })), true);
   assert.deepStrictEqual(exits, [["act", "star"]]);
 });
 
