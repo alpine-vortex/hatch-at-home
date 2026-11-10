@@ -241,6 +241,13 @@ def _parked(v: Any, born: float) -> dict[str, Game]:
     return out
 
 
+def _iso_day(v: Any) -> date | None:
+    try:
+        return date.fromisoformat(v) if isinstance(v, str) else None
+    except ValueError:
+        return None
+
+
 def _bond(bond: dict[str, Any]) -> dict[str, Any]:
     """One bond as loaded: every key in use type-checked, a damaged one
     dropped; keys this version doesn't know kept as they are."""
@@ -261,6 +268,8 @@ def _bond(bond: dict[str, Any]) -> dict[str, Any]:
     for key, check in checks.items():
         if key in out and not check(out[key]):
             del out[key]
+    if "since" in out and _iso_day(out["since"]) is None:
+        del out["since"]  # friends_for reads it as a date
     # Gifts (plan visitors v2 §6, V-E review #3/#14): nothing here may raise,
     # or bonds_from drops the whole bond. A bad value is dropped alone; an
     # id no worlds.json knows is not bad (a later version's): kept.
@@ -804,7 +813,7 @@ class PetState:
             kwargs["opening"], kwargs["opening_at"] = int(opening), opening_at
         kwargs["games"] = {
             kind: {
-                k: int(n) if isinstance(n, int | float) else 0
+                k: int(n) if _num(n) else 0
                 for k, n in {"played": 0, "won": 0, **counts}.items()
                 if k in ("played", "won", "dropped", "tidy", "neat")
             }
@@ -816,7 +825,7 @@ class PetState:
         kwargs["temperament"] = {
             t: float(f)
             for t, f in _mapping(kwargs.get("temperament")).items()
-            if t in TRAITS and _num(f)
+            if t in TRAITS and _num(f) and f > 0  # a divisor in trait_progress
         }
         kwargs["trait_levels"] = {
             t: n
@@ -3996,6 +4005,8 @@ def add_bond(
     bond.setdefault("since", today)  # the day they first met
     if bond.get("day") != today:
         bond.update(day=today, today=0, visited=False)
+    bond.setdefault("today", 0)  # a record with a day but no counters (damaged)
+    bond.setdefault("visited", False)
     if kind == "game" and game:
         games = bond.setdefault("games", {})
         games[game] = games.get(game, 0) + 1

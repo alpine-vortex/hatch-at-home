@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date, timedelta
+import math
 from pathlib import Path
 import random
 import re
@@ -719,7 +720,7 @@ def _mapping(v: Any) -> dict[Any, Any]:
 
 
 def _num(v: Any) -> bool:
-    return isinstance(v, int | float) and not isinstance(v, bool)
+    return isinstance(v, int | float) and not isinstance(v, bool) and math.isfinite(v)
 
 
 def _day_lists(v: Any) -> dict[str, list[str]]:
