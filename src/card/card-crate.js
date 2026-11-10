@@ -25,6 +25,7 @@ const CRATE_COPY = {
   changed: "that board moved on, here is the next one",
   enough: "that's plenty of crates for today",
   failed: "hmm, that didn't work",
+  long: "that's a lot of pushes, try taking some back",
   hint: "Show a hint",
   stuck: (n) => `This one's stuck. Take back ${n === 1 ? "1 move" : `${n} moves`}.`,
   notNeat: "Using a hint means no neat find on this board.",
@@ -130,7 +131,7 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     }
     if (s.game !== picking) return; // stopped while waiting
     if (reply?.result && reply.result !== "ok") {
-      this._endGame(s, REFUSALS[reply.result] ?? null);
+      this._endGame(s, reply.result === "enough" ? CRATE_COPY.enough : REFUSALS[reply.result] ?? null);
       return;
     }
     if (!HATCH_CRATE_PUSH.valid(reply) || typeof reply.id !== "string" || typeof reply.day !== "string") {
@@ -246,6 +247,7 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     const id = s.ids?.["sensor.mood"];
     if (g?.kind !== "crate" || g.practice || !g.done || g.settled || g.settling || !id) return;
     g.settling = true;
+    const sent = g.moves.join("");
     let reply;
     try {
       reply = await this._crateSend(id, g);
@@ -254,27 +256,39 @@ class HatchPetCardCrate extends HatchPetCardBoard {
       return;
     }
     g.settling = false;
-    if (s.game !== g) return;
     const result = reply?.result;
+    // As Hop's settle: a paid or moved-on board's parked letters go even when the game was left meanwhile.
+    if ((result === "ok" || result === "board_changed" || result === "enough") && crateRead(g.key) === sent) {
+      crateStore(g.key, null);
+    }
+    if (s.game !== g) return;
     if (result === "ok") {
       g.settled = true;
       g.next = reply.next_round;
-      crateStore(g.key, null);
       g.prompt = reply.found ? CRATE_COPY.found : CRATE_COPY.paid;
       this._write(s, g.prompt, 60000);
       s.sayUntil = Date.now() + 60000;
       this._crateDraw(s, false);
     } else if (result === "board_changed" || result === "enough") {
       // Someone else paid this round (another screen), or a new day: the parked letters mean nothing now.
-      crateStore(g.key, null);
       g.settled = true;
       g.next = null;
       this._write(s, result === "enough" ? CRATE_COPY.enough : CRATE_COPY.changed, 60000);
       this._crateDraw(s, false);
     } else {
       g.settled = true; // illegal, too_long, asleep, egg ...: not paid; no retry loop
-      const line = REFUSALS[result];
+      const line = result === "too_long" ? CRATE_COPY.long : REFUSALS[result];
       if (line) this._write(s, typeof line === "string" ? line : CRATE_COPY.failed, 6000);
+    }
+  }
+
+  // Other boards' parked letters of this pet (another day or id) go, so none piles up.
+  _crateForgetOld(s, keep) {
+    try {
+      const mine = `${CRATE_KEY}|${s.ids?.device}|`;
+      for (const k of Object.keys(localStorage)) if (k.startsWith(mine) && k !== keep) localStorage.removeItem(k);
+    } catch (err) {
+      // no storage
     }
   }
 
@@ -285,6 +299,7 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     const g = s.game = { kind: "crate", board, level, round, key, id: reply.id, day: reply.day, moves: [],
       st: HATCH_CRATE_PUSH.start(board), done: false, cell: 0, keys: {},
       hinted: !!reply.hinted, neatOpen: !practice && !!reply.neat_open, practice };
+    this._crateForgetOld(s, key);
     const parked = crateRead(key);
     if (parked) {
       const run = HATCH_CRATE_PUSH.replay(board, [...parked]);
@@ -419,6 +434,10 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     const g = s.game;
     const next = HATCH_CRATE_PUSH.apply(g.board, g.st, letter);
     if (!next) return;
+    if (g.moves.length >= HATCH_CRATE_PUSH.MAX_MOVES) { // the server would refuse a longer list
+      this._write(s, CRATE_COPY.long, 6000);
+      return;
+    }
     g.lastAt = Date.now();
     g.moves.push(letter);
     g.st = next;
@@ -467,6 +486,8 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     if (s.game !== g) return;
     if (!HATCH_CRATE_PUSH.valid(reply) || typeof reply.id !== "string" || typeof reply.day !== "string") {
       g.crateLoading = false;
+      if (reply?.result === "enough") this._write(s, CRATE_COPY.enough, 6000);
+      else if (reply?.result && reply.result !== "ok" && REFUSALS[reply.result]) this._write(s, REFUSALS[reply.result], 6000);
       return;
     }
     this._hopTeardown(s);
