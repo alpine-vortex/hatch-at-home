@@ -386,7 +386,7 @@ class HatchPetCardSheets extends HatchPetCardStatus {
         <button class="bell namego">${SETUP_COPY.nameSave}</button></div>
       <div class="sec">${SETUP_COPY.nameHeading}</div>
       <input class="nameinput" type="text" value="${escape(name)}" maxlength="${NAME_MAX}"
-        aria-label="the new egg's name, up to ${NAME_MAX} characters" aria-describedby="nameerr"
+        aria-label="the pet's name, up to ${NAME_MAX} characters" aria-describedby="nameerr"
         autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="done">
       <div class="nameerr" id="nameerr" role="alert" hidden></div>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;

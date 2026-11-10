@@ -442,6 +442,8 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
     img.classList.remove("pop");
     img.src = `${BASE}/ui/find_${f.world}_${f.id}.png?v=${VERSION}`;
     img.dataset.find = `${f.world}/${f.id}`;
+    const fd = findOf(this._worlds, f.world, f.id);
+    img.alt = fd?.name || fd?.a || "";
     img.hidden = false;
     if (!isCalm) {
       void img.offsetWidth; // restart the pop
