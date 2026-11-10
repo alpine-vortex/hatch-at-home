@@ -194,7 +194,11 @@ const HATCH_DIRECTOR = Object.freeze(
           for (const e of take) {
             if (!unlist(e)) continue;
             n++;
-            e.cancel();
+            try {
+              e.cancel();
+            } catch (err) {
+              if (!error) error = { err }; // a cancel that throws must not strand the rest of the drain (or detach)
+            }
             if (!e.undo) continue; // a drop: just stopped
             try {
               e.undo();
@@ -227,7 +231,12 @@ const HATCH_DIRECTOR = Object.freeze(
         if (!set) ledger.set(scope, (set = new Set()));
         set.add(e);
         entries.add(e);
-        e.cancel = start(e);
+        try {
+          e.cancel = start(e);
+        } catch (err) {
+          unlist(e); // an arm that threw leaves no entry behind
+          throw err;
+        }
         return Object.freeze({
           stop: () => quiet(e),
           // An adopted thing finished on its own: it leaves, nothing is cancelled. Per handle and
@@ -314,8 +323,8 @@ const HATCH_DIRECTOR = Object.freeze(
           for (const e of [...entries].filter((x) => x.hidden === "tab")) {
             if (!unlist(e)) continue;
             n++;
-            e.cancel();
             try {
+              e.cancel();
               if (e.undo) e.undo();
             } catch (err) {
               if (!error) error = { err };

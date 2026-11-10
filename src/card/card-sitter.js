@@ -148,8 +148,8 @@ class HatchPetCardSitter extends HatchPetCardLayout {
       st.in = false;
       if (play) this._sitterLeave(s, night, now);
       else this._sitterReset(s);
-    } else {
-      st.in = false;
+    } else if (st.in !== undefined || s.subscribed || s.subscribeFailed) {
+      st.in = false; // seen gone: only once the channel has spoken (a mood-sensor "no sitter" before the snapshot is not a sighting; with the privacy mask a reload would walk it in)
     }
     if (st.night === true && !night && sitter && play) this._animate(s, s.sitterEl, "fade", HATCH_SITTER.MS.fade); // F6: no stand-up frames
     st.night = night;

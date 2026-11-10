@@ -564,3 +564,14 @@ test("perf: a frame that fails to load is requested once, not on every paint", (
     assert.strictEqual(img.v, "x.png");
   } finally { sandbox.Image = keep; }
 });
+
+test("R15 F8: a sitter first seen at the first snapshot (no channel yet before it) never walks in", () => {
+  reset();
+  const { card, s } = make({ subscribed: false });
+  sync(card, s, null); // before the snapshot: the mood sensor (privacy-masked) says no sitter
+  assert.strictEqual(s.sit.in, undefined, "not a sighting of it gone");
+  s.subscribed = true;
+  sync(card, s, view()); // the snapshot says it is in
+  assert.strictEqual(s.sit.step, null);
+  assert.ok(!s.sitterEl.hidden);
+});
