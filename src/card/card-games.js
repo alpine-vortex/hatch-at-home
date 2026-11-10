@@ -274,7 +274,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     g.wins = info.wins;
     g.lastAt = Date.now();
     this._modeSync(s);
-    s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
+    this._scoreSet(s, `round ${info.round + 1}/${info.rounds} · ${info.wins} right`);
     // The prompt is kept on the game: a care line said over it gives way to it again.
     if (kind === "dig") {
       // A fresh pile, or a parked dig carried on: the same round, bank and basket.
@@ -408,7 +408,7 @@ class HatchPetCardGames extends HatchPetCardCare {
       this._write(s, info.correct ? "yes! you found me" : `nope, i went ${info.went}!`);
     }
     this._chirp(s, info.correct ? "tap" : "buzz"); // F14
-    s.gameScore.textContent = `round ${info.round}/${info.rounds} · ${info.wins} right`;
+    this._scoreSet(s, `round ${info.round}/${info.rounds} · ${info.wins} right`);
     const prompt = kind === "higher_lower" ? "higher or lower?" : "one more! left or right?";
     const at = Date.now();
     // F1: the buttons come back as before, but the result stays in the bubble until it can
@@ -424,7 +424,7 @@ class HatchPetCardGames extends HatchPetCardCare {
       }
       g.busy = false;
       this._modeSync(s);
-      s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
+      this._scoreSet(s, `round ${info.round + 1}/${info.rounds} · ${info.wins} right`);
       g.prompt = prompt;
       if (kind === "higher_lower" && this._luckyNumber(s, g, info.number)) return;
       this._promptLater(s, g, mark, at);
@@ -491,13 +491,24 @@ class HatchPetCardGames extends HatchPetCardCare {
 
   // Berry dig: the pile's leaves left in .gnum, the bank and basket on the
   // score line, keep only with something in the basket.
+  // The score line: a small pop when a real score replaces another (not "thinking…", not the same text).
+  _scoreSet(s, text) {
+    const el = s.gameScore;
+    const was = el.textContent;
+    if (was === text) return;
+    el.textContent = text;
+    if (calm() || !was || was === "thinking…" || el.hidden) return;
+    this._waapi(s, el, [{ scale: 1 }, { scale: 1.12 }, { scale: 1 }], { duration: 260, easing: "ease-out" },
+      { key: "scorepop", group: "game" });
+  }
+
   _digShow(s, info, flip = false, win = false) {
     if (flip) this._flipNumber(s, info.leaves, win);
     else this._showNumber(s, info.leaves);
     s.gameNum.setAttribute("aria-label", `${info.leaves} leaves left`);
     s.gameScore.classList.add("two");
-    s.gameScore.textContent = `round ${Math.min(info.round + 1, info.rounds)}/${info.rounds}\n` +
-      `${info.wins} banked · basket ${info.basket}`;
+    this._scoreSet(s, `round ${Math.min(info.round + 1, info.rounds)}/${info.rounds}\n` +
+      `${info.wins} banked · basket ${info.basket}`);
     this._modeSync(s); // keep reads the basket (blocked when empty), both read busy
   }
 
