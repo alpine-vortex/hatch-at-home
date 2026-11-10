@@ -687,7 +687,8 @@ async def websocket_forget_me(
     user = connection.user.id
     async with people.lock(user):  # a visit that's running finishes first
         await people.forget(user)
-    for pet in hass.data[DOMAIN]["pets"].values():
+    # A copy: async_forget_games awaits a save, and a pet may load or unload then.
+    for pet in list(hass.data[DOMAIN]["pets"].values()):
         pet._moved.pop(user, None)  # today's moves go with the rest
         pet._private.pop(user, None)  # and their private moments
         if pet.state is not None:
