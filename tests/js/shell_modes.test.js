@@ -790,6 +790,13 @@ test("4B: the engine builds the map from the table and names no key or game; the
 
 // ---- crate push, slice 6a: slot 5 is the hint ----
 
+test("crate entry: its idleHold holds while the settle, a load or a request is out", () => {
+  const hold = M.SHELL_MODES.crate.exit.idleHold;
+  assert.deepStrictEqual([{}, { settling: true }, { crateLoading: true }, { busy: true }].map((g) => hold({ game: g })),
+    [false, true, true, true]);
+  assert.strictEqual(hold({}), false, "no game");
+});
+
 test("crate entry: slot 5 is the hint (key h, the special's icon), enabled from g.keys.hint", () => {
   const m = M.SHELL_MODES.crate;
   assert.deepStrictEqual(entryProblems(m), []);
