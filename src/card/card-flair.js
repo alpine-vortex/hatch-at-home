@@ -14,7 +14,7 @@ class HatchPetCard extends HatchPetCardLink {
   // Returns the traits shown (card-check calls it directly).
   _flair(s, only = null) {
     const stage = this._state(s, "sensor.life_stage");
-    const traits = (only ? [only] : stage?.attributes.traits || []).filter((t) => FLAIR[t]);
+    const traits = (only ? [only] : stage?.attributes?.traits || []).filter((t) => FLAIR[t]);
     if (!stage || !traits.length || !s.species || stage.state === "egg") return [];
     const levels = stage.attributes?.trait_levels || {};
     s.flairTurn = (s.flairTurn || 0) + 1;

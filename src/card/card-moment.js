@@ -23,7 +23,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         if (capture) say(this._lines(s, "care_miss", "...oh, there you are ♥").text, 5000); // never guilt
         break;
       case "discipline_miss":
-        say("ok, ok... ♪");
+        say("ok, ok... ♪", 4500, () => this._animate(s, s.pet, "sulk", 800));
         break;
       case "became_sick": // feeling poorly (2b): said once, dropped if it's well by then
         // From weight, the public moment keeps its cause (gaps-seams 2b): it says why.
@@ -349,7 +349,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         }
         break;
       case "tv_off_late":
-        say(pick(["*yawn* bedtime soon...", "all done! sleepy now..."]));
+        say(pick(["*yawn* bedtime soon...", "all done! sleepy now..."]), 4500, () => this._animate(s, s.pet, "sigh", 600));
         break;
       case "first_snow":
         speak("the first snow!! ❄", 4500, () => {
