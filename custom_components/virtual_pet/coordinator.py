@@ -7,6 +7,7 @@ from collections import deque
 from collections.abc import Callable
 import copy
 from datetime import date, datetime, timedelta
+import math
 import random
 from typing import Any
 import unicodedata
@@ -3903,6 +3904,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     async def async_fast_forward(self, hours: float) -> dict[str, Any]:
         """Debug: live through N hours right now, at normal rates."""
         assert self.state is not None
+        if not math.isfinite(hours) or hours <= 0:
+            return {"hours": hours, "events": []}
         now = self._now()
         self._advance(now)
         events = model.fast_forward(self.state, now, hours, self.settings, self.rng)
