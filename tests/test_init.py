@@ -4572,3 +4572,16 @@ async def test_card_siblings_are_served_compressed(
     resp = await client.get(url, headers={"Accept-Encoding": "identity"})
     assert "Content-Encoding" not in resp.headers
     assert await resp.read() == plain
+
+
+@pytest.mark.parametrize("hours", [0, -3, float("inf"), float("nan")])
+async def test_fast_forward_ignores_non_finite_or_non_positive_hours(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any], hours: float
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, hunger=30.0)
+    await setup(hass)
+    pet = hass.data[DOMAIN]["pets"]["test_pet"]
+    before = pet.state.to_dict()
+    result = await pet.async_fast_forward(hours)
+    assert result["events"] == []
+    assert pet.state.to_dict() == before
