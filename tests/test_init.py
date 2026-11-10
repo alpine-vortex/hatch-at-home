@@ -7,6 +7,7 @@ import hashlib
 import json
 import random
 from typing import Any
+from unittest.mock import AsyncMock, patch
 
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant import config_entries
@@ -4585,3 +4586,91 @@ async def test_fast_forward_ignores_non_finite_or_non_positive_hours(
     result = await pet.async_fast_forward(hours)
     assert result["events"] == []
     assert pet.state.to_dict() == before
+
+
+async def test_a_refused_unload_keeps_the_pet_registered(
+    hass: HomeAssistant, now: float
+) -> None:
+    config = await setup(hass)
+    with patch(
+        "homeassistant.config_entries.ConfigEntries.async_unload_platforms",
+        AsyncMock(return_value=False),
+    ):
+        assert not await hass.config_entries.async_unload(config.entry_id)
+    assert hass.data[DOMAIN]["pets"][config.entry_id] is config.runtime_data
+
+
+async def test_a_clean_unload_drops_the_pet(hass: HomeAssistant, now: float) -> None:
+    config = await setup(hass)
+    assert config.entry_id in hass.data[DOMAIN]["pets"]
+    assert await hass.config_entries.async_unload(config.entry_id)
+    assert config.entry_id not in hass.data[DOMAIN]["pets"]
+
+
+async def test_a_failed_platform_setup_leaves_no_pet_registered(
+    hass: HomeAssistant, now: float, caplog: pytest.LogCaptureFixture
+) -> None:
+    """HA never calls async_unload_entry for a setup that raised: the pet must
+    not stay in hass.data, and the error is not swallowed."""
+    await hass.config.async_set_time_zone("UTC")
+    config = entry()
+    config.add_to_hass(hass)
+    forward = "homeassistant.config_entries.ConfigEntries.async_forward_entry_setups"
+    with patch(forward, AsyncMock(side_effect=RuntimeError("platform broke"))):
+        assert not await hass.config_entries.async_setup(config.entry_id)
+        await hass.async_block_till_done()
+    assert config.state is ConfigEntryState.SETUP_ERROR
+    assert config.entry_id not in hass.data[DOMAIN]["pets"]
+    # The error was re-raised to HA (which logs it), not swallowed.
+    assert "platform broke" in caplog.text
+
+
+@pytest.mark.parametrize("bad", ["x" * 21, "Fe\x00rn", "Fe\nrn", "   ​  "])
+async def test_the_user_step_rejects_a_bad_name(hass: HomeAssistant, bad: str) -> None:
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_NAME: bad, "world": "woodland"}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {CONF_NAME: "bad_name"}
+    assert not hass.config_entries.async_entries(DOMAIN)
+
+
+@pytest.mark.parametrize("bad", ["x" * 21, "Fe\x00rn", "Fe\nrn"])
+async def test_reconfigure_rejects_a_bad_name(
+    hass: HomeAssistant, now: float, bad: str
+) -> None:
+    config = await setup(hass)
+    result = await config.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_NAME: bad, "world": "woodland"}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {CONF_NAME: "bad_name"}
+    assert config.title == "Pip"
+
+
+async def test_reconfigure_keeps_an_unchanged_legacy_long_name(
+    hass: HomeAssistant,
+) -> None:
+    """A name saved before the 20-character limit is not a reason to refuse the
+    form when it is left as shown (here: moving the next egg's world)."""
+    long_name = "A" * 30
+    config = MockConfigEntry(
+        domain=DOMAIN,
+        title=long_name,
+        data={CONF_NAME: long_name, "world": "woodland"},
+        entry_id="legacy_long",
+    )
+    config.add_to_hass(hass)
+    result = await config.start_reconfigure_flow(hass)
+    assert result["type"] is FlowResultType.FORM
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_NAME: long_name, "world": "pond"}
+    )
+    await hass.async_block_till_done()
+    assert result["reason"] == "reconfigure_successful"
+    assert config.title == long_name
+    assert config.data[CONF_NAME] == long_name
