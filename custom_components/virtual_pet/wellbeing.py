@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+import math
 import statistics
 from typing import Any
 
@@ -206,9 +207,10 @@ def _number(
     if state is None or (since is not None and state.last_updated < since):
         return None
     try:
-        return float(state.state)
+        value = float(state.state)
     except ValueError:
         return None
+    return value if math.isfinite(value) else None
 
 
 async def _counter(

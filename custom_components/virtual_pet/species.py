@@ -58,8 +58,11 @@ def load_catalog() -> Catalog:
     for path in sorted((FRONTEND_DIR / "sprites").glob("*/species.json")):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-        except ValueError as err:
+        except (OSError, ValueError) as err:
             _LOGGER.warning("Skipping %s: not valid JSON (%s)", path, err)
+            continue
+        if not isinstance(data, dict):
+            _LOGGER.warning("Skipping %s: not a JSON object", path)
             continue
         missing = [
             k for k, kind in REQUIRED.items() if not isinstance(data.get(k), kind)
@@ -71,7 +74,15 @@ def load_catalog() -> Catalog:
             continue
         if data.get("ready", True):
             species[path.parent.name] = data
-    all_worlds = json.loads((FRONTEND_DIR / "worlds.json").read_text(encoding="utf-8"))
+    try:
+        all_worlds = json.loads(
+            (FRONTEND_DIR / "worlds.json").read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError) as err:
+        _LOGGER.warning("Ignoring worlds.json (%s)", err)
+        all_worlds = {}
+    if not isinstance(all_worlds, dict):
+        all_worlds = {}
     worlds = {
         key: world
         for key, world in all_worlds.items()

@@ -1029,8 +1029,8 @@ def catch_up(state: PetState, now: float) -> None:
     through, in advance; downtime is not.)
     """
     elapsed = now - state.last_updated
-    if elapsed <= 0:
-        state.last_updated = now
+    # A clock set back (elapsed < 0) moves the timers back with it, as advance does.
+    if elapsed == 0:
         return
     shift_times(state, elapsed)
     state.last_updated = now
