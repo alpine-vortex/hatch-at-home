@@ -65,7 +65,7 @@ class HatchPetCardJournal extends HatchPetCardSheets {
       : active.dataset?.finish !== undefined ? `.tile[data-finish="${active.dataset.finish}"]` // its marks move
         : active.className
           // not the classes a tap puts on for a moment (_tapped), or the redrawn button never matches (F4)
-          ? `.${active.className.trim().split(/\s+/).filter((c) => !PASSING_CLASSES.has(c)).join(".")}${active.dataset?.gen ? `[data-gen="${active.dataset.gen}"]` : ""}` : null;
+          ? `.${active.className.trim().split(/\s+/).filter((c) => !PASSING_CLASSES.has(c)).join(".")}${Object.entries(active.dataset || {}).map(([k, v]) => `[data-${k.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase())}="${String(v).replace(/["\\]/g, "\\$&")}"]`).join("")}` : null;
     s.statusHtml = html;
     s.status.innerHTML = html;
     if (keep) s.status.querySelector(keep)?.focus({ preventScroll: true });
@@ -94,8 +94,8 @@ class HatchPetCardJournal extends HatchPetCardSheets {
   // The top band of a deeper page, as the settings sheet has (UX fix 2, F3): the way back at
   // the left, the page's heading at the right, sticky. `page` marks which page is on show.
   _pageBand(back, title, page, note = "") {
-    return `<div class="shead" data-page="${page}"><button class="sback">${back}</button>` +
-      `<span class="stitle">${title}</span>${note}</div>`;
+    return `<div class="shead" data-page="${page}"><button class="sback" aria-label="back to ${back.replace(/^\W+/, "")}">${back}</button>` +
+      `<span class="stitle" role="heading" aria-level="2">${title}</span>${note}</div>`;
   }
 
   // Is this page (not its loading view) already on show? Then a redraw keeps it and its place (F2).
@@ -147,7 +147,7 @@ class HatchPetCardJournal extends HatchPetCardSheets {
     if (!s.journal || s.finds) return; // closed (or on to the finds) while the names loaded
     const tiles = roster.map((id) => {
       const known = raised.has(id);
-      return `<div class="jtile${known ? "" : " locked"}" data-id="${escape(id)}" data-name="${known ? escape(names[id]).toLowerCase() : ""}">` +
+      return `<div class="jtile${known ? "" : " locked"}" role="button" tabindex="0"${known ? "" : ` aria-label="not met yet"`} data-id="${escape(id)}" data-name="${known ? escape(names[id]).toLowerCase() : ""}">` +
         `<img src="${BASE}/sprites/${id}/child_content_1.png?v=${VERSION}" alt="">` +
         `<span>${known ? escape(names[id]).toLowerCase() : "???"}</span></div>`;
     });
@@ -475,7 +475,7 @@ class HatchPetCardJournal extends HatchPetCardSheets {
     const rows = worlds.map(([, w]) => {
       const tiles = (w.roster || []).filter((id) => names[id]).map((id) => {
         const known = raised.has(id);
-        return `<div class="jtile${known ? "" : " locked"}" data-id="${escape(id)}" data-name="${known ? escape(names[id]).toLowerCase() : ""}">` +
+        return `<div class="jtile${known ? "" : " locked"}" role="button" tabindex="0"${known ? "" : ` aria-label="not met yet"`} data-id="${escape(id)}" data-name="${known ? escape(names[id]).toLowerCase() : ""}">` +
           `<img src="${BASE}/sprites/${id}/child_content_1.png?v=${VERSION}" alt="">` +
           `<span>${known ? escape(names[id]).toLowerCase() : "???"}</span></div>`;
       });
@@ -495,6 +495,9 @@ class HatchPetCardJournal extends HatchPetCardSheets {
   // A tap on a creature's tile: the pet says one line, once a tile for as long as the page
   // is open (UX fix 2, F14). A raised one it names, an unmet one is still a silhouette.
   _tileLines(s) {
+    s.status.querySelectorAll(".jtile").forEach((tile) => tile.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tile.click(); }
+    }));
     s.status.querySelectorAll(".jtile").forEach((tile) => tile.addEventListener("click", () => {
       const said = (s.tileSaid ??= new Set());
       if (said.has(tile.dataset.id)) return;
@@ -588,6 +591,7 @@ class HatchPetCardJournal extends HatchPetCardSheets {
       const tiles = collectionTiles(world, data.reply, own);
       html = `
       ${this._pageBand("‹ journal", head, "finds", SAY_NOTE)}
+      ${tiles.length ? "" : `<div class="ssub">nothing here yet</div>`}
       <div class="fgrid">${tiles.filter((t) => t.kind === "visitor").map(tile).join("")}</div>
       ${findsShown() ? `<div class="fgrid">${tiles.filter((t) => t.kind === "find").map(tile).join("")}</div>` : ""}`;
     }

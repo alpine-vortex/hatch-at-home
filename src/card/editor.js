@@ -26,6 +26,7 @@ class HatchPetCardEditor extends HTMLElement {
         const entities = await helpers?.createCardElement({ type: "entities", entities: [] });
         await entities?.constructor?.getConfigElement?.();
       }
+      if (this._form) return this._render(); // a second call got here first: just update its data
       this._form = document.createElement("ha-form");
       const LABELS = { devices: "Pets on this shelf", seasonal: "Seasonal decorations" };
       const HELPERS = {
