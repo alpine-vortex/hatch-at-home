@@ -65,6 +65,7 @@ class HatchPetCardSheets extends HatchPetCardStatus {
       this._closePicker(s);
       this._renderStatus(s, log());
       s.status.scrollTop = 0;
+      this._wipe(s);
       s.status.querySelector(".shellrow")?.focus({ preventScroll: true });
     });
     s.status.querySelectorAll(".tile").forEach((t) => t.addEventListener("click", (e) => {

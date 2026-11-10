@@ -60,7 +60,7 @@ class HatchPetCardMemory extends HatchPetCardJournal {
     if (s.status.querySelector('.shead[data-page="memory"], .mempage')) {
       s.status.innerHTML = ""; // dropped from the DOM, not just hidden
     }
-    if (open && redraw && s.screen?.classList.contains("show-status")) this._memoryRedraw(s);
+    if (open && redraw && s.screen?.classList.contains("show-status")) { this._memoryRedraw(s); this._wipe(s); }
     return open;
   }
 

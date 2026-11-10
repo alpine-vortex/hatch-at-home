@@ -447,6 +447,8 @@ const STYLE = `
     animation: bubblepop 1.2s ease-out forwards; }
   @keyframes bubblepop { 0% { transform: translateY(0); opacity: 1; } 80% { transform: translateY(-30px) scale(1); opacity: 1; }
     100% { transform: translateY(-30px) scale(0); opacity: 0; } }
+  @keyframes jitter { 25% { transform: translateX(-2%); } 75% { transform: translateX(2%); } }
+  @keyframes fade-in { from { opacity: 0; } }
   @keyframes pop { from { transform: scale(.3); opacity: 0; } }
   /* The sitter (sitter plan S3a, card-sitter.js): one element beside the pet, behind it, on the pet's
      own 256 px sprite box so the frames sit on the same floor. Its motion is its own: translate
@@ -564,6 +566,7 @@ const STYLE = `
   @keyframes hint-pulse { 0%, 100% { box-shadow: 0 0 0 3px #ffd34d, 0 0 0 5px #3a2a1a; } 50% { box-shadow: 0 0 0 6px #ffd34d, 0 0 0 8px #3a2a1a; } }
   @keyframes hint-pulse-cell { 0%, 100% { box-shadow: inset 0 0 0 3px #e8a317; } 50% { box-shadow: inset 0 0 0 7px #ffd34d; } }
   .toy.hint.pulse { animation: hint-pulse .8s ease-in-out 2; }
+  .game .hopb.crate.won .hc.spot { animation: hint-pulse-cell .8s ease-in-out 2; }
   .game .hopb.crate .hc.hint.pulse { animation: hint-pulse-cell .8s ease-in-out 2; }
   /* The board: the grid, centred in the whole overlay (the keys are the shell's eight buttons).
      Sizes are set in JS (_hopLayout) from the overlay: --c the cell. No new art:
@@ -798,7 +801,7 @@ const STYLE = `
   .screen.show-status .basket, .screen.show-status .reveal { display: none !important; }
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
-  .pet.sulk, .drape.sulk { animation: shake .35s 2; } /* a sleeping pet's blanket moves with it (_drapeMirror) */
+  .pet.sulk, .drape.sulk { animation: jitter .35s 2; } /* a sleeping pet's blanket moves with it (_drapeMirror) */
   /* Feeling poorly (2b): sags and settles back, once. Reduced motion holds the sag. */
   .pet.droop, .drape.droop { animation: droop 2.8s ease-in-out 1; transform-origin: 50% 100%; }
   @keyframes droop { 0%, 100% { transform: none; }
@@ -811,7 +814,7 @@ const STYLE = `
   .pet.dance { animation: hop .45s ease-in-out infinite; }
   .pet.jig, .drape.jig { animation: hop .45s ease-in-out 4; } /* a house moment's dance (H8): bounded, unlike .dance */
   .pet.startle, .drape.startle { animation: perk .3s ease-out 2; } /* a house moment's startle (H8): a quick double jolt */
-  .pet.shiver { animation: shake .25s linear infinite; }
+  .pet.shiver { animation: jitter .25s linear infinite; }
   /* The fan: wind lines cross the scene and the pet leans into them. */
   .breeze { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 1; }
   .screen.breezy .breeze, .screen.windy .breeze { display: block; }
@@ -1648,6 +1651,8 @@ const STYLE = `
   .photo-dialog { width: min(300px, 90vw); box-sizing: border-box; padding: 12px; border: 3px solid #3a2a1a;
     border-radius: 12px; background: #e9e2c6; color: #2f3a24; font: 400 13px 'Tiny5', monospace; text-align: center; }
   .photo-dialog::backdrop { background: rgba(20, 16, 10, .65); }
+  .photo-dialog[open] { animation: pop .18s ease-out; transform-origin: 50% 50%; }
+  .photo-dialog[open]::backdrop { animation: fade-in .18s; }
   /* Press and hold to save: nothing here blocks the long-press menu. */
   .photo-dialog .pbig { display: block; width: 100%; height: auto; -webkit-touch-callout: default; user-select: auto; }
   .photo-dialog p { margin: 8px 0 4px; }
