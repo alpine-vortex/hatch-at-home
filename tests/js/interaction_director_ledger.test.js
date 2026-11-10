@@ -506,3 +506,16 @@ test("the card makes _dirCard and passes the three wrappers; _dirPause hears tab
   const reset = part.slice(part.indexOf("        reset: () => {"), part.indexOf("        keptCount:"));
   assert.doesNotMatch(reset, /drain|entries|ledger\./);
 });
+
+test("R15: a cancel that throws does not strand a drain or a detach; a throwing arm leaves no entry", () => {
+  const w = world();
+  const s = {};
+  w.dir.adopt(s, { cancel: () => { throw new Error("cancel"); }, key: "a" });
+  w.dir.later(s, 100, w.note("fn"), { key: "b", undo: w.note("undo-b") });
+  assert.throws(() => w.dir.detach(s), /cancel/);
+  assert.deepStrictEqual(w.log, ["undo-b"], "the second entry was still drained");
+  assert.strictEqual(w.dir.pending(s), 0);
+  const bad = D.create({ now: () => 1, schedule: () => { throw new Error("arm"); } });
+  assert.throws(() => bad.later(s, 5, () => {}), /arm/);
+  assert.strictEqual(bad.pending(), 0);
+});
