@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 import hashlib
 import json
+from pathlib import Path
 import random
 from typing import Any
 from unittest.mock import AsyncMock, patch
@@ -4674,3 +4675,152 @@ async def test_reconfigure_keeps_an_unchanged_legacy_long_name(
     assert result["reason"] == "reconfigure_successful"
     assert config.title == long_name
     assert config.data[CONF_NAME] == long_name
+
+
+# --- Setup and unload keep the pets map honest (F2) --------------------------
+
+
+async def test_a_failed_platform_unload_keeps_the_pet_registered_v(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = await setup(hass)
+    pet = hass.data[DOMAIN]["pets"]["test_pet"]
+
+    async def refuse(entry: Any, platforms: Any) -> bool:
+        return False
+
+    monkeypatch.setattr(hass.config_entries, "async_unload_platforms", refuse)
+    assert not await hass.config_entries.async_unload(config.entry_id)
+    assert config.state is ConfigEntryState.FAILED_UNLOAD
+    # Its entities are still up, so the coordinator they use stays findable.
+    assert hass.data[DOMAIN]["pets"]["test_pet"] is pet
+
+
+async def test_a_platform_setup_that_raises_unregisters_the_pet_v(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await hass.config.async_set_time_zone("UTC")
+    config = entry()
+    config.add_to_hass(hass)
+
+    async def boom(entry: Any, platforms: Any) -> None:
+        raise RuntimeError("platform setup failed")
+
+    monkeypatch.setattr(hass.config_entries, "async_forward_entry_setups", boom)
+    assert not await hass.config_entries.async_setup(config.entry_id)
+    await hass.async_block_till_done()
+    assert config.state is ConfigEntryState.SETUP_ERROR
+    assert "test_pet" not in hass.data[DOMAIN]["pets"]
+
+
+@pytest.mark.parametrize(
+    "name", ["​", "ㅤ", "x" * 21, "a\nb"], ids=["zwsp", "filler", "long", "nl"]
+)
+async def test_setup_refuses_a_bad_name_v(hass: HomeAssistant, name: str) -> None:
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_NAME: name, "world": "woodland"}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"name": "bad_name"}
+    assert not hass.config_entries.async_entries(DOMAIN)
+
+
+async def test_setup_stores_the_name_tidied_v(hass: HomeAssistant) -> None:
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_NAME: "  Mo   ss ", "world": "woodland"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Mo ss"
+
+
+@pytest.mark.parametrize("name", ["​", "⠀", "x" * 21], ids=["zwsp", "braille", "long"])
+async def test_reconfigure_refuses_a_bad_name_v(
+    hass: HomeAssistant, now: float, name: str
+) -> None:
+    config = await setup(hass)
+    result = await config.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_NAME: name, "world": "woodland"}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"name": "bad_name"}
+    assert config.title == "Pip"
+
+
+def test_bad_name_has_its_words_v() -> None:
+    package = Path(__file__).parent.parent / "custom_components" / DOMAIN
+    for path in (package / "strings.json", package / "translations" / "en.json"):
+        errors = json.loads(path.read_text())["config"]["error"]
+        assert errors["bad_name"], path
+
+
+# --- forget_me while the pets map changes (R10) ------------------------------
+
+
+async def test_forget_me_survives_a_pet_loading_mid_forget_v(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    pets = hass.data[DOMAIN]["pets"]
+    pet = pets["test_pet"]
+    forget = pet.async_forget_games
+    calls: list[str] = []
+
+    async def forget_while_another_loads(user: str) -> None:
+        calls.append(user)
+        pets["another_pet"] = pet  # a second entry finishing setup mid-await
+        await forget(user)
+
+    monkeypatch.setattr(pet, "async_forget_games", forget_while_another_loads)
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": f"{DOMAIN}/forget_me"})
+    reply = await client.receive_json()
+    pets.pop("another_pet", None)
+    assert reply["success"], reply
+    assert len(calls) == 1  # the copy: the late pet isn't visited this time
+
+
+# --- Who may call the card's mutating commands (R2-05, as built) -------------
+
+
+async def test_a_read_only_login_reaches_the_households_commands_v(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_read_only_access_token: str,
+) -> None:
+    """Records today's rule: rename asks for POLICY_CONTROL; rest, set_shell,
+    collect and ask_again don't (their docstrings call rest and the basket the
+    household's). Flip this test if the owner gates them."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    client = await hass_ws_client(hass, hass_read_only_access_token)
+    eid = "sensor.pip_life_stage"
+
+    async def call(command: str, **data: Any) -> dict[str, Any]:
+        await client.send_json_auto_id({"type": f"{DOMAIN}/{command}", **data})
+        while (msg := await client.receive_json())["type"] == "event":
+            pass
+        return msg
+
+    rename = await call("rename", entity_id=eid, name="Fern")
+    assert rename["error"]["code"] == "read_only"
+    assert (await call("rest", entity_id=eid, enabled=True))["success"]
+    assert hass.data[DOMAIN]["pets"]["test_pet"].state.resting
+    assert (await call("rest", entity_id=eid, enabled=False))["success"]
+    assert (await call("set_shell", entity_id=eid, finish=None))["success"]
+    assert (await call("collect", entity_id=eid))["success"]
+    again = await call("ask_again", entity_id=eid, kind="fav_weather", shared=False)
+    assert again["success"]
