@@ -7104,11 +7104,11 @@ async function main() {
   // P3c: the recap's TV and music come from the title-less public tv_on/music_on.
   const recapAt = new Date(Date.now() - 1800 * 1000).toISOString();
   await inject(pet["sensor.last_care"], {
-    attributes: { moments: [{ type: "music_on", at: recapAt }, { type: "tv_on", at: recapAt }], log: [] },
+    attributes: { moments: [{ type: "tv_on", at: recapAt }, { type: "music_on", at: recapAt }], log: [] },
   });
   const recap = await card.evaluate(async (el) => {
     const s = el._slides[el._index];
-    for (let i = 0; i < 30 && el._state(s, "sensor.last_care")?.attributes.moments?.[0]?.type !== "music_on"; i++) {
+    for (let i = 0; i < 30 && el._state(s, "sensor.last_care")?.attributes.moments?.[0]?.type !== "tv_on"; i++) {
       await new Promise((r) => setTimeout(r, 100));
     }
     return el._awayNote(s, Date.now() - 3600 * 1000);
@@ -10278,7 +10278,7 @@ async function main() {
       await settle();
       out.opens = isOpen() && !s.layAt;
       const field = s.status.querySelector(".nameinput");
-      out.fieldName = field.value === el._petName(s) && field.maxLength === 20 && field.getAttribute("aria-label") === "the new egg's name, up to 20 characters"
+      out.fieldName = field.value === el._petName(s) && field.maxLength === 20 && field.getAttribute("aria-label") === "the pet's name, up to 20 characters"
         && document.activeElement !== null;
       out.lines = s.status.querySelector(".sec").textContent === "a name for the egg"
         && s.status.querySelector(".namego").textContent === "name it"
@@ -17600,10 +17600,11 @@ async function main() {
     const real = el._state;
     const t = (m) => new Date(Date.now() - m * 60000).toISOString();
     const moments = [
-      { type: "found", id: ids[0], world, at: t(50) },
-      { type: "found", id: "laterfind", world, at: t(40) },
-      { type: "found", id: ids[1], world, at: t(30) },
+      // newest first, as the server sends them (model.py inserts at 0)
       { type: "found", id: ids[2], world, at: t(20) },
+      { type: "found", id: ids[1], world, at: t(30) },
+      { type: "found", id: "laterfind", world, at: t(40) },
+      { type: "found", id: ids[0], world, at: t(50) },
     ];
     el._state = function (slide, key) {
       if (key === "sensor.last_care") return { state: "ok", attributes: { moments, log: [] } };
