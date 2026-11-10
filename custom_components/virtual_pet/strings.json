@@ -36,6 +36,7 @@
       }
     },
     "error": {
+      "bad_name": "Use 1 to 20 characters, with at least one you can see.",
       "name_taken": "Another pet here already has that name."
     },
     "abort": {

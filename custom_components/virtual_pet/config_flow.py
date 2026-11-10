@@ -74,6 +74,7 @@ from .const import (
     DEFAULT_ZONE,
     DOMAIN,
 )
+from .coordinator import RenameError, clean_name
 from .defaults import default_weather
 from .model import parse_hhmm
 from .names import clear_device_name, name_taken, pet_name
@@ -190,8 +191,15 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             name = user_input[CONF_NAME].strip() or shown
             renamed = name != shown
-            if renamed and name_taken(self.hass, name, entry.entry_id):
-                errors[CONF_NAME] = "name_taken"
+            if renamed:
+                try:
+                    name = clean_name(name)
+                except RenameError:
+                    errors[CONF_NAME] = "bad_name"
+                else:
+                    renamed = name != shown
+                    if renamed and name_taken(self.hass, name, entry.entry_id):
+                        errors[CONF_NAME] = "name_taken"
         if user_input is not None and not errors:
             world = user_input[CONF_WORLD]
             data = {k: v for k, v in entry.data.items() if k != CONF_NEXT_WORLD}
@@ -245,8 +253,13 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             name = user_input[CONF_NAME].strip() or self._free_name()
-            if name_taken(self.hass, name):
-                errors[CONF_NAME] = "name_taken"
+            try:
+                name = clean_name(name)
+            except RenameError:
+                errors[CONF_NAME] = "bad_name"
+            else:
+                if name_taken(self.hass, name):
+                    errors[CONF_NAME] = "name_taken"
         if user_input is not None and not errors:
             dashboard = notify.dashboard_path(user_input.get(CONF_DASHBOARD))
             weather = default_weather(self.hass, from_states=True)

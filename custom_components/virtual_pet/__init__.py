@@ -1353,7 +1353,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:
         _recall_sender(hass),
     ):
         hass.async_create_background_task(send, f"{DOMAIN} notify")
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    try:
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    except BaseException:
+        # HA does not call async_unload_entry for a setup that raised.
+        hass.data[DOMAIN]["pets"].pop(entry.entry_id, None)
+        raise
     coordinator.async_start_home()
     return True
 
@@ -1385,10 +1390,12 @@ def _refresh_recalls(hass: HomeAssistant) -> None:
 async def async_unload_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:
     """Put the pet away. The coordinator saves itself on shutdown."""
     pets: dict[str, PetCoordinator] = hass.data[DOMAIN]["pets"]
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        return False  # still loaded: it stays registered
     pets.pop(entry.entry_id, None)
     if pets:  # a reload of the only pet (options) keeps its bundle
         _refresh_recalls(hass)
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    return True
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: PetConfigEntry) -> None:
