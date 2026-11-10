@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+import math
 import re
 from typing import Any
 
@@ -175,9 +176,11 @@ def _title(state: State, *keys: str, fallback: bool = True) -> str | None:
 
 def _float(state: State | None) -> float | None:
     try:
-        return float(state.state) if state else None
+        value = float(state.state) if state else None
     except ValueError:
         return None
+    # "nan" and "inf" parse, but are no reading (int() of them raises).
+    return value if value is None or math.isfinite(value) else None
 
 
 def _to_celsius(value: Any, unit: Any) -> float | None:

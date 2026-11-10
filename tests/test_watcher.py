@@ -65,6 +65,13 @@ async def test_people_home_holds_through_a_dropout(hass: HomeAssistant) -> None:
     assert watcher.people_home(R.HOME_HOLD_MINUTES * 60 + 1) is None
 
 
+async def test_non_finite_states_are_no_reading(hass: HomeAssistant) -> None:
+    watcher = Watcher(hass, {CONF_ZONE: "zone.home"})
+    for text in ("nan", "inf", "-inf"):
+        hass.states.async_set("zone.home", text)
+        assert watcher.people_home(0) is None  # int() of these would raise
+
+
 def test_wind_comes_out_in_kmh(hass: HomeAssistant) -> None:
     watcher = Watcher(hass, {"weather": "weather.home"})
     hass.states.async_set(
