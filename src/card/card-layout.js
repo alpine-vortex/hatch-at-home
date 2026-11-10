@@ -2,7 +2,7 @@ class HatchPetCardLayout extends HatchPetCardBuild {
   _layout() {
     const vw = this._viewport.clientWidth;
     if (!vw) return;
-    this._slideW = Math.min(330, vw - 56);
+    this._slideW = Math.max(120, Math.min(330, vw - 56));
     const compact = this._slideW < 280;
     if (compact !== this._card.classList.contains("compact")) {
       this._card.classList.toggle("compact", compact);
@@ -249,7 +249,7 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     const s = this._slides[this._index];
     if (!s || !s.world) return;
     const vw = this._viewport.clientWidth;
-    const w = this._slideW || Math.min(330, vw - 56);
+    const w = this._slideW || Math.max(120, Math.min(330, vw - 56));
     for (const slide of this._slides) slide.el.style.width = `${w}px`;
     // On whole device pixels, so the pet and the shell's grid stay crisp.
     const dpr = window.devicePixelRatio || 1;

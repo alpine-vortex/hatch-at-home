@@ -1598,7 +1598,7 @@ const STYLE = `
   .jweek .wday b { font-weight: 600; font-size: 11px; opacity: .8; }
   .jweek img { width: 18px; height: 18px; image-rendering: pixelated; }
   .jgrid { display: flex; flex-wrap: wrap; gap: 6px 10px; }
-  .jtile { display: flex; flex-direction: column; align-items: center; width: 64px; font-size: 11px;
+  .jtile { display: flex; flex-direction: column; align-items: center; width: 64px; font-size: 11px; overflow-wrap: anywhere;
     text-align: center; line-height: 1.1; }
   .jtile img { width: 48px; height: 48px; image-rendering: pixelated; }
   .jtile.locked img { filter: brightness(0); opacity: .3; }
@@ -1649,7 +1649,7 @@ const STYLE = `
     border-radius: 12px; background: #e9e2c6; color: #2f3a24; font: 400 13px 'Tiny5', monospace; text-align: center; }
   .photo-dialog::backdrop { background: rgba(20, 16, 10, .65); }
   /* Press and hold to save: nothing here blocks the long-press menu. */
-  .photo-dialog .pbig { display: block; width: 100%; height: auto; -webkit-touch-callout: default; user-select: auto; }
+  .photo-dialog .pbig { display: block; width: 100%; height: auto; max-height: 60vh; object-fit: contain; -webkit-touch-callout: default; user-select: auto; }
   .photo-dialog p { margin: 8px 0 4px; }
   .photo-dialog a { display: block; margin: 4px 0 8px; color: inherit; word-break: break-all; }
   .photo-dialog a[hidden], .photo-dialog p[hidden] { display: none; }
@@ -1741,6 +1741,9 @@ const STYLE = `
   .screen .askday.asktext .tags button.tag[aria-pressed="true"] { background: #3a2a1a; color: #fffdf5; }
   .compact .screen .askday.asktext .tags { gap: 2px; }
   .compact .screen .askday.asktext .tags button.tag { min-height: 26px; padding: 0 4px; }
+  /* a 44px hit area without growing the chip */
+  .screen .askday.asktext .tags button.tag { position: relative; }
+  .screen .askday.asktext .tags button.tag::after { content: ""; position: absolute; inset: -8px -2px; }
   .compact .screen .askday { gap: 4px; bottom: 2%; }
   .compact .screen .askday.many { max-width: 100%; }
   .compact .screen .askday button { min-height: 44px; min-width: 44px;
