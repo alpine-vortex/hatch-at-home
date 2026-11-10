@@ -413,3 +413,25 @@ async def test_diagnostics_hold_no_user_id_from_a_dream_pick_after_forget_me(
     assert (await client.receive_json())["success"]
     diag = await async_get_config_entry_diagnostics(hass, config)
     assert ada.id not in json.dumps(diag, default=str)
+
+
+async def test_forget_me_walks_a_copy_of_the_pets(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    """A pet that loads during a pet's awaited forget does not break the walk."""
+    ada, token = await a_user(hass)
+    hass_storage[PEOPLE_KEY] = people_store({ada.id: dict(RECORD)})
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    config = await setup(hass)
+    pet = config.runtime_data
+    pets = hass.data[DOMAIN]["pets"]
+    forget = pet.async_forget_games
+
+    async def forget_and_load_another(user: str) -> None:
+        await forget(user)
+        pets["late"] = pet  # a pet loads while forget_me is awaiting
+
+    pet.async_forget_games = forget_and_load_another
+    client = await hass_ws_client(hass, token)
+    await client.send_json_auto_id({"type": "virtual_pet/forget_me"})
+    assert (await client.receive_json())["success"]
