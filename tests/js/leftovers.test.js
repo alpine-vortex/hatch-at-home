@@ -82,7 +82,8 @@ test("the copy is the plan's, with the name or without it", () => {
 
 test("the first look says the thanks once, with the birthday name", () => {
   const look = method("_firstLook");
-  assert.match(look, /lines\.length < FIRST_LOOK_LINES && this\._leftoversFirst\(s, "look-"\)\) \{\s*lines\.push\(\[yourPartyLine\(LEFTOVERS\.look, this\._birthdayName\(s\)\), 5000\]\)/);
+  // checked when queued, spent only when said (then), so a card closed first says it next time
+  assert.match(look, /lines\.length < FIRST_LOOK_LINES && this\._leftoversDue\(s, "look-"\)\) \{[\s\S]*?lines\.push\(\[yourPartyLine\(LEFTOVERS\.look, this\._birthdayName\(s\)\), 5000, \{ then: \(\) => this\._leftoversFirst\(s, "look-"\) \}\]\)/);
 });
 
 test("the feed scene serves the party's slice once, and its line wins over the extra", () => {

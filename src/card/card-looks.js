@@ -49,8 +49,9 @@ class HatchPetCardLooks extends HatchPetCardTick {
       if (HOME_WEATHER[home.weather]) lines.push([HOME_WEATHER[home.weather], 4500]);
     }
     // The day after your party (birthday plan 7.4): its thanks, once (the server's year, this device).
-    if (lines.length < FIRST_LOOK_LINES && this._leftoversFirst(s, "look-")) {
-      lines.push([yourPartyLine(LEFTOVERS.look, this._birthdayName(s)), 5000]);
+    if (lines.length < FIRST_LOOK_LINES && this._leftoversDue(s, "look-")) {
+      // spent when said, not when queued: a card closed first says it next time (Luna, 7.4)
+      lines.push([yourPartyLine(LEFTOVERS.look, this._birthdayName(s)), 5000, { then: () => this._leftoversFirst(s, "look-") }]);
     }
     let wishTold = false;
     // Kept milestones said nowhere here (the card was closed): once, as lines of
