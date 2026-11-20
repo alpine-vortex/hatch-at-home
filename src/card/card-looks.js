@@ -438,8 +438,24 @@ class HatchPetCardLooks extends HatchPetCardTick {
     const find = gift && typeof gift.world === "string" && findOf(this._worlds, gift.world, gift.id);
     if (!find || sharedScreen()) return; // one this card doesn't know: nothing
     const g = { id: find.id, world: gift.world };
+    const still = () => !sharedScreen();
+    if (this._yourPartyOn(s)) {
+      // On your own party day any gift is the present (birthday plan 8.3): wrapped with its line,
+      // then opened to the find with the gift's own line and the confetti.
+      this._queue(s, yourPartyLine(PARTY_PRESENT, this._birthdayName(s)), PRESENT_OPEN_MS, {
+        type: "gift", still, then: () => this._giftPop(s, g, true),
+      });
+      this._queue(s, this._giftLine(s, find), GIFT_LINE_MS, {
+        type: "gift", still, then: () => {
+          this._giftPop(s, g);
+          this._confetti(s);
+          this._chirp(s, "win");
+        },
+      });
+      return;
+    }
     this._queue(s, this._giftLine(s, find), GIFT_LINE_MS, {
-      type: "gift", still: () => !sharedScreen(), then: () => this._giftPop(s, g),
+      type: "gift", still, then: () => this._giftPop(s, g),
     });
   }
 
@@ -453,20 +469,22 @@ class HatchPetCardLooks extends HatchPetCardTick {
 
   // The gift pops up above the pet as its line is said (a reveal's look, with no basket,
   // the basket left as it is, no sparkle); still under reduced motion. Gone with the line.
-  _giftPop(s, g) {
+  // `wrapped`: the present's box (birthday plan 8.3), for its own line's time; the find comes after.
+  _giftPop(s, g, wrapped = false) {
     this._giftPopEnd(s);
     if (sharedScreen() || !s.screen) return;
     const el = document.createElement("div");
-    el.className = "reveal gift";
+    el.className = this._yourPartyOn(s) ? "reveal gift party" : "reveal gift";
     el.innerHTML = '<img class="rf" alt="">';
     const img = el.firstChild;
-    img.src = `${BASE}/ui/find_${g.world}_${g.id}.png?v=${VERSION}`;
+    img.src = wrapped ? `${BASE}/ui/party_present.png?v=${VERSION}` : `${BASE}/ui/find_${g.world}_${g.id}.png?v=${VERSION}`;
     img.dataset.find = `${g.world}/${g.id}`;
     if (!calm()) img.classList.add("pop");
     s.screen.append(el);
-    const until = Date.now() + GIFT_LINE_MS;
+    const ms = wrapped ? PRESENT_OPEN_MS : GIFT_LINE_MS;
+    const until = Date.now() + ms;
     const P = s.giftPop = { el, until };
-    this._later(s, GIFT_LINE_MS, () => this._giftPopEnd(s), { key: "gift.pop" });
+    this._later(s, ms, () => this._giftPopEnd(s), { key: "gift.pop" });
     if (!(s.flairUntil > until)) s.flairUntil = P.until; // a pat wiggles; nothing else starts
     if (!(s.visitUntil > until)) s.visitUntil = P.until;
   }

@@ -261,6 +261,9 @@ const PARTY_WISH_ASK = "make a wish, {n}! ... ok, blow! ♪";
 const WISH_BEAT_MS = 2600;
 const PARTY_WISH = "yay!! i won't tell anyone your wish ♥"; // the candles blown out (plans 4.1, 8.1)
 const PARTY_CAKE = "birthday cake for breakfast! ♪"; // the feed scene on party day (plan 4.2)
+// A present on your party day (plan 8.3): the wrapped box's line (`{n}` through yourPartyLine), its time.
+const PARTY_PRESENT = "happy birthday, {n}! i got you something ♥";
+const PRESENT_OPEN_MS = 3000;
 const PARTY_BOTH = "it's your birthday AND mine!!"; // its own birthday the same day (plan 3.4)
 // The day after your party (plan 7.4): the first look's thanks (`{n}` as PARTY_YOURS, through
 // yourPartyLine) and the feed scene's leftover slice, each once.

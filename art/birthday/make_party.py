@@ -360,6 +360,28 @@ def bunting() -> Image.Image:
     return g.image()
 
 
+def present() -> Image.Image:
+    """A wrapped present, 16 x 16 art px (64 x 64, a find's size, birthday plan 8.3): blue paper with
+    white dots, a pink ribbon and bow, lit from the left like the hat."""
+    g = Grid(16, 16)
+    g.rect(2, 8, 13, 14, "b")  # the box
+    g.rect(1, 5, 14, 7, "b")  # the lid, a little wider
+    g.rect(12, 8, 13, 14, "B")  # the box's shaded side
+    g.rect(1, 7, 14, 7, "B")  # under the lid's edge
+    for x, y in ((4, 10), (10, 12), (4, 13), (11, 9), (3, 6), (12, 5)):
+        g.put(x, y, "w")
+    g.rect(7, 5, 8, 14, "p")  # the ribbon
+    g.rect(8, 5, 8, 14, "P")
+    g.ell(5.0, 3.0, 2.6, 1.7, "p")  # the bow's loops
+    g.ell(11.0, 3.0, 2.6, 1.7, "p")
+    g.put(4, 2, "q")
+    g.put(10, 2, "q")
+    g.rect(7, 2, 8, 4, "P")  # the knot
+    g.put(7, 3, "p")
+    g.outline()
+    return g.image()
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     w, h = 16, 12
@@ -380,6 +402,7 @@ def main() -> None:
     save_tight(balloons(1), OUT / "party_balloons_1.png")
     save_tight(pop_puff(), OUT / "party_pop.png")
     bunting().save(OUT / "party_bunting.png")
+    save_tight(present(), OUT / "party_present.png")
 
 
 if __name__ == "__main__":

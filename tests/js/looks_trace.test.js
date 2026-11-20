@@ -205,6 +205,18 @@ test("a second _giftPop at 2000 ends the first (its node goes) and runs its own 
   assert.deepStrictEqual(short(w.log).filter((x) => /remove/.test(x)), ["2000 div1 remove", "7000 div2 remove"]);
 });
 
+test("8.3: a wrapped _giftPop shows the present for PRESENT_OPEN_MS; the find's pop then takes its place", () => {
+  const w = gifted({ ...GIFT, globals: { ...GIFT.globals, PRESENT_OPEN_MS: 3000 } });
+  w.card._giftPop(w.slide, g, true);
+  assert.match(w.slide.giftPop.el.firstChild.src, /\/ui\/party_present\.png/);
+  assert.strictEqual(w.slide.giftPop.until, w.base + 3000);
+  w.run(3000);
+  w.card._giftPop(w.slide, g); // the second line: opened
+  assert.match(w.slide.giftPop.el.firstChild.src, /\/ui\/find_beach_shell\.png/);
+  w.settle();
+  assert.deepStrictEqual(short(w.log).filter((x) => /remove/.test(x)), ["3000 div1 remove", "8000 div2 remove"]);
+});
+
 test("_giftPop on a shared screen puts nothing up", () => {
   const w = gifted({ ...GIFT, globals: { ...GIFT.globals, sharedScreen: () => true } });
   w.card._giftPop(w.slide, g);

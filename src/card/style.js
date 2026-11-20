@@ -761,6 +761,8 @@ const STYLE = `
   .screen .reveal.gift { left: auto; right: calc(6% + var(--edge, 0%)); bottom: 46%;
     width: calc(var(--px, 2px) * 16); }
   .screen .reveal.gift .rf { position: static; display: block; width: 100%; margin: 0; }
+  /* On your party day (birthday plan 8.3) the balloons hold the right: the present comes in on the left, over the cake. */
+  .screen .reveal.gift.party { right: auto; left: calc(6% + var(--edge, 0%)); }
   .season .bunting { position: absolute; top: calc(var(--edge, 0%) * .3); left: var(--edge, 0%);
     right: var(--edge, 0%); height: 8.4%;
     background-repeat: repeat-x; background-size: 18.75% 100%; image-rendering: pixelated; }

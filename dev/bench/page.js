@@ -232,13 +232,17 @@
   // first look: mine.gift set, the look forced (its other lines dropped, so the gift's is
   // the one said), the take answered by the fake callWS, the line said and the pop paused
   // just in. An asleep, away or egg pet's first look doesn't run: nothing is taken or said.
-  async function giftShot(card, s, gift) {
+  async function giftShot(card, s, gift, open = false) {
     s.mine = { bond: { level: 6, nickname: null }, ...(s.mine || {}), gift };
     Object.assign(s, { subscribed: true, lookedFirst: false, queue: [], sayUntil: 0 });
     card._firstLook(s);
     s.queue = (s.queue || []).filter((q) => q.type === "gift");
     for (let n = 0; s.gifting && n < 200; n++) await new Promise((r) => setTimeout(r, 5));
     card._sayQueued(s);
+    if (open) { // `giftOpen` (plan 8.3): the present's second line, the box opened to the find
+      s.sayUntil = 0;
+      card._sayQueued(s);
+    }
     if (s.giftPop) card._director.stop(s, { key: "gift.pop" }); // held for the shot
     window.bench.info = { lookedFirst: !!s.lookedFirst, said: s.sayEntry?.type === "gift" ? s.sayEntry.text : null,
       pop: s.giftPop ? s.giftPop.el.querySelector(".rf").dataset.find : null };
@@ -773,9 +777,9 @@
       card._partyTick(cur);
       await new Promise((r) => setTimeout(r, 60));
     }
-    if (pd.blow) { // the cake's tap (plan 4.1): the candles out, the lean and the line
+    if (pd.blow) { // the cake's tap (plans 4.1, 8.1): the wish's ask ("ask"), else past the beat: the candles out, the lean and the line
       cur.screen.querySelector(".yp-cake").click();
-      await new Promise((r) => setTimeout(r, 700));
+      await new Promise((r) => setTimeout(r, pd.blow === "ask" ? 700 : 3300));
     }
     for (let i = 0; i < (pd.pop || 0); i++) { // the balloons' taps (plan 7.1): the last one's puff is on show
       if (i) await new Promise((r) => setTimeout(r, 600));
@@ -1286,7 +1290,18 @@
     // `reveal`: the basket's reveal pinned (see revealShot).
     if (shot.reveal) await revealShot(card, cur, shot.reveal);
     // `gift`: a gift said at the first look (see giftShot).
-    if (shot.gift) await giftShot(card, cur, shot.gift);
+    if (shot.gift) await giftShot(card, cur, shot.gift, shot.giftOpen);
+    // `lookLine: n`: the first look's line n said (its queue from there; plan 8.2's party dream).
+    // bench.info.look: every line the look queued.
+    if (shot.lookLine !== undefined) {
+      Object.assign(cur, { subscribed: true, lookedFirst: false, queue: [], sayUntil: 0 });
+      card._firstLook(cur);
+      const lines = (cur.queue || []).map((q) => q.text);
+      cur.queue = cur.queue.slice(shot.lookLine);
+      card._sayQueued(cur);
+      window.bench.info = { look: lines };
+      await settled(card);
+    }
     // A flush first, so a class that is a CSS transition (`look`, `wander-l`) starts one `petAt` can seek.
     void cur.pet.offsetWidth;
     for (const c of shot.petClasses || []) cur.pet.classList.add(c);
