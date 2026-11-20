@@ -2031,7 +2031,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             celebrations.append(("pet", "friends", today, note))
         out += celebrations[:1]
         # The countdown (plan 1.3): once a day per person, below the celebrations
-        # (the look's other lines come first when room is short).
+        # but ahead of the look's other notes; when room is short it waits,
+        # unmarked, for a later look.
         if (
             soon is not None
             and soon >= 1
