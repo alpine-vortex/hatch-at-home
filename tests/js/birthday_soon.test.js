@@ -27,13 +27,19 @@ const { birthdaySoonLine, usedUpTo, MAX } = ctx.api;
 const EVERY = [...ctx.api.EVERY];
 const BIRTHDAY_SOON = JSON.parse(JSON.stringify(ctx.api.BIRTHDAY_SOON)); // out of the vm realm
 
-test("the table is the plan's copy, by days to go", () => {
+test("the table has every count, at least three lines each, all distinct", () => {
   assert.deepStrictEqual(Object.keys(BIRTHDAY_SOON), ["1", "2", "3", "4", "5"]);
-  assert.deepStrictEqual(BIRTHDAY_SOON[5], ["psst {n}... your birthday is in 5 days! ♪", "5 more sleeps till your birthday!"]);
-  assert.deepStrictEqual(BIRTHDAY_SOON[4], ["4 days to your birthday, {n}! i'm planning things ♪"]);
-  assert.deepStrictEqual(BIRTHDAY_SOON[3], ["3 more sleeps! i'm practising the song ♪", "3 days! do you like cake? i like cake"]);
-  assert.deepStrictEqual(BIRTHDAY_SOON[2], ["2 days to go, {n}! i can't sit still!"]);
-  assert.deepStrictEqual(BIRTHDAY_SOON[1], ["tomorrow's your birthday, {n}!! ♥", "one more sleep!! i'm so excited!!"]);
+  for (const [d, list] of Object.entries(BIRTHDAY_SOON)) {
+    assert.ok(list.length >= 3, `day ${d}: ${list.length} lines`); // the note plus two idles, no repeat
+    assert.strictEqual(new Set(list).size, list.length, `day ${d}: a line twice`);
+  }
+  assert.ok(BIRTHDAY_SOON[5].includes("psst {n}... your birthday is in 5 days! ♪"));
+  assert.ok(BIRTHDAY_SOON[1].includes("tomorrow's your birthday, {n}!! ♥"));
+});
+
+test("an idle line is never the one just said", () => {
+  assert.match(src, /s\.lastBdaySoon = line;[\s\S]*?birthdaySoonLine\(line/);
+  assert.match(method("_birthdaySoonTick"), /filter\(\(l\) => l !== s\.lastBdaySoon\)/);
 });
 
 test("the name goes in, or the line goes without it", () => {

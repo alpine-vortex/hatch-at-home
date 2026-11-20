@@ -294,6 +294,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
       if (away >= 0) s.queue.splice(away, 1);
     }
     if (note.kind === "birthday_soon") {
+      s.lastBdaySoon = line; // the idle lines say another one next
       this._queue(s, birthdaySoonLine(line, this._birthdayName(s)), 5000, { personal: true });
       this._sparkle(s);
       return;
@@ -353,7 +354,9 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     const { days, year } = this._birthdayPrefs(s);
     if (!days || !BIRTHDAY_SOON[days] || s.egg || s.resting || !this._hass.user?.id || !this._free(s)) return;
     if (!usedUpTo(`bdaysoon-${s.ids?.device}-${this._hass.user.id}-${year}-${days}`, BIRTHDAY_SOON_IDLE_MAX)) return;
-    this._speak(s, birthdaySoonLine(pick(BIRTHDAY_SOON[days]), this._birthdayName(s)), 4500);
+    const fresh = BIRTHDAY_SOON[days].filter((l) => l !== s.lastBdaySoon); // never the same line twice running
+    s.lastBdaySoon = pick(fresh.length ? fresh : BIRTHDAY_SOON[days]);
+    this._speak(s, birthdaySoonLine(s.lastBdaySoon, this._birthdayName(s)), 4500);
     if (days === 1) this._chirp(s, "tap");
   }
 

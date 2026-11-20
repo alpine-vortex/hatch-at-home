@@ -278,11 +278,16 @@ const SEASON_ICONS = { spring: "♪", summer: "☀", autumn: "♥", winter: "❄
 // (call_me, else the nickname, else the first name); none: the line goes without it.
 // Outside the fresh-expand block on purpose: the scan there bans digits and "?".
 const BIRTHDAY_SOON = {
-  5: ["psst {n}... your birthday is in 5 days! ♪", "5 more sleeps till your birthday!"],
-  4: ["4 days to your birthday, {n}! i'm planning things ♪"],
-  3: ["3 more sleeps! i'm practising the song ♪", "3 days! do you like cake? i like cake"],
-  2: ["2 days to go, {n}! i can't sit still!"],
-  1: ["tomorrow's your birthday, {n}!! ♥", "one more sleep!! i'm so excited!!"],
+  5: ["psst {n}... your birthday is in 5 days! ♪", "5 more sleeps till your birthday!",
+    "5 days till your birthday, {n}! i'm counting on my toes"],
+  4: ["4 days to your birthday, {n}! i'm planning things ♪", "4 more sleeps! i'm making you a card (it's mostly scribbles)",
+    "only 4 days, {n}! what cake do you like best?", "shh... it's a secret plan. 4 days! 🤫"],
+  3: ["3 more sleeps! i'm practising the song ♪", "3 days! do you like cake? i like cake",
+    "3 days to go, {n}! la la la ♪"],
+  2: ["2 days to go, {n}! i can't sit still!", "2 more sleeps! i'm blowing up balloons",
+    "just 2 days, {n}! i'm practising my party hop", "the day after tomorrow!! ♥"],
+  1: ["tomorrow's your birthday, {n}!! ♥", "one more sleep!! i'm so excited!!",
+    "tomorrow!! i can't wait, {n}! ♪"],
 };
 const BIRTHDAY_SOON_IDLE_MAX = 2; // idle lines a device says for one count, besides the look's note
 const BIRTHDAY_SOON_EVERY_MS = [90000, 150000];

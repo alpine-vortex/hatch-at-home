@@ -204,13 +204,25 @@ def cake(lit: bool) -> Image.Image:
             g.put(c0, 1, "f")
             g.put(c0, 3, "z")
         else:
-            wisp = ((0, 5), (1, 4), (0, 3), (-1, 2), (0, 1), (1, 0))
-            smoke += [(c0 + dx, dy) for dx, dy in wisp]
+            # a soft curl, two wide: a darker core over a light edge, rising and leaning right
+            wisp = (
+                (0, 5, "G"),
+                (0, 4, "G"),
+                (1, 4, "g"),
+                (1, 3, "G"),
+                (2, 3, "g"),
+                (1, 2, "G"),
+                (0, 2, "g"),
+                (0, 1, "G"),
+                (1, 1, "g"),
+                (1, 0, "g"),
+            )
+            smoke += [(c0 + dx, dy, k) for dx, dy, k in wisp]
     g.outline()
     # the wisps go on after the outline: one soft mid-grey, no dark rim, so they read on a dark
     # screen and a light one (a dark rim round each pixel made a checker)
-    for x, y in smoke:
-        g.put(x, y, "m")
+    for x, y, k in smoke:
+        g.put(x, y, k)
     return g.image()
 
 
@@ -218,9 +230,10 @@ def slice_() -> Image.Image:
     """A slice on a small plate, filling 34 x 26 art px (136 x 104) like food_pancakes."""
     g = Grid(34, 26)
     # the plate leaves a 1 px margin so the outline closes all round
-    g.ell(16.5, 13, 15.5, 11.5, "d")
-    g.ell(16.5, 13, 12.8, 9, "D")
-    g.ell(16.5, 12.6, 12.8, 8.6, "d")
+    g.ell(16.5, 13, 15.4, 11.4, "d")
+    # the well: a closed shade ring, then the inside lifted a pixel so the shade shows below
+    g.ell(16.5, 13.2, 12.6, 8.6, "D")
+    g.ell(16.5, 12.4, 11.8, 7.8, "d")
     # the wedge: pink top face, front face with sponge and cream, lit from the left
     g.poly([(7, 12), (26, 7), (27, 11), (9, 17)], "p")
     g.poly([(7, 12), (9, 17), (9, 20), (7, 15)], "s")

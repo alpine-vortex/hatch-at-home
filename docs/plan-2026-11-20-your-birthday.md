@@ -163,3 +163,12 @@ Left as is: `call_me` survives "forget my birthday" (by design, 1.5; "forget my 
 it); tip-off day key in the browser's zone; the admin service can't clear a birthday; a stale
 party on a card whose channel drops past midnight; cake slice on the murk exit ease; ß upper-cases
 to SS. Server and privacy bar: no findings.
+
+## Polish (2026-11-20, after release)
+
+- Countdown copy (2.3) widened to 3-4 lines a day (days 4 and 2 had one line, said up to three
+  times a day); an idle line is never the one just said (`s.lastBdaySoon`).
+- Art nits fixed: smoke over the blown-out candles is a two-tone curl that reads on light and dark;
+  the slice's plate outline is closed (no nubs) with a full shade ring.
+- Luna review of 5294bd46..57a6e75d: one finding, fixed: the tip-off's once-a-day key no longer
+  includes the count.
