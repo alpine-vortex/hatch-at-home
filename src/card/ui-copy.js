@@ -258,6 +258,11 @@ const PARTY_YOURS = ["best day of the year! it's {n}'s birthday!", "make a wish,
 const PARTY_WISH = "yay!! now your wish comes true ♥"; // the candles blown out (plan 4.1)
 const PARTY_CAKE = "birthday cake for breakfast! ♪"; // the feed scene on party day (plan 4.2)
 const PARTY_BOTH = "it's your birthday AND mine!!"; // its own birthday the same day (plan 3.4)
+// A balloon popped (plan 7.1). The last line is never the third pop's (the bunch is empty then).
+const PARTY_POP = ["pop! ♪", "eek! that was loud!", "one more! one more!"];
+// Where each balloon pops, in % of the bunch's art (blue on top first, then yellow, then pink), and the puff's life.
+const BALLOON_SPOTS = [[50, 17], [73, 31], [27, 31]];
+const POP_MS = 450;
 function yourPartyLine(line, name) {
   return name ? line.replace("{n}", () => name) : line.replace("{n}'s", "your").replace(", {n}", "").replace(" {n}", "");
 }

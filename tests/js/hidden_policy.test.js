@@ -30,6 +30,9 @@ const CASES = [
   { name: "bubble pop", ms: 1300, spec: { methods: ["_bubblePop"], consts: ["BUBBLE_POP_ODDS"],
     globals: { Math: Object.assign(Object.create(Math), { random: () => 0 }), BASE: "", VERSION: "1" } },
     arm: (w) => w.card._bubblePop(w.slide) },
+  { name: "balloon puff", ms: 450, spec: { methods: ["_balloonBunch", "_popBalloon", "_balloonsGone"], consts: ["PARTY_POP", "BALLOON_SPOTS", "POP_MS"],
+    returns: { _yourPartyOn: true, _owned: false }, globals: { pick: (l) => l[0] } },
+    arm: (w) => w.card._balloonBunch(w.slide).dispatch("click", { stopPropagation: () => {} }) },
 ];
 
 for (const c of CASES) {
@@ -91,8 +94,8 @@ test("entries that are not listed still fire on time after a hidden tab (backlig
 test("the listed sites carry hidden: \"tab\" and the unlisted state-changing ones do not (source guard)", () => {
   const files = ["card-flair", "card-season", "card-moment", "card-visit", "card-tick", "card-visitors"];
   const tabbed = files.reduce((n, f) => n + (read(`src/card/${f}.js`).match(/hidden: "tab"/g) || []).length, 0);
-  assert.strictEqual(tabbed, 11, "flair 1, season 3, bubble pop 1, hearts, sparkle, house fx, robot, speck, find ring");
+  assert.strictEqual(tabbed, 12, "flair 1, season 4 (the balloon puff), bubble pop 1, hearts, sparkle, house fx, robot, speck, find ring");
   const all = fs.readdirSync(path.join(ROOT, "src/card")).filter((f) => f.endsWith(".js") && f !== "interaction-director.js")
     .reduce((n, f) => n + (read(`src/card/${f}`).match(/hidden: "tab"/g) || []).length, 0);
-  assert.strictEqual(all, 11 + 0, "no other site is on the tab policy");
+  assert.strictEqual(all, 12 + 0, "no other site is on the tab policy");
 });

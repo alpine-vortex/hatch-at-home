@@ -193,7 +193,7 @@ class HatchPetCardSeason extends HatchPetCardCrate {
   }
 
   // The props (3.2): bunting across the top, a balloon bunch at one side, the cake beside the pet.
-  // Drawn when the party is on, taken down when it is not (the day turning). Décor aria-hidden, under the
+  // Drawn when the party is on, taken down when it is not (the day turning). The bunting aria-hidden, under the
   // pet's z-order (they stand at the sides, never over it). True when the party is on.
   _yourPartyProps(s) {
     const on = this._yourPartyOn(s);
@@ -205,9 +205,8 @@ class HatchPetCardSeason extends HatchPetCardCrate {
     if (box) return true;
     const el = document.createElement("div");
     el.className = "yparty";
-    // The bunting and balloons are décor (aria-hidden); the cake is a real button, so not the wrapper.
+    // The bunting is décor (aria-hidden); the balloons and the cake are real buttons, so not the wrapper.
     el.innerHTML = `<div class="yp-bunting" aria-hidden="true" style="background-image:url(${BASE}/ui/party_bunting.png?v=${VERSION})"></div>` +
-      `<img class="yp-balloons" aria-hidden="true" src="${BASE}/ui/party_balloons.png?v=${VERSION}" alt="">` +
       `<button type="button" class="yp-cake" aria-label="blow out the candles"><img src="${BASE}/ui/party_cake_${this._candlesOut(s) ? "out" : "lit"}.png?v=${VERSION}" alt=""></button>`;
     const cake = el.querySelector(".yp-cake");
     cake.addEventListener("click", (e) => {
@@ -215,8 +214,70 @@ class HatchPetCardSeason extends HatchPetCardCrate {
       this._blowOut(s, cake);
     });
     if (this._candlesOut(s)) this._cakeSpent(cake);
+    cake.before(this._balloonBunch(s));
     s.screen.append(el);
     return true;
+  }
+
+  // The balloon bunch (plan 7.1): a real button. Its pops are this slide's (s.yPops), never stored, so a
+  // fresh props box on the next visit brings the bunch back; a rebuild within the visit keeps it as it was.
+  _balloonBunch(s) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "yp-balloons";
+    btn.setAttribute("aria-label", "pop a balloon");
+    const img = document.createElement("img");
+    img.alt = "";
+    btn.append(img);
+    const left = 3 - (s.yPops || 0);
+    if (left > 0) img.src = `${BASE}/ui/party_balloons${left < 3 ? `_${left}` : ""}.png?v=${VERSION}`;
+    else {
+      this._balloonsGone(btn);
+      btn.hidden = true;
+    }
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation(); // not the screen's Status shortcut
+      this._popBalloon(s, btn, img);
+    });
+    return btn;
+  }
+
+  // One tap, one balloon: the puff where it was, a confetti burst, the tap chirp, a line. The third
+  // empties the bunch: the button goes once the last puff is done.
+  _popBalloon(s, btn, img) {
+    const popped = s.yPops || 0;
+    if (popped >= 3 || this._owned(s) || s.scene || !this._yourPartyOn(s)) return;
+    s.yPops = popped + 1;
+    const left = 3 - s.yPops;
+    const puff = document.createElement("img");
+    puff.className = "yp-pop";
+    puff.alt = "";
+    puff.setAttribute("aria-hidden", "true");
+    puff.src = `${BASE}/ui/party_pop.png?v=${VERSION}`;
+    puff.style.left = `${BALLOON_SPOTS[popped][0]}%`;
+    puff.style.top = `${BALLOON_SPOTS[popped][1]}%`;
+    btn.append(puff);
+    if (left) img.src = `${BASE}/ui/party_balloons_${left}.png?v=${VERSION}`;
+    else {
+      img.hidden = true;
+      this._balloonsGone(btn);
+    }
+    const done = () => {
+      puff.remove();
+      if (!left) btn.hidden = true;
+    };
+    this._later(s, POP_MS, done, { group: "season", hidden: "tab", undo: done });
+    if (!calm()) this._animate(s, s.pet, "perk", 320);
+    this._confetti(s);
+    this._chirp(s, "tap");
+    this._speak(s, pick(PARTY_POP.slice(0, left ? 3 : 2)), 2500, { catch: true });
+  }
+
+  // The bunch, empty: no longer a button (as _cakeSpent).
+  _balloonsGone(btn) {
+    btn.disabled = true;
+    btn.tabIndex = -1;
+    btn.setAttribute("aria-hidden", "true");
   }
 
   // Blow out the candles (plan 4.1): once per device per day (the server's year), then the cake stays

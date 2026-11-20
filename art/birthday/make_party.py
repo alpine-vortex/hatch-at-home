@@ -255,11 +255,18 @@ def slice_() -> Image.Image:
     return g.image()
 
 
-def balloons() -> Image.Image:
-    """A bunch of three, 24 x 48 art px (96 x 192). Anchor: the strings' tie, bottom centre."""
+BALLOONS = ((6.5, 15, "p", "P", "q"), (17.5, 15, "y", "Y", "z"), (12, 8, "b", "B", "w"))
+
+
+def balloons(n: int = 3) -> Image.Image:
+    """A bunch of n (3, 2, 1), 24 x 48 art px (96 x 192). Anchor: the strings' tie, bottom centre.
+
+    Popped in the order blue (the top one, drawn last over the others), yellow, pink: the
+    canvas and the tie stay put, so the bunch doesn't move as it empties (birthday plan 7.1).
+    """
     g = Grid(24, 48)
     tie = (11, 47)
-    spec = ((6.5, 15, "p", "P", "q"), (17.5, 15, "y", "Y", "z"), (12, 8, "b", "B", "w"))
+    spec = BALLOONS[:n]
     # strings first, under the balloons
     for cx, cy, *_ in spec:
         bx, by = int(cx), int(cy + 7)
@@ -279,8 +286,59 @@ def balloons() -> Image.Image:
         for dx, dy in ((-3, -4), (-2, -5), (-3, -3), (-4, -2)):
             g.put(int(cx) + dx, int(cy) + dy, lt)
         g.put(int(cx) - 2, int(cy) - 3, lt)
+    # the others hid each balloon's one-pixel bumps; alone they show, so they go
+    if len(spec) < 3:
+        src = [r[:] for r in g.g]
+        for y in range(g.h):
+            for x in range(g.w):
+                near = sum(
+                    0 <= x + dx < g.w
+                    and 0 <= y + dy < g.h
+                    and src[y + dy][x + dx] != "."
+                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                )
+                if src[y][x] not in ".o" and near <= 1:
+                    g.g[y][x] = "."
     g.outline()
     return g.image()
+
+
+def pop_puff() -> Image.Image:
+    """The pop (plan 7.1): a white burst with yellow tips and two scraps, 14 x 14 art px
+    (56 x 56). Anchor: the centre, over the balloon that went."""
+    g = Grid(14, 14)
+    cx = cy = 7
+    for dx, dy, ln in (
+        (1, 0, 6),
+        (-1, 0, 6),
+        (0, 1, 6),
+        (0, -1, 6),
+        (1, 1, 4),
+        (-1, -1, 4),
+        (1, -1, 4),
+        (-1, 1, 4),
+    ):
+        for i in range(2, ln + 1):
+            g.put(
+                cx + dx * i - (dx < 0),
+                cy + dy * i - (dy < 0),
+                "y" if i >= ln - 1 else "w",
+            )
+    g.ell(7, 7, 2.2, 2.2, "w")
+    g.put(2, 4, "p")
+    g.put(11, 10, "b")
+    g.outline()
+    return g.image()
+
+
+def save_tight(img: Image.Image, path: Path) -> None:
+    """A palette PNG with exactly the image's own colours, checked pixel-identical."""
+    n = len(img.getcolors(1 << 16))
+    pal = img.quantize(
+        colors=n, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE
+    )
+    pal.save(path, optimize=True)
+    assert list(Image.open(path).convert("RGBA").getdata()) == list(img.getdata()), path
 
 
 def bunting() -> Image.Image:
@@ -318,6 +376,9 @@ def main() -> None:
     cake(False).save(OUT / "party_cake_out.png")
     slice_().save(OUT / "party_cake_slice.png")
     balloons().save(OUT / "party_balloons.png")
+    save_tight(balloons(2), OUT / "party_balloons_2.png")
+    save_tight(balloons(1), OUT / "party_balloons_1.png")
+    save_tight(pop_puff(), OUT / "party_pop.png")
     bunting().save(OUT / "party_bunting.png")
 
 

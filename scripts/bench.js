@@ -1321,6 +1321,10 @@ const PRESETS = {
     }
     out.push({ ...base, name: "birthday/party-candles", group: "birthday", label: "candles blown out (4.1)", yourBirthdayIn: 0,
       partyDay: { blow: true } });
+    for (const pop of [1, 3]) { // the balloons (plan 7.1): one popped, its puff on show; all three, the bunch gone
+      out.push({ ...base, name: `birthday/party-pop-${pop}`, group: "birthday", label: `${pop} balloon${pop > 1 ? "s" : ""} popped (7.1)`,
+        yourBirthdayIn: 0, partyDay: { pop } });
+    }
     for (const at of [900, 1800]) {
       out.push({ ...base, name: `birthday/party-feed-${at}`, group: "birthday", label: `cake slice at the meal ${at} (4.2)`, yourBirthdayIn: 0,
         care: "feed", careAt: at, answer: { at: 200, result: "ok" }, clip: "screen", pet: { hunger: 60 }, variant: { feed: "A", "feed.extra": "none" } });
