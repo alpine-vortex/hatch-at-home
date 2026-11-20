@@ -243,3 +243,6 @@ gift clock needed; a bond is read, never created; never an egg. The card says an
 its own party day as a present: a wrapped box (art: `party_present`, hand-placed in
 `art/birthday/make_party.py`) pops, then opens to the find ("happy birthday! i got you
 something ♥", then the find's name). Pytest across month and year ends and Feb 29; Luna review.
+
+Round 4 shipped as 0.52.3. Luna's review of 8.3 found one thing (the year was spent when no gift
+could be picked); fixed, so a year with nothing to give stays open.
