@@ -165,6 +165,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     // An egg doesn't talk (C15'): the greeting waits for the hatch, and its key stays unwritten (F2).
     if (this._state(s, "sensor.life_stage")?.state === "egg") return;
     s.greeted = true;
+    if (this._yourPartyOn(s)) this._yourPartyConfetti(s); // each greeting on your day
     const user = this._hass.user;
     const bond = this._bond(s);
     const level = bond?.level || 0;
@@ -297,8 +298,10 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     }
     if (note.kind === "your_birthday") {
       const name = this._birthdayName(s);
-      if (!note.quiet && name) line = `happy birthday, ${name}!! ♥`;
-      (s.queue ??= []).push({ text: line, ms: 5000, personal: true, cls: KEPT, perk: true, then: () => {
+      const party = this._yourPartyOn(s); // your party day (plan 3.3): the big line, 6 s
+      if (!note.quiet && party) line = `HAPPY BIRTHDAY${name ? `, ${name.toUpperCase()}` : ""}!!! 🎂`;
+      else if (!note.quiet && name) line = `happy birthday, ${name}!! ♥`;
+      (s.queue ??= []).push({ text: line, ms: party ? 6000 : 5000, personal: true, cls: KEPT, perk: true, then: () => {
         if (!note.quiet) this._chirp(s, "birthday");
         this._sparkle(s);
       } });

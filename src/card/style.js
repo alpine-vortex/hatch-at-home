@@ -775,6 +775,16 @@ const STYLE = `
     35% { translate: -140% 0; rotate: 90deg; } 70% { translate: 120% 0; rotate: 200deg; }
     90% { opacity: 1; } 100% { opacity: 0; translate: -60% 0; rotate: 300deg; } }
   .costume .fx.hat { transform: translate(-50%, -100%); }
+  /* Your party's props (birthday plan 3.2): not the pet, so no pet class, no transform. They stand at
+     the sides (the pet is the middle 46%), under the line and the flair. Reduced motion: the bob stops. */
+  .yparty { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+  .yparty .yp-bunting { position: absolute; left: 0; top: 0; width: 100%; height: 11%; background-repeat: repeat-x;
+    background-size: auto 100%; image-rendering: pixelated; }
+  .yparty img { position: absolute; bottom: 4%; image-rendering: pixelated; }
+  .yparty .yp-balloons { right: 3%; height: 46%; width: auto; transform-origin: 50% 100%;
+    animation: yp-bob 3.2s ease-in-out infinite alternate; }
+  .yparty .yp-cake { left: 3%; height: 24%; width: auto; }
+  @keyframes yp-bob { from { rotate: -2deg; } to { rotate: 2deg; } }
   .confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
   /* A bit is a full-height lane that slides down (translate) with the chip turning inside it. */
   .confetti i { position: absolute; top: 0; bottom: 0; left: var(--x); width: 5px;

@@ -250,6 +250,15 @@ const stepBtn = (which, dir) => `<button type="button" class="stepb" data-step="
 // Its yearly birthday: a party hat (the season costume code places it) and confetti.
 const PARTY = { key: "party", costumes: [{ art: "hat", sink: 7, width: 56 }],
   lines: ["party hat on! ♪", "look, I'm all dressed up! ♪", "best birthday ever! ♪"] };
+// Your own party day (birthday plan 3.3): idle lines from the pet, `{n}` the name (none: the line
+// goes without it; "{n}'s" becomes "your"). The first look says the first. Outside the fresh-expand
+// block, like BIRTHDAY_SOON.
+const PARTY_YOURS = ["best day of the year! it's {n}'s birthday!", "make a wish, {n}! ♥", "i saved you the biggest slice ♪",
+  "party party party!! ♪", "you're the best, {n} ♥"];
+const PARTY_BOTH = "it's your birthday AND mine!!"; // its own birthday the same day (plan 3.4)
+function yourPartyLine(line, name) {
+  return name ? line.replace("{n}", name) : line.replace("{n}'s", "your").replace(", {n}", "").replace(" {n}", "");
+}
 // The visit's celebration lines: one a look, and always a place for it.
 const CELEBRATION_NOTES = new Set(["your_birthday", "pet_birthday", "birthday_friends", "friends_for"]);
 const months = (n) => `${n} month${n === 1 ? "" : "s"}`;
