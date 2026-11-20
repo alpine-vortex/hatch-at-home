@@ -155,6 +155,113 @@ async def test_an_open_card_gets_the_new_day_without_a_visit_and_not_a_shared_on
     assert "birthday_in" not in [e["mine"] for e in events if "mine" in e][-1]
 
 
+# --- 7.4 the day after ----------------------------------------------------------
+
+
+def test_birthday_after_is_the_day_after_across_month_and_year_ends() -> None:
+    assert model.birthday_after("11-24", "2026-11-25") == "2026"
+    assert model.birthday_after("11-24", "2026-11-24") is None  # the day itself
+    assert model.birthday_after("11-24", "2026-11-26") is None  # two days on
+    assert model.birthday_after("11-24", "2026-11-23") is None
+    assert model.birthday_after("01-31", "2026-02-01") == "2026"  # a month end
+    assert model.birthday_after("04-30", "2026-05-01") == "2026"
+    assert model.birthday_after("12-31", "2027-01-01") == "2026"  # the birthday's year
+    assert model.birthday_after("12-31", "2026-12-31") is None
+    assert model.birthday_after("01-01", "2026-01-02") == "2026"
+
+
+def test_birthday_after_follows_birthday_today_for_29_february() -> None:
+    # A common year: the party is on the 28th, so the day after is 1 March.
+    assert model.birthday_after("02-29", "2027-03-01") == "2027"
+    assert model.birthday_after("02-29", "2027-02-28") is None  # the party itself
+    # A leap year: the party is on the 29th; the 29th is not the day after.
+    assert model.birthday_after("02-29", "2028-02-29") is None
+    assert model.birthday_after("02-29", "2028-03-01") == "2028"
+    # A 28 February birthday: its day after is the 29th in a leap year, else 1 March.
+    assert model.birthday_after("02-28", "2028-02-29") == "2028"
+    assert model.birthday_after("02-28", "2028-03-01") is None
+    assert model.birthday_after("02-28", "2027-03-01") == "2027"
+
+
+def test_birthday_after_is_none_for_nothing_or_nonsense() -> None:
+    for bad in (None, "", "13-01", "02-30", "x"):
+        assert model.birthday_after(bad, "2026-11-25") is None
+
+
+async def test_the_visit_prefs_carry_the_day_after_to_this_person_only(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2027-01-01 12:00:00+00:00")
+    me = await hass.auth.async_create_user("Me", group_ids=["system-admin"])
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    config = await setup(hass)
+    pet = config.runtime_data
+    pet.people.person(me.id).update(birthday="12-31", call_me="Bee")
+    reply = await pet.async_visit(me.id)
+    assert reply["birthday_after"] is True
+    assert reply["birthday_after_year"] == "2026"  # the party's year, not today's
+    assert "birthday_in" not in reply and "birthday_year" not in reply
+    assert "12-31" not in str(reply)  # the date never leaves
+    # Not the day after: neither key.
+    pet.people.person(me.id)["birthday"] = "12-30"
+    reply = await pet.async_visit(me.id)
+    assert not {"birthday_after", "birthday_after_year"} & set(reply)
+    # No birthday at all: neither key.
+    other = await hass.auth.async_create_user("O", group_ids=["system-admin"])
+    bare = await pet.async_visit(other.id)
+    assert not {"birthday_after", "birthday_after_year"} & set(bare)
+    # Someone else's day after is not in my reply.
+    pet.people.person(other.id)["birthday"] = "12-31"
+    reply = await pet.async_visit(me.id)
+    assert "birthday_after" not in reply
+
+
+@pytest.fixture
+def late_on_the_24th(freezer: FrozenDateTimeFactory) -> None:
+    """Before any token is made (a token made later would be long expired)."""
+    freezer.move_to("2026-11-24 23:55:00+00:00")
+
+
+async def test_an_open_card_gets_the_day_after_at_midnight_and_not_a_shared_one(
+    late_on_the_24th: None,
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    me = hass_admin_user.id
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    config = await setup(hass)
+    config.runtime_data.people.person(me).update(birthday="11-24", call_me="Bee")
+    mine_client = await hass_ws_client(hass)
+    snapshot = await subscribe(mine_client)
+    assert snapshot["mine"]["birthday_in"] == 0
+    assert "birthday_after" not in snapshot["mine"]
+    shared = await hass_ws_client(hass)
+    shared_snap = await subscribe(shared, shared=True)
+    assert shared_snap["mine"] is None
+    await pushed(mine_client)
+    seen_shared = [shared_snap, *await pushed(shared)]
+    # Midnight passes; no visit, no reload: the next tick tells the open card.
+    await settle(hass, freezer, model.R.TICK_MINUTES * 60 * 2)
+    assert dt_util.now().date().isoformat() == "2026-11-25"
+    mines = [e["mine"] for e in await pushed(mine_client) if "mine" in e]
+    assert mines and mines[-1]["birthday_after"] is True
+    assert mines[-1]["birthday_after_year"] == "2026"
+    assert "birthday_in" not in mines[-1]
+    after_shared = await pushed(shared)
+    assert all("mine" not in e for e in after_shared)
+    seen_shared += after_shared
+    # And the day after that it is gone.
+    await settle(hass, freezer, 24 * 3600)
+    mines = [e["mine"] for e in await pushed(mine_client) if "mine" in e]
+    assert mines and "birthday_after" not in mines[-1]
+    assert "birthday_after_year" not in mines[-1]
+    seen_shared += await pushed(shared)
+    assert "birthday_after" not in str(seen_shared)
+
+
 # --- 1.3 the look note ---------------------------------------------------------
 
 

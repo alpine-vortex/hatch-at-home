@@ -3935,6 +3935,16 @@ def birthday_in(birthday: str | None, today: str) -> int | None:
 BIRTHDAY_SOON_DAYS = 5  # how far ahead the countdown starts
 
 
+def birthday_after(birthday: str | None, today: str) -> str | None:
+    """The year of a "MM-DD" birthday if today is the day after it, else None:
+    yesterday by birthday_today (so 29 February's day after is 1 March in every
+    year), and 1 January's belongs to the year before."""
+    yesterday = date.fromisoformat(today) - timedelta(days=1)
+    if birthday_today(birthday, yesterday.isoformat()):
+        return str(yesterday.year)
+    return None
+
+
 def friends_for(since: str | None, today: str) -> int | None:
     """Whole months since they first met, if today is the day ("we've been
     friends for a month!"); the 31st falls on a short month's last day."""

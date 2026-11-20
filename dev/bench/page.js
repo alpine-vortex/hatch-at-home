@@ -1020,9 +1020,11 @@
     }
     // The birthday prefs the private channel would send (birthday plan 3.6): `yourBirthdayIn` (0-5,
     // with birthday_year the page's year) and `callMe`; each gives the slides a viewer's own view.
-    if (shot.yourBirthdayIn !== undefined || shot.callMe || shot.parties) {
+    // `yourBirthdayAfter` (plan 7.4): the day after, birthday_after with the page's year.
+    if (shot.yourBirthdayIn !== undefined || shot.callMe || shot.parties || shot.yourBirthdayAfter) {
       const extra = {
         ...(shot.yourBirthdayIn !== undefined ? { birthday_in: shot.yourBirthdayIn, birthday_year: String(new Date().getFullYear()) } : {}),
+        ...(shot.yourBirthdayAfter ? { birthday_after: true, birthday_after_year: String(new Date().getFullYear()) } : {}),
         ...(shot.callMe ? { call_me: shot.callMe } : {}),
         ...(shot.parties ? { parties: shot.parties } : {}),
       };

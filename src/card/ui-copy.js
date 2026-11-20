@@ -258,6 +258,9 @@ const PARTY_YOURS = ["best day of the year! it's {n}'s birthday!", "make a wish,
 const PARTY_WISH = "yay!! now your wish comes true ♥"; // the candles blown out (plan 4.1)
 const PARTY_CAKE = "birthday cake for breakfast! ♪"; // the feed scene on party day (plan 4.2)
 const PARTY_BOTH = "it's your birthday AND mine!!"; // its own birthday the same day (plan 3.4)
+// The day after your party (plan 7.4): the first look's thanks (`{n}` as PARTY_YOURS, through
+// yourPartyLine) and the feed scene's leftover slice, each once.
+const LEFTOVERS = { look: "best party ever!! thank you, {n} ♥", cake: "leftover cake! still yummy ♪" };
 function yourPartyLine(line, name) {
   return name ? line.replace("{n}", () => name) : line.replace("{n}'s", "your").replace(", {n}", "").replace(" {n}", "");
 }

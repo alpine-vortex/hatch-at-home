@@ -1883,8 +1883,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     def _birthday_prefs(self, user: str) -> dict[str, Any]:
         """The countdown's facts for this person only (birthday plan 1.2): days to
-        go (0-5, by the server's local date), the year being counted to, what to call
-        them, the years of their parties. Never the date itself."""
+        go (0-5, by the server's local date), the year being counted to, the day
+        after, what to call them, the years of their parties. Never the date itself."""
         person = self.people.data["people"].get(user, {})
         out: dict[str, Any] = {}
         if call_me := person.get("call_me"):
@@ -1898,6 +1898,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             assert nxt is not None
             out["birthday_in"] = days
             out["birthday_year"] = str(nxt.year)
+        # The day after (plan 7.4): a flag and the birthday's year, for the card's
+        # once-only keys; the next midnight's tick takes it away again.
+        if after := model.birthday_after(person.get("birthday"), today):
+            out["birthday_after"] = True
+            out["birthday_after_year"] = after
         return out
 
     def _house_birthday_in(self, user: str) -> int | None:

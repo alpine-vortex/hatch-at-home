@@ -250,6 +250,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
         s.bdayReply = { in: Number.isInteger(reply.birthday_in) ? reply.birthday_in : null,
           year: typeof reply.birthday_year === "string" ? reply.birthday_year : null,
           callMe: typeof reply.call_me === "string" ? reply.call_me : null,
+          after: reply.birthday_after === true ? reply.birthday_after_year : null, // the day after (plan 7.4)
           parties: Array.isArray(reply.parties) ? reply.parties.filter((y) => typeof y === "string") : [] };
         this._houseTipOff(s, reply.house_birthday_in); // birthday plan 4.4
         if (reply.follow === 1) this._followOk = true; // F1: it takes typed text and follow-ups
@@ -333,12 +334,15 @@ class HatchPetCardVisit extends HatchPetCardLooks {
 
   // The server's countdown for this viewer: the channel's mine once it has spoken (so a day that
   // turns reaches an open card), else the last visit's reply. Never on a shared screen.
-  // { days: 1-5 | 0 | null, year, callMe }
+  // { days: 1-5 | 0 | null, year, callMe, after }: `after` is the birthday's year on the day after
+  // it (plan 7.4: mine's birthday_after with birthday_after_year), else null.
   _birthdayPrefs(s) {
-    if (sharedScreen()) return { days: null, year: null, callMe: null };
-    const m = s.mine ? { in: s.mine.birthday_in, year: s.mine.birthday_year, callMe: s.mine.call_me } : s.bdayReply || {};
+    if (sharedScreen()) return { days: null, year: null, callMe: null, after: null };
+    const m = s.mine ? { in: s.mine.birthday_in, year: s.mine.birthday_year, callMe: s.mine.call_me,
+      after: s.mine.birthday_after === true ? s.mine.birthday_after_year : null } : s.bdayReply || {};
     const days = Number.isInteger(m.in) && m.in >= 0 && m.in <= 5 && typeof m.year === "string" ? m.in : null;
-    return { days, year: days === null ? null : m.year, callMe: typeof m.callMe === "string" ? m.callMe : null };
+    const after = typeof m.after === "string" && /^\d{4}$/.test(m.after) ? m.after : null;
+    return { days, year: days === null ? null : m.year, callMe: typeof m.callMe === "string" ? m.callMe : null, after };
   }
 
   // Now and then while the countdown runs (1-5 days): one line from BIRTHDAY_SOON, at most

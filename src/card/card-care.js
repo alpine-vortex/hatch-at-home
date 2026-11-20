@@ -236,7 +236,9 @@ const SCENES = {
       sc.bowlX = 0.67 * sw;
       // Your party day (birthday plan 4.2): a slice of cake on its plate, not the day's food. The art is
       // whole (no rim to clip to), so each bite is the dip below (_bowlClip says no); the server's feed is unchanged.
-      if (this._yourPartyOn(s)) {
+      // The day after (7.4), the leftovers: the same slice, once (spent with its line, below).
+      sc.leftovers = this._leftoversDue(s, "cake-");
+      if (this._yourPartyOn(s) || sc.leftovers) {
         sc.bowl.dataset.cake = "1";
         sc.bowl.setAttribute("src", `${BASE}/ui/party_cake_slice.png?v=${VERSION}`);
         sc.bowlW *= 136 / 104;
@@ -250,6 +252,7 @@ const SCENES = {
       const weight = Number.parseFloat(this._state(s, "sensor.weight")?.state);
       const extras = ["heart", "lick", ...(isHeavy(Number.isFinite(weight) ? weight : null) ? ["burp"] : [])];
       sc.extra = s.pinVariant?.["feed.extra"] ?? (Math.random() < FEED_EXTRA_ODDS ? this._careVariant(s, "feed.extra", extras) : "none");
+      if (sc.leftovers) sc.extra = "none"; // the leftovers' line is said, not the extra's
       sc.fired = new Set();
     },
     render(s, sc, t, { sw, sh, ramp, ease }) {
@@ -340,7 +343,8 @@ const SCENES = {
       // The meal's line as the bowl goes (the answer is in: the gate saw to it). The 1-in-4
       // extra says its own instead.
       if (t >= sc.leaveAt && sc.result === "ok" && once("line")) {
-        const line = sc.extra !== "none" ? [pick(FEED_LINES[sc.extra === "heart" ? "tummy" : sc.extra]), 3000]
+        const line = sc.leftovers && this._leftoversFirst(s, "cake-") ? [LEFTOVERS.cake, 2500]
+          : sc.extra !== "none" ? [pick(FEED_LINES[sc.extra === "heart" ? "tummy" : sc.extra]), 3000]
           : this._mealLine(s, this._words(s).food);
         if (line) this._line(s, MINE, line[0], Math.max(line[1], MINE_MS), { write: true, type: "care" });
       }
