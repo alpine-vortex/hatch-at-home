@@ -776,10 +776,15 @@
       cur.screen.querySelector(".yp-cake").click();
       await new Promise((r) => setTimeout(r, 700));
     }
-    await new Promise((r) => setTimeout(r, 450)); // the hat's fade-in
+    for (let i = 0; i < (pd.pop || 0); i++) { // the balloons' taps (plan 7.1): the last one's puff is on show
+      if (i) await new Promise((r) => setTimeout(r, 600));
+      cur.screen.querySelector(".yp-balloons").click();
+    }
+    await new Promise((r) => setTimeout(r, pd.pop ? 120 : 450)); // the hat's fade-in (a pop: its puff, mid-way)
     if (season && pd.treatToday) season.treat = was;
     const art = [...cur.screen.querySelectorAll(".costume img")].map((i) => i.getAttribute("src").replace(/^.*\/ui\//, "").replace(/\?.*/, ""));
-    window.bench.info = { party: { costumes: art, props: !!cur.screen.querySelector(".yparty"), confetti: !!cur.screen.querySelector(".confetti"), cake: cur.screen.querySelector(".yp-cake img")?.getAttribute("src").replace(/^.*\/ui\//, "").replace(/\?.*/, ""), cakeOff: !!cur.screen.querySelector(".yp-cake")?.disabled } };
+    window.bench.info = { party: { costumes: art, props: !!cur.screen.querySelector(".yparty"), confetti: !!cur.screen.querySelector(".confetti"), cake: cur.screen.querySelector(".yp-cake img")?.getAttribute("src").replace(/^.*\/ui\//, "").replace(/\?.*/, ""), cakeOff: !!cur.screen.querySelector(".yp-cake")?.disabled,
+      balloons: cur.screen.querySelector(".yp-balloons img")?.getAttribute("src")?.replace(/^.*\/ui\//, "").replace(/\?.*/, "") || null, popped: cur.yPops || 0 } };
   }
 
   // Put on the costume `art` of `season` (frame 1 or 2 showing) and wait out the

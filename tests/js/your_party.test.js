@@ -60,9 +60,9 @@ test("the first line is the big one, 6 s, with the birthday chirp", () => {
 test("props are aria-hidden, stand beside the pet, and calm() keeps confetti away", () => {
   const props = method("_yourPartyProps");
   assert.match(props, /class="yp-bunting" aria-hidden="true"/);
-  assert.match(props, /class="yp-balloons" aria-hidden="true"/);
-  assert.doesNotMatch(props, /el\.setAttribute\("aria-hidden"/); // the cake button stays reachable
-  assert.match(props, /party_bunting\.png[\s\S]*party_balloons\.png[\s\S]*party_cake_\$\{/);
+  assert.doesNotMatch(props, /yp-balloons" aria-hidden/); // 7.1: the balloons are a button now
+  assert.doesNotMatch(props, /el\.setAttribute\("aria-hidden"/); // the cake and balloon buttons stay reachable
+  assert.match(props, /party_bunting\.png[\s\S]*party_cake_\$\{[\s\S]*cake\.before\(this\._balloonBunch\(s\)\)/);
   assert.match(method("_confetti"), /if \(calm\(\)\) return;/);
   assert.match(method("_greet"), /_yourPartyOn\(s\)\) this\._yourPartyConfetti\(s\)/);
   assert.match(src, /\.yparty \.yp-balloons \{[^}]*animation: yp-bob/);

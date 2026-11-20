@@ -261,6 +261,11 @@ const PARTY_BOTH = "it's your birthday AND mine!!"; // its own birthday the same
 // The day after your party (plan 7.4): the first look's thanks (`{n}` as PARTY_YOURS, through
 // yourPartyLine) and the feed scene's leftover slice, each once.
 const LEFTOVERS = { look: "best party ever!! thank you, {n} ♥", cake: "leftover cake! still yummy ♪" };
+// A balloon popped (plan 7.1). The last line is never the third pop's (the bunch is empty then).
+const PARTY_POP = ["pop! ♪", "eek! that was loud!", "one more! one more!"];
+// Where each balloon pops, in % of the bunch's art (blue on top first, then yellow, then pink), and the puff's life.
+const BALLOON_SPOTS = [[50, 17], [73, 31], [27, 31]];
+const POP_MS = 450;
 function yourPartyLine(line, name) {
   return name ? line.replace("{n}", () => name) : line.replace("{n}'s", "your").replace(", {n}", "").replace(" {n}", "");
 }

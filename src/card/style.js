@@ -781,8 +781,14 @@ const STYLE = `
   .yparty .yp-bunting { position: absolute; left: 0; top: 0; width: 100%; height: 11%; background-repeat: repeat-x;
     background-size: auto 100%; image-rendering: pixelated; }
   .yparty img { position: absolute; bottom: 4%; image-rendering: pixelated; }
-  .yparty .yp-balloons { right: 3%; height: 46%; width: auto; transform-origin: 50% 100%;
+  .yparty .yp-balloons { position: absolute; right: 3%; bottom: 4%; height: 46%; aspect-ratio: 96 / 192; padding: 0; border: 0;
+    background: none; pointer-events: auto; cursor: pointer; min-width: 44px; min-height: 44px; transform-origin: 50% 100%;
     animation: yp-bob 3.2s ease-in-out infinite alternate; }
+  .yparty .yp-balloons:disabled { pointer-events: none; cursor: default; }
+  .yparty .yp-balloons img { left: 0; bottom: 0; width: 100%; height: 100%; }
+  .yparty .yp-balloons .yp-pop { left: auto; bottom: auto; width: 58%; height: auto; translate: -50% -50%;
+    animation: yp-pop .45s ease-out both; }
+  @keyframes yp-pop { from { scale: .4; opacity: 1; } 70% { opacity: 1; } to { scale: 1.15; opacity: 0; } }
   .yparty .yp-cake { position: absolute; left: 3%; bottom: 4%; height: 24%; aspect-ratio: 160 / 140; padding: 0; border: 0;
     background: none; pointer-events: auto; cursor: pointer; min-width: 44px; min-height: 44px; }
   .yparty .yp-cake:disabled { pointer-events: none; cursor: default; }
