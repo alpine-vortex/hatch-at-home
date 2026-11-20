@@ -217,3 +217,29 @@ season, pet, at most 4 a day, an hour apart; they never count as friends.
 
 Round 3: 0.52.1 brought the balloon refill (an hour later) and three more idle lines; 0.52.2 brings
 7.3 party guests (the woodland chickadee, Steller's jay and snail, plus the turkey) and 7.5.
+
+## 8. Extras, round 4 (owner, 2026-11-20)
+
+Ship as 0.52.3 by the evening of 22 Nov (it carries 0.52.2: one HACS update). Never a release on
+24 Nov. Cut order if time runs short: 8.3 the present first. Same rules as section 7.
+
+8.1 **Make a wish**: the cake tap asks first ("make a wish, {n}! ... ok, blow! ♪", `{n}` through
+`yourPartyLine`), then after a beat (`_later`) the candles go out with the confetti and chirp and
+"yay!! i won't tell anyone your wish ♥". The first tap spends the `candles-` key and disables the
+cake; the beat re-checks `_owned`, `s.scene` and `_yourPartyOn` (a close mid-beat leaves the
+candles out, quietly).
+
+8.2 **Party dream**: the day after, the first look's dream slot (its `dream-<device>` once a day)
+tells a party dream instead of the house's ("i dreamed about your party! the balloons floated
+all the way to the moon ♪"), keyed like the leftovers (`dream-`), spent when said; then, only
+with room to spare, "a whole year till the next one! i'm counting ♪" (no number: the card never
+has the date, and Feb 29 breaks one).
+
+8.3 **A present from the pet**: on the person's birthday (the server's local date, `birthday_today`)
+the pet sets a gift aside for them through the gift path: if none waits, one is picked (the
+world's gift-only find they don't have yet first, else `pick_gift`); a gift already waiting is the
+present. Once per server year (`present_year` on the bond, validated on load); no bond level or
+gift clock needed; a bond is read, never created; never an egg. The card says any gift taken on
+its own party day as a present: a wrapped box (art: `party_present`, hand-placed in
+`art/birthday/make_party.py`) pops, then opens to the find ("happy birthday! i got you
+something ♥", then the find's name). Pytest across month and year ends and Feb 29; Luna review.
