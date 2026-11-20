@@ -1425,9 +1425,23 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         state = self.state
         if state is None or self._find_flags is None:
             return
-        if model.gift_tick(
+        changed = model.gift_tick(
             state, now, self.world, self.finds, self._find_flags, self.rng
-        ):
+        )
+        # A present on each person's birthday (birthday plan 8.3), the server's date.
+        today = dt_util.now().date().isoformat()
+        for user, person in sorted(self.people.data["people"].items()):
+            changed |= model.birthday_present(
+                state,
+                user,
+                person.get("birthday"),
+                today,
+                self.world,
+                self.finds,
+                self._find_flags,
+                self.rng,
+            )
+        if changed:
             self._save()
 
     def take_gift(self, user: str) -> dict[str, Any] | None:

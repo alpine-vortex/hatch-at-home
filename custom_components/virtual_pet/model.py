@@ -256,6 +256,7 @@ def _bond(bond: dict[str, Any]) -> dict[str, Any]:
         "day": _str,
         "tucked_at": _num,
         "next_gift_at": _num,
+        "present_year": _str,  # birthday plan 8.3: the server's year of the last present
         "trick_asked": _str,  # F7: "<generation>-<trick month>" of its trick ask
     }
     for key, check in checks.items():
@@ -3677,6 +3678,39 @@ def gift_tick(
             bond["gift"] = {"id": find["id"], "world": world}
         changed = True
     return changed
+
+
+def birthday_present(
+    state: PetState,
+    user: str,
+    birthday: str | None,
+    today: str,
+    world: str,
+    finds: list[dict[str, Any]],
+    flags: dict[str, bool | None],
+    rng: random.Random,
+) -> bool:
+    """A present on the person's birthday (birthday plan 8.3), by the
+    server's local date (birthday_today, so 29 February's is the 28th in
+    common years), once a server year (`present_year`). A gift already
+    waiting is the present; else the world's gift-only find they don't have
+    yet, else pick_gift. No bond level or gift clock; a bond is read, never
+    created; never an egg. Taken as any gift (take_gift). True if the bond
+    changed (save it)."""
+    bond = state.bonds.get(user)
+    if bond is None or not finds or life_stage(state) == "egg":
+        return False
+    year = today[:4]
+    if bond.get("present_year") == year or not birthday_today(birthday, today):
+        return False
+    bond["present_year"] = year
+    if "gift" not in bond:
+        had = set(bond.get("gifts", ()))
+        only = [f for f in finds if f.get("gift_only") and f["id"] not in had]
+        find = only[0] if only else pick_gift(bond, finds, flags, rng)
+        if find is not None:
+            bond["gift"] = {"id": find["id"], "world": world}
+    return True
 
 
 def known_gift(bond: dict[str, Any] | None, known: dict[str, set[str]]) -> Any:
