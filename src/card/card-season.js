@@ -202,7 +202,10 @@ class HatchPetCardSeason extends HatchPetCardCrate {
       box?.remove();
       return false;
     }
-    if (box) return true;
+    if (box) {
+      this._balloonRefill(s, box);
+      return true;
+    }
     const el = document.createElement("div");
     el.className = "yparty";
     // The bunting is décor (aria-hidden); the balloons and the cake are real buttons, so not the wrapper.
@@ -221,6 +224,7 @@ class HatchPetCardSeason extends HatchPetCardCrate {
 
   // The balloon bunch (plan 7.1): a real button. Its pops are this slide's (s.yPops), never stored, so a
   // fresh props box on the next visit brings the bunch back; a rebuild within the visit keeps it as it was.
+  // A screen that stays up all day (a wall tablet) gets a full bunch an hour after it was popped empty.
   _balloonBunch(s) {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -261,6 +265,7 @@ class HatchPetCardSeason extends HatchPetCardCrate {
     else {
       img.hidden = true;
       this._balloonsGone(btn);
+      s.yEmptyAt = Date.now();
     }
     const done = () => {
       puff.remove();
@@ -271,6 +276,16 @@ class HatchPetCardSeason extends HatchPetCardCrate {
     this._confetti(s);
     this._chirp(s, "tap");
     this._speak(s, pick(PARTY_POP.slice(0, left ? 3 : 2)), 2500, { catch: true });
+  }
+
+  // A full bunch again, BALLOON_REFILL_MS after the last pop, on a props box that never came down.
+  _balloonRefill(s, box) {
+    if ((s.yPops || 0) < 3 || Date.now() - (s.yEmptyAt || 0) < BALLOON_REFILL_MS) return;
+    const old = box.querySelector(".yp-balloons");
+    if (!old) return;
+    s.yPops = 0;
+    s.yEmptyAt = 0;
+    old.replaceWith(this._balloonBunch(s));
   }
 
   // The bunch, empty: no longer a button (as _cakeSpent).

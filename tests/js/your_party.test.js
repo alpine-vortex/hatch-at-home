@@ -44,7 +44,8 @@ test("the copy is the plan's, and the name goes in or the line goes without", ()
   vm.runInContext(`${grab(/\nconst PARTY_YOURS = \[[\s\S]*?\];\n/)}${grab(/\nfunction yourPartyLine\([\s\S]*?\n\}\n/)}this.api = { PARTY_YOURS, yourPartyLine };`, ctx);
   const { yourPartyLine } = ctx.api;
   assert.deepStrictEqual([...ctx.api.PARTY_YOURS], ["best day of the year! it's {n}'s birthday!", "make a wish, {n}! ♥",
-    "i saved you the biggest slice ♪", "party party party!! ♪", "you're the best, {n} ♥"]);
+    "i saved you the biggest slice ♪", "party party party!! ♪", "you're the best, {n} ♥",
+    "this is the best party ever! ♪", "i can't stop hopping!! ♪", "one more slice? ♥"]);
   assert.strictEqual(yourPartyLine("make a wish, {n}! ♥", "Bee"), "make a wish, Bee! ♥");
   assert.strictEqual(yourPartyLine("best day of the year! it's {n}'s birthday!", "Bee"), "best day of the year! it's Bee's birthday!");
   for (const l of ctx.api.PARTY_YOURS) assert.ok(!/\{n\}/.test(yourPartyLine(l, "")), l);

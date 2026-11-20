@@ -254,7 +254,8 @@ const PARTY = { key: "party", costumes: [{ art: "hat", sink: 7, width: 56 }],
 // goes without it; "{n}'s" becomes "your"). The first look says the first. Outside the fresh-expand
 // block, like BIRTHDAY_SOON.
 const PARTY_YOURS = ["best day of the year! it's {n}'s birthday!", "make a wish, {n}! ♥", "i saved you the biggest slice ♪",
-  "party party party!! ♪", "you're the best, {n} ♥"];
+  "party party party!! ♪", "you're the best, {n} ♥", "this is the best party ever! ♪", "i can't stop hopping!! ♪",
+  "one more slice? ♥"];
 const PARTY_WISH = "yay!! now your wish comes true ♥"; // the candles blown out (plan 4.1)
 const PARTY_CAKE = "birthday cake for breakfast! ♪"; // the feed scene on party day (plan 4.2)
 const PARTY_BOTH = "it's your birthday AND mine!!"; // its own birthday the same day (plan 3.4)
@@ -266,6 +267,7 @@ const PARTY_POP = ["pop! ♪", "eek! that was loud!", "one more! one more!"];
 // Where each balloon pops, in % of the bunch's art (blue on top first, then yellow, then pink), and the puff's life.
 const BALLOON_SPOTS = [[50, 17], [73, 31], [27, 31]];
 const POP_MS = 450;
+const BALLOON_REFILL_MS = 3600000; // an emptied bunch comes back an hour later (a screen that stays up)
 function yourPartyLine(line, name) {
   return name ? line.replace("{n}", () => name) : line.replace("{n}'s", "your").replace(", {n}", "").replace(" {n}", "");
 }

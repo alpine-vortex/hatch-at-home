@@ -7,8 +7,8 @@ const { world } = require("./timer_trace");
 const src = require("./card-source");
 
 const SPEC = {
-  methods: ["_balloonBunch", "_popBalloon", "_balloonsGone"],
-  consts: ["PARTY_POP", "BALLOON_SPOTS", "POP_MS"],
+  methods: ["_balloonBunch", "_popBalloon", "_balloonsGone", "_balloonRefill"],
+  consts: ["PARTY_POP", "BALLOON_SPOTS", "POP_MS", "BALLOON_REFILL_MS"],
   watch: ["_confetti", "_chirp", "_speak", "_animate"],
   returns: { _yourPartyOn: true, _owned: false },
   globals: { pick: (l) => l[l.length - 1] }, // the last line it may say
@@ -90,4 +90,30 @@ test("the button is in the props outside any aria-hidden wrapper; the copy is th
   assert.doesNotMatch(props, /el\.setAttribute\("aria-hidden"/);
   assert.match(src, /const PARTY_POP = \["pop! ♪", "eek! that was loud!", "one more! one more!"\];/);
   assert.match(src, /\.yparty \.yp-balloons \{[^}]*pointer-events: auto/);
+});
+
+test("an emptied bunch on a screen that stays up is full again an hour later, not before", () => {
+  const w = world(SPEC);
+  const btn = w.card._balloonBunch(w.slide);
+  let put = null;
+  const box = { querySelector: (q) => (q === ".yp-balloons" ? { replaceWith: (b) => (put = b) } : null) };
+  tap(btn);
+  w.card._balloonRefill(w.slide, box);
+  assert.strictEqual(put, null, "a part-popped bunch stays as it is");
+  w.run(60 * 60 * 1000);
+  w.card._balloonRefill(w.slide, box);
+  assert.strictEqual(put, null, "only an empty bunch comes back");
+  tap(btn);
+  tap(btn);
+  w.run(59 * 60 * 1000);
+  w.card._balloonRefill(w.slide, box);
+  assert.strictEqual(put, null, "not before the hour");
+  w.run(60 * 1000);
+  w.card._balloonRefill(w.slide, box);
+  assert.ok(put, "the hour is up");
+  assert.strictEqual(w.slide.yPops, 0);
+  assert.strictEqual(art(put.children[0]), "party_balloons.png");
+  assert.ok(!put.disabled && !put.hidden);
+  tap(put);
+  assert.strictEqual(w.slide.yPops, 1, "the new bunch pops");
 });

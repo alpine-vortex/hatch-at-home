@@ -30,7 +30,7 @@ const CASES = [
   { name: "bubble pop", ms: 1300, spec: { methods: ["_bubblePop"], consts: ["BUBBLE_POP_ODDS"],
     globals: { Math: Object.assign(Object.create(Math), { random: () => 0 }), BASE: "", VERSION: "1" } },
     arm: (w) => w.card._bubblePop(w.slide) },
-  { name: "balloon puff", ms: 450, spec: { methods: ["_balloonBunch", "_popBalloon", "_balloonsGone"], consts: ["PARTY_POP", "BALLOON_SPOTS", "POP_MS"],
+  { name: "balloon puff", ms: 450, spec: { methods: ["_balloonBunch", "_popBalloon", "_balloonsGone", "_balloonRefill"], consts: ["PARTY_POP", "BALLOON_SPOTS", "POP_MS", "BALLOON_REFILL_MS"],
     returns: { _yourPartyOn: true, _owned: false }, globals: { pick: (l) => l[0] } },
     arm: (w) => w.card._balloonBunch(w.slide).dispatch("click", { stopPropagation: () => {} }) },
 ];
