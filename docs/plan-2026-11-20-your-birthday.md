@@ -194,7 +194,7 @@ lit cake beside it, in place of the small cake icon. It is drawn from the pet as
 after the pet grows the print shows the new stage; no new stored keys this week). Own screen only.
 Acceptance: bench journal shot with `parties: ["2026"]`.
 
-7.3 **Party guests** (party day) — **cut 2026-11-20** (hat anchors for ~36 visitor frames, the hat must follow the flap, mirror and slide, and a new visit mode that skips the social meter: about a day; worker's assessment, plan cut order): now and then a world visitor drops by in a party hat (one at a
+7.3 **Party guests** (party day) — cut 2026-11-20, then built for 0.52.2 with the hats baked into the art (`art/party-guests/compose.py`), so no runtime anchors. First estimate (hat anchors for ~36 visitor frames, the hat must follow the flap, mirror and slide, and a new visit mode that skips the social meter: about a day; worker's assessment, plan cut order): now and then a world visitor drops by in a party hat (one at a
 time, at most 2 per visit). First check that visitors run on party day at all (`_visitorTick` vs the
 party guard in `_seasonTick`). A hat anchor per visitor sprite is most of the work. Acceptance: bench
 day 0 with a guest, Firefox and Chromium.
@@ -209,3 +209,11 @@ ends and Feb 29; Luna review (server code).
 Round 2 shipped as 0.52.0: 7.1 balloon pop (the bunch returns on a fresh slide: a page load or a
 device change, so a wall tablet keeps it popped for the day), 7.2 party photo, 7.4 leftovers (Luna:
 one finding, fixed: the thank-you is spent when said). 7.3 cut.
+
+7.5 **Stranger pets** (party day, owner 2026-11-20): a pet of another species, at your pet's stage,
+drops by in a party hat; it is not yours, but it shows the other kinds. The hat is drawn on the
+client from species.json's seat (`_partyPetArt`), so no new art. Guests take turns world, pet,
+season, pet, at most 4 a day, an hour apart; they never count as friends.
+
+Round 3: 0.52.1 brought the balloon refill (an hour later) and three more idle lines; 0.52.2 brings
+7.3 party guests (the woodland chickadee, Steller's jay and snail, plus the turkey) and 7.5.
