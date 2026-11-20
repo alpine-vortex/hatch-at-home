@@ -193,7 +193,7 @@ class HatchPetCardSeason extends HatchPetCardCrate {
   }
 
   // The props (3.2): bunting across the top, a balloon bunch at one side, the cake beside the pet.
-  // Drawn when the party is on, taken down when it is not (the day turning). aria-hidden, under the
+  // Drawn when the party is on, taken down when it is not (the day turning). Décor aria-hidden, under the
   // pet's z-order (they stand at the sides, never over it). True when the party is on.
   _yourPartyProps(s) {
     const on = this._yourPartyOn(s);
@@ -205,9 +205,9 @@ class HatchPetCardSeason extends HatchPetCardCrate {
     if (box) return true;
     const el = document.createElement("div");
     el.className = "yparty";
-    el.setAttribute("aria-hidden", "true");
-    el.innerHTML = `<div class="yp-bunting" style="background-image:url(${BASE}/ui/party_bunting.png?v=${VERSION})"></div>` +
-      `<img class="yp-balloons" src="${BASE}/ui/party_balloons.png?v=${VERSION}" alt="">` +
+    // The bunting and balloons are décor (aria-hidden); the cake is a real button, so not the wrapper.
+    el.innerHTML = `<div class="yp-bunting" aria-hidden="true" style="background-image:url(${BASE}/ui/party_bunting.png?v=${VERSION})"></div>` +
+      `<img class="yp-balloons" aria-hidden="true" src="${BASE}/ui/party_balloons.png?v=${VERSION}" alt="">` +
       `<button type="button" class="yp-cake" aria-label="blow out the candles"><img src="${BASE}/ui/party_cake_${this._candlesOut(s) ? "out" : "lit"}.png?v=${VERSION}" alt=""></button>`;
     const cake = el.querySelector(".yp-cake");
     cake.addEventListener("click", (e) => {

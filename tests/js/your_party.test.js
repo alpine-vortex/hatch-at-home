@@ -1,6 +1,6 @@
 // Birthday plan 3.1-3.5: your own party day. Source-shape tests (the card needs a browser): the
 // trigger is the server's count, the guard sits ahead of the season's branches, one party when the
-// pet's birthday is the same day, the copy is the plan's, props are aria-hidden and not the pet.
+// pet's birthday is the same day, the copy is the plan's, décor props are aria-hidden (the cake is a button) and not the pet.
 const test = require("node:test");
 const assert = require("node:assert");
 const vm = require("vm");
@@ -59,7 +59,9 @@ test("the first line is the big one, 6 s, with the birthday chirp", () => {
 
 test("props are aria-hidden, stand beside the pet, and calm() keeps confetti away", () => {
   const props = method("_yourPartyProps");
-  assert.match(props, /setAttribute\("aria-hidden", "true"\)/);
+  assert.match(props, /class="yp-bunting" aria-hidden="true"/);
+  assert.match(props, /class="yp-balloons" aria-hidden="true"/);
+  assert.doesNotMatch(props, /el\.setAttribute\("aria-hidden"/); // the cake button stays reachable
   assert.match(props, /party_bunting\.png[\s\S]*party_balloons\.png[\s\S]*party_cake_\$\{/);
   assert.match(method("_confetti"), /if \(calm\(\)\) return;/);
   assert.match(method("_greet"), /_yourPartyOn\(s\)\) this\._yourPartyConfetti\(s\)/);

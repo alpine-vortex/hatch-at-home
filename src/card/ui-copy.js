@@ -259,7 +259,7 @@ const PARTY_WISH = "yay!! now your wish comes true ♥"; // the candles blown ou
 const PARTY_CAKE = "birthday cake for breakfast! ♪"; // the feed scene on party day (plan 4.2)
 const PARTY_BOTH = "it's your birthday AND mine!!"; // its own birthday the same day (plan 3.4)
 function yourPartyLine(line, name) {
-  return name ? line.replace("{n}", name) : line.replace("{n}'s", "your").replace(", {n}", "").replace(" {n}", "");
+  return name ? line.replace("{n}", () => name) : line.replace("{n}'s", "your").replace(", {n}", "").replace(" {n}", "");
 }
 // The visit's celebration lines: one a look, and always a place for it.
 const CELEBRATION_NOTES = new Set(["your_birthday", "pet_birthday", "birthday_friends", "friends_for"]);
@@ -287,7 +287,7 @@ const BIRTHDAY_SOON = {
 const BIRTHDAY_SOON_IDLE_MAX = 2; // idle lines a device says for one count, besides the look's note
 const BIRTHDAY_SOON_EVERY_MS = [90000, 150000];
 function birthdaySoonLine(line, name) {
-  return name ? line.replace("{n}", name) : line.replace(", {n}", "").replace(" {n}", "");
+  return name ? line.replace("{n}", () => name) : line.replace(", {n}", "").replace(" {n}", "");
 }
 // The tip-off (birthday plan 4.4): another person's birthday is 1-3 days off; names no one.
 function houseTipOffLine(days) {
