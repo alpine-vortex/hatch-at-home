@@ -74,7 +74,13 @@ class HatchPetCardLooks extends HatchPetCardTick {
     // The hold ran out on states that may be yesterday's: no dream or wish this look (their
     // keys stay unused for the next).
     const stale = !!this._resumedAt;
-    const dreamLine = !stale && this._dreamText(s, dreamt);
+    // The day after your party (plan 8.2): a party dream takes the dream's slot, spent when said (the
+    // day's dream with it); then the year to go, only in a spare slot (one the gift doesn't need).
+    if (this._leftoversDue(s, "dream-") && lines.length < FIRST_LOOK_LINES) {
+      lines.push([LEFTOVERS.dream, 5000, { then: () => this._leftoversFirst(s, "dream-") && oncePerDay(`dream-${device}`) }]);
+      if (lines.length < extras) lines.push([LEFTOVERS.year, 4500]);
+    }
+    const dreamLine = !stale && !this._leftoversDue(s, "dream-") && this._dreamText(s, dreamt);
     if (dreamLine && lines.length < FIRST_LOOK_LINES && oncePerDay(`dream-${device}`)) {
       lines.push([dreamLine, 5000]);
       if (dreamt.kind === "picked") this._dreamStoryTold(s, dreamt.pick); // its callback (F2)

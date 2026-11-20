@@ -72,12 +72,25 @@ test("none on a shared screen, an egg, no user, no day after, or while the party
 
 test("the copy is the plan's, with the name or without it", () => {
   const ctx = vm.createContext({});
-  vm.runInContext(`${grab(/\nconst LEFTOVERS = \{[^\n]*\n/)}${grab(/\nfunction yourPartyLine\([\s\S]*?\n\}\n/)}this.api = { LEFTOVERS, yourPartyLine };`, ctx);
+  vm.runInContext(`${grab(/\nconst LEFTOVERS = \{[\s\S]*?\};\n/)}${grab(/\nfunction yourPartyLine\([\s\S]*?\n\}\n/)}this.api = { LEFTOVERS, yourPartyLine };`, ctx);
   const { LEFTOVERS, yourPartyLine } = ctx.api;
   assert.strictEqual(LEFTOVERS.look, "best party ever!! thank you, {n} ♥");
   assert.strictEqual(LEFTOVERS.cake, "leftover cake! still yummy ♪");
   assert.strictEqual(yourPartyLine(LEFTOVERS.look, "Bee"), "best party ever!! thank you, Bee ♥");
   assert.strictEqual(yourPartyLine(LEFTOVERS.look, ""), "best party ever!! thank you ♥");
+  assert.strictEqual(LEFTOVERS.dream, "i dreamed about your party! the balloons floated all the way to the moon ♪");
+  assert.strictEqual(LEFTOVERS.year, "a whole year till the next one! i'm counting ♪");
+  assert.doesNotMatch(LEFTOVERS.year, /\d/, "no number: the card never has the date");
+});
+
+test("8.2: the party dream takes the dream's slot once, spent when said; the year only in a spare slot", () => {
+  const look = method("_firstLook");
+  assert.match(look, /if \(this\._leftoversDue\(s, "dream-"\) && lines\.length < FIRST_LOOK_LINES\) \{\s*lines\.push\(\[LEFTOVERS\.dream, 5000, \{ then: \(\) => this\._leftoversFirst\(s, "dream-"\) && oncePerDay\(`dream-\$\{device\}`\) \}\]\);\s*if \(lines\.length < extras\) lines\.push\(\[LEFTOVERS\.year, 4500\]\);/);
+  // the house's dream waits while the party dream is still to come
+  assert.match(look, /const dreamLine = !stale && !this\._leftoversDue\(s, "dream-"\) && this\._dreamText\(s, dreamt\);/);
+  // after the thanks, before the house's dream
+  assert.ok(look.indexOf("LEFTOVERS.look") < look.indexOf("LEFTOVERS.dream"));
+  assert.ok(look.indexOf("LEFTOVERS.dream") < look.indexOf("const dreamLine"));
 });
 
 test("the first look says the thanks once, with the birthday name", () => {

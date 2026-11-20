@@ -264,7 +264,10 @@ const PARTY_CAKE = "birthday cake for breakfast! ♪"; // the feed scene on part
 const PARTY_BOTH = "it's your birthday AND mine!!"; // its own birthday the same day (plan 3.4)
 // The day after your party (plan 7.4): the first look's thanks (`{n}` as PARTY_YOURS, through
 // yourPartyLine) and the feed scene's leftover slice, each once.
-const LEFTOVERS = { look: "best party ever!! thank you, {n} ♥", cake: "leftover cake! still yummy ♪" };
+// The party dream (plan 8.2) and the year to go (no number: the card never has the date).
+const LEFTOVERS = { look: "best party ever!! thank you, {n} ♥", cake: "leftover cake! still yummy ♪",
+  dream: "i dreamed about your party! the balloons floated all the way to the moon ♪",
+  year: "a whole year till the next one! i'm counting ♪" };
 // A balloon popped (plan 7.1). The last line is never the third pop's (the bunch is empty then).
 const PARTY_POP = ["pop! ♪", "eek! that was loud!", "one more! one more!"];
 // Where each balloon pops, in % of the bunch's art (blue on top first, then yellow, then pink), and the puff's life.
