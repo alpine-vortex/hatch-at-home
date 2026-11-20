@@ -15,7 +15,7 @@ const store = () => {
 };
 const spec = ({ season = TURKEY, party = true, free = true, ls = store() } = {}) => ({
   methods: ["_partyGuestTick", "_partyGuestLog", "_partyGuestPick", "_partyGuestOf"],
-  consts: ["PARTY_GUEST_ART", "PARTY_GUEST_TURNS", "PARTY_GUESTS_MAX", "PARTY_GUEST_GAP_MS", "VISIT_CHECK_MS"],
+  consts: ["PARTY_GUEST_ART", "PARTY_GUEST_LTR", "PARTY_GUEST_TURNS", "PARTY_GUESTS_MAX", "PARTY_GUEST_GAP_MS", "VISIT_CHECK_MS"],
   watch: ["_visitorStart", "_seasonVisitor"],
   returns: { _yourPartyOn: party, _visitorFree: free, _yourPartyKey: "hatch-yourparty-guests-dev-u-2026", _birthdayPrefs: { year: 2026 } },
   globals: { localStorage: ls, seasonNow: () => season, visitorList: (w) => w?.visitors || [], turnHash: (t) => t.length },
@@ -31,7 +31,7 @@ test("guests come in turn, an hour apart, four a day at most: a hatted visitor, 
   assert.strictEqual(tick(w), true, "the first at the first free look");
   const v = visits(w)[0];
   assert.strictEqual(v.name, "_visitorStart");
-  assert.deepStrictEqual(JSON.parse(JSON.stringify(v.args[2])), { ltr: true, count: false, party: true }, "never counted: not the day's visit, a friend or the meter");
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(v.args[2])), { ltr: true, count: false, party: true }, "never counted (a flyer: from the left): not the day's visit, a friend or the meter");
   assert.ok(["chickadee", "stellersjay", "snail"].includes(v.args[1].id), "a visitor with hatted art, never a crosser");
   w.run(30 * 60000);
   assert.strictEqual(tick(w), false, "not within the hour");
@@ -85,7 +85,7 @@ test("no hatted art for the world and no season guest: nobody comes", () => {
 test("the art, the CSS lift and the greet are wired", () => {
   assert.match(src, /visitor_\$\{world\}_\$\{v\.id\}\$\{party \? "_party" : ""\}_\$\{n\}\.png/);
   assert.match(src, /\.season \.vis\.party\.fly \{ margin-top: calc\(var\(--px, 2px\) \* -6\); \}/);
-  assert.match(src, /V\?\.party \? pick\(PARTY_GUEST_LINES\)/);
+  assert.match(src, /V\?\.party \? pick\(v\.lines \|\| PARTY_GUEST_LINES\)/);
   const fs = require("fs");
   const path = require("path");
   const ui = path.join(__dirname, "../../custom_components/virtual_pet/frontend/ui");
@@ -93,4 +93,44 @@ test("the art, the CSS lift and the greet are wired", () => {
     assert.ok(fs.existsSync(path.join(ui, `visitor_woodland_${id}_party_${n}.png`)), `${id} ${n}`);
   }
   for (const n of [1, 2]) assert.ok(fs.existsSync(path.join(ui, `season_thanksgiving_turkey_party_${n}.png`)));
+});
+
+test("the second guest is a stranger pet: another species, this pet's stage, started once its art is drawn", async () => {
+  const pet = { id: "otter", name: "sea otter", a: "a sea otter", walk: true, srcs: ["data:1", "data:2"] };
+  const sp = spec();
+  const asked = [];
+  sp.fields = { _worlds: { woodland: { roster: ["fox", "bird"] }, pond: { roster: ["otter", "fox"] } },
+    _partyPetArt: (...a) => (asked.push(a), Promise.resolve(pet)) }; // async: the harness doesn't stub it
+  const w = world(sp);
+  Object.assign(w.slide, { speciesId: "fox", drawn: "teen" });
+  tick(w);
+  w.run(HOUR);
+  assert.strictEqual(tick(w), true);
+  assert.strictEqual(asked.length, 1);
+  assert.notStrictEqual(asked[0][0], "fox", "never this pet's own species");
+  assert.ok(["bird", "otter"].includes(asked[0][0]));
+  assert.strictEqual(asked[0][1], "teen", "this pet's stage");
+  await new Promise((r) => setImmediate(r));
+  const v = visits(w);
+  assert.strictEqual(v.length, 2);
+  assert.strictEqual(v[1].args[1], pet);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(v[1].args[2])), { ltr: false, count: false, party: true }, "a walker: from the right");
+});
+
+test("a stranger pet whose art fails, or a screen taken meanwhile, brings nobody", async () => {
+  const sp = spec();
+  sp.fields = { _worlds: { pond: { roster: ["otter"] } }, _partyPetArt: () => Promise.resolve(null) };
+  const w = world(sp);
+  w.slide.speciesId = "fox";
+  w.card._partyGuestPick(w.slide, 1)();
+  await new Promise((r) => setImmediate(r));
+  assert.strictEqual(visits(w).length, 0, "no art");
+  const sp2 = spec();
+  sp2.fields = { _worlds: { pond: { roster: ["otter"] } }, _partyPetArt: () => Promise.resolve({ id: "otter", walk: true, srcs: [] }) };
+  const w2 = world(sp2);
+  w2.slide.speciesId = "fox";
+  w2.card._partyGuestPick(w2.slide, 1)();
+  w2.slide.visitor = {}; // the day's own visitor came first
+  await new Promise((r) => setImmediate(r));
+  assert.strictEqual(visits(w2).length, 0, "a visit on");
 });

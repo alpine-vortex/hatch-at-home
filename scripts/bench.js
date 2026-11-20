@@ -1336,11 +1336,16 @@ const PRESETS = {
     // Party guests (7.3): each woodland visitor in its party hat, frame 1 at 420 and frame 2 at 330, on the left
     // (as the card sends them); the turkey in its hat. With the props up (partyDay).
     for (const id of ["chickadee", "stellersjay", "snail"]) {
-      for (const [frame, side, width] of [[1, "left", 420], [2, "left", 330]]) { // a party guest comes from the left
+      const side = id === "snail" ? "right" : "left"; // as the card sends them: a walker from the right
+      for (const [frame, width] of [[1, 420], [2, 330]]) {
         out.push({ ...base, width, name: `birthday/guest-${id}-${frame}-${width}`, group: "birthday-guests",
           label: `party guest ${id}, frame ${frame}, ${side} at ${width} (7.3)`, yourBirthdayIn: 0, partyDay: {},
           visitor: { id, frame, side, party: true } });
       }
+    }
+    for (const [pet, stage, width] of [["otter", "adult", 420], ["tarantula", "adult", 330], ["owl", "child", 420], ["corgi", "baby", 330]]) {
+      out.push({ ...base, stage, width, name: `birthday/guest-pet-${pet}-${stage}-${width}`, group: "birthday-guests",
+        label: `stranger pet ${pet}, ${stage} at ${width} (7.5)`, yourBirthdayIn: 0, partyDay: {}, visitor: { pet, party: true, frame: 1, side: "right" } });
     }
     out.push({ ...base, name: "birthday/guest-turkey", group: "birthday-guests", label: "party guest turkey (7.3)",
       yourBirthdayIn: 0, season: "thanksgiving", partyDay: {}, seasonVisitor: { season: "thanksgiving", at: 0.3, party: true } });

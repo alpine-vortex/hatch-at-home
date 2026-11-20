@@ -183,15 +183,65 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
     if (kind === "world") {
       const ids = PARTY_GUEST_ART[s.worldKey] || [];
       const list = visitorList(s.world).filter((v) => ids.includes(v.id) && !v.cross);
-      // From the left, away from the balloons (the cake is low: a flyer passes over it, a walker in front).
-      return list.length ? () => this._visitorStart(s, list[roll % list.length], { ltr: true, count: false, party: true }) : null;
+      const v = list[roll % list.length];
+      return list.length ? () => this._visitorStart(s, v, { ltr: PARTY_GUEST_LTR(v), count: false, party: true }) : null;
     }
     if (kind === "season") {
       const season = seasonNow(this._config);
       const party = season?.visitor?.party;
       return party ? () => this._seasonVisitor(s, { ...season, visitor: { ...season.visitor, ...party } }) : null;
     }
+    if (kind === "pet") {
+      // A stranger pet (plan 7.5): a species from any world but this pet's, at this pet's stage. Not
+      // the household's: drawn here alone, never a link, never reported.
+      const ids = [...new Set(Object.values(this._worlds || {}).flatMap((w) => w.roster || []))].filter((id) => id !== s.speciesId);
+      if (!ids.length) return null;
+      const id = ids[roll % ids.length];
+      const stage = s.drawn || "adult";
+      return () => this._partyPetArt(id, stage).then((v) => {
+        if (v && !s.visitor && !s.seasonVisit && this._visitorFree(s) && this._yourPartyOn(s)) {
+          this._visitorStart(s, v, { ltr: PARTY_GUEST_LTR(v), count: false, party: true });
+        }
+      });
+    }
     return null;
+  }
+
+  // A stranger pet's visit art (plan 7.5): its content frames at `stage` with the party hat, seated as the
+  // party print seats it (partyHatSeat), drawn once on canvases. A visitor-like {id, name, walk, srcs,
+  // lines}, or null when anything fails to load (no guest then).
+  async _partyPetArt(id, want) {
+    try {
+      const sp = await loadJson(`sprites/${id}/species.json`);
+      const stage = sp.stages?.includes(want) ? want : sp.stage_fallback?.[want] || sp.stages?.[sp.stages.length - 1];
+      const srcs = [1, 2].map((n) => spriteSrc(id, `${stage}_content_${n}`));
+      const hatSrc = `${BASE}/ui/season_party_${PARTY.costumes[0].art}.png?v=${VERSION}`;
+      let frames, hat;
+      try {
+        [hat, ...frames] = await Promise.all([hatSrc, ...srcs].map(loadImage));
+      } finally {
+        releaseImages([hatSrc, ...srcs]);
+      }
+      // The hat in sprite px, as the print sizes it against a pet box of 62% of a 384 px scene.
+      const { sink, width } = PARTY.costumes[0];
+      const hw = (width * 256) / (384 * 0.62 * (sp.scale?.[stage] || 1));
+      const hh = (hw * hat.naturalHeight) / hat.naturalWidth;
+      const art = frames.map((img) => {
+        const seat = partyHatSeat(sp, stage, (x, y) => this._headTop(img, x, y));
+        const c = document.createElement("canvas");
+        c.width = 256;
+        c.height = 256 + PARTY_PET_PAD;
+        const g = c.getContext("2d");
+        g.imageSmoothingEnabled = false;
+        g.drawImage(img, 0, PARTY_PET_PAD, 256, 256);
+        if (seat) g.drawImage(hat, seat.x - hw / 2, PARTY_PET_PAD + seat.top + sink - hh, hw, hh);
+        return c.toDataURL();
+      });
+      const name = (sp.short || sp.name || id).toLowerCase();
+      return { id, name, a: `${/^[aeiou]/.test(name) ? "an" : "a"} ${name}`, walk: true, srcs: art, lines: PARTY_PET_LINES };
+    } catch (err) {
+      return null;
+    }
   }
 
   // --- Fresh-expand E10: a rare pair, a guest from another world (card only) --------
@@ -240,8 +290,9 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
       `${frames.length > 1 ? " flap" : ""}${isCalm ? "" : v.cross ? " cross" : " in"}${party ? " party" : ""}`;
     el.dataset.visitor = `${world}/${v.id}`;
     el.style.setProperty("--in-ms", `${inMs}ms`);
-    el.innerHTML = frames.map((n) =>
-      `<img src="${BASE}/ui/visitor_${world}_${v.id}${party ? "_party" : ""}_${n}.png?v=${VERSION}" alt="">`).join("");
+    el.innerHTML = frames.map((n) => `<img src="${v.srcs ? v.srcs[n - 1]
+      : `${BASE}/ui/visitor_${world}_${v.id}${party ? "_party" : ""}_${n}.png?v=${VERSION}`}" alt="">`).join("");
+    if (v.srcs) el.classList.add("petguest"); // a stranger pet (plan 7.5): its art drawn on the card
     s.seasonBox.append(el);
     const now = Date.now();
     const V = s.visitor = { el, els: [el], v, until: now + total, greetAt, guest: guest ? world : null, party };
@@ -306,7 +357,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
     const baby = this._babySet(s, "visit");
     // A guest says where it's from; a pair, that there are two (E10); else the viewer's
     // favourite (F4); else a friend's line (E3), else the usual. Baby talk stays.
-    const rare = !baby && (V?.party ? pick(PARTY_GUEST_LINES).replace("{v}", () => v.name)
+    const rare = !baby && (V?.party ? pick(v.lines || PARTY_GUEST_LINES).replace("{v}", () => v.name).replace("{a}", () => v.a)
       : V?.guest ? VISIT_GUEST[V.guest] : V?.pair ? turnPick(PAIR_LINES, `${s.ids?.device}|pair`) : null);
     // The favourite: on the viewer's own screen, 1 visit in 2, with a hop and hearts.
     if (!baby && !rare && !sharedScreen() && s.mine?.fav_visitor === v.id && Math.random() < 0.5) {

@@ -277,6 +277,13 @@ const PARTY_GUESTS_MAX = 4; // a day on this device, for this person
 const PARTY_GUEST_GAP_MS = 3600000; // between two guests
 // The pet's greet of a hatted world visitor, `{v}` its name.
 const PARTY_GUEST_LINES = ["{v} came to the party! ♪", "you came, {v}! have some cake ♪", "{v} wore a party hat! ♥"];
+// A stranger pet (plan 7.5): another species, never the household's. `{v}` its short name, lower case;
+// `{a}` the same with "a" or "an".
+const PARTY_PET_LINES = ["{a} came to the party! ♪", "hi, {v}! i love your hat ♥", "a new friend! hello, {v} ♪"];
+// Which side a guest comes from: a flyer from the left (over the cake, clear of the balloons), a walker
+// from the right (in front of the balloons' strings, clear of the cake). Either way it faces the pet.
+const PARTY_GUEST_LTR = (v) => !v.walk;
+const PARTY_PET_PAD = 64; // sprite px above the art for the hat
 const BALLOON_REFILL_MS = 3600000; // an emptied bunch comes back an hour later (a screen that stays up)
 function yourPartyLine(line, name) {
   return name ? line.replace("{n}", () => name) : line.replace("{n}'s", "your").replace(", {n}", "").replace(" {n}", "");

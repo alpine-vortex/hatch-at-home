@@ -729,6 +729,9 @@ const STYLE = `
   /* A party guest (plan 7.3): the hat's 6 cells on top; over the party's props (the cake, the balloons). */
   .season .vis.party.fly { margin-top: calc(var(--px, 2px) * -6); }
   .season .vis.party, .season .sfly.party { z-index: 2; }
+  /* A stranger pet (plan 7.5): about 60% of the pet's size, the hat's pad on top (64 of 320 px). */
+  .season .vis.petguest { width: 27%; }
+  .season .vis.petguest.rtl { --stop: calc(97% - var(--edge, 0%) - 27%); }
   .season .vis.vis-shootingstar { top: 28%; } /* under the bubble, over the pet's head */
   /* The art faces right; leaving, it turns back the way it came. */
   .season .vis.rtl img, .season .vis.ltr.out img { transform: scaleX(-1); }

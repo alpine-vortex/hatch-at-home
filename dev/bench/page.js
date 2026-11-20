@@ -622,7 +622,8 @@
     const home = vis.guest ? card._worlds?.[vis.guest] : s.world;
     if (vis.guest && !home) throw new Error(`no world ${vis.guest}`);
     const list = visitorList(home);
-    const v = list.find((x) => x.id === vis.id) || list[0];
+    // `pet: "<species>"` (birthday plan 7.5): a stranger pet at this pet's stage, in its party hat.
+    const v = vis.pet ? await card._partyPetArt(vis.pet, s.drawn || "adult") : list.find((x) => x.id === vis.id) || list[0];
     if (!v) throw new Error(`no visitor ${vis.id} in ${vis.guest || s.worldKey}`);
     // `friend` (fresh-expand E3): seen here on enough days already, so the greet is a
     // friend line (the coin pinned to the friend side).
