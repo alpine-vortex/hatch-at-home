@@ -256,7 +256,10 @@ const PARTY = { key: "party", costumes: [{ art: "hat", sink: 7, width: 56 }],
 const PARTY_YOURS = ["best day of the year! it's {n}'s birthday!", "make a wish, {n}! ♥", "i saved you the biggest slice ♪",
   "party party party!! ♪", "you're the best, {n} ♥", "this is the best party ever! ♪", "i can't stop hopping!! ♪",
   "one more slice? ♥"];
-const PARTY_WISH = "yay!! now your wish comes true ♥"; // the candles blown out (plan 4.1)
+// Make a wish (plan 8.1): the cake tap asks (`{n}` through yourPartyLine), the candles go out a beat later.
+const PARTY_WISH_ASK = "make a wish, {n}! ... ok, blow! ♪";
+const WISH_BEAT_MS = 2600;
+const PARTY_WISH = "yay!! i won't tell anyone your wish ♥"; // the candles blown out (plans 4.1, 8.1)
 const PARTY_CAKE = "birthday cake for breakfast! ♪"; // the feed scene on party day (plan 4.2)
 const PARTY_BOTH = "it's your birthday AND mine!!"; // its own birthday the same day (plan 3.4)
 // The day after your party (plan 7.4): the first look's thanks (`{n}` as PARTY_YOURS, through

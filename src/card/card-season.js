@@ -299,13 +299,20 @@ class HatchPetCardSeason extends HatchPetCardCrate {
   // out-candled. The pet leans toward the cake, lit swaps to out, confetti, the chirp, the line.
   _blowOut(s, cake) {
     if (this._owned(s) || s.scene || this._candlesOut(s) || !this._yourPartyOn(s)) return;
+    // Make a wish (plan 8.1): spent and no longer a button at the first tap, so a second tap or a close
+    // mid-beat never plays it twice; the beat finds the party gone, a scene or the screen owned: out, quietly.
     this._yourPartyFirst(s, "candles-");
-    this._cakeSpent(cake);
-    this._patLean(s, "l", 1200);
-    this._animate(s, s.pet, "perk", 320);
-    this._confetti(s);
-    this._chirp(s, "birthday");
-    this._speak(s, PARTY_WISH, 4500, { catch: true });
+    cake.disabled = true;
+    this._speak(s, yourPartyLine(PARTY_WISH_ASK, this._birthdayName(s)), WISH_BEAT_MS, { catch: true });
+    this._later(s, WISH_BEAT_MS, () => {
+      this._cakeSpent(cake);
+      if (this._owned(s) || s.scene || !this._yourPartyOn(s)) return;
+      this._patLean(s, "l", 1200);
+      this._animate(s, s.pet, "perk", 320);
+      this._confetti(s);
+      this._chirp(s, "birthday");
+      this._speak(s, PARTY_WISH, 4500, { catch: true });
+    }, { key: "party.wish" });
   }
 
   // The cake after the candles: out art, no longer a button.

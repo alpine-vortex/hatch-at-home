@@ -77,9 +77,13 @@ test("4.1: the cake is a button that blows the candles out, once a day, with the
   const blow = method("_blowOut");
   assert.match(blow, /_candlesOut\(s\)/);
   assert.match(blow, /_yourPartyFirst\(s, "candles-"\)/);
+  // 8.1: the ask first, the candles a beat later through the ledger, the party re-checked
+  assert.match(blow, /cake\.disabled = true;\s*this\._speak\(s, yourPartyLine\(PARTY_WISH_ASK/);
+  assert.match(blow, /this\._later\(s, WISH_BEAT_MS, \(\) => \{\s*this\._cakeSpent\(cake\);\s*if \(this\._owned\(s\) \|\| s\.scene \|\| !this\._yourPartyOn\(s\)\) return;/);
   assert.match(blow, /_patLean\(s, "l"/);
-  assert.match(blow, /_confetti\(s\)[\s\S]*_chirp\(s, "birthday"\)[\s\S]*PARTY_WISH/);
-  assert.match(src, /const PARTY_WISH = "yay!! now your wish comes true ♥";/);
+  assert.match(blow, /_confetti\(s\)[\s\S]*_chirp\(s, "birthday"\)[\s\S]*PARTY_WISH, 4500/);
+  assert.match(src, /const PARTY_WISH_ASK = "make a wish, \{n\}! \.\.\. ok, blow! ♪";/);
+  assert.match(src, /const PARTY_WISH = "yay!! i won't tell anyone your wish ♥";/);
   assert.match(method("_cakeSpent"), /party_cake_lit[\s\S]*party_cake_out/);
 });
 
