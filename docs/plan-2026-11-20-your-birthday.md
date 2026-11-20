@@ -154,3 +154,12 @@ Order of cuts if time runs short: 4.3, then 4.4, then 4.2. S1-S3 are the must-sh
 
 - A settings row for `call_me` (set it yourself).
 - A birthday-list page for the household.
+
+## Audit (2026-11-20, tier 2, range 5294bd46..3ae09f3b)
+
+Player impact 1, nits 7. Fixed in 49167ce8: the cake button sat inside an aria-hidden
+wrapper (screen readers skipped it), and `{n}` replacement now takes the name as plain text.
+Left as is: `call_me` survives "forget my birthday" (by design, 1.5; "forget my data" clears
+it); tip-off day key in the browser's zone; the admin service can't clear a birthday; a stale
+party on a card whose channel drops past midnight; cake slice on the murk exit ease; ß upper-cases
+to SS. Server and privacy bar: no findings.
