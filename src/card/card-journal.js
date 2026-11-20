@@ -222,18 +222,92 @@ class HatchPetCardJournal extends HatchPetCardSheets {
     return `<div class="photos"><span>photos</span><div class="prow">${prints.join("")}</div></div>`;
   }
 
-  // The journal's "birthday parties" row (birthday plan 4.3): the lit cake and a line for each
-  // year kept, the viewer's own (mine, else the last visit's reply). None on a shared screen, and
-  // gone with the list ("forget my birthday" empties it).
+  // The journal's "birthday parties" row (birthday plan 4.3, 7.2): a print for each year kept, the
+  // viewer's own (mine, else the last visit's reply), the pet as it is now in the party hat with the
+  // lit cake, and the line under it. Until a print is drawn (or when none can be: an egg, a tainted
+  // canvas) the small cake icon stands in. None on a shared screen, and gone with the list
+  // ("forget my birthday" empties it).
   _partyRow(s) {
     if (sharedScreen()) return "";
-    const years = (s.mine?.parties || s.bdayReply?.parties || []).filter((y) => typeof y === "string");
+    const years = this._partyYears(s);
     if (!years.length) return "";
     const name = this._birthdayName(s);
-    const rows = years.map((y) =>
-      `<div class="gen"><img src="${BASE}/ui/party_cake_lit.png?v=${VERSION}" alt="" ` +
-      `style="width:20px;height:18px;image-rendering:pixelated;vertical-align:middle"> ${escape(partyKeepsakeLine(name, y))}</div>`);
-    return `<div class="photos"><span>birthday parties</span>${rows.join("")}</div>`;
+    const want = this._partyPrintWant(s);
+    if (want && years.some((y) => s.partyPrints?.get(y)?.sig !== want.sig(y))) this._loadPartyPrints(s);
+    const prints = [];
+    const lines = [];
+    for (const y of years) {
+      const line = escape(partyKeepsakeLine(name, y));
+      const p = want && s.partyPrints?.get(y);
+      if (p?.url && p.sig === want.sig(y)) {
+        prints.push(`<figure class="print pparty"><img src="${p.url}" alt="${escape(`photo of ${want.name || "your pet"}, ${partyKeepsakeLine(name, y)}`)}">` +
+          `<figcaption>${line}</figcaption></figure>`);
+      } else {
+        lines.push(`<div class="gen"><img src="${BASE}/ui/party_cake_lit.png?v=${VERSION}" alt="" ` +
+          `style="width:20px;height:18px;image-rendering:pixelated;vertical-align:middle"> ${line}</div>`);
+      }
+    }
+    return `<div class="photos"><span>birthday parties</span>${prints.length ? `<div class="prow">${prints.join("")}</div>` : ""}${lines.join("")}</div>`;
+  }
+
+  _partyYears(s) {
+    return [...new Set((s.mine?.parties || s.bdayReply?.parties || []).filter((y) => typeof y === "string"))];
+  }
+
+  // The party print's pet: the one on this slide as it is now (accepted, plan 7.2: after it grows, the
+  // print shows the new stage). null for an egg or a pet not known yet.
+  _partyPrintWant(s) {
+    const life = this._state(s, "sensor.life_stage");
+    const species = life?.attributes?.species;
+    const stage = life?.state;
+    if (!species || !stage || stage === "egg" || s.egg) return null;
+    const dev = this._hass.devices?.[s.ids?.device];
+    const name = dev?.name_by_user || dev?.name || "";
+    return { species, stage, name, sig: (y) => JSON.stringify([species, stage, name, y]) };
+  }
+
+  // Draw the party prints the row wants, one load in flight per slide. A draw that fails is kept as
+  // failed (no URL), so the redraw it asks for does not ask again.
+  _loadPartyPrints(s) {
+    if (!s.partyLoad) s.partyLoad = this._drawPartyPrints(s).finally(() => { s.partyLoad = null; });
+    return s.partyLoad;
+  }
+
+  async _drawPartyPrints(s) {
+    const id = s.ids?.["sensor.life_stage"];
+    const want = this._partyPrintWant(s);
+    if (!id || !want || sharedScreen()) return;
+    const epoch = s.photoEpoch || 0;
+    const years = this._partyYears(s);
+    const kept = s.partyPrints || new Map();
+    const next = new Map();
+    const made = [];
+    for (const y of years) {
+      const sig = want.sig(y);
+      const had = kept.get(y);
+      if (had?.sig === sig) {
+        next.set(y, had);
+        continue;
+      }
+      const photo = { species: want.species, stage: want.stage, name: want.name };
+      const print = await this._renderPhoto(photo, { party: { year: y } }).then((canvas) => new Promise((resolve, reject) => {
+        try {
+          canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("no print"))), "image/png");
+        } catch (err) {
+          reject(err);
+        }
+      })).then((blob) => ({ url: URL.createObjectURL(blob) })).catch(() => ({ url: null }));
+      if (print.url) made.push(print.url);
+      next.set(y, { ...print, sig });
+    }
+    // Dropped meanwhile (another pet, a shared screen), or the journal closed: nothing kept.
+    if ((s.photoEpoch || 0) !== epoch || s.ids?.["sensor.life_stage"] !== id || sharedScreen() || !s.journal) {
+      made.forEach((url) => URL.revokeObjectURL(url));
+      return;
+    }
+    for (const [y, p] of kept) if (next.get(y) !== p && p.url) URL.revokeObjectURL(p.url);
+    s.partyPrints = next;
+    if (s.journal && !s.finds) this._renderJournal(s); // never over the finds page
   }
 
   _photoAlt(photo) {
@@ -302,13 +376,15 @@ class HatchPetCardJournal extends HatchPetCardSheets {
   // Draw a photo: a cream print with a thicker bottom edge, the creature's day
   // backdrop cropped square, the pet as it was (its drawn stage, scale and
   // perch, as on the shelf), one flair per place, its name and the day.
-  // sprite: false leaves the pet out (card-check compares the two).
-  async _renderPhoto(photo, { sprite = true } = {}) {
+  // sprite: false leaves the pet out (card-check compares the two). party: {year} makes the
+  // birthday party print (plan 7.2): no flair, the party hat on the pet and the lit cake beside it,
+  // "birthday party ♪" and the year under its name.
+  async _renderPhoto(photo, { sprite = true, party = null } = {}) {
     const sp = await loadJson(`sprites/${photo.species}/species.json`);
     const { w, h, px, pic, edge } = PHOTO;
     const stage = sp.stages?.includes(photo.stage) ? photo.stage
       : sp.stage_fallback?.[photo.stage] || sp.stages?.[sp.stages.length - 1];
-    const traits = (photo.traits || []).filter((t) => FLAIR[t]);
+    const traits = party ? [] : (photo.traits || []).filter((t) => FLAIR[t]);
     const shown = ["head", "air", "ground"].map((place) => [place, traits.find((t) => FLAIR[t].place === place)])
       .filter(([, t]) => t);
     const flairSrc = (t) => `${BASE}/ui/flair_${FLAIR[t].art ? `${t}_1` : t}.png?v=${VERSION}`;
@@ -324,6 +400,15 @@ class HatchPetCardJournal extends HatchPetCardSheets {
       [back, pet, perch, ...pieces] = await Promise.all(srcs.map((src, i) => (src ? (i > 2 ? loadImage(src).catch(() => null) : loadImage(src)) : null)));
     } finally {
       releaseImages(srcs.filter(Boolean)); // the locals hold them for the draw; the map does not keep them
+    }
+    let hatImg = null, cakeImg = null;
+    if (party) {
+      const props = [`${BASE}/ui/season_party_${PARTY.costumes[0].art}.png?v=${VERSION}`, `${BASE}/ui/party_cake_lit.png?v=${VERSION}`];
+      try {
+        [hatImg, cakeImg] = await Promise.all(props.map((src) => loadImage(src).catch(() => null)));
+      } finally {
+        releaseImages(props);
+      }
     }
     try {
       await document.fonts?.load("22px Tiny5");
@@ -358,11 +443,22 @@ class HatchPetCardJournal extends HatchPetCardSheets {
     const cx = edge + pic / 2;
     const left = cx - box / 2;
     const top = edge + pic * 0.96 - box;
-    if (perch) g.drawImage(perch, left, top, box, box);
-    if (pet) g.drawImage(pet, left, top, box, box);
     const k = box / 256;
     const [hx, hy] = sp.head?.[stage] || [128, 96];
     const head = { x: left + hx * k, y: top + hy * k };
+    if (cakeImg) { // behind the pet, beside it
+      const c = partyCakeBox({ edge, pic, cx, box, away: head.x >= cx ? -1 : 1, ratio: cakeImg.naturalWidth / cakeImg.naturalHeight });
+      g.drawImage(cakeImg, c.x, c.y, c.w, c.h);
+    }
+    if (perch) g.drawImage(perch, left, top, box, box);
+    if (pet) g.drawImage(pet, left, top, box, box);
+    const seat = hatImg && pet ? partyHatSeat(sp, stage, (x, y) => this._headTop(pet, x, y)) : null;
+    if (seat) { // placed by its bottom middle, brim sunk in, as _costume places it on the screen
+      const { sink, width } = PARTY.costumes[0];
+      const hw = width * ks;
+      const hh = hw * hatImg.naturalHeight / hatImg.naturalWidth;
+      g.drawImage(hatImg, left + seat.x * k - hw / 2, top + (seat.top + sink) * k - hh, hw, hh);
+    }
     const fy = top + 224 * k;
     const half = box * 0.32;
     const away = head.x >= cx ? -1 : 1; // the air's flair on the other side from the head
@@ -383,10 +479,10 @@ class HatchPetCardJournal extends HatchPetCardSheets {
     g.font = "400 22px Tiny5, monospace";
     g.fillText(photo.name, w / 2, edge + pic + 36, pic);
     g.font = "400 14px Tiny5, monospace";
-    g.fillText("best friends ♥", w / 2, edge + pic + 58, pic);
+    g.fillText(party ? PARTY_PRINT : "best friends ♥", w / 2, edge + pic + 58, pic);
     g.font = "400 12px Tiny5, monospace";
     g.fillStyle = "#6a5a44";
-    g.fillText(localDay(photo.on, this._hass?.locale?.language), w / 2, edge + pic + 78, pic);
+    g.fillText(party ? String(party.year) : localDay(photo.on, this._hass?.locale?.language), w / 2, edge + pic + 78, pic);
     return canvas;
   }
 
@@ -623,6 +719,9 @@ class HatchPetCardJournal extends HatchPetCardSheets {
     s.photoLoad = null; // a load still running will find its epoch stale
     s.photos?.forEach((p) => URL.revokeObjectURL(p.url));
     s.photos = null;
+    s.partyLoad = null;
+    s.partyPrints?.forEach((p) => { if (p.url) URL.revokeObjectURL(p.url); });
+    s.partyPrints = null;
     if (this._photoFor?.s === s) this.shadowRoot.querySelector(".photo-dialog")?.close();
   }
 

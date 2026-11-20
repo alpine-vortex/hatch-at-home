@@ -1658,6 +1658,7 @@ const STYLE = `
   .prow { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 2px; }
   .print { margin: 0; flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; }
   .screen .status .print img { width: 72px; height: 91px; box-shadow: 2px 2px 0 rgba(58,42,26,.35); }
+  .print.pparty figcaption { max-width: 104px; text-align: center; line-height: 1.25; }
   .photo-dialog { width: min(300px, 90vw); box-sizing: border-box; padding: 12px; border: 3px solid #3a2a1a;
     border-radius: 12px; background: #e9e2c6; color: #2f3a24; font: 400 13px 'Tiny5', monospace; text-align: center; }
   .photo-dialog::backdrop { background: rgba(20, 16, 10, .65); }

@@ -1152,6 +1152,11 @@
       // The journal loads the species names first: wait for its tiles.
       // (Date is pinned, so count the tries instead of reading the clock.)
       for (let n = 0; !root.querySelector(".jgrid") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
+      // The party prints (birthday plan 7.2) are drawn after the journal opens: wait for them.
+      if (shot.parties) {
+        for (let n = 0; !root.querySelector(".pparty img") && n < 200; n++) await new Promise((r) => setTimeout(r, 25));
+        await Promise.all([...root.querySelectorAll(".pparty img")].map((img) => img.decode().catch(() => {})));
+      }
       if (shot.scrollEnd) cur.status.scrollTop = cur.status.scrollHeight; // the memories line (H7's seasons preset)
       if (shot.journalScroll) cur.status.querySelector(shot.journalScroll)?.scrollIntoView({ block: "center" }); // e.g. the parties row
     }

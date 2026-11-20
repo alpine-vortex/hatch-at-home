@@ -1327,6 +1327,11 @@ const PRESETS = {
     }
     out.push({ ...base, name: "birthday/party-thanksgiving", group: "birthday", label: "party day, Thanksgiving's treat day",
       yourBirthdayIn: 0, season: "thanksgiving", partyDay: { treatToday: true } });
+    // The journal's party print (7.2): the pet as it is now, in the party hat, the lit cake beside it.
+    for (const [species, stage, width] of [["fox", "adult", 420], ["fox", "adult", 330], ["axolotl", "child", 420]]) {
+      out.push({ ...base, species, stage, width, name: `birthday/journal-${species}-${stage}-${width}`, group: "birthday-journal",
+        label: `party print, ${species} ${stage} at ${width} (7.2)`, journal: true, view: "journal", parties: ["2026"], journalScroll: ".pparty" });
+    }
     return out;
   },
   feed() {

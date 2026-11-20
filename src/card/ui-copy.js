@@ -300,6 +300,9 @@ function houseTipOffLine(days) {
 }
 // The journal's keepsake entry (birthday plan 4.3): one per year kept, `{n}` the name.
 const partyKeepsakeLine = (name, year) => `${name ? `${name}'s` : "the"} birthday party, ${year}`;
+// The party print's middle line (plan 7.2): under the pet's name, over the year. The person's name
+// stays off the picture (it is in the line under the print).
+const PARTY_PRINT = "birthday party ♪";
 // What the pet tells only you (virtual_pet.visit's notes), each once.
 const NOTES = {
   pet_birthday: (n) => (n.years ? `it's my birthday!! i'm ${n.years} today! ♥` : `i'm ${months(n.months)} old today! ♥`),
@@ -779,6 +782,30 @@ function spriteSrc(speciesId, sprite) {
 const PHOTO = { w: 300, h: 380, px: 2, pic: 268, edge: 16 };
 const PHOTO_GROUND = { helper: 1.35, couch_potato: 1.35, player: -1.35, homebody: -1.3, fireside: 1.3, fog_wanderer: -0.6 };
 const PHOTO_GROUND_DY = { fog_wanderer: 4, homebody: 4, player: 0 }; // x ks below the feet, as the shelf has them
+// The party print's hat seat (plan 7.2), from species.json alone, as _hatSpot/_hatSeat place the
+// costume on the screen: the "hat" point for the content pose, else for the stage; [x, y, "exact"]
+// seats it at y, [x, y] at the lower of y and the scanned head top, none scans the head point.
+// `scan(x, y)` is the head top in sprite px (null: unreadable). Returns {x, top}, or null: no hat.
+function partyHatSeat(sp, stage, scan) {
+  const hat = sp.hat || {};
+  const key = `${stage}_content`;
+  const own = key in hat ? hat[key] : hat[stage];
+  if (own === null) return null; // no hat fits the pose
+  if (Array.isArray(own) && own[2] === "exact") return { x: own[0], top: own[1] };
+  const p = own || sp.head?.[stage];
+  if (!p) return null;
+  const scanned = scan(p[0], p[1]);
+  const top = own ? Math.max(own[1], scanned ?? own[1]) : scanned;
+  return top === null || top === undefined ? null : { x: p[0], top };
+}
+// The party print's cake (plan 7.2): 24% of the picture tall, as the screen's, its bottom at the
+// pet's feet line, beside the pet on the side away from its head, kept inside the picture.
+function partyCakeBox({ edge, pic, cx, box, away, ratio }) {
+  const h = 0.24 * pic;
+  const w = h * ratio;
+  const x = Math.min(edge + pic - w - 4, Math.max(edge + 4, away > 0 ? cx + box * 0.3 : cx - box * 0.3 - w));
+  return { x, y: edge + pic * 0.96 - h, w, h };
+}
 // Whether a shown element sits over another's, not just grazing its edge: they cross side to
 // side and a's bottom edge falls inside b (a hidden or missing one never does).
 const covers = (a, b) => {
