@@ -635,7 +635,7 @@
     try {
       V = card._visitorStart(s, v, vis.guest
         ? { ltr: vis.side !== "right", world: vis.guest, guest: true }
-        : { ltr: vis.side !== "right" });
+        : { ltr: vis.side !== "right", ...(vis.party ? { count: false, party: true } : {}) }); // `party` (plan 7.3): in a hat
     } finally {
       card._rareDay = rare;
     }
@@ -739,7 +739,7 @@
   // frame 1 or 2, with its first greet in the bubble: {season, at, frame, side}.
   async function seasonVisitorShot(card, cur, sv) {
     const season = card.constructor.seasons.find((x) => x.key === sv.season);
-    const { art, cls, ms, walk, greet } = season.visitor;
+    const { art, cls, ms, walk, greet } = sv.party ? { ...season.visitor, ...season.visitor.party } : season.visitor; // `party` (plan 7.3)
     const el = card._seasonFly(cur, season, art, cls, ms, { ltr: sv.side !== "right", walk: !!walk });
     await settled(card);
     for (const a of el.getAnimations()) {

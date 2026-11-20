@@ -142,7 +142,9 @@ const SEASONS = [
     snackLines: ["pie!! ♪", "pumpkin pie, my favourite!", "mmm, warm from the oven ♪"],
     flyer: { art: ["goose_1", "goose_2"], cls: "sgoose", ms: 8000, flock: 3 },
     visitor: { art: ["turkey_1", "turkey_2"], cls: "sturkey", ms: 7000, walk: true, startle: "gobble?!", jump: "perk",
-      greet: ["hi, turkey!", "happy Thanksgiving, turkey ♪", "gobble gobble to you too!"] },
+      greet: ["hi, turkey!", "happy Thanksgiving, turkey ♪", "gobble gobble to you too!"],
+      // A party guest on your birthday (plan 7.3): the same visit in a party hat, its own greet.
+      party: { art: ["turkey_party_1", "turkey_party_2"], cls: "sturkey party", greet: ["a turkey came to the party! ♪", "nice hat, turkey! ♥"] } },
     chirp: "harvest",
     bunting: true,
     leaves: true,

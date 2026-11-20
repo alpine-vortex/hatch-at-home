@@ -1333,6 +1333,17 @@ const PRESETS = {
       care: "feed", careAt: 1800, answer: { at: 200, result: "ok" }, clip: "screen", pet: { hunger: 60 }, variant: { feed: "A", "feed.extra": "none" } });
     out.push({ ...base, name: "birthday/party-thanksgiving", group: "birthday", label: "party day, Thanksgiving's treat day",
       yourBirthdayIn: 0, season: "thanksgiving", partyDay: { treatToday: true } });
+    // Party guests (7.3): each woodland visitor in its party hat, frame 1 at 420 and frame 2 at 330, on the left
+    // (as the card sends them); the turkey in its hat. With the props up (partyDay).
+    for (const id of ["chickadee", "stellersjay", "snail"]) {
+      for (const [frame, side, width] of [[1, "left", 420], [2, "left", 330]]) { // a party guest comes from the left
+        out.push({ ...base, width, name: `birthday/guest-${id}-${frame}-${width}`, group: "birthday-guests",
+          label: `party guest ${id}, frame ${frame}, ${side} at ${width} (7.3)`, yourBirthdayIn: 0, partyDay: {},
+          visitor: { id, frame, side, party: true } });
+      }
+    }
+    out.push({ ...base, name: "birthday/guest-turkey", group: "birthday-guests", label: "party guest turkey (7.3)",
+      yourBirthdayIn: 0, season: "thanksgiving", partyDay: {}, seasonVisitor: { season: "thanksgiving", at: 0.3, party: true } });
     // The journal's party print (7.2): the pet as it is now, in the party hat, the lit cake beside it.
     for (const [species, stage, width] of [["fox", "adult", 420], ["fox", "adult", 330], ["axolotl", "child", 420]]) {
       out.push({ ...base, species, stage, width, name: `birthday/journal-${species}-${stage}-${width}`, group: "birthday-journal",

@@ -120,6 +120,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
       return;
     }
     if (s.lateVisit && this._lateVisitTick(s, now)) return;
+    if (this._partyGuestTick(s, now)) return;
     if (now < (s.nextVisitCheck || 0)) return;
     s.nextVisitCheck = now + VISIT_CHECK_MS;
     if (!this._visitorFree(s, now)) return;
@@ -131,6 +132,66 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
     // A no-visit day's rare guest from another world (E10 V-c): once a day, in its window.
     const g = !v && this._visitorGuest(s);
     if (g && oncePerDay(`guest-${s.ids?.device}`, this._visitDay(s))) this._visitorStart(s, g.v, { world: g.world, guest: true });
+  }
+
+  // --- Party guests (birthday plan 7.3) ---------------------------------------------
+  // On your party day (_yourPartyOn: your own screen, never an egg) guests drop by, one at a time,
+  // PARTY_GUEST_GAP_MS apart, at most PARTY_GUESTS_MAX a day on this device for this person (kept as
+  // the party's other keys: _yourPartyKey). Never the day's visit, a friend's count or the social meter.
+  _partyGuestTick(s, now) {
+    if (now < (s.nextPartyGuest || 0) || !this._yourPartyOn(s)) return false;
+    s.nextPartyGuest = now + VISIT_CHECK_MS;
+    if (s.seasonVisit || !this._visitorFree(s, now)) return false;
+    const log = this._partyGuestLog(s);
+    if (log.n >= PARTY_GUESTS_MAX || now - log.at < PARTY_GUEST_GAP_MS) return false;
+    const go = this._partyGuestPick(s, log.n);
+    if (!go) return false;
+    this._partyGuestLog(s, { n: log.n + 1, at: now });
+    go();
+    return true;
+  }
+
+  // {n, at}: the guests so far today and when the last came. With `put`, stores it. No storage: this
+  // card's memory.
+  _partyGuestLog(s, put) {
+    const key = this._yourPartyKey(s, "guests-");
+    try {
+      if (put) localStorage.setItem(key, JSON.stringify(put));
+      else {
+        const log = JSON.parse(localStorage.getItem(key) || "null");
+        return log && typeof log === "object" ? { n: Number(log.n) || 0, at: Number(log.at) || 0 } : { n: 0, at: 0 };
+      }
+    } catch (err) {
+      if (put) (this._partyGuests ??= new Map()).set(key, put);
+      else return this._partyGuests?.get(key) || { n: 0, at: 0 };
+    }
+    return put;
+  }
+
+  // The nth guest: its kind by turn (PARTY_GUEST_TURNS), else the next kind that has one. A function
+  // that starts it, or null.
+  _partyGuestPick(s, n) {
+    for (let i = 0; i < PARTY_GUEST_TURNS.length; i++) {
+      const go = this._partyGuestOf(s, PARTY_GUEST_TURNS[(n + i) % PARTY_GUEST_TURNS.length], n);
+      if (go) return go;
+    }
+    return null;
+  }
+
+  _partyGuestOf(s, kind, n) {
+    const roll = turnHash(`${s.ids?.device}|${this._birthdayPrefs(s).year}|partyguest|${n}`);
+    if (kind === "world") {
+      const ids = PARTY_GUEST_ART[s.worldKey] || [];
+      const list = visitorList(s.world).filter((v) => ids.includes(v.id) && !v.cross);
+      // From the left, away from the balloons (the cake is low: a flyer passes over it, a walker in front).
+      return list.length ? () => this._visitorStart(s, list[roll % list.length], { ltr: true, count: false, party: true }) : null;
+    }
+    if (kind === "season") {
+      const season = seasonNow(this._config);
+      const party = season?.visitor?.party;
+      return party ? () => this._seasonVisitor(s, { ...season, visitor: { ...season.visitor, ...party } }) : null;
+    }
+    return null;
   }
 
   // --- Fresh-expand E10: a rare pair, a guest from another world (card only) --------
@@ -164,10 +225,10 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
   // and it goes back the way it came; a crosser streaks straight over. Reduced motion:
   // the first frame, standing still at the edge for VISIT_CALM_MS; the greet's frame
   // and the line, no look or hop.
-  _visitorStart(s, v, { ltr = Math.random() < 0.5, count = true, world = s.worldKey, guest = false } = {}) {
+  _visitorStart(s, v, { ltr = Math.random() < 0.5, count = true, world = s.worldKey, guest = false, party = false } = {}) {
     this._visitorEnd(s);
-    if (count && !guest) this._visitFriendCount(s, v);
-    if (count && !guest && !v.cross) this._visitorReport(s);
+    if (count && !guest && !party) this._visitFriendCount(s, v);
+    if (count && !guest && !party && !v.cross) this._visitorReport(s);
     const isCalm = calm();
     const inMs = v.in || (v.cross ? 1800 : VISIT_IN_MS);
     const stay = (v.stay || VISIT_STAY_MS) * (sharedScreen() ? 2 : 1); // a shared screen: longer (E8 Sh-a)
@@ -176,15 +237,15 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
     const frames = isCalm ? [1] : [1, 2];
     const el = document.createElement("div");
     el.className = `vis vis-${v.id} ${v.walk ? "walk" : "fly"} ${ltr ? "ltr" : "rtl"}` +
-      `${frames.length > 1 ? " flap" : ""}${isCalm ? "" : v.cross ? " cross" : " in"}`;
+      `${frames.length > 1 ? " flap" : ""}${isCalm ? "" : v.cross ? " cross" : " in"}${party ? " party" : ""}`;
     el.dataset.visitor = `${world}/${v.id}`;
     el.style.setProperty("--in-ms", `${inMs}ms`);
     el.innerHTML = frames.map((n) =>
-      `<img src="${BASE}/ui/visitor_${world}_${v.id}_${n}.png?v=${VERSION}" alt="">`).join("");
+      `<img src="${BASE}/ui/visitor_${world}_${v.id}${party ? "_party" : ""}_${n}.png?v=${VERSION}" alt="">`).join("");
     s.seasonBox.append(el);
     const now = Date.now();
-    const V = s.visitor = { el, els: [el], v, until: now + total, greetAt, guest: guest ? world : null };
-    if (!v.cross && !guest) { // seen here today, for the evening's today line (fresh-moment 4)
+    const V = s.visitor = { el, els: [el], v, until: now + total, greetAt, guest: guest ? world : null, party };
+    if (!v.cross && !guest && !party) { // seen here today, for the evening's today line (fresh-moment 4)
       try {
         localStorage.setItem(`hatch-visitseen-${s.ids?.device}`, JSON.stringify({ day: this._visitDay(s).toDateString(), name: v.name }));
       } catch (err) {
@@ -202,7 +263,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
     // the greet and the stay, never turned away from one coming in on the right.
     if (!isCalm && !v.cross && ltr) at(inMs, () => this._look(s, greetAt + stay - inMs));
     // A friend of its world along, now and then (E10 V-b): the other side, a little behind.
-    const pal = !guest && this._visitorPair(s, v);
+    const pal = !guest && !party && this._visitorPair(s, v);
     if (pal) {
       V.pair = pal;
       at(isCalm ? 0 : PAIR_BEHIND_MS, () => {
@@ -245,7 +306,8 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
     const baby = this._babySet(s, "visit");
     // A guest says where it's from; a pair, that there are two (E10); else the viewer's
     // favourite (F4); else a friend's line (E3), else the usual. Baby talk stays.
-    const rare = !baby && (V?.guest ? VISIT_GUEST[V.guest] : V?.pair ? turnPick(PAIR_LINES, `${s.ids?.device}|pair`) : null);
+    const rare = !baby && (V?.party ? pick(PARTY_GUEST_LINES).replace("{v}", () => v.name)
+      : V?.guest ? VISIT_GUEST[V.guest] : V?.pair ? turnPick(PAIR_LINES, `${s.ids?.device}|pair`) : null);
     // The favourite: on the viewer's own screen, 1 visit in 2, with a hop and hearts.
     if (!baby && !rare && !sharedScreen() && s.mine?.fav_visitor === v.id && Math.random() < 0.5) {
       this._line(s, FLAVOUR, turnPick(FAVV_LINES.greet, `${s.ids?.device}|favv`)(v.name), 3000);

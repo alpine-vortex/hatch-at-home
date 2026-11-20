@@ -267,6 +267,16 @@ const PARTY_POP = ["pop! ♪", "eek! that was loud!", "one more! one more!"];
 // Where each balloon pops, in % of the bunch's art (blue on top first, then yellow, then pink), and the puff's life.
 const BALLOON_SPOTS = [[50, 17], [73, 31], [27, 31]];
 const POP_MS = 450;
+// Party guests (plan 7.3): on your party day guests drop by in a party hat, one at a time, kinds in
+// turn (a kind with nothing to send gives way): a visitor of the pet's world, a stranger pet (7.5),
+// the season's visitor (world.js `visitor.party`). A world's hatted art is
+// `visitor_<world>_<id>_party_<n>.png` (art/party-guests/compose.py), 6 world cells taller (the hat).
+const PARTY_GUEST_ART = { woodland: ["chickadee", "stellersjay", "snail"] };
+const PARTY_GUEST_TURNS = ["world", "pet", "season", "pet"];
+const PARTY_GUESTS_MAX = 4; // a day on this device, for this person
+const PARTY_GUEST_GAP_MS = 3600000; // between two guests
+// The pet's greet of a hatted world visitor, `{v}` its name.
+const PARTY_GUEST_LINES = ["{v} came to the party! ♪", "you came, {v}! have some cake ♪", "{v} wore a party hat! ♥"];
 const BALLOON_REFILL_MS = 3600000; // an emptied bunch comes back an hour later (a screen that stays up)
 function yourPartyLine(line, name) {
   return name ? line.replace("{n}", () => name) : line.replace("{n}'s", "your").replace(", {n}", "").replace(" {n}", "");

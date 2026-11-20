@@ -726,6 +726,9 @@ const STYLE = `
   @keyframes v-out { from { left: var(--stop); } to { left: var(--from); } }
   @keyframes v-cross { from { left: var(--from); } to { left: var(--to); } }
   .season .vis.fly { top: 36%; } .season .vis.walk { bottom: 6%; }
+  /* A party guest (plan 7.3): the hat's 6 cells on top; over the party's props (the cake, the balloons). */
+  .season .vis.party.fly { margin-top: calc(var(--px, 2px) * -6); }
+  .season .vis.party, .season .sfly.party { z-index: 2; }
   .season .vis.vis-shootingstar { top: 28%; } /* under the bubble, over the pet's head */
   /* The art faces right; leaving, it turns back the way it came. */
   .season .vis.rtl img, .season .vis.ltr.out img { transform: scaleX(-1); }
