@@ -90,7 +90,7 @@ const slide = (mine, extra = {}) => ({ ids: { device: "dev1" }, mine, nextBdaySo
 
 test("mine's count and year are read, and a shared screen has none", () => {
   const c = card();
-  assert.deepStrictEqual({ ...c._birthdayPrefs(slide({ birthday_in: 3, birthday_year: "2026", call_me: "Bee" })) }, { days: 3, year: "2026", callMe: "Bee" });
+  assert.deepStrictEqual({ ...c._birthdayPrefs(slide({ birthday_in: 3, birthday_year: "2026", call_me: "Bee" })) }, { days: 3, year: "2026", callMe: "Bee", after: null });
   assert.strictEqual(c._birthdayPrefs(slide({})).days, null); // mine has spoken: none
   assert.strictEqual(c._birthdayPrefs(slide({ birthday_in: 9, birthday_year: "2026" })).days, null);
   assert.strictEqual(c._birthdayPrefs(slide({ birthday_in: 2 })).days, null); // no year: not trusted

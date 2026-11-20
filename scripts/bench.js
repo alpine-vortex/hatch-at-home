@@ -1325,6 +1325,8 @@ const PRESETS = {
       out.push({ ...base, name: `birthday/party-feed-${at}`, group: "birthday", label: `cake slice at the meal ${at} (4.2)`, yourBirthdayIn: 0,
         care: "feed", careAt: at, answer: { at: 200, result: "ok" }, clip: "screen", pet: { hunger: 60 }, variant: { feed: "A", "feed.extra": "none" } });
     }
+    out.push({ ...base, name: "birthday/after-feed-1800", group: "birthday", label: "the day after: leftover cake (7.4)", yourBirthdayAfter: true,
+      care: "feed", careAt: 1800, answer: { at: 200, result: "ok" }, clip: "screen", pet: { hunger: 60 }, variant: { feed: "A", "feed.extra": "none" } });
     out.push({ ...base, name: "birthday/party-thanksgiving", group: "birthday", label: "party day, Thanksgiving's treat day",
       yourBirthdayIn: 0, season: "thanksgiving", partyDay: { treatToday: true } });
     // The journal's party print (7.2): the pet as it is now, in the party hat, the lit cake beside it.
@@ -1645,6 +1647,7 @@ function parseArgs(argv) {
     else if (key === "boot") opts.shot.booted = false;
     else if (key === "mine") opts.shot.mine = true;
     else if (key === "your-birthday-in") opts.shot.yourBirthdayIn = Number(val()); // 0-5: the server's day count in mine (birthday plan 3.6)
+    else if (key === "your-birthday-after") opts.shot.yourBirthdayAfter = true; // mine's birthday_after, the day after (plan 7.4)
     else if (key === "scroll-end") opts.shot.scrollEnd = true; // the status box scrolled to its foot
     else if (key === "journal-scroll") opts.shot.journalScroll = val(); // a selector scrolled into view once the journal is open
     else if (key === "parties") opts.shot.parties = val().split(","); // mine's parties, e.g. 2025,2026 (birthday plan 4.3)

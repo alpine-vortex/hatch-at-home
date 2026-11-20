@@ -83,7 +83,7 @@ test("4.1: the cake is a button that blows the candles out, once a day, with the
 });
 
 test("4.2: the feed scene serves the slice on party day, and says the plan's line", () => {
-  assert.match(src, /if \(this\._yourPartyOn\(s\)\) \{\s*sc\.bowl\.dataset\.cake = "1";[\s\S]*?party_cake_slice\.png/);
+  assert.match(src, /if \(this\._yourPartyOn\(s\) \|\| sc\.leftovers\) \{\s*sc\.bowl\.dataset\.cake = "1";[\s\S]*?party_cake_slice\.png/);
   assert.match(method("_bowlClip"), /if \(img\.dataset\.cake\) return false;/);
   assert.match(method("_mealLine"), /_yourPartyOn\(s\)\) return \[PARTY_CAKE, 2500\]/);
   assert.match(src, /const PARTY_CAKE = "birthday cake for breakfast! ♪";/);

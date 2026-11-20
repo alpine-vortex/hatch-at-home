@@ -48,6 +48,10 @@ class HatchPetCardLooks extends HatchPetCardTick {
       lines.push([`welcome home, ${(bond?.level >= BOND.nickname && bond.nickname) || first || "friend"}! ♥`, 5000]);
       if (HOME_WEATHER[home.weather]) lines.push([HOME_WEATHER[home.weather], 4500]);
     }
+    // The day after your party (birthday plan 7.4): its thanks, once (the server's year, this device).
+    if (lines.length < FIRST_LOOK_LINES && this._leftoversFirst(s, "look-")) {
+      lines.push([yourPartyLine(LEFTOVERS.look, this._birthdayName(s)), 5000]);
+    }
     let wishTold = false;
     // Kept milestones said nowhere here (the card was closed): once, as lines of
     // this look. A browser with no record yet starts from now, so a new one

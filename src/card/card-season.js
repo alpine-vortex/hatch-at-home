@@ -289,6 +289,41 @@ class HatchPetCardSeason extends HatchPetCardCrate {
     return true;
   }
 
+  // The day after your party (birthday plan 7.4): the server's `birthday_after` for this viewer, keyed
+  // on the birthday's year (the server's), this device and this person. Own screen only, never an egg,
+  // never while a party is on. The year, or null.
+  _leftoversYear(s) {
+    if (sharedScreen() || s.egg || !s.species || !this._hass.user?.id || this._yourPartyOn(s)) return null;
+    return this._birthdayPrefs(s).after;
+  }
+
+  _leftoversKey(s, tag) {
+    return `hatch-leftovers-${tag}${s.ids?.device}-${this._hass.user?.id}-${this._leftoversYear(s)}`;
+  }
+
+  // Whether a leftover moment (`look-`, `cake-`) is still to come here, without spending it.
+  _leftoversDue(s, tag) {
+    if (!this._leftoversYear(s)) return false;
+    const key = this._leftoversKey(s, tag);
+    try {
+      return !localStorage.getItem(key);
+    } catch (err) {
+      return !this._parties?.has(key);
+    }
+  }
+
+  // Spend it: true the once.
+  _leftoversFirst(s, tag) {
+    if (!this._leftoversDue(s, tag)) return false;
+    const key = this._leftoversKey(s, tag);
+    try {
+      localStorage.setItem(key, "1");
+    } catch (err) {
+      (this._parties ??= new Set()).add(key);
+    }
+    return true;
+  }
+
   // Confetti on the first look and each greeting; two within a few seconds are one.
   _yourPartyConfetti(s) {
     const now = Date.now();

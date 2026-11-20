@@ -446,6 +446,8 @@ function feedSlide({ hunger = "60", missing = false, habit, moods = ["content", 
   const self = {
     _state: (_s, k) => states[k],
     _yourPartyOn: () => false,
+    _leftoversDue: () => false, // the day after (birthday plan 7.4): not today
+    _leftoversFirst: () => false,
     _sceneFrames: (s0, act) => (s0.species.acts?.[act]?.includes(s0.drawn) ? [`${s0.drawn}_${act}_1`, `${s0.drawn}_${act}_2`] : null),
     _careVariant: ctx0.api._careVariant,
     _careFrames: careFramesApi._careFrames,
