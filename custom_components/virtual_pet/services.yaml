@@ -261,3 +261,14 @@ set_person_birthday:
       example: "Bee"
       selector:
         text:
+    notify_pet:
+      selector:
+        entity:
+          integration: virtual_pet
+person_check:
+  fields:
+    user_id:
+      required: true
+      example: "0123456789abcdef0123456789abcdef"
+      selector:
+        text:

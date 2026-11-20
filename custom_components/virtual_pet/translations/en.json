@@ -553,6 +553,20 @@
         "call_me": {
           "name": "Call me",
           "description": "What the pet calls them on a birthday line, 1-16 characters. An empty value clears it."
+        },
+        "notify_pet": {
+          "name": "Notify from pet",
+          "description": "A pet whose notifications this person gets from now on (the birthday push comes through one). Leave it out to change nothing."
+        }
+      }
+    },
+    "person_check": {
+      "name": "Check a person's birthday setup",
+      "description": "Admin only: reads back a person's birthday, phone switch, call-me name, days to go, the pets that notify them and the phones Home Assistant knows for them.",
+      "fields": {
+        "user_id": {
+          "name": "User ID",
+          "description": "The Home Assistant user's ID."
         }
       }
     }

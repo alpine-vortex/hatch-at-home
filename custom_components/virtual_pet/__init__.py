@@ -64,6 +64,7 @@ from .const import (
     SERVICE_HOP,
     SERVICE_MY_DAY,
     SERVICE_NOTIFY_ME,
+    SERVICE_PERSON_CHECK,
     SERVICE_PLAY_GAME,
     SERVICE_REACT,
     SERVICE_SET_PERSON_BIRTHDAY,
@@ -241,8 +242,12 @@ SET_PERSON_BIRTHDAY_SCHEMA = vol.Schema(
         vol.Optional("birthday"): cv.string,
         vol.Optional("birthday_phone"): cv.boolean,
         vol.Optional("call_me"): cv.string,
+        # A pet whose notifications this person gets (the birthday push needs one).
+        vol.Optional("notify_pet"): cv.entity_id,
     }
 )
+
+PERSON_CHECK_SCHEMA = vol.Schema({vol.Required("user_id"): cv.string})
 
 
 CARD_PATH = Path(__file__).parent / "frontend" / CARD_FILENAME
@@ -354,9 +359,43 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key="no_pet"
             )
+        # Checked before anything changes: an unknown pet refuses the whole call.
+        notify_pet = pet_for(data["notify_pet"]) if "notify_pet" in data else None
         await pets[0].async_set_person_birthday(
             data["user_id"], birthday, data.get("birthday_phone"), call_me
         )
+        if notify_pet is not None and notify_pet.state is not None:
+            await notify_pet.async_set_notify(data["user_id"], True)
+
+    async def person_check(call: ServiceCall) -> ServiceResponse:
+        """Admin only: what the birthday needs for one person, read back (their
+        data, which pets notify them, the phones HA knows for them). Inside the
+        household: the admin who set it reads it."""
+        user_id = call.data["user_id"]
+        user = await hass.auth.async_get_user(user_id)
+        if user is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="unknown_user"
+            )
+        pets = list(hass.data[DOMAIN]["pets"].values())
+        if not pets:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="no_pet"
+            )
+        person = pets[0].people.data["people"].get(user_id) or {}
+        return {
+            "user": user.name,
+            "birthday": person.get("birthday"),
+            "birthday_phone": bool(person.get("birthday_phone")),
+            "call_me": person.get("call_me"),
+            "birthday_in": pets[0]._birthday_prefs(user_id).get("birthday_in"),
+            "notify_pets": [
+                p.state.name
+                for p in pets
+                if p.state is not None and user_id in p.state.notify_users
+            ],
+            "phones": notify.phones(hass, user_id),
+        }
 
     def pet_of(call: ServiceCall) -> PetCoordinator:
         """The loaded pet that owns the call's entity."""
@@ -603,6 +642,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         SERVICE_SET_PERSON_BIRTHDAY,
         set_person_birthday,
         schema=SET_PERSON_BIRTHDAY_SCHEMA,
+    )
+    async_register_admin_service(
+        hass,
+        DOMAIN,
+        SERVICE_PERSON_CHECK,
+        person_check,
+        schema=PERSON_CHECK_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
     )
     return True
 

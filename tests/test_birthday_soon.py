@@ -629,3 +629,60 @@ async def test_set_person_birthday_pushes_to_an_open_card(
     )
     events = await pushed(client)
     assert [e["mine"]["call_me"] for e in events if "mine" in e] == ["Bee"]
+
+
+async def test_set_person_birthday_notify_pet_and_person_check(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_admin_user: Any,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-11-20 12:00:00+00:00")
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    config = await setup(hass)
+    pet = config.runtime_data
+    ada, _ = await a_user(hass)
+    assert ada.id not in pet.state.notify_users
+    # An unknown pet refuses the whole call: nothing changes.
+    with pytest.raises(ServiceValidationError):
+        await set_birthday(
+            hass,
+            hass_admin_user.id,
+            user_id=ada.id,
+            birthday="11-22",
+            notify_pet="sensor.nobody_life_stage",
+        )
+    assert "birthday" not in pet.people.data["people"].get(ada.id, {})
+    await set_birthday(
+        hass,
+        hass_admin_user.id,
+        user_id=ada.id,
+        birthday="11-22",
+        birthday_phone=True,
+        call_me="Bee",
+        notify_pet="sensor.pip_life_stage",
+    )
+    assert ada.id in pet.state.notify_users
+    check = await hass.services.async_call(
+        DOMAIN,
+        "person_check",
+        {"user_id": ada.id},
+        blocking=True,
+        return_response=True,
+        context=Context(user_id=hass_admin_user.id),
+    )
+    assert check["birthday"] == "11-22"
+    assert check["birthday_phone"] is True
+    assert check["call_me"] == "Bee"
+    assert check["birthday_in"] == 2
+    assert check["notify_pets"] == [pet.state.name]
+    assert check["phones"] == []
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "person_check",
+            {"user_id": "nobody"},
+            blocking=True,
+            return_response=True,
+            context=Context(user_id=hass_admin_user.id),
+        )
