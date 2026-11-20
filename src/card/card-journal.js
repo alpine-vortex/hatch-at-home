@@ -172,6 +172,7 @@ class HatchPetCardJournal extends HatchPetCardSheets {
       <div class="jgrid">${tiles.join("")}</div>
       <button class="wlink">every world ›</button>
       ${this._photoRow(s)}
+      ${this._partyRow(s)}
       <div class="jlist">${olderLink}<div class="jmore"></div>${lines.join("")}${past.length < 2 ? "<div class=\"gt\">a week into adulthood, a pet can lay an egg</div>" : ""}${this._memories(stage.memories, now.name)}</div>
       <div class="jfoot"><button class="flink">${findsShown() ? "finds" : "visitors"} ›</button></div>`;
     const top = s.status.scrollTop;
@@ -219,6 +220,20 @@ class HatchPetCardJournal extends HatchPetCardSheets {
       `<button class="bell psave" data-gen="${photo.generation}" ` +
       `aria-label="${escape(`save the photo of ${photo.name}, generation ${photo.generation}`)}">save</button></figure>`);
     return `<div class="photos"><span>photos</span><div class="prow">${prints.join("")}</div></div>`;
+  }
+
+  // The journal's "birthday parties" row (birthday plan 4.3): the lit cake and a line for each
+  // year kept, the viewer's own (mine, else the last visit's reply). None on a shared screen, and
+  // gone with the list ("forget my birthday" empties it).
+  _partyRow(s) {
+    if (sharedScreen()) return "";
+    const years = (s.mine?.parties || s.bdayReply?.parties || []).filter((y) => typeof y === "string");
+    if (!years.length) return "";
+    const name = this._birthdayName(s);
+    const rows = years.map((y) =>
+      `<div class="gen"><img src="${BASE}/ui/party_cake_lit.png?v=${VERSION}" alt="" ` +
+      `style="width:20px;height:18px;image-rendering:pixelated;vertical-align:middle"> ${escape(partyKeepsakeLine(name, y))}</div>`);
+    return `<div class="photos"><span>birthday parties</span>${rows.join("")}</div>`;
   }
 
   _photoAlt(photo) {

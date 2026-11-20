@@ -1619,6 +1619,10 @@ function parseArgs(argv) {
     else if (key === "boot") opts.shot.booted = false;
     else if (key === "mine") opts.shot.mine = true;
     else if (key === "your-birthday-in") opts.shot.yourBirthdayIn = Number(val()); // 0-5: the server's day count in mine (birthday plan 3.6)
+    else if (key === "scroll-end") opts.shot.scrollEnd = true; // the status box scrolled to its foot
+    else if (key === "journal-scroll") opts.shot.journalScroll = val(); // a selector scrolled into view once the journal is open
+    else if (key === "parties") opts.shot.parties = val().split(","); // mine's parties, e.g. 2025,2026 (birthday plan 4.3)
+    else if (key === "house-birthday-in") opts.shot.houseBirthdayIn = Number(val()); // the visit reply's house_birthday_in, 1-3 (plan 4.4)
     else if (key === "call-me") opts.shot.callMe = val(); // mine's call_me
     else if (key === "sitter-pose") (opts.shot.sitter ||= "day", opts.shot.sitterPose = val()); // <pose>[:frame], the sitter pinned in a pose
     else if (key === "sitter-look") (opts.shot.sitter ||= "day", opts.shot.sitterLook = val()); // <finish|base>; S3b reads it, S3a draws the base sitter

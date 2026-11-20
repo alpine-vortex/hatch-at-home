@@ -40,6 +40,7 @@ C = {
     "f": (255, 150, 40, 255),  # flame
     "g": (200, 204, 214, 255),  # smoke
     "G": (150, 154, 170, 255),  # smoke, darker
+    "m": (168, 172, 184, 200),  # smoke wisp: soft, reads on dark and light
     "t": (110, 84, 70, 255),  # string / wick
     "d": (232, 226, 210, 255),  # plate
     "D": (186, 178, 158, 255),  # plate shade
@@ -182,6 +183,7 @@ def cake(lit: bool) -> Image.Image:
             if g.g[y][x] == "p" and g.g[y + 1][x] in "sSc" and y > 16:
                 g.g[y][x] = "P"
     # candles: white with a blue spiral, a wick, then flame or smoke
+    smoke = []
     cols = "wbwbwbw"
     for c0 in CANDLES:
         for i, y in enumerate(range(7, 14)):
@@ -203,16 +205,20 @@ def cake(lit: bool) -> Image.Image:
             g.put(c0, 3, "z")
         else:
             wisp = ((0, 5), (1, 4), (0, 3), (-1, 2), (0, 1), (1, 0))
-            for i, (dx, dy) in enumerate(wisp):
-                g.put(c0 + dx, dy, "g" if i % 2 == 0 else "G")
+            smoke += [(c0 + dx, dy) for dx, dy in wisp]
     g.outline()
+    # the wisps go on after the outline: one soft mid-grey, no dark rim, so they read on a dark
+    # screen and a light one (a dark rim round each pixel made a checker)
+    for x, y in smoke:
+        g.put(x, y, "m")
     return g.image()
 
 
 def slice_() -> Image.Image:
     """A slice on a small plate, filling 34 x 26 art px (136 x 104) like food_pancakes."""
     g = Grid(34, 26)
-    g.ell(16.5, 13, 16.5, 12.5, "d")
+    # the plate leaves a 1 px margin so the outline closes all round
+    g.ell(16.5, 13, 15.5, 11.5, "d")
     g.ell(16.5, 13, 12.8, 9, "D")
     g.ell(16.5, 12.6, 12.8, 8.6, "d")
     # the wedge: pink top face, front face with sponge and cream, lit from the left

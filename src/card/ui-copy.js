@@ -278,6 +278,12 @@ const BIRTHDAY_SOON_EVERY_MS = [90000, 150000];
 function birthdaySoonLine(line, name) {
   return name ? line.replace("{n}", name) : line.replace(", {n}", "").replace(" {n}", "");
 }
+// The tip-off (birthday plan 4.4): another person's birthday is 1-3 days off; names no one.
+function houseTipOffLine(days) {
+  return days === 1 ? "psst... someone's birthday is tomorrow 🤫" : `psst... someone's birthday is in ${days} days 🤫`;
+}
+// The journal's keepsake entry (birthday plan 4.3): one per year kept, `{n}` the name.
+const partyKeepsakeLine = (name, year) => `${name ? `${name}'s` : "the"} birthday party, ${year}`;
 // What the pet tells only you (virtual_pet.visit's notes), each once.
 const NOTES = {
   pet_birthday: (n) => (n.years ? `it's my birthday!! i'm ${n.years} today! ♥` : `i'm ${months(n.months)} old today! ♥`),

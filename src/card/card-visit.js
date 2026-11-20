@@ -248,7 +248,9 @@ class HatchPetCardVisit extends HatchPetCardLooks {
         // and year only, never a date. Read through _birthdayPrefs (mine first once it has spoken).
         s.bdayReply = { in: Number.isInteger(reply.birthday_in) ? reply.birthday_in : null,
           year: typeof reply.birthday_year === "string" ? reply.birthday_year : null,
-          callMe: typeof reply.call_me === "string" ? reply.call_me : null };
+          callMe: typeof reply.call_me === "string" ? reply.call_me : null,
+          parties: Array.isArray(reply.parties) ? reply.parties.filter((y) => typeof y === "string") : [] };
+        this._houseTipOff(s, reply.house_birthday_in); // birthday plan 4.4
         if (reply.follow === 1) this._followOk = true; // F1: it takes typed text and follow-ups
         (reply.notes || []).forEach((note) => this._note(s, note, !!reply.made_room));
         const ask = reply.ask;

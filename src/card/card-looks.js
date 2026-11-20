@@ -1,6 +1,17 @@
 class HatchPetCardLooks extends HatchPetCardTick {
   // The first look at this pet on this device: what happened while you were
   // out, this morning's dream and today's wish (each once a day per device).
+  // The tip-off (birthday plan 4.4): the house says a birthday is 1-3 days off. Once a day per
+  // device and count, the day read off the server's clock (never the browser's alone); only when
+  // your own countdown is not running, never on a shared screen, never an egg.
+  _houseTipOff(s, days) {
+    if (!Number.isInteger(days) || days < 1 || days > 3 || sharedScreen() || s.egg) return;
+    if (this._birthdayPrefs(s).days !== null || !this._hass.user?.id) return;
+    const day = new Date(serverNow()).toDateString();
+    if (!usedUpTo(`housetip-${s.ids?.device}-${this._hass.user.id}-${days}-${day}`, 1)) return;
+    this._queue(s, houseTipOffLine(days), 4500, { personal: true });
+  }
+
   _firstLook(s) {
     if (!this._channelHeard(s)) return; // the viewer's bond and wish first
     if (this._resumeHeld()) return; // fresh states first

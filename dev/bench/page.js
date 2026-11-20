@@ -993,12 +993,21 @@
     }
     // The birthday prefs the private channel would send (birthday plan 3.6): `yourBirthdayIn` (0-5,
     // with birthday_year the page's year) and `callMe`; each gives the slides a viewer's own view.
-    if (shot.yourBirthdayIn !== undefined || shot.callMe) {
+    if (shot.yourBirthdayIn !== undefined || shot.callMe || shot.parties) {
       const extra = {
         ...(shot.yourBirthdayIn !== undefined ? { birthday_in: shot.yourBirthdayIn, birthday_year: String(new Date().getFullYear()) } : {}),
         ...(shot.callMe ? { call_me: shot.callMe } : {}),
+        ...(shot.parties ? { parties: shot.parties } : {}),
       };
       slides.forEach((s) => { s.mine = { bond: { level: 6, nickname: null }, ...(s.mine || {}), ...extra }; });
+    }
+    // `houseBirthdayIn` (1-3): the visit reply's house_birthday_in through the card's own tip-off
+    // (birthday plan 4.4), its line held in the bubble.
+    if (shot.houseBirthdayIn) {
+      localStorage.clear();
+      card._houseTipOff(cur, shot.houseBirthdayIn);
+      const tip = cur.queue?.pop();
+      if (tip) card._write(cur, tip.text, 1e9);
     }
     // `textStep`: the big day's (or weekend's) typed step through the card's own
     // _askTextStart and _askText, its line in the bubble and the box held (no timer):
@@ -1116,6 +1125,7 @@
       // (Date is pinned, so count the tries instead of reading the clock.)
       for (let n = 0; !root.querySelector(".jgrid") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
       if (shot.scrollEnd) cur.status.scrollTop = cur.status.scrollHeight; // the memories line (H7's seasons preset)
+      if (shot.journalScroll) cur.status.querySelector(shot.journalScroll)?.scrollIntoView({ block: "center" }); // e.g. the parties row
     }
     // The journal's "every world ›" page (top10 8a); `journal: {raised: [..]}` sets what's drawn.
     if (shot.view === "everyworld") {
