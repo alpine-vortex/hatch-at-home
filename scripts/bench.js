@@ -1618,6 +1618,8 @@ function parseArgs(argv) {
     else if (key === "big-text") opts.shot.bigText = true; // the "big text" switch on (top10 4b)
     else if (key === "boot") opts.shot.booted = false;
     else if (key === "mine") opts.shot.mine = true;
+    else if (key === "your-birthday-in") opts.shot.yourBirthdayIn = Number(val()); // 0-5: the server's day count in mine (birthday plan 3.6)
+    else if (key === "call-me") opts.shot.callMe = val(); // mine's call_me
     else if (key === "sitter-pose") (opts.shot.sitter ||= "day", opts.shot.sitterPose = val()); // <pose>[:frame], the sitter pinned in a pose
     else if (key === "sitter-look") (opts.shot.sitter ||= "day", opts.shot.sitterLook = val()); // <finish|base>; S3b reads it, S3a draws the base sitter
     else if (key === "sitter-beat") (opts.shot.sitter ||= "day", opts.shot.sitterBeat = val()); // arrive|leave|round-<care>:<ms>, a beat pinned at ms

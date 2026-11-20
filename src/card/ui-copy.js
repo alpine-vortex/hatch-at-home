@@ -263,10 +263,27 @@ const HOME_WEATHER = {
   cold: "brr, it looks cold out there!", hot: "you must be thirsty after that heat!",
 };
 const SEASON_ICONS = { spring: "♪", summer: "☀", autumn: "♥", winter: "❄" };
+// The countdown to your birthday (birthday plan 2.3), by days to go. `{n}` is the name
+// (call_me, else the nickname, else the first name); none: the line goes without it.
+// Outside the fresh-expand block on purpose: the scan there bans digits and "?".
+const BIRTHDAY_SOON = {
+  5: ["psst {n}... your birthday is in 5 days! ♪", "5 more sleeps till your birthday!"],
+  4: ["4 days to your birthday, {n}! i'm planning things ♪"],
+  3: ["3 more sleeps! i'm practising the song ♪", "3 days! do you like cake? i like cake"],
+  2: ["2 days to go, {n}! i can't sit still!"],
+  1: ["tomorrow's your birthday, {n}!! ♥", "one more sleep!! i'm so excited!!"],
+};
+const BIRTHDAY_SOON_IDLE_MAX = 2; // idle lines a device says for one count, besides the look's note
+const BIRTHDAY_SOON_EVERY_MS = [90000, 150000];
+function birthdaySoonLine(line, name) {
+  return name ? line.replace("{n}", name) : line.replace(", {n}", "").replace(" {n}", "");
+}
 // What the pet tells only you (virtual_pet.visit's notes), each once.
 const NOTES = {
   pet_birthday: (n) => (n.years ? `it's my birthday!! i'm ${n.years} today! ♥` : `i'm ${months(n.months)} old today! ♥`),
   birthday_friends: (n) => `i'm ${months(n.months)} old! friends from day one ♥`,
+  // The template (_note puts the name in): one a day per pet, in turns.
+  birthday_soon: (n, device) => turnPick(BIRTHDAY_SOON[n.days], `${device}|bdaysoon|${n.days}`),
   your_birthday: (n) => (n.quiet ? "happy birthday ♥" : "happy birthday!! ♥"), // _note adds the name
   // Door 11 (memory plan M2, 6a): the 12-month day may carry one tag; a tag this card
   // has no line for says the usual line.

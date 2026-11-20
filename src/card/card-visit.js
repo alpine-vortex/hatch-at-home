@@ -244,6 +244,11 @@ class HatchPetCardVisit extends HatchPetCardLooks {
         // Memory (plan M1a): two booleans, as the channel's mine has them; never what is kept.
         if (typeof reply.memory_on === "boolean") this._memoryOn = reply.memory_on;
         if (typeof reply.memory_allowed === "boolean") s.memoryAllowed = reply.memory_allowed; // this pet's own option
+        // The countdown (birthday plan 1.2), as the channel's mine has it; the server's day count
+        // and year only, never a date. Read through _birthdayPrefs (mine first once it has spoken).
+        s.bdayReply = { in: Number.isInteger(reply.birthday_in) ? reply.birthday_in : null,
+          year: typeof reply.birthday_year === "string" ? reply.birthday_year : null,
+          callMe: typeof reply.call_me === "string" ? reply.call_me : null };
         if (reply.follow === 1) this._followOk = true; // F1: it takes typed text and follow-ups
         (reply.notes || []).forEach((note) => this._note(s, note, !!reply.made_room));
         const ask = reply.ask;
@@ -285,9 +290,13 @@ class HatchPetCardVisit extends HatchPetCardLooks {
       const away = s.queue.findIndex((q) => q.opts?.away);
       if (away >= 0) s.queue.splice(away, 1);
     }
+    if (note.kind === "birthday_soon") {
+      this._queue(s, birthdaySoonLine(line, this._birthdayName(s)), 5000, { personal: true });
+      this._sparkle(s);
+      return;
+    }
     if (note.kind === "your_birthday") {
-      const bond = this._bond(s);
-      const name = (bond?.level >= BOND.nickname && bond.nickname) || short(this._hass.user?.name?.trim().split(/\s+/)[0], 16);
+      const name = this._birthdayName(s);
       if (!note.quiet && name) line = `happy birthday, ${name}!! ♥`;
       (s.queue ??= []).push({ text: line, ms: 5000, personal: true, cls: KEPT, perk: true, then: () => {
         if (!note.quiet) this._chirp(s, "birthday");
@@ -304,6 +313,43 @@ class HatchPetCardVisit extends HatchPetCardLooks {
       this._sparkle(s);
       if (!calm()) this._bondHearts(s);
     }
+  }
+
+  // What the pet calls you on a birthday line (birthday plan 1.1): call_me, else its nickname for
+  // you (at its level), else your Home Assistant first name, else nothing. Every other line is
+  // unchanged: only the birthday lines read this.
+  _birthdayName(s) {
+    const callMe = this._birthdayPrefs(s).callMe;
+    if (callMe) return short(callMe, 16);
+    const bond = this._bond(s);
+    return (bond?.level >= BOND.nickname && bond.nickname) || short(this._hass.user?.name?.trim().split(/\s+/)[0], 16) || "";
+  }
+
+  // The server's countdown for this viewer: the channel's mine once it has spoken (so a day that
+  // turns reaches an open card), else the last visit's reply. Never on a shared screen.
+  // { days: 1-5 | 0 | null, year, callMe }
+  _birthdayPrefs(s) {
+    if (sharedScreen()) return { days: null, year: null, callMe: null };
+    const m = s.mine ? { in: s.mine.birthday_in, year: s.mine.birthday_year, callMe: s.mine.call_me } : s.bdayReply || {};
+    const days = Number.isInteger(m.in) && m.in >= 0 && m.in <= 5 && typeof m.year === "string" ? m.in : null;
+    return { days, year: days === null ? null : m.year, callMe: typeof m.callMe === "string" ? m.callMe : null };
+  }
+
+  // Now and then while the countdown runs (1-5 days): one line from BIRTHDAY_SOON, at most
+  // BIRTHDAY_SOON_IDLE_MAX a device for each count, a small chirp on 1 day to go. Keyed on the
+  // server's year and count, never the browser's date. Only when the pet is free (no scene,
+  // game, question or line), never an egg, never a shared screen. (Plan 2.2)
+  _birthdaySoonTick(s) {
+    const now = Date.now();
+    if (!s.nextBdaySoon) s.nextBdaySoon = now + BIRTHDAY_SOON_EVERY_MS[0];
+    if (now < s.nextBdaySoon) return;
+    const [lo, hi] = BIRTHDAY_SOON_EVERY_MS;
+    s.nextBdaySoon = now + lo + Math.random() * (hi - lo);
+    const { days, year } = this._birthdayPrefs(s);
+    if (!days || !BIRTHDAY_SOON[days] || s.egg || s.resting || !this._hass.user?.id || !this._free(s)) return;
+    if (!usedUpTo(`bdaysoon-${s.ids?.device}-${this._hass.user.id}-${year}-${days}`, BIRTHDAY_SOON_IDLE_MAX)) return;
+    this._speak(s, birthdaySoonLine(pick(BIRTHDAY_SOON[days]), this._birthdayName(s)), 4500);
+    if (days === 1) this._chirp(s, "tap");
   }
 
   // E14: the week strip, oldest first, from the life stage sensor's `week`: no fixed seven

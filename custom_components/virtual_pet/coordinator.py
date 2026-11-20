@@ -1853,6 +1853,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     self.people.mark_memory_said(user, kind, key)
                 else:
                     self.people.mark(user, kind, key)
+                    if kind == "your_birthday":
+                        # The keepsake (plan 1.5): the year, ten kept.
+                        parties = self.people.person(user).setdefault("parties", [])
+                        if key not in parties:
+                            parties.append(key)
+                            del parties[: -P.PARTIES_KEPT]
                     if note.get("told"):
                         # Door 6 (memory plan M1b): the favourite's note, said once a
                         # day as ever, and its one-shot in their memory too.
@@ -1875,6 +1881,38 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             **self._visit_prefs(user),
         }
 
+    def _birthday_prefs(self, user: str) -> dict[str, Any]:
+        """The countdown's facts for this person only (birthday plan 1.2): days to
+        go (0-5, by the server's local date), the year being counted to, what to call
+        them, the years of their parties. Never the date itself."""
+        person = self.people.data["people"].get(user, {})
+        out: dict[str, Any] = {}
+        if call_me := person.get("call_me"):
+            out["call_me"] = call_me
+        if parties := person.get("parties"):
+            out["parties"] = list(parties)
+        today = dt_util.now().date().isoformat()
+        days = model.birthday_in(person.get("birthday"), today)
+        if days is not None:
+            nxt = model.birthday_next(person["birthday"], today)
+            assert nxt is not None
+            out["birthday_in"] = days
+            out["birthday_year"] = str(nxt.year)
+        return out
+
+    def _house_birthday_in(self, user: str) -> int | None:
+        """The nearest of the others' birthdays, 1-3 days off (plan 1.6); no one
+        named, never this person, never today's."""
+        today = dt_util.now().date().isoformat()
+        days = [
+            d
+            for other, person in self.people.data["people"].items()
+            if other != user
+            and (d := model.birthday_in(person.get("birthday"), today)) is not None
+            and 1 <= d <= 3
+        ]
+        return min(days) if days else None
+
     def _visit_prefs(self, user: str) -> dict[str, Any]:
         """The person's own settings, on every visit reply (counted or not), so a
         second device never shows a default. They go to this person only (a state
@@ -1889,6 +1927,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "memory_on": self.people.memory_on(user),
             "memory_allowed": self.memory_allowed,
             "follow": 1,  # follow-ups (F1): the card may send a typed text, and fetch
+            **self._birthday_prefs(user),
+            **(
+                {"house_birthday_in": d}
+                if (d := self._house_birthday_in(user)) is not None
+                else {}
+            ),
         }
 
     def _up_early(self, user: str, now: float) -> list[dict[str, Any]]:
@@ -1964,6 +2008,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     {"kind": "your_birthday", "quiet": quiet},
                 )
             )
+        soon = model.birthday_in(person.get("birthday"), today)
         months = model.friends_for(bond.get("since"), today)
         friends = months and noted.get("friends") != today
         # No birthday while resting: aging is paused (plan §3.3, S4).
@@ -1985,6 +2030,23 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 note["tag"] = tag
             celebrations.append(("pet", "friends", today, note))
         out += celebrations[:1]
+        # The countdown (plan 1.3): once a day per person, below the celebrations
+        # (the look's other lines come first when room is short).
+        if (
+            soon is not None
+            and soon >= 1
+            and not state.resting
+            and model.life_stage(state) != "egg"
+            and not self.people.said(user, "birthday_soon", today)
+        ):
+            out.append(
+                (
+                    "person",
+                    "birthday_soon",
+                    today,
+                    {"kind": "birthday_soon", "days": soon},
+                )
+            )
         gen = str(state.generation)
         if gen in bond.get("photos", {}) and noted.get("photo") != gen:
             out.append(("pet", "photo", gen, {"kind": "photo"}))
@@ -2484,6 +2546,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         person = self.people.person(user)
         person.pop("birthday", None)
         person.pop("birthday_phone", None)
+        person.pop("parties", None)
         person["birthday_skipped"] = True
         self.people.save()
         self._push_everywhere()
@@ -2646,7 +2709,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             assert closest.state is not None
             self._send(
                 [user],
-                notify.birthday(closest.state.name, closest.bond_for(user)[1]),
+                notify.birthday(
+                    closest.state.name,
+                    person.get("call_me") or closest.bond_for(user)[1],
+                ),
                 f"{DOMAIN}_birthday",
                 level="passive",
             )
@@ -2952,6 +3018,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "memory_allowed": self.memory_allowed,
             "birthday_phone": bool(person.get("birthday_phone")),
             "birthday_kept": bool(person.get("birthday")),
+            # The countdown (plan 1.2): recomputed each tick, so the day's turn
+            # reaches an open card through the usual diff.
+            **self._birthday_prefs(user),
             # Their card opens on this pet (the favourite, §5.3): only theirs, never
             # anyone else's choice.
             "open_on": self.people.open_on(user) == self.pet_id,

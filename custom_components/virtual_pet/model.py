@@ -3906,6 +3906,35 @@ def birthday_today(birthday: str | None, today: str) -> bool:
     return today[5:] == birthday
 
 
+def _birthday_on(birthday: str, year: int) -> date:
+    """The day a "MM-DD" birthday falls in a year (29 Feb: the 28th in common years)."""
+    if birthday == "02-29" and not calendar.isleap(year):
+        return date(year, 2, 28)
+    return date(year, int(birthday[:2]), int(birthday[3:]))
+
+
+def birthday_next(birthday: str | None, today: str) -> date | None:
+    """The next occurrence of a "MM-DD" birthday, today included."""
+    if not birthday or not valid_birthday(birthday):
+        return None
+    day = date.fromisoformat(today)
+    this = _birthday_on(birthday, day.year)
+    return this if this >= day else _birthday_on(birthday, day.year + 1)
+
+
+def birthday_in(birthday: str | None, today: str) -> int | None:
+    """Days to a "MM-DD" birthday, 0-5 (0 = today), else None. Follows
+    birthday_today for 29 February; counts over a year end."""
+    nxt = birthday_next(birthday, today)
+    if nxt is None:
+        return None
+    days = (nxt - date.fromisoformat(today)).days
+    return days if days <= BIRTHDAY_SOON_DAYS else None
+
+
+BIRTHDAY_SOON_DAYS = 5  # how far ahead the countdown starts
+
+
 def friends_for(since: str | None, today: str) -> int | None:
     """Whole months since they first met, if today is the day ("we've been
     friends for a month!"); the 31st falls on a short month's last day."""

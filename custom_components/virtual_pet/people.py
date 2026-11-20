@@ -739,6 +739,7 @@ def _str_dict(v: Any) -> dict[str, str]:
 
 
 # What "forget my data" keeps: refusals with no content, so nobody is asked again.
+PARTIES_KEPT = 10
 _FORGET_KEEPS = ("birthday_skipped", "memory_asked", "memory_chosen_days")
 
 
@@ -762,6 +763,16 @@ _PERSON_KEYS: dict[str, Any] = {
     "birthday_skipped": lambda v: isinstance(v, bool),
     "birthday": lambda v: isinstance(v, str) and model.valid_birthday(v),
     "birthday_sent": lambda v: isinstance(v, str),  # the year, "2026"
+    # What the pet calls them on a birthday line (birthday plan 1.1): 1-16 characters,
+    # set by an admin store edit. Stripped on load (_person) before this check.
+    "call_me": lambda v: isinstance(v, str) and 1 <= len(v) <= 16,
+    # The years their birthday was said ("2026"), newest last (plan 1.5): not in
+    # _FORGET_KEEPS, so both forgets clear it.
+    "parties": lambda v: (
+        isinstance(v, list)
+        and len(v) <= PARTIES_KEPT
+        and all(isinstance(y, str) and len(y) == 4 and y.isdigit() for y in v)
+    ),
     "once_last": lambda v: isinstance(v, str),  # a day
     "asked": lambda v: isinstance(v, dict) and isinstance(v.get("day"), str),
     "phone_asked": lambda v: isinstance(v, bool),  # the phone question (top10 1a)
@@ -930,6 +941,10 @@ def _memory(v: Any) -> dict[str, Any] | None:
 def _person(record: dict[str, Any]) -> dict[str, Any]:
     """One person's record as loaded, with the shapes its readers expect."""
     out = dict(record)
+    if isinstance(out.get("call_me"), str):
+        out["call_me"] = out["call_me"].strip()
+    if isinstance(out.get("parties"), list):
+        out["parties"] = out["parties"][-PARTIES_KEPT:]
     for key, ok in _PERSON_KEYS.items():
         if key in out and not ok(out[key]):
             del out[key]

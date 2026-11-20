@@ -991,6 +991,15 @@
       const over = (i) => (Array.isArray(shot.mine) ? shot.mine[i] || {} : typeof shot.mine === "object" ? shot.mine : {});
       slides.forEach((s, i) => { s.mine = { ...mine, ...over(i) }; });
     }
+    // The birthday prefs the private channel would send (birthday plan 3.6): `yourBirthdayIn` (0-5,
+    // with birthday_year the page's year) and `callMe`; each gives the slides a viewer's own view.
+    if (shot.yourBirthdayIn !== undefined || shot.callMe) {
+      const extra = {
+        ...(shot.yourBirthdayIn !== undefined ? { birthday_in: shot.yourBirthdayIn, birthday_year: String(new Date().getFullYear()) } : {}),
+        ...(shot.callMe ? { call_me: shot.callMe } : {}),
+      };
+      slides.forEach((s) => { s.mine = { bond: { level: 6, nickname: null }, ...(s.mine || {}), ...extra }; });
+    }
     // `textStep`: the big day's (or weekend's) typed step through the card's own
     // _askTextStart and _askText, its line in the bubble and the box held (no timer):
     // {kind, day, tag}. With mine's memory_on and memory_allowed the box has memory's tag

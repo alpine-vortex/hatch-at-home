@@ -464,6 +464,23 @@ function oncePerDay(name, day = new Date()) {
   }
   return true;
 }
+// A count kept per key, up to `max`: true while it is under (and counts this use). For the
+// birthday countdown's idle lines: the key carries the server's birthday_year and birthday_in,
+// never the browser's date (the browser may be in another time zone; birthday plan 3.1).
+function usedUpTo(key, max) {
+  const full = `hatch-${key}`;
+  try {
+    const n = Number(localStorage.getItem(full)) || 0;
+    if (n >= max) return false;
+    localStorage.setItem(full, String(n + 1));
+  } catch (err) {
+    const seen = (usedUpTo.seen ??= new Map());
+    const n = seen.get(full) || 0;
+    if (n >= max) return false;
+    seen.set(full, n + 1);
+  }
+  return true;
+}
 // Which pet is on show, kept per browser (UX fix 2, F8): a reload, a phone waking a dropped tab
 // or a rebuilt dashboard view comes back to it, not to the first. Keyed by the card's first
 // device, so two cards don't share a place; a device that is gone is ignored.

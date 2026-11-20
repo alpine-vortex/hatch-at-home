@@ -59,6 +59,7 @@ class HatchPetCardTick extends HatchPetCardSitter {
         this._idle(s);
         this._eggWobble(s);
         this._flairTick(s);
+        this._birthdaySoonTick(s);
         this._firstMove(s);
         this._seasonTick(s);
         this._partyTick(s);
