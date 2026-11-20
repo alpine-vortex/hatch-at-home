@@ -66,6 +66,7 @@ from .const import (
     SERVICE_NOTIFY_ME,
     SERVICE_PLAY_GAME,
     SERVICE_REACT,
+    SERVICE_SET_PERSON_BIRTHDAY,
     SERVICE_SET_SHELL,
     SERVICE_SHARE_NEWS,
     SERVICE_VISIT,
@@ -81,7 +82,7 @@ from .coordinator import (
 )
 from .defaults import default_weather
 from .home import news_text
-from .model import GAMES
+from .model import GAMES, valid_birthday
 from .people import (
     ANSWERS,
     ASK_AGAIN_KINDS,
@@ -231,6 +232,17 @@ FAST_FORWARD_SCHEMA = vol.Schema(
         vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
     }
 )
+# Admin: set a person's birthday, its phone switch and what the pet calls them on a
+# birthday line (birthday plan 1.7). Values are checked in the handler, so a bad one
+# is refused without a schema error that could carry it.
+SET_PERSON_BIRTHDAY_SCHEMA = vol.Schema(
+    {
+        vol.Required("user_id"): cv.string,
+        vol.Optional("birthday"): cv.string,
+        vol.Optional("birthday_phone"): cv.boolean,
+        vol.Optional("call_me"): cv.string,
+    }
+)
 
 
 CARD_PATH = Path(__file__).parent / "frontend" / CARD_FILENAME
@@ -318,6 +330,33 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 call.data[ATTR_HOURS]
             )
         return results
+
+    async def set_person_birthday(call: ServiceCall) -> None:
+        """Admin only (async_register_admin_service). Nothing is created for an
+        unknown user id; a bad value refuses the whole call."""
+        data = call.data
+        if await hass.auth.async_get_user(data["user_id"]) is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="unknown_user"
+            )
+        birthday = data.get("birthday")
+        if birthday is not None and not valid_birthday(birthday):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="bad_birthday"
+            )
+        call_me = data["call_me"].strip() if "call_me" in data else None
+        if call_me is not None and len(call_me) > 16:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="bad_call_me"
+            )
+        pets = list(hass.data[DOMAIN]["pets"].values())
+        if not pets:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="no_pet"
+            )
+        await pets[0].async_set_person_birthday(
+            data["user_id"], birthday, data.get("birthday_phone"), call_me
+        )
 
     def pet_of(call: ServiceCall) -> PetCoordinator:
         """The loaded pet that owns the call's entity."""
@@ -557,6 +596,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         fast_forward,
         schema=FAST_FORWARD_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
+    )
+    async_register_admin_service(
+        hass,
+        DOMAIN,
+        SERVICE_SET_PERSON_BIRTHDAY,
+        set_person_birthday,
+        schema=SET_PERSON_BIRTHDAY_SCHEMA,
     )
     return True
 

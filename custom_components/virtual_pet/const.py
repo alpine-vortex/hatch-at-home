@@ -19,6 +19,7 @@ STORE_MINOR_VERSION = 1
 SERVICE_NOTIFY_ME = "notify_me"
 ATTR_ENABLED = "enabled"
 SERVICE_FAST_FORWARD = "fast_forward"
+SERVICE_SET_PERSON_BIRTHDAY = "set_person_birthday"
 SERVICE_PLAY_GAME = "play_game"
 SERVICE_HOP = "hop"
 ATTR_ACTION = "action"

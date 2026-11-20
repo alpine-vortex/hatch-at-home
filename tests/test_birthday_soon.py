@@ -7,7 +7,8 @@ import copy
 from typing import Any
 
 from freezegun.api import FrozenDateTimeFactory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Context, HomeAssistant
+from homeassistant.exceptions import ServiceValidationError, Unauthorized
 from homeassistant.util import dt as dt_util
 import pytest
 from pytest_homeassistant_custom_component.common import (
@@ -16,6 +17,7 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.virtual_pet import model, people as P
+from custom_components.virtual_pet.const import DOMAIN
 
 from .test_channel import command, pushed, subscribe
 from .test_forget import PEOPLE_KEY, a_user, people_store, saved_people
@@ -405,3 +407,118 @@ async def test_the_house_tip_off_is_the_nearest_of_the_others_one_to_three_days(
     assert (await pet.async_visit(other.id))["house_birthday_in"] == 1  # mine: 11-21
     # The private channel's prefs carry no tip-off (a visit reply only).
     assert "house_birthday_in" not in pet._mine(me.id)
+
+
+# --- 1.7 the admin service -------------------------------------------------------
+
+
+async def set_birthday(hass: HomeAssistant, caller: str | None, **data: Any) -> None:
+    await hass.services.async_call(
+        DOMAIN,
+        "set_person_birthday",
+        data,
+        blocking=True,
+        context=Context(user_id=caller),
+    )
+
+
+async def test_set_person_birthday_sets_validates_clears_and_tells_open_cards(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_admin_user: Any,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-11-20 12:00:00+00:00")
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    config = await setup(hass)
+    pet = config.runtime_data
+    ada, _ = await a_user(hass)
+    pet.people.person(ada.id)["birthday_skipped"] = True
+    # Set all three: the skip is lifted, the store is saved at once.
+    await set_birthday(
+        hass,
+        hass_admin_user.id,
+        user_id=ada.id,
+        birthday="11-22",
+        birthday_phone=True,
+        call_me="  Bee ",
+    )
+    person = pet.people.data["people"][ada.id]
+    assert person == {
+        "birthday": "11-22",
+        "birthday_phone": True,
+        "call_me": "Bee",
+    }
+    assert saved_people(hass_storage)[ada.id] == person
+    assert pet._mine(ada.id)["birthday_in"] == 2
+    # A field left out is left alone; an empty call_me clears it.
+    await set_birthday(hass, hass_admin_user.id, user_id=ada.id, call_me="")
+    assert "call_me" not in person and person["birthday"] == "11-22"
+    await set_birthday(hass, hass_admin_user.id, user_id=ada.id, birthday_phone=False)
+    assert person["birthday_phone"] is False and person["birthday"] == "11-22"
+
+
+async def test_set_person_birthday_refuses_bad_values_and_unknown_users(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_admin_user: Any,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    config = await setup(hass)
+    people = config.runtime_data.people
+    ada, _ = await a_user(hass)
+    admin = hass_admin_user.id
+    before = copy.deepcopy(people.data)
+    for bad in (
+        {"user_id": "no-such-user", "birthday": "03-14"},  # unknown id
+        {"user_id": ada.id, "birthday": "02-30"},
+        {"user_id": ada.id, "birthday": "3-14"},
+        {"user_id": ada.id, "call_me": "x" * 17},
+    ):
+        with pytest.raises(ServiceValidationError):
+            await set_birthday(hass, admin, **bad)
+    # Nothing was made or changed, not even for an unknown user.
+    assert people.data == before
+    assert "no-such-user" not in people.data["people"]
+    # 16 characters is fine; 29 February too.
+    await set_birthday(hass, admin, user_id=ada.id, birthday="02-29", call_me="x" * 16)
+    assert people.data["people"][ada.id]["birthday"] == "02-29"
+
+
+async def test_set_person_birthday_is_admin_only(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_read_only_user: Any,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    config = await setup(hass)
+    people = config.runtime_data.people
+    ada, _ = await a_user(hass)
+    before = copy.deepcopy(people.data)
+    with pytest.raises(Unauthorized):
+        await set_birthday(
+            hass, hass_read_only_user.id, user_id=ada.id, birthday="03-14"
+        )
+    with pytest.raises(Unauthorized):
+        await set_birthday(hass, ada.id, user_id=ada.id, birthday="03-14")
+    assert people.data == before
+
+
+async def test_set_person_birthday_pushes_to_an_open_card(
+    on_the_24th: None,
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    await setup(hass)
+    client = await hass_ws_client(hass)
+    snapshot = await subscribe(client)
+    assert "call_me" not in snapshot["mine"]
+    await pushed(client)
+    await set_birthday(
+        hass, hass_admin_user.id, user_id=hass_admin_user.id, call_me="Bee"
+    )
+    events = await pushed(client)
+    assert [e["mine"]["call_me"] for e in events if "mine" in e] == ["Bee"]

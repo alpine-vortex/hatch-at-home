@@ -243,3 +243,21 @@ react:
       example: "the bread's ready! ♪"
       selector:
         text:
+set_person_birthday:
+  fields:
+    user_id:
+      required: true
+      example: "0123456789abcdef0123456789abcdef"
+      selector:
+        text:
+    birthday:
+      example: "03-14"
+      selector:
+        text:
+    birthday_phone:
+      selector:
+        boolean:
+    call_me:
+      example: "Bee"
+      selector:
+        text:

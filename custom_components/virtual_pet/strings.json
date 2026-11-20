@@ -328,6 +328,15 @@
     },
     "shell_locked": {
       "message": "The {finish} shell opens once the pet is a {stage}."
+    },
+    "unknown_user": {
+      "message": "No Home Assistant user has that ID."
+    },
+    "bad_birthday": {
+      "message": "A birthday is a real day written MM-DD."
+    },
+    "bad_call_me": {
+      "message": "Call me is at most 16 characters."
     }
   },
   "services": {
@@ -522,6 +531,28 @@
         "text": {
           "name": "Words",
           "description": "Custom only, optional: what the pet says, up to 40 characters. Empty: the reaction's own line."
+        }
+      }
+    },
+    "set_person_birthday": {
+      "name": "Set a person's birthday",
+      "description": "Admin only: sets a person's birthday, whether their phone hears it, and what the pet calls them on a birthday line. Leave a field out to leave it as it is.",
+      "fields": {
+        "user_id": {
+          "name": "User ID",
+          "description": "The Home Assistant user's ID."
+        },
+        "birthday": {
+          "name": "Birthday",
+          "description": "The day, as MM-DD (29 February is fine). Setting it means the pet won't be told to leave the question alone."
+        },
+        "birthday_phone": {
+          "name": "Birthday on the phone",
+          "description": "Whether their phone hears \"happy birthday\" on the day."
+        },
+        "call_me": {
+          "name": "Call me",
+          "description": "What the pet calls them on a birthday line, 1-16 characters. An empty value clears it."
         }
       }
     }

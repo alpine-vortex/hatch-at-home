@@ -60,7 +60,15 @@ House-wide, names no one: `_visit_prefs` gains
 who keep a birthday, absent otherwise. Never the person, never 0. Card copy
 says "someone" only.
 
-Tests: pytest for each of 1.1-1.6 (shape drop, window edges, once a day, priority under
+1.7 **Admin service** (owner's addition, 2026-11-20): `virtual_pet.set_person_birthday(user_id,
+birthday "MM-DD" optional, birthday_phone bool optional, call_me str optional)`, admin callers
+only (`async_register_admin_service`), `user_id` must be a real HA user (nothing is created for an
+unknown one). Values validate like `_PERSON_KEYS` (a real day; `call_me` stripped, at most 16, an
+empty string clears it); a bad value refuses the call. Setting a birthday clears
+`birthday_skipped`. The store is saved at once and every pet's channel re-sends that person's
+`mine`. This replaces the admin store edit that 1.1 names; a settings row stays parked.
+
+Tests: pytest for each of 1.1-1.7 (shape drop, window edges, once a day, priority under
 celebrations, push name, parties append/cap, house tip-off excludes self and never says
 who).
 
@@ -133,7 +141,7 @@ Name-free, transparent, same palette and outline as the party hat
 | slice | what | depends on | tier |
 |---|---|---|---|
 | S0 | her data set on the household HA (admin store edit, not repo work) | - | 0 |
-| S1 | server 1.1-1.6 + tests | - | 2 (people store schema) |
+| S1 | server 1.1-1.7 + tests | - | 2 (people store schema) |
 | S2 | card countdown (2.x) + bench flags (3.6 part) | S1 prefs names | 1 |
 | S3 | party day 3.1-3.5 + bench preset, with stand-in art | S1, S2 | 1 |
 | S4 | extras 4.1-4.4 | S3, S5 | 1 |

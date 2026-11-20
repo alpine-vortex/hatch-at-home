@@ -2533,6 +2533,32 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.people.save()
         self._push_everywhere()
 
+    async def async_set_person_birthday(
+        self,
+        user: str,
+        birthday: str | None,
+        birthday_phone: bool | None,
+        call_me: str | None,
+    ) -> None:
+        """An admin sets a person's birthday, phone switch and call_me (birthday plan
+        1.7; the values are checked by the service). Setting a birthday clears the
+        "don't ask again" refusal; an empty call_me clears it. Saved at once, and every
+        pet's channel re-sends that person's `mine`."""
+        async with self.people.lock(user):
+            person = self.people.person(user)
+            if birthday is not None:
+                person["birthday"] = birthday
+                person.pop("birthday_skipped", None)
+            if birthday_phone is not None:
+                person["birthday_phone"] = birthday_phone
+            if call_me is not None:
+                if call_me:
+                    person["call_me"] = call_me
+                else:
+                    person.pop("call_me", None)
+            await self.people.async_save_now()
+        self._push_everywhere()
+
     async def async_set_baby_talk(self, user: str, enabled: bool) -> None:
         """Simpler words from babies and children on this person's cards. One
         switch per person, for every pet; no entity shows it (the card learns
