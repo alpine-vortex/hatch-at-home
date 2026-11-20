@@ -540,6 +540,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
   // visitor came by here (once a day); else half "yum" (its own food, in its own words),
   // half the meal of the hour. Baby talk keeps "yum".
   _mealLine(s, food, hour = new Date().getHours()) {
+    if (this._yourPartyOn(s)) return [PARTY_CAKE, 2500]; // your party day: the slice's line (plan 4.2)
     const seen = this._visitSeen(s);
     if (seen && Math.random() < CRUMB_ODDS && oncePerDay(`crumb-${s.ids?.device}`)) {
       return [CRUMB_LINE(seen), 2500];

@@ -84,6 +84,9 @@ class HatchPetCardSeason extends HatchPetCardCrate {
         if (!isCalm && dark && !(s.visitUntil > now)) this._seasonFly(s, season, art, cls, ms, { ltr: true });
       }
     }
+    // Your own party (birthday plan 3.4): it beats every season's visitor, treat and costume (the sky
+    // and scenery above stay). Ahead of the countdown and the treat on purpose.
+    if (this._yourPartyOn(s)) return;
     if (!this._free(s) || s.pet.classList.contains("hop") || s.pet.classList.contains("greethop")) return;
     const today = new Date();
     // The countdown, on the first look of the day.
@@ -144,6 +147,7 @@ class HatchPetCardSeason extends HatchPetCardCrate {
   // the day turning starts it), then the hat now and then. On a holiday's own
   // day that holiday's costume wins: confetti, no party hat.
   _partyTick(s) {
+    if (this._yourPartyTick(s)) return; // your day: one party, the pet's own birthday too (plan 3.4)
     if (!this._state(s, "sensor.life_stage")?.attributes.birthday) return;
     if (!this._free(s) || s.pet.classList.contains("hop") || s.pet.classList.contains("greethop")) return;
     if (this._hatSpot(s) === null) return; // a pose no hat can sit on: wait for the next
@@ -179,6 +183,118 @@ class HatchPetCardSeason extends HatchPetCardCrate {
       (this._parties ??= new Set()).add(key);
     }
     return true;
+  }
+
+  // Your own birthday party (birthday plan 3): the server's `birthday_in === 0` for this viewer,
+  // never the browser's date, never a shared screen, never an egg.
+  _yourPartyOn(s) {
+    if (sharedScreen() || s.egg || !s.species) return false;
+    return this._birthdayPrefs(s).days === 0;
+  }
+
+  // The props (3.2): bunting across the top, a balloon bunch at one side, the cake beside the pet.
+  // Drawn when the party is on, taken down when it is not (the day turning). aria-hidden, under the
+  // pet's z-order (they stand at the sides, never over it). True when the party is on.
+  _yourPartyProps(s) {
+    const on = this._yourPartyOn(s);
+    const box = s.screen.querySelector(".yparty");
+    if (!on) {
+      box?.remove();
+      return false;
+    }
+    if (box) return true;
+    const el = document.createElement("div");
+    el.className = "yparty";
+    el.setAttribute("aria-hidden", "true");
+    el.innerHTML = `<div class="yp-bunting" style="background-image:url(${BASE}/ui/party_bunting.png?v=${VERSION})"></div>` +
+      `<img class="yp-balloons" src="${BASE}/ui/party_balloons.png?v=${VERSION}" alt="">` +
+      `<button type="button" class="yp-cake" aria-label="blow out the candles"><img src="${BASE}/ui/party_cake_${this._candlesOut(s) ? "out" : "lit"}.png?v=${VERSION}" alt=""></button>`;
+    const cake = el.querySelector(".yp-cake");
+    cake.addEventListener("click", (e) => {
+      e.stopPropagation(); // not the screen's Status shortcut
+      this._blowOut(s, cake);
+    });
+    if (this._candlesOut(s)) this._cakeSpent(cake);
+    s.screen.append(el);
+    return true;
+  }
+
+  // Blow out the candles (plan 4.1): once per device per day (the server's year), then the cake stays
+  // out-candled. The pet leans toward the cake, lit swaps to out, confetti, the chirp, the line.
+  _blowOut(s, cake) {
+    if (this._owned(s) || s.scene || this._candlesOut(s) || !this._yourPartyOn(s)) return;
+    this._yourPartyFirst(s, "candles-");
+    this._cakeSpent(cake);
+    this._patLean(s, "l", 1200);
+    this._animate(s, s.pet, "perk", 320);
+    this._confetti(s);
+    this._chirp(s, "birthday");
+    this._speak(s, PARTY_WISH, 4500, { catch: true });
+  }
+
+  // The cake after the candles: out art, no longer a button.
+  _cakeSpent(cake) {
+    const img = cake.querySelector("img");
+    if (img) img.src = img.src.replace("party_cake_lit", "party_cake_out");
+    cake.disabled = true;
+    cake.tabIndex = -1;
+    cake.setAttribute("aria-hidden", "true");
+  }
+
+  _candlesOut(s) {
+    const key = this._yourPartyKey(s, "candles-");
+    try {
+      return !!localStorage.getItem(key);
+    } catch (err) {
+      return !!this._parties?.has(key);
+    }
+  }
+
+  _yourPartyKey(s, tag) {
+    return `hatch-yourparty-${tag}${s.ids?.device}-${this._hass.user?.id}-${this._birthdayPrefs(s).year}`;
+  }
+
+  // The first look and the idle lines of the party. True while it is on (the caller stops there).
+  _yourPartyTick(s) {
+    if (!this._yourPartyProps(s)) return false;
+    if (!this._free(s) || s.pet.classList.contains("hop") || s.pet.classList.contains("greethop")) return true;
+    if (this._hatSpot(s) === null) return true;
+    const now = Date.now();
+    const name = this._birthdayName(s);
+    if (this._yourPartyFirst(s)) {
+      this._yourPartyConfetti(s);
+      const both = this._state(s, "sensor.life_stage")?.attributes.birthday; // its own birthday too: one party
+      this._costume(s, PARTY, both ? PARTY_BOTH : yourPartyLine(PARTY_YOURS[0], name));
+      s.nextYourParty = now + SEASON_COSTUME_MS[0];
+      return true;
+    }
+    if (!s.nextYourParty) s.nextYourParty = now + SEASON_COSTUME_MS[0];
+    if (now < s.nextYourParty) return true;
+    const [lo, hi] = SEASON_COSTUME_MS;
+    s.nextYourParty = now + lo + Math.random() * (hi - lo);
+    this._costume(s, PARTY, yourPartyLine(pick(PARTY_YOURS), name));
+    return true;
+  }
+
+  // The first party moment of this birthday on this device, for this person (the server's year).
+  _yourPartyFirst(s, tag = "") {
+    const key = this._yourPartyKey(s, tag);
+    try {
+      if (localStorage.getItem(key)) return false;
+      localStorage.setItem(key, "1");
+    } catch (err) {
+      if (this._parties?.has(key)) return false;
+      (this._parties ??= new Set()).add(key);
+    }
+    return true;
+  }
+
+  // Confetti on the first look and each greeting; two within a few seconds are one.
+  _yourPartyConfetti(s) {
+    const now = Date.now();
+    if (s.yConfettiAt && now - s.yConfettiAt < 4000) return;
+    s.yConfettiAt = now;
+    this._confetti(s);
   }
 
   _confetti(s) {

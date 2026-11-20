@@ -1308,6 +1308,27 @@ const PRESETS = {
     }
     return out;
   },
+  // Your birthday (docs/plan-2026-11-20-your-birthday.md 2 and 3.6): the countdown at 5 and 1 days, the
+  // party day by day and by night, and the party day with Thanksgiving pinned and its treat forced to
+  // today (no turkey costume: bench.info.party.costumes is empty of season_thanksgiving).
+  birthday() {
+    const base = { species: "fox", stage: "adult", world: "woodland", width: 420, callMe: "Bee", say: "" };
+    const out = [];
+    for (const n of [5, 1]) out.push({ ...base, name: `birthday/in-${n}`, group: "birthday", label: `${n} days to go`, yourBirthdayIn: n });
+    for (const scene of ["day", "night"]) {
+      out.push({ ...base, name: `birthday/party-${scene}`, group: "birthday", label: `party day, ${scene}`, yourBirthdayIn: 0, scene,
+        partyDay: {} });
+    }
+    out.push({ ...base, name: "birthday/party-candles", group: "birthday", label: "candles blown out (4.1)", yourBirthdayIn: 0,
+      partyDay: { blow: true } });
+    for (const at of [900, 1800]) {
+      out.push({ ...base, name: `birthday/party-feed-${at}`, group: "birthday", label: `cake slice at the meal ${at} (4.2)`, yourBirthdayIn: 0,
+        care: "feed", careAt: at, answer: { at: 200, result: "ok" }, clip: "screen", pet: { hunger: 60 }, variant: { feed: "A", "feed.extra": "none" } });
+    }
+    out.push({ ...base, name: "birthday/party-thanksgiving", group: "birthday", label: "party day, Thanksgiving's treat day",
+      yourBirthdayIn: 0, season: "thanksgiving", partyDay: { treatToday: true } });
+    return out;
+  },
   feed() {
     const out = [];
     const ok = { at: 200, result: "ok" };
@@ -1739,7 +1760,7 @@ async function runShots(browser, base, shots, outDir, workers) {
           }, shot.lines);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(n));
         }
-        if (shot.costume || shot.deviceFx || shot.glassMark || shot.momentCue || shot.gift || shot.look || shot.care || shot.lightsAlign || shot.mode || shot.view === "crate" || shot.view === "board" || shot.view === "games") {
+        if (shot.costume || shot.partyDay || shot.deviceFx || shot.glassMark || shot.momentCue || shot.gift || shot.look || shot.care || shot.lightsAlign || shot.mode || shot.view === "crate" || shot.view === "board" || shot.view === "games") {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
         }

@@ -445,6 +445,7 @@ function feedSlide({ hunger = "60", missing = false, habit, moods = ["content", 
   const states = { "sensor.hunger": missing ? undefined : { state: hunger } };
   const self = {
     _state: (_s, k) => states[k],
+    _yourPartyOn: () => false,
     _sceneFrames: (s0, act) => (s0.species.acts?.[act]?.includes(s0.drawn) ? [`${s0.drawn}_${act}_1`, `${s0.drawn}_${act}_2`] : null),
     _careVariant: ctx0.api._careVariant,
     _careFrames: careFramesApi._careFrames,

@@ -755,6 +755,33 @@
     card._write(cur, greet[0], 1e9);
   }
 
+  // Your party day (birthday plan 3.6): the card's own ticks run a few times on the frozen slide, so the
+  // first look's confetti and hat, the props and the season guard are the card's. `treatToday` pins the
+  // season's treat to today first (Thanksgiving's turkey): a party day shows no season costume then.
+  // bench.info.party: the costume art on show, whether the props are up, whether the treat's costume came.
+  async function partyDayShot(card, cur, pd) {
+    const season = card.constructor.seasons.find((x) => x.key === (pd.season || card._config.seasonal));
+    const was = season?.treat;
+    if (season && pd.treatToday) {
+      const d = new Date();
+      season.treat = [d.getMonth() + 1, d.getDate()];
+    }
+    for (let i = 0; i < 3; i++) {
+      Object.assign(cur, { sayUntil: 0, flairUntil: 0, nextCostume: 0, nextYourParty: 0, nextParty: 0, treated: false });
+      card._seasonTick(cur);
+      card._partyTick(cur);
+      await new Promise((r) => setTimeout(r, 60));
+    }
+    if (pd.blow) { // the cake's tap (plan 4.1): the candles out, the lean and the line
+      cur.screen.querySelector(".yp-cake").click();
+      await new Promise((r) => setTimeout(r, 700));
+    }
+    await new Promise((r) => setTimeout(r, 450)); // the hat's fade-in
+    if (season && pd.treatToday) season.treat = was;
+    const art = [...cur.screen.querySelectorAll(".costume img")].map((i) => i.getAttribute("src").replace(/^.*\/ui\//, "").replace(/\?.*/, ""));
+    window.bench.info = { party: { costumes: art, props: !!cur.screen.querySelector(".yparty"), confetti: !!cur.screen.querySelector(".confetti"), cake: cur.screen.querySelector(".yp-cake img")?.getAttribute("src").replace(/^.*\/ui\//, "").replace(/\?.*/, ""), cakeOff: !!cur.screen.querySelector(".yp-cake")?.disabled } };
+  }
+
   // Put on the costume `art` of `season` (frame 1 or 2 showing) and wait out the
   // pet's little perk, so the shot holds the hat still.
   async function dress(card, cur, { season, art, frame = 1 }) {
@@ -1081,6 +1108,7 @@
     if (shot.deviceFx) deviceFxShot(card, cur, shot);
     if (shot.glassMark) glassMarkShot(card, cur, shot);
     if (shot.costume) await dress(card, cur, shot.costume);
+    if (shot.partyDay) await partyDayShot(card, cur, shot.partyDay);
     if (["status", "settings", "picker"].includes(shot.view)) root.querySelector(".statusbtn").click();
     if (shot.view === "settings" || shot.view === "picker") root.querySelector(".gear").click();
     if (shot.view === "lay") cur.request.click(); // settings S2: the lay sheet opens
