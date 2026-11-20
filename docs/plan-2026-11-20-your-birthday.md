@@ -172,3 +172,36 @@ to SS. Server and privacy bar: no findings.
   the slice's plate outline is closed (no nubs) with a full shade ring.
 - Luna review of 5294bd46..57a6e75d: one finding, fixed: the tip-off's once-a-day key no longer
   includes the count.
+
+## 7. Extras, round 2 (owner, 2026-11-20)
+
+Ship as 0.52.0: released by the evening of 22 Nov, installed by 23 Nov. Never a release on 24 Nov
+(an HA restart on her day). Cut order if time runs short: 7.3 guests first, then 7.4 leftovers.
+Each keeps the rules above: the server's day and year for every key, own screen only
+(`sharedScreen()`), never an egg, timers through the ledger (`_later`), motion on
+`motion_rule.test.js`'s list, `calm()` for reduced motion.
+
+7.1 **Balloon pop** (party day): the balloon bunch becomes a real `<button>`
+(`aria-label="pop a balloon"`, not inside an aria-hidden wrapper, like the cake). A tap pops one
+balloon: a pop puff (new small art), a confetti burst, the `tap` chirp, a line from PARTY_POP
+("pop! ♪", "eek! that was loud!", "one more! one more!"). Three pops empty the bunch; it comes back
+on the next visit (a fresh props box), not kept in storage. Acceptance: bench day 0 shows the bunch;
+a JS test drives three taps.
+
+7.2 **Party photo** (keepsake): the journal's "birthday parties" row shows a print per year,
+drawn on the card like the best-friend photos (`_renderPhoto`) with the party hat on the pet and the
+lit cake beside it, in place of the small cake icon. It is drawn from the pet as it is now (accepted:
+after the pet grows the print shows the new stage; no new stored keys this week). Own screen only.
+Acceptance: bench journal shot with `parties: ["2026"]`.
+
+7.3 **Party guests** (party day): now and then a world visitor drops by in a party hat (one at a
+time, at most 2 per visit). First check that visitors run on party day at all (`_visitorTick` vs the
+party guard in `_seasonTick`). A hat anchor per visitor sprite is most of the work. Acceptance: bench
+day 0 with a guest, Firefox and Chromium.
+
+7.4 **Leftovers** (the day after): server `birthday_after` (true on the day after the birthday by
+the server's local date, worked out from `birthday` and today, no new stored key) in `_visit_prefs`
+and `_mine`, carried by the existing midnight re-send. Card: the first look says
+"best party ever!! thank you, {n} ♥" once (keyed on the server's year and the device), and the feed
+scene serves the cake slice once ("leftover cake! still yummy ♪"). Pytest across month and year
+ends and Feb 29; Luna review (server code).
