@@ -3703,13 +3703,14 @@ def birthday_present(
     year = today[:4]
     if bond.get("present_year") == year or not birthday_today(birthday, today):
         return False
-    bond["present_year"] = year
     if "gift" not in bond:
         had = set(bond.get("gifts", ()))
         only = [f for f in finds if f.get("gift_only") and f["id"] not in had]
         find = only[0] if only else pick_gift(bond, finds, flags, rng)
-        if find is not None:
-            bond["gift"] = {"id": find["id"], "world": world}
+        if find is None:
+            return False  # nothing to give yet: a later tick that day tries again (Luna, 8.3)
+        bond["gift"] = {"id": find["id"], "world": world}
+    bond["present_year"] = year
     return True
 
 

@@ -117,6 +117,25 @@ def test_no_level_or_clock_needed_but_never_a_new_bond_or_an_egg() -> None:
     ), "a world with no finds"
 
 
+def test_nothing_to_give_keeps_the_year_open() -> None:
+    only_had = [f for f in WOOD if f.get("gift_only")]  # all they have: nothing to pick
+    pet = pet_with({"me": {"points": 1, "gifts": [ONLY]}})
+    assert not model.birthday_present(
+        pet,
+        "me",
+        "11-24",
+        "2026-11-24",
+        "woodland",
+        only_had,
+        ALL_TRUE,
+        random.Random(1),
+    )
+    assert "present_year" not in pet.bonds["me"], "a later tick may still give one"
+    assert "gift" not in pet.bonds["me"]
+    assert present(pet, "11-24", "2026-11-24"), "with something to give: the present"
+    assert pet.bonds["me"]["present_year"] == "2026"
+
+
 def test_present_year_is_type_checked_on_load() -> None:
     bonds = model.bonds_from(
         {
