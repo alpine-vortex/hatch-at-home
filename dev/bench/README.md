@@ -9,7 +9,8 @@ shots. It loads the card unchanged, gives it a fake `hass`, and serves sprites,
 ## Run
 
 The repo has no `node_modules`; point `NODE_PATH` at a checkout with Playwright
-(and its Chromium):
+(and its Chromium). `BENCH_BROWSER=firefox` runs the same shots in Playwright's Firefox (Gecko,
+the owner's browser; desktop Firefox at the shot's width, not Firefox for Android):
 
 ```sh
 export NODE_PATH=/home/poe/github/relink/node_modules

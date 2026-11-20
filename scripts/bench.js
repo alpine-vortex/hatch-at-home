@@ -2105,9 +2105,10 @@ async function buildSheets(browser, shots, outDir) {
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   const shots = loadShots(opts);
-  const { chromium } = require("playwright");
+  // BENCH_BROWSER=firefox runs the shots in Gecko (the owner's browser); default Chromium.
+  const engine = process.env.BENCH_BROWSER === "firefox" ? "firefox" : "chromium";
   const { server, url } = await startServer();
-  const browser = await chromium.launch();
+  const browser = await require("playwright")[engine].launch();
   const started = Date.now();
   try {
     console.log(`${shots.length} shots -> ${opts.out}`);
