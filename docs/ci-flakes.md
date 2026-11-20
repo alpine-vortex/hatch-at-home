@@ -18,3 +18,6 @@ date, run id, shard, check). A check listed twice gets fixed next.
 - 2026-11-08 run 42508478494 shard 4/5: the pat box sits on the pet's box, shown, named for the pet
 - 2026-11-08 run 42510055913 shard 2/5: game on the shell: higher_lower: the F13 restart keeps the mode: one announcement, from kept, the eight restored
 - 2026-11-08 (crate push merge candidate, ci-gate of 8b330c5e) shard 2/5: game on the shell: higher_lower: the F13 restart keeps the mode (third time in two days: worth fixing next)
+- 2026-11-20 run 44782777516 shard 1/5: dig: after the x, reopening carries on from the parked pile (thinking… -> round 1/5
+- 2026-11-20 run 44782777516 shard 1/5: dig F16: the second screen of one person adopts the server's round, and both keep playing
+- 2026-11-20 run 44782777516 shard 1/5: dig F16: the other screen's x closes this one quietly with the parked line
