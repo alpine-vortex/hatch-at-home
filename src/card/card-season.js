@@ -208,9 +208,50 @@ class HatchPetCardSeason extends HatchPetCardCrate {
     el.setAttribute("aria-hidden", "true");
     el.innerHTML = `<div class="yp-bunting" style="background-image:url(${BASE}/ui/party_bunting.png?v=${VERSION})"></div>` +
       `<img class="yp-balloons" src="${BASE}/ui/party_balloons.png?v=${VERSION}" alt="">` +
-      `<img class="yp-cake" src="${BASE}/ui/party_cake_lit.png?v=${VERSION}" alt="">`;
+      `<button type="button" class="yp-cake" aria-label="blow out the candles"><img src="${BASE}/ui/party_cake_${this._candlesOut(s) ? "out" : "lit"}.png?v=${VERSION}" alt=""></button>`;
+    const cake = el.querySelector(".yp-cake");
+    cake.addEventListener("click", (e) => {
+      e.stopPropagation(); // not the screen's Status shortcut
+      this._blowOut(s, cake);
+    });
+    if (this._candlesOut(s)) this._cakeSpent(cake);
     s.screen.append(el);
     return true;
+  }
+
+  // Blow out the candles (plan 4.1): once per device per day (the server's year), then the cake stays
+  // out-candled. The pet leans toward the cake, lit swaps to out, confetti, the chirp, the line.
+  _blowOut(s, cake) {
+    if (this._owned(s) || s.scene || this._candlesOut(s) || !this._yourPartyOn(s)) return;
+    this._yourPartyFirst(s, "candles-");
+    this._cakeSpent(cake);
+    this._patLean(s, "l", 1200);
+    this._animate(s, s.pet, "perk", 320);
+    this._confetti(s);
+    this._chirp(s, "birthday");
+    this._speak(s, PARTY_WISH, 4500, { catch: true });
+  }
+
+  // The cake after the candles: out art, no longer a button.
+  _cakeSpent(cake) {
+    const img = cake.querySelector("img");
+    if (img) img.src = img.src.replace("party_cake_lit", "party_cake_out");
+    cake.disabled = true;
+    cake.tabIndex = -1;
+    cake.setAttribute("aria-hidden", "true");
+  }
+
+  _candlesOut(s) {
+    const key = this._yourPartyKey(s, "candles-");
+    try {
+      return !!localStorage.getItem(key);
+    } catch (err) {
+      return !!this._parties?.has(key);
+    }
+  }
+
+  _yourPartyKey(s, tag) {
+    return `hatch-yourparty-${tag}${s.ids?.device}-${this._hass.user?.id}-${this._birthdayPrefs(s).year}`;
   }
 
   // The first look and the idle lines of the party. True while it is on (the caller stops there).
@@ -236,8 +277,8 @@ class HatchPetCardSeason extends HatchPetCardCrate {
   }
 
   // The first party moment of this birthday on this device, for this person (the server's year).
-  _yourPartyFirst(s) {
-    const key = `hatch-yourparty-${s.ids?.device}-${this._hass.user?.id}-${this._birthdayPrefs(s).year}`;
+  _yourPartyFirst(s, tag = "") {
+    const key = this._yourPartyKey(s, tag);
     try {
       if (localStorage.getItem(key)) return false;
       localStorage.setItem(key, "1");

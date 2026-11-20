@@ -1319,6 +1319,12 @@ const PRESETS = {
       out.push({ ...base, name: `birthday/party-${scene}`, group: "birthday", label: `party day, ${scene}`, yourBirthdayIn: 0, scene,
         partyDay: {} });
     }
+    out.push({ ...base, name: "birthday/party-candles", group: "birthday", label: "candles blown out (4.1)", yourBirthdayIn: 0,
+      partyDay: { blow: true } });
+    for (const at of [900, 1800]) {
+      out.push({ ...base, name: `birthday/party-feed-${at}`, group: "birthday", label: `cake slice at the meal ${at} (4.2)`, yourBirthdayIn: 0,
+        care: "feed", careAt: at, answer: { at: 200, result: "ok" }, clip: "screen", pet: { hunger: 60 }, variant: { feed: "A", "feed.extra": "none" } });
+    }
     out.push({ ...base, name: "birthday/party-thanksgiving", group: "birthday", label: "party day, Thanksgiving's treat day",
       yourBirthdayIn: 0, season: "thanksgiving", partyDay: { treatToday: true } });
     return out;

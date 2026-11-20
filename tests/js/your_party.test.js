@@ -19,7 +19,8 @@ test("the trigger is the server's count, never the browser's date, never shared 
   assert.match(on, /s\.egg/);
   assert.match(on, /_birthdayPrefs\(s\)\.days === 0/);
   assert.doesNotMatch(on, /new Date|getDate/);
-  assert.match(method("_yourPartyFirst"), /hatch-yourparty-\$\{s\.ids\?\.device\}-\$\{this\._hass\.user\?\.id\}-\$\{this\._birthdayPrefs\(s\)\.year\}/);
+  assert.match(method("_yourPartyKey"), /hatch-yourparty-\$\{tag\}\$\{s\.ids\?\.device\}-\$\{this\._hass\.user\?\.id\}-\$\{this\._birthdayPrefs\(s\)\.year\}/);
+  assert.match(method("_yourPartyFirst"), /_yourPartyKey\(s, tag\)/);
 });
 
 test("the guard is ahead of the countdown, visitor, treat and costume branches", () => {
@@ -59,9 +60,29 @@ test("the first line is the big one, 6 s, with the birthday chirp", () => {
 test("props are aria-hidden, stand beside the pet, and calm() keeps confetti away", () => {
   const props = method("_yourPartyProps");
   assert.match(props, /setAttribute\("aria-hidden", "true"\)/);
-  assert.match(props, /party_bunting\.png[\s\S]*party_balloons\.png[\s\S]*party_cake_lit\.png/);
+  assert.match(props, /party_bunting\.png[\s\S]*party_balloons\.png[\s\S]*party_cake_\$\{/);
   assert.match(method("_confetti"), /if \(calm\(\)\) return;/);
   assert.match(method("_greet"), /_yourPartyOn\(s\)\) this\._yourPartyConfetti\(s\)/);
   assert.match(src, /\.yparty \.yp-balloons \{[^}]*animation: yp-bob/);
   assert.doesNotMatch(src, /\.pet\.yp-/);
+});
+
+test("4.1: the cake is a button that blows the candles out, once a day, with the plan's line", () => {
+  const props = method("_yourPartyProps");
+  assert.match(props, /<button type="button" class="yp-cake" aria-label="blow out the candles">/);
+  assert.match(props, /e\.stopPropagation\(\)/);
+  const blow = method("_blowOut");
+  assert.match(blow, /_candlesOut\(s\)/);
+  assert.match(blow, /_yourPartyFirst\(s, "candles-"\)/);
+  assert.match(blow, /_patLean\(s, "l"/);
+  assert.match(blow, /_confetti\(s\)[\s\S]*_chirp\(s, "birthday"\)[\s\S]*PARTY_WISH/);
+  assert.match(src, /const PARTY_WISH = "yay!! now your wish comes true ♥";/);
+  assert.match(method("_cakeSpent"), /party_cake_lit[\s\S]*party_cake_out/);
+});
+
+test("4.2: the feed scene serves the slice on party day, and says the plan's line", () => {
+  assert.match(src, /if \(this\._yourPartyOn\(s\)\) \{\s*sc\.bowl\.dataset\.cake = "1";[\s\S]*?party_cake_slice\.png/);
+  assert.match(method("_bowlClip"), /if \(img\.dataset\.cake\) return false;/);
+  assert.match(method("_mealLine"), /_yourPartyOn\(s\)\) return \[PARTY_CAKE, 2500\]/);
+  assert.match(src, /const PARTY_CAKE = "birthday cake for breakfast! ♪";/);
 });

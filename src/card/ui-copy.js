@@ -255,6 +255,8 @@ const PARTY = { key: "party", costumes: [{ art: "hat", sink: 7, width: 56 }],
 // block, like BIRTHDAY_SOON.
 const PARTY_YOURS = ["best day of the year! it's {n}'s birthday!", "make a wish, {n}! ♥", "i saved you the biggest slice ♪",
   "party party party!! ♪", "you're the best, {n} ♥"];
+const PARTY_WISH = "yay!! now your wish comes true ♥"; // the candles blown out (plan 4.1)
+const PARTY_CAKE = "birthday cake for breakfast! ♪"; // the feed scene on party day (plan 4.2)
 const PARTY_BOTH = "it's your birthday AND mine!!"; // its own birthday the same day (plan 3.4)
 function yourPartyLine(line, name) {
   return name ? line.replace("{n}", name) : line.replace("{n}'s", "your").replace(", {n}", "").replace(" {n}", "");

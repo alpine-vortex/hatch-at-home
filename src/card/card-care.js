@@ -234,6 +234,13 @@ const SCENES = {
       sc.bowl.setAttribute("src", spriteSrc(s.speciesId, s.species.props?.feed || "bird/bowl_food"));
       sc.bowlW = 0.22 * sh;
       sc.bowlX = 0.67 * sw;
+      // Your party day (birthday plan 4.2): a slice of cake on its plate, not the day's food. The art is
+      // whole (no rim to clip to), so each bite is the dip below (_bowlClip says no); the server's feed is unchanged.
+      if (this._yourPartyOn(s)) {
+        sc.bowl.dataset.cake = "1";
+        sc.bowl.setAttribute("src", `${BASE}/ui/party_cake_slice.png?v=${VERSION}`);
+        sc.bowlW *= 136 / 104;
+      }
       const front = pet.left - box.left + pet.width * 0.72;
       sc.step = Math.max(0, Math.min(sw * 0.22, sc.bowlX + sc.bowlW / 2 - front));
       sc.crumbs = [0, 1, 2].map(() => add("div", `scene-crumb${sc.water ? " bubble" : ""}`));
@@ -1052,6 +1059,7 @@ class HatchPetCardCare extends HatchPetCardMode {
 
   // The bowl's food at step 0 (full) to 3 (all of it above the rim gone): a stepped clip.
   _bowlClip(s, img, step) {
+    if (img.dataset.cake) return false; // the party's slice: whole art, the bite dips instead
     const cuts = bowlCuts(bowlRows(img), s.species?.bowl_rim);
     const cut = step > 0 && cuts ? cuts[Math.min(3, step) - 1] : 0;
     img.style.clipPath = cut ? `inset(${(cut / img.naturalHeight) * 100}% 0 0 0)` : "";

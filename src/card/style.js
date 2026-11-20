@@ -783,7 +783,10 @@ const STYLE = `
   .yparty img { position: absolute; bottom: 4%; image-rendering: pixelated; }
   .yparty .yp-balloons { right: 3%; height: 46%; width: auto; transform-origin: 50% 100%;
     animation: yp-bob 3.2s ease-in-out infinite alternate; }
-  .yparty .yp-cake { left: 3%; height: 24%; width: auto; }
+  .yparty .yp-cake { position: absolute; left: 3%; bottom: 4%; height: 24%; aspect-ratio: 160 / 140; padding: 0; border: 0;
+    background: none; pointer-events: auto; cursor: pointer; min-width: 44px; min-height: 44px; }
+  .yparty .yp-cake:disabled { pointer-events: none; cursor: default; }
+  .yparty .yp-cake img { left: 0; bottom: 0; width: 100%; height: 100%; }
   @keyframes yp-bob { from { rotate: -2deg; } to { rotate: 2deg; } }
   .confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
   /* A bit is a full-height lane that slides down (translate) with the chip turning inside it. */

@@ -772,10 +772,14 @@
       card._partyTick(cur);
       await new Promise((r) => setTimeout(r, 60));
     }
+    if (pd.blow) { // the cake's tap (plan 4.1): the candles out, the lean and the line
+      cur.screen.querySelector(".yp-cake").click();
+      await new Promise((r) => setTimeout(r, 700));
+    }
     await new Promise((r) => setTimeout(r, 450)); // the hat's fade-in
     if (season && pd.treatToday) season.treat = was;
     const art = [...cur.screen.querySelectorAll(".costume img")].map((i) => i.getAttribute("src").replace(/^.*\/ui\//, "").replace(/\?.*/, ""));
-    window.bench.info = { party: { costumes: art, props: !!cur.screen.querySelector(".yparty"), confetti: !!cur.screen.querySelector(".confetti") } };
+    window.bench.info = { party: { costumes: art, props: !!cur.screen.querySelector(".yparty"), confetti: !!cur.screen.querySelector(".confetti"), cake: cur.screen.querySelector(".yp-cake img")?.getAttribute("src").replace(/^.*\/ui\//, "").replace(/\?.*/, ""), cakeOff: !!cur.screen.querySelector(".yp-cake")?.disabled } };
   }
 
   // Put on the costume `art` of `season` (frame 1 or 2 showing) and wait out the
