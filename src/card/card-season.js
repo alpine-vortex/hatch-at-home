@@ -246,7 +246,7 @@ class HatchPetCardSeason extends HatchPetCardCrate {
     return btn;
   }
 
-  // One tap, one balloon: the puff where it was, a confetti burst, the tap chirp, a line. The third
+  // One tap, one balloon: the puff where it was, a confetti burst, a soft pop and a line. The third
   // empties the bunch: the button goes once the last puff is done.
   _popBalloon(s, btn, img) {
     const popped = s.yPops || 0;
@@ -274,7 +274,7 @@ class HatchPetCardSeason extends HatchPetCardCrate {
     this._later(s, POP_MS, done, { group: "season", hidden: "tab", undo: done });
     if (!calm()) this._animate(s, s.pet, "perk", 320);
     this._confetti(s);
-    this._chirp(s, "tap");
+    this._chirp(s, "balloon");
     this._speak(s, pick(PARTY_POP.slice(0, left ? 3 : 2)), 2500, { catch: true });
   }
 
@@ -310,7 +310,7 @@ class HatchPetCardSeason extends HatchPetCardCrate {
       this._patLean(s, "l", 1200);
       this._animate(s, s.pet, "perk", 320);
       this._confetti(s);
-      this._chirp(s, "birthday");
+      this._chirp(s, "candles");
       this._speak(s, PARTY_WISH, 4500, { catch: true });
     }, { key: "party.wish" });
   }

@@ -111,6 +111,9 @@ class HatchPetCardBase extends HTMLElement {
   _onHidden = () => {
     if (document.hidden) {
       (this._slides || []).forEach((x) => this._stopTyping(x));
+      const s = this._slides?.[this._index];
+      if (s?.scene) s.scene.soundPlayed = true; // the beat passed out of view
+      if (s?.sceneFade) s.sceneFade.sound = null;
       (this._slides || []).forEach((x) => this._memoryPageClose(x)); // memory plan M3a, path 5
       this._hiddenAt ??= Date.now();
       this._dirPause("tab");

@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.52.4";
+const VERSION = "0.53.0";
 // scripts/build-card.js swaps this for the card's content id (7 hex of its own sha256): Settings shows it.
 const BUILD = "__BUILD_ID__";
 const BASE = "/virtual_pet/frontend";
@@ -130,19 +130,34 @@ const GAME_END_MS = 1800; // a game's last result is read this long before its e
 // device (status screen). Never while the pet sleeps, nor late at night.
 const SOUND_KEY = "hatch-sounds";
 const QUIET_HOURS = [21, 8]; // from 21:00 to 08:00 local time
-const CHIRPS = { // [frequency Hz, length s] notes, played one after another
+const WIN_CHIRP = [[784, 0.08], [988, 0.08], [1319, 0.18]];
+const BIRTHDAY_CHIRP = [[523, 0.12], [523, 0.1], [587, 0.22], [523, 0.22], [698, 0.22], [659, 0.4]];
+const CRATE_SEAT_CHIRP = [[435, 0.075, { type: "triangle", end: 260, peak: 0.035 }]];
+const CHIRPS = { // [frequency Hz, length s, optional voice] notes, played one after another
   call: [[880, 0.08], [0, 0.05], [880, 0.08]],
   hatch: [[523, 0.09], [659, 0.09], [784, 0.09], [1047, 0.16]],
-  win: [[784, 0.08], [988, 0.08], [1319, 0.18]],
+  win: WIN_CHIRP,
   trait: [[1047, 0.07], [1319, 0.07], [1568, 0.07], [2093, 0.14]],
   spooky: [[660, 0.12], [622, 0.12], [587, 0.12], [523, 0.26]],
   harvest: [[523, 0.1], [659, 0.1], [784, 0.1], [659, 0.1], [784, 0.22]],
-  birthday: [[523, 0.12], [523, 0.1], [587, 0.22], [523, 0.22], [698, 0.22], [659, 0.4]],
+  birthday: BIRTHDAY_CHIRP,
+  balloon: [[1850, 0.046, { type: "noise", end: 650, peak: 0.085, attack: 0.003 }]],
+  candles: [[1430, 0.105, { type: "noise", end: 650, peak: 0.055, attack: 0.023 }], ...BIRTHDAY_CHIRP],
   click: [[1760, 0.04]], // the backlight
+  touch: [[775, 0.037, { type: "triangle", end: 510, peak: 0.028 }]], // a soft shell click
   tap: [[1319, 0.04], [1568, 0.06]], // a pat on the egg (UX fix 4, F2): soft
   link: [[1319, 0.06], [0, 0.03], [1760, 0.09]], // the infrared link
   boot: [[523, 0.08], [784, 0.08], [1047, 0.2]],
   buzz: [[330, 0.06], [262, 0.1]], // a bee, a wrong guess (UX fix 6, F14)
+  bite: [[560, 0.08, { type: "triangle", end: 245, peak: 0.034 }]],
+  biteWater: [[365, 0.085, { type: "sine", end: 735, peak: 0.035 }]],
+  sweep: [[1700, 0.15, { type: "noise", end: 700, peak: 0.065, attack: 0.028 }]],
+  net: [[650, 0.16, { type: "noise", end: 1250, peak: 0.052, attack: 0.04 }],
+    [440, 0.045, { type: "sine", end: 610, peak: 0.022 }]],
+  crateSeat: CRATE_SEAT_CHIRP,
+  crateWin: [...CRATE_SEAT_CHIRP, ...WIN_CHIRP],
+  newFind: [[660, 0.06, { type: "triangle", end: 500, peak: 0.032 }],
+    [990, 0.105, { type: "sine", peak: 0.025 }]],
 };
 let audio = null; // one AudioContext for every card on the page
 // A running AudioContext keeps an audio thread and session alive (on a phone's WebView, for the
@@ -452,23 +467,49 @@ function chirpOut() {
   return chirpBus;
 }
 
+let chirpNoise = null;
+function chirpSource(freq, len, t, { type = "square", end }, gain) {
+  if (type === "noise") {
+    if (!chirpNoise) {
+      chirpNoise = audio.createBuffer(1, Math.ceil(audio.sampleRate * 0.25), audio.sampleRate);
+      const samples = chirpNoise.getChannelData(0);
+      for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
+    }
+    const source = audio.createBufferSource();
+    source.buffer = chirpNoise;
+    const filter = audio.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(freq, t);
+    filter.frequency.exponentialRampToValueAtTime(end, t + len);
+    source.connect(filter).connect(gain);
+    return source;
+  }
+  const osc = audio.createOscillator();
+  osc.type = type;
+  osc.frequency.value = freq;
+  if (end) {
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.exponentialRampToValueAtTime(end, t + len);
+  }
+  osc.connect(gain);
+  return osc;
+}
+
 function playChirp(name) {
   const notes = CHIRPS[name];
   if (!notes) return;
   unlockAudio();
   let t = audio.currentTime + 0.01;
-  for (const [freq, len] of notes) {
+  for (const [freq, len, voice = {}] of notes) {
     if (freq) {
-      const osc = audio.createOscillator();
       const gain = audio.createGain();
-      osc.type = "square";
-      osc.frequency.value = freq;
       gain.gain.setValueAtTime(0, t); // a 5 ms ramp in: a note that starts at full gain clicks (UX7 F7)
-      gain.gain.linearRampToValueAtTime(0.05, t + 0.005);
+      gain.gain.linearRampToValueAtTime(voice.peak ?? 0.05, t + (voice.attack ?? 0.005));
       gain.gain.exponentialRampToValueAtTime(0.001, t + len);
-      osc.connect(gain).connect(chirpOut());
-      osc.start(t);
-      osc.stop(t + len);
+      gain.connect(chirpOut());
+      const source = chirpSource(freq, len, t, voice, gain);
+      source.start(t);
+      source.stop(t + len);
     }
     t += len;
   }

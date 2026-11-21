@@ -320,6 +320,16 @@ test("a new first-ever find: its ring is taken off 600 ms after it pops", () => 
   assert.deepStrictEqual(removed(w).filter((r) => r[1].startsWith("span")).map((r) => r[0]), [600]);
 });
 
+test("a streak of new finds sounds just once, on the first new picture", () => {
+  const w = make({ calm: true });
+  const mixed = finds(3);
+  mixed[1].new = mixed[2].new = true;
+  w.card._revealStart(w.slide, mixed);
+  w.run(7600);
+  assert.deepStrictEqual(w.calls.filter((c) => c.name === "_chirp").map((c) => [c.t, c.args[1]]),
+    [[2500, "newFind"]]);
+});
+
 test("_revealEnd stops the steps: nothing later shows", () => {
   const w = make();
   const R = w.card._revealStart(w.slide, finds(3));

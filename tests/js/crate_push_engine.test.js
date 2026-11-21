@@ -59,3 +59,16 @@ test("legalMoves lists the letters that apply", () => {
   const b = boards.wall;
   assert.deepStrictEqual(plain(S.legalMoves(b, S.start(b))), ["d"]);
 });
+
+test("a crate seating on a goal has its own cue, including the solving move", () => {
+  const { world } = require("./timer_trace");
+  const w = world({ methods: ["_crateMove", "_crateReplay"], globals: {
+    HATCH_CRATE_PUSH: S, crateStore() {}, CRATE_COPY: { practiceDone: "solved" },
+  } });
+  const board = { w: 4, h: 3, grid: ["Pbn.", "....", ".bn."] };
+  w.slide.game = { board, st: S.start(board), moves: [], practice: true };
+  for (const move of "urlddr") w.card._crateMove(w.slide, move);
+  w.card._crateReplay(w.slide, []);
+  assert.deepStrictEqual(w.calls.filter((c) => c.name === "_chirp").map((c) => c.args[1]),
+    ["crateSeat", "tap", "tap", "tap", "crateWin"]);
+});

@@ -81,6 +81,8 @@ class HatchPetCardBuild extends HatchPetCardBase {
     for (const [k, v] of printTiles()) this._card.style.setProperty(k, v);
     this._viewport = root.querySelector(".viewport");
     this._track = root.querySelector(".track");
+    this._touchSounds = new WeakSet();
+    root.addEventListener("click", (e) => this._touchControl(e), true);
     // Once a slide comes to rest, its shell's parts are put back on whole device pixels.
     this._track.addEventListener("transitionend", (e) => {
       const s = this._slides[this._index];
@@ -111,7 +113,6 @@ class HatchPetCardBuild extends HatchPetCardBase {
     this._viewport.addEventListener("pointerdown", (e) => {
       startX = e.clientX;
       startY = e.clientY;
-      this._swiped = false;
     });
     this._viewport.addEventListener("pointerup", (e) => {
       if (startX === null) return;
@@ -120,6 +121,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
       startX = null;
       // A swipe is mostly sideways: a mostly vertical drag is someone reading or selecting (UX fix 2, F6).
       if (Math.abs(dx) > 40 && Math.abs(dx) > 1.5 * Math.abs(dy)) {
+        if (this._slides.length > 1) this._touchChirp(e);
         this._swiped = true;
         this._go(this._index + (dx < 0 ? 1 : -1));
       }
@@ -138,6 +140,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     for (const type of ["touchend", "pointerup", "click"]) this._card.addEventListener(type, unlock, true);
     // Someone is watching (gaps-seams 5a): a tap or swipe; the first after a gap starts a look.
     this._card.addEventListener("pointerdown", () => {
+      this._swiped = false;
       const now = Date.now();
       if (!this._touchedAt || now - this._touchedAt >= LINK_TOUCHED_MS) this._lookAt = now;
       this._touchedAt = now;
@@ -155,6 +158,25 @@ class HatchPetCardBuild extends HatchPetCardBase {
     });
     this._io.observe(this._card);
     this._slides = [];
+  }
+
+  _touchChirp(e, s = this._slides[this._index]) {
+    if (!s || s !== this._slides[this._index] || !e.isTrusted || (e.detail !== 0 && this._swiped) || this._touchSounds.has(e)) return;
+    this._touchSounds.add(e);
+    this._chirp(s, "touch");
+  }
+
+  // Standard controls can stop propagation, replace themselves, or leave the card.
+  // The controls with their own feedback and the touch targets without buttons own their cues.
+  _touchControl(e) {
+    if (!e.isTrusted) return;
+    const control = e.target.closest?.("button, a[href], input, select, textarea, [role=button]");
+    if (!control || control.matches(':disabled, [aria-disabled="true"], .toy, .pat, .boot, .backlight, .bell.sound, .bell.babble, .yp-balloons')) return;
+    const s = this._slides[this._index];
+    const slide = control.closest(".slide");
+    if (!s || (slide && slide !== s.el)) return; // the adjacent slide tap only brings it forward
+    if (s.scene?.stop && s.screen.contains(control) && !s.status.contains(control)) return;
+    this._touchChirp(e, s);
   }
 
   _buildSlide() {
@@ -286,7 +308,12 @@ class HatchPetCardBuild extends HatchPetCardBase {
       }
     }).observe(s.bubble, { childList: true, characterData: true, subtree: true });
     // A pat (PR 3b): a tap on the pet itself, card only. A tap beside it still opens the status.
-    s.pat.addEventListener("click", (e) => this._pat(s, e));
+    s.pat.addEventListener("click", (e) => {
+      if (!this._patOn(s)) return;
+      const before = lastChirp;
+      this._pat(s, e);
+      if (before === lastChirp) this._touchChirp(e, s);
+    });
     // The basket (visitors v2 §3): its own button, never a pat, never the status.
     s.basket.addEventListener("click", (e) => this._basketTap(s, e));
     // The CSS hides it at once for a game, a question or the status; if it had focus,
@@ -379,34 +406,44 @@ class HatchPetCardBuild extends HatchPetCardBase {
     });
     // A tap on the screen is a shortcut for the Status button; it holds buttons of its
     // own (the game, the bell, the journal), so it isn't a button itself.
-    s.screen.addEventListener("click", () => {
+    s.screen.addEventListener("click", (e) => {
       // A game on show keeps its screen: a stray tap must not end it unseen (the
       // Status button still does, on purpose).
       // The picker has no close button (shell modes slice 3): a tap on the screen outside its list closes it.
       // A swipe is not a tap. A game that has started keeps its screen.
       if (s.game?.picking) {
-        if (!this._swiped) this._endGame(s, null);
+        if (!this._swiped) {
+          this._touchChirp(e, s);
+          this._endGame(s, null);
+        }
         return;
       }
       if (this._owned(s)) return;
       // A tap on a visit in progress is a pat on the host, not the Status button: it
       // would end the hello (UX8 F1).
       if (s.linking) {
-        if (!this._swiped) this._perk(s);
+        if (!this._swiped) {
+          this._touchChirp(e, s);
+          this._perk(s);
+        }
         return;
       }
       // A question's chips take no stray tap (F3); a tap right after an answer is its
       // double tap, not the Status button (F2), so the pet's reply is seen.
       if (this._questionOn(s) || Date.now() - (s.answeredAt || 0) < CONFIRM_GAP_MS) return;
       if (!this._swiped) {
+        this._touchChirp(e, s);
         this._tapped(this._card.querySelector(".statusbtn"));
         this._toggleStatus(s);
       }
     });
     // The device beside the current one is inert; tapping it brings it forward.
-    slide.addEventListener("click", () => {
+    slide.addEventListener("click", (e) => {
       const i = this._slides.indexOf(s);
-      if (i !== this._index && !this._swiped) this._go(i);
+      if (i !== this._index && !this._swiped) {
+        this._touchChirp(e);
+        this._go(i);
+      }
     });
     // The eight round buttons. Each has one click handler, the shell mode router (_modeClick): at rest
     // it runs the care tap below, in a mode the slot's act. What a button shows (icon, caption, label,
@@ -429,7 +466,12 @@ class HatchPetCardBuild extends HatchPetCardBase {
     s.careTaps.push(() => this._toggleLights(s));
     box.append(lights);
     s.buttons.lights = lights;
-    this._modeButtons(s).forEach((b, i) => b.addEventListener("click", () => this._modeClick(s, i)));
+    this._modeButtons(s).forEach((b, i) => b.addEventListener("click", (e) => {
+      const enabled = !b.matches(':disabled, [aria-disabled="true"]');
+      const before = lastChirp;
+      this._modeClick(s, i);
+      if (enabled && before === lastChirp) this._touchChirp(e, s);
+    }));
     this._paintCaps(s, this._careRest());
     this._track.append(slide);
     return s;
@@ -1019,6 +1061,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
       if (x.nameSheet && i !== to) this._closeName(x); // and so does the name sheet (S3)
       if (i !== to && x.memoryPage) this._memoryPageClose(x); // the memory page stays with no pet left (M3a, path 3)
       if (i !== to) this._layDrop(x); // a lay waited for belongs to the slide it was made on: no sheet opens off-screen
+      if (i !== to && x.sceneFade) x.sceneFade.sound = null;
       this._sceneEnd(x, { swipe: i !== to }); // a swipe ends a care scene, showing how things are now (the slide stayed on keeps its shake-off)
       if (x.visitor && i !== to) { // a world visitor goes too, after a grace: a slip of the finger keeps it (UX8 F11)
         const V = x.visitor;

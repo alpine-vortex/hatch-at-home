@@ -48,7 +48,7 @@ test("three taps pop the bunch empty: 3, 2, 1, gone; a fourth tap does nothing",
   assert.strictEqual(w.slide.yPops, 3);
   const names = (n) => w.calls.filter((c) => c.name === n).length;
   assert.deepStrictEqual([names("_confetti"), names("_chirp"), names("_speak")], [3, 3, 3]);
-  assert.ok(w.calls.filter((c) => c.name === "_chirp").every((c) => c.args[1] === "tap"));
+  assert.ok(w.calls.filter((c) => c.name === "_chirp").every((c) => c.args[1] === "balloon"));
   assert.deepStrictEqual(said(w), ["one more! one more!", "one more! one more!", "eek! that was loud!"], "never 'one more' on the last");
 });
 

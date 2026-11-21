@@ -64,11 +64,19 @@ const probe = () => {
       this.state = "running"; // a context made inside a tap starts running
       this.currentTime = 0;
       this.destination = {};
+      this.notes = [];
       (window.__ctxs ||= []).push(this);
     }
     suspend() { this.state = "suspended"; return Promise.resolve(); }
     resume() { this.state = "running"; return Promise.resolve(); }
-    createOscillator() { return { frequency: {}, connect: (n) => n, start() {}, stop() {} }; }
+    createOscillator() {
+      const frequency = {
+        value: 0,
+        setValueAtTime(value) { this.value = value; },
+        exponentialRampToValueAtTime() {},
+      };
+      return { frequency, connect: (n) => n, start: () => this.notes.push(frequency.value), stop() {} };
+    }
     createGain() { return { gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect: (n) => n }; }
     createBiquadFilter() { return { frequency: {}, connect: (n) => n }; }
   }
@@ -81,23 +89,23 @@ const shot = (pets) => ({
   pets: Array.from({ length: pets }, (_, i) => ({ species: ["fox", "bunny", "hedgehog"][i % 3], stage: i ? "child" : "adult", mood: "content", world: "woodland" })),
 });
 
-async function withPage(run) {
+async function withPage(run, { hasTouch = false } = {}) {
   const { startServer } = require(path.join(ROOT, "dev/bench/server"));
   require(path.join(ROOT, "scripts/build-card.js")).ensureBuilt({ quiet: true });
   const { server, url } = await startServer(0);
   const browser = await chromium.launch();
   try {
-    const page = await (await browser.newContext({ viewport: { width: 460, height: 900 } })).newPage();
+    const page = await (await browser.newContext({ viewport: { width: 460, height: 900 }, hasTouch })).newPage();
     await page.addInitScript(probe);
     await page.goto(`${url}/`);
     const worlds = await page.evaluate(async () => (await (await fetch("/virtual_pet/frontend/worlds.json")).json()));
     const roster = worlds.woodland.roster;
-    const mount = (pets) => page.evaluate(async (s) => {
+    const mount = (pets, options = {}) => page.evaluate(async (s) => {
       await window.bench.mount(s);
       const c = document.querySelector("hatch-pet-card");
       clearInterval(c._timer); // the bench holds the clock still; run the card's own tick as a page does
       c._timer = setInterval(() => c._tick(), 700);
-    }, { ...shot(pets), pets: shot(pets).pets.map((p, i) => ({ ...p, species: roster[i % roster.length] })) });
+    }, { ...shot(pets), ...options, pets: shot(pets).pets.map((p, i) => ({ ...p, species: roster[i % roster.length] })) });
     await run({ page, mount });
   } finally {
     await browser.close();
@@ -220,4 +228,53 @@ test("sounds off (the default): the power-on tap and a tap on the card make no A
       assert.strictEqual(made, sounds ? 1 : 0, sounds ? "sounds on: the one context" : "sounds off: none");
     });
   }
+});
+
+test("trusted touches click on controls and the pet, with one immediate sound for a board move", { skip, timeout: 120000 }, async () => {
+  await withPage(async ({ page, mount }) => {
+    await mount(1);
+    await page.evaluate(() => {
+      Date.prototype.getHours = () => 12;
+      localStorage.setItem("hatch-sounds", "on");
+    });
+    const notes = () => page.evaluate(() => (window.__ctxs || []).flatMap((ctx) => ctx.notes));
+    const status = page.locator(".statusbtn");
+    await status.tap();
+    await page.locator(".gear").tap();
+    await page.locator(".sback").tap();
+    await status.tap();
+    await page.locator(".pat").tap();
+    assert.deepStrictEqual(await notes(), [775, 775, 775, 775, 775]);
+    await page.locator(".backlight").tap();
+    assert.deepStrictEqual((await notes()).slice(5), [1760]);
+
+    await mount(1, { view: "crate", crate: { level: "easy" } });
+    const before = (await notes()).length;
+    const left = page.locator('button.toy[aria-label="Push left"]');
+    await left.tap();
+    assert.deepStrictEqual((await notes()).slice(before), [1319, 1568], "the move already has its own chirp");
+
+    await page.evaluate(() => { Date.prototype.getHours = () => 22; });
+    await status.tap();
+    assert.equal((await notes()).length, before + 2, "quiet hours");
+    await page.evaluate(() => {
+      Date.prototype.getHours = () => 12;
+      localStorage.setItem("hatch-sounds", "off");
+    });
+    await status.tap();
+    assert.equal((await notes()).length, before + 2, "sounds off");
+
+    await mount(2);
+    await page.evaluate(() => { localStorage.setItem("hatch-sounds", "on"); });
+    const afterMount = (await notes()).length;
+    const viewport = await page.locator(".viewport").boundingBox();
+    const x = viewport.x + viewport.width * 0.6;
+    const y = viewport.y + 30;
+    const client = await page.context().newCDPSession(page);
+    await client.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+    await client.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x - 85, y }] });
+    await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    assert.equal(await page.evaluate(() => document.querySelector("hatch-pet-card")._index), 1);
+    assert.deepStrictEqual((await notes()).slice(afterMount), [775], "one click for the shelf swipe");
+  }, { hasTouch: true });
 });

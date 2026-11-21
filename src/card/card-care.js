@@ -21,6 +21,7 @@
 //   watch(s, sc, t)              read on every frame (and by _layout on every hass update): lights reads the live
 //                                asleep state here, its answer (plan 4.3b)
 //   calm(s)                      reduced motion: no scene, but the pet shows the tap took (a pose); lights
+//   chirp(s)                     sound for a confirmed care, when render sets soundReady or the calm fade starts
 const SCENES = {
   medicine: {
     ms: 2200,
@@ -78,6 +79,7 @@ const SCENES = {
   clean: {
     ms: 2300,
     skippable: true,
+    chirp: (s) => s.world?.mess === "murk" ? "net" : "sweep",
     due(s) {
       const poop = Number.parseFloat(this._state(s, "sensor.poop")?.state); // unavailable, unknown, NaN: no scene (4.2)
       return Number.isFinite(poop) && poop > 0;
@@ -126,11 +128,14 @@ const SCENES = {
         sc.dust.style.left = `${left - sc.dust.getBoundingClientRect().width * 0.55}px`;
         sc.dust.style.opacity = String(0.9 * ramp(60, 260) * (1 - ramp(1650, 2000)));
       }
+      let cleared = sc.murk && sweep >= 0.5;
       for (const { el, x } of sc.mess) {
         const k = Math.min(1, Math.max(0, (point - x) / (0.05 * sw)));
         el.style.opacity = String(1 - k);
         el.classList.toggle("scene-gone", k >= 1);
+        cleared ||= k >= 1;
       }
+      sc.soundReady = sweep < 1 && cleared;
       if (sc.murk) {
         // The water clears behind the net, with a soft edge.
         const p = Math.min(106, Math.max(-6, (point / sw) * 100));
@@ -180,6 +185,7 @@ const SCENES = {
   feed: {
     ms: 2750,
     gate: 650,
+    chirp: (s) => s.world?.mess === "murk" ? "biteWater" : "bite",
     skippable: false,
     playOwed: true,
     refuseMs: 900,
@@ -281,6 +287,7 @@ const SCENES = {
       sc.bowl.style.opacity = t < 100 ? "0" : "";
       // The food: a stepped clip at each bite's chomp (none for a species with no bowl_rim).
       const chomps = sc.bites.filter((b) => t >= b.at + 120);
+      sc.soundReady = chomps.length === 1 && t < chomps[0].at + chomps[0].len;
       const clipped = this._bowlClip(s, sc.bowl, chomps.length ? chomps[chomps.length - 1].step : 0);
       // A bowl with no rim to clip to (25 species) shows each bite another way: the whole bowl
       // dips, 200 ms (squashed 8% down and back, from its base) at the chomp.

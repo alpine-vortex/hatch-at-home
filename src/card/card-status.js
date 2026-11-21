@@ -638,7 +638,7 @@ class HatchPetCardStatus extends HatchPetCardMoment {
           unlockAudio();
           skipped = this._maySample(s);
           if (skipped === null) audio.resume().then(() => babble(`${s.species.voice.sound} hello there`, s.species.voice));
-        }
+        } else this._touchChirp(e, s);
       } catch (err) {
         // no WebAudio
       }

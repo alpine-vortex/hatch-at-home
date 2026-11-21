@@ -226,7 +226,7 @@ function sceneCard({ registry, now = 0 } = {}) {
   };
   const line = (name) => src.match(new RegExp(`\\nconst ${name} = [^\\n]*`))[0];
   const consts = ["SCENE_KIND_OF", "sceneKind", "SCENE_HOLD_MS", "SCENE_EXIT_MS", "SCENE_OWE_MS", "SPOILED_BY", "isYes"].map(line).join("");
-  const methods = ["_sceneClock", "_sceneOver", "_sceneAnswer", "_sceneFail", "_sceneNow", "_sceneOffer", "_sceneEnd", "_sceneRefusalLine",
+  const methods = ["_sceneClock", "_sceneOver", "_sceneAnswer", "_sceneFail", "_sceneNow", "_sceneOffer", "_sceneEnd", "_sceneRefusalLine", "_sceneRender",
     "_care", "_press"].map(method).join(",\n");
   vm.runInNewContext(`${consts}\nthis.api = {${methods}};`, ctx);
   ctx.SCENES = registry || {
@@ -235,7 +235,7 @@ function sceneCard({ registry, now = 0 } = {}) {
       refuseAt: (s0, sc, te) => (te < 650 ? Math.max(te, 450) : 650 + Math.ceil((te - 650) / 400) * 400) },
     lights: { ms: 2400, gate: 400, playOwed: true, refuseMs: 700, refuse() {}, exit() {} },
   };
-  const el = () => ({ style: {}, classList: { remove() {}, add() {}, contains: () => false } });
+  const el = () => ({ style: {}, classList: { remove() {}, add() {}, toggle() {}, contains: () => false } });
   const s = {
     pet: el(), perch: el(), poops: [], pressed: [], ids: { "button.feed": "button.feed", "button.medicine": "button.medicine" },
     buttons: { feed: {}, medicine: {} }, screen: { removeEventListener() {}, classList: { contains: () => false, add() {}, remove() {} } },
@@ -522,6 +522,38 @@ test("feed's beats: the gate is the first bite, the bites step the clip 1-2-3, n
   slow.s.pinVariant = { feed: "D" };
   const sc = slow.setup(feed);
   assert.ok(sc.ms <= 3200 && sc.bites[0].len > 400, `${sc.ms} ${sc.bites[0].len}`); // slower, still capped
+});
+
+test("a meal sounds once at its first bite after the server answers", () => {
+  const feed = feedEntry();
+  const f = feedSlide({ world: { mess: "murk" } });
+  f.s.pinVariant = { feed: "B" };
+  const { self, s } = sceneCard({ registry: { feed } });
+  const sounds = [];
+  Object.assign(self, { _bowlClip: () => true, _animate() {}, _show() {}, _chirp: (_s, sound) => sounds.push(sound) });
+  Object.assign(s, f.s);
+  const sc = s.scene = f.setup(feed, { kind: "feed" });
+  self._sceneRender(s, 1200);
+  assert.deepStrictEqual(sounds, [], "held at the gate");
+  self._sceneAnswer(s, "ok", 1200);
+  self._sceneRender(s, 1319);
+  assert.deepStrictEqual(sounds, [], "the bowl has not been bitten");
+  self._sceneRender(s, 1320);
+  self._sceneRender(s, 1350);
+  self._sceneRender(s, 1750);
+  assert.deepStrictEqual(sounds, ["biteWater"]);
+});
+
+test("a reduced-motion care cue belongs to the confirmed local press", () => {
+  const { self, s } = sceneCard();
+  const sounds = [];
+  self._chirp = (_s, sound) => sounds.push(sound);
+  for (const [claimed, result] of [[false, "ok"], [true, "full"], [true, "ok"]]) {
+    s.sceneFade = { kind: "feed", until: Date.now() + 10000, sound: "bite" };
+    s.prop = s.pet;
+    self._sceneOffer(s, fed("feed", result), claimed);
+  }
+  assert.deepStrictEqual(sounds, ["bite"]);
 });
 
 test("feed's push-away: from the landed bowl before the gate; after it, the bite in progress finishes", () => {
@@ -1318,7 +1350,7 @@ test("lights, reduced motion: no scene, the pose only (sleepy for a tuck, conten
   f.s.asleep = true;
   f.ctx.SCENES.lights.calm.call(f.self, f.s);
   assert.deepStrictEqual(plain(f.s.poseFrames), ["adult_content_1", "adult_content_2"]);
-  assert.match(method("_sceneStart"), /s\.sceneFade = \{ kind, until: Date\.now\(\) \+ 10000 \};[^\n]*\n\s+entry\.calm\?\.call\(this, s\);/);
+  assert.match(method("_sceneStart"), /s\.sceneFade = \{ kind, until: Date\.now\(\) \+ 10000\b[^\n]*\n\s+entry\.calm\?\.call\(this, s\);/);
 });
 
 // --- Care D audit fixes (the tier-2 audit, 2026-11-02) ------------------------------------------

@@ -527,6 +527,7 @@ class HatchPetCardBoard extends HatchPetCardGames {
     }
     g.lit = best;
     g.lastAt = Date.now();
+    this._touchChirp(e, s);
     this._hopDraw(s, false);
   }
 

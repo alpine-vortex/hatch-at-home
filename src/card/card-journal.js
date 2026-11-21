@@ -518,7 +518,10 @@ class HatchPetCardJournal extends HatchPetCardSheets {
         e.stopPropagation();
         const box = dialog.getBoundingClientRect();
         const inside = e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom;
-        if (e.target === dialog && !inside) dialog.close();
+        if (e.target === dialog && !inside) {
+          this._touchChirp(e, this._photoFor?.s);
+          dialog.close();
+        }
       });
       dialog.querySelector(".pclose").addEventListener("click", () => dialog.close());
       dialog.querySelector(".pdownload").addEventListener("click", () => {

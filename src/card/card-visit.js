@@ -628,7 +628,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     // this card's own quick repeats (taps in a game) all play.
     const device = s.ids?.device;
     const now = Date.now();
-    if (lastChirp.card && lastChirp.card !== this && lastChirp.name === name && lastChirp.device === device
+    if (name !== "touch" && lastChirp.card && lastChirp.card !== this && lastChirp.name === name && lastChirp.device === device
       && now - lastChirp.at < 300) return;
     lastChirp = { card: this, name, device, at: now };
     try {

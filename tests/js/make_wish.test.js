@@ -26,7 +26,7 @@ test("the tap asks for a wish, and the candles go out a beat later", () => {
   w.run(2600);
   assert.strictEqual(named(w, "_cakeSpent"), 1);
   assert.strictEqual(named(w, "_confetti"), 1);
-  assert.strictEqual(named(w, "_chirp"), 1);
+  assert.deepStrictEqual(w.calls.filter((c) => c.name === "_chirp").map((c) => c.args[1]), ["candles"]);
   assert.deepStrictEqual(said(w), ["make a wish, Bee! ... ok, blow! ♪", "yay!! i won't tell anyone your wish ♥"]);
 });
 
@@ -44,5 +44,6 @@ test("the party gone mid-beat: the candles go out quietly", () => {
   w.run(2600);
   assert.strictEqual(named(w, "_cakeSpent"), 1, "out, so a fresh cake shows them out");
   assert.strictEqual(named(w, "_confetti"), 0);
+  assert.strictEqual(named(w, "_chirp"), 0);
   assert.strictEqual(said(w).length, 1, "only the ask");
 });

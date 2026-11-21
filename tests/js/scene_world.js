@@ -7,7 +7,7 @@ const src = require("./card-source");
 const SCENES_BLOCK = src.slice(src.indexOf("const SCENES = {"), src.indexOf("\n};\n", src.indexOf("const SCENES = {")) + 4);
 const GO = src.match(/\n  _go\(index[^\n]*\n[\s\S]*?\n  \}\n/)[0];
 const SPEC = {
-  methods: ["_sceneEnd", "_drapeStop", "_drapeSync"],
+  methods: ["_sceneEnd", "_sceneRender", "_sceneClock", "_drapeStop", "_drapeSync"],
   consts: ["SCENE_OWE_MS", "DRAPE_FALL_MS", "DRAPE_SLIDE_PX"],
   screen: true,
   watch: ["_drapeShow", "_drapeHide"],
@@ -30,8 +30,8 @@ function sceneWorld({ pets = 1 } = {}) {
   return w;
 }
 // A clean scene as _sceneStart leaves it (the boxes are the browser's), at the world's now.
-const begin = (w, s = w.slide, { murk = false } = {}) => {
-  const sc = { kind: "clean", start: w.now, els: [], mess: [], tool: w.el("tool"), toolArt: ["broom"], water: false, murk, petX: 0, answered: false };
+const begin = (w, s = w.slide, { murk = false, water = false } = {}) => {
+  const sc = { kind: "clean", start: w.now, gate: null, els: [], mess: [], tool: w.el("tool"), toolArt: ["broom"], water, murk, petX: 0, answered: false };
   s.scene = sc;
   return sc;
 };

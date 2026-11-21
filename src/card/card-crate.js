@@ -419,6 +419,9 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     const g = s.game;
     const next = HATCH_CRATE_PUSH.apply(g.board, g.st, letter);
     if (!next) return;
+    const placed = next.crates.find((cell) => !g.st.crates.includes(cell));
+    const { grid, w } = g.board;
+    const seated = placed !== undefined && "npB".includes(grid[Math.floor(placed / w)][placed % w]);
     g.lastAt = Date.now();
     g.moves.push(letter);
     g.st = next;
@@ -426,12 +429,12 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     if (HATCH_CRATE_PUSH.isSolved(g.board, next)) {
       g.done = true;
       this._reactFrames(s, "praised", { inGame: true });
-      this._chirp(s, "win");
+      this._chirp(s, seated ? "crateWin" : "win");
       g.prompt = g.practice ? CRATE_COPY.practiceDone : CRATE_COPY.solved;
       this._write(s, g.prompt, 60000);
       s.sayUntil = Date.now() + 60000;
       if (!g.practice) this._crateSettle(s);
-    } else this._chirp(s, "tap");
+    } else this._chirp(s, seated ? "crateSeat" : "tap");
     this._crateDraw(s, true);
   }
 

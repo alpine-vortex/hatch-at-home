@@ -58,6 +58,24 @@ test("a scene ended before 1800 never adds rock2", () => {
   assert.deepStrictEqual(rock(w), []);
 });
 
+test("clean sounds once while its confirmed broom or net is clearing the screen", () => {
+  for (const water of [false, true]) {
+    const w = sceneWorld();
+    const s = w.slide;
+    s.world = { mess: water ? "murk" : null };
+    s.screen.clientHeight = 300;
+    const sc = begin(w, s, { water, murk: water });
+    if (!water) sc.mess = [{ el: w.el("mess"), x: 100 }];
+    const sounds = () => w.calls.filter((c) => c.name === "_chirp").map((c) => c.args[1]);
+    w.card._sceneRender(s, 950);
+    assert.deepStrictEqual(sounds(), [], "the tool is visible but hasn't been confirmed");
+    sc.result = "ok";
+    w.card._sceneRender(s, 1000);
+    w.card._sceneRender(s, 1100);
+    assert.deepStrictEqual(sounds(), [water ? "net" : "sweep"]);
+  }
+});
+
 // --- The drape (R17-R20) --------------------------------------------------------------------------------------------------
 
 const shows = (w) => w.calls.filter((c) => c.name === "_drapeShow").map((c) => [c.t, ...c.args.slice(1)]);

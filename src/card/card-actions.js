@@ -122,7 +122,7 @@ class HatchPetCardActions extends HatchPetCardMemory {
     if (!mood || stage === "egg" || ((s.asleep || s.lightsOut) && kind !== "lights")) return;
     if (!entry.due.call(this, s, mood, stage)) return; // read after _press ended any scene (plan 4.2)
     if (calm()) {
-      s.sceneFade = { kind, until: Date.now() + 10000 }; // no scene: the news fades in
+      s.sceneFade = { kind, until: Date.now() + 10000, sound: entry.chirp?.(s) }; // no scene: the news fades in
       entry.calm?.call(this, s); // but the pet visibly reacts: its pose (plan 9)
       return;
     }
@@ -158,6 +158,7 @@ class HatchPetCardActions extends HatchPetCardMemory {
       sc.stop = (e) => {
         if (s.status?.contains(e.target)) return;
         e.stopImmediatePropagation();
+        this._touchChirp(e, s);
         this._sceneEnd(s);
       };
       s.screen.addEventListener("click", sc.stop, true);
@@ -244,6 +245,10 @@ class HatchPetCardActions extends HatchPetCardMemory {
     sc.frames = frames;
     const shown = frames || s.frames;
     if (shown?.length) this._show(s, s.pet, shown[Math.floor(t / 300) % shown.length]);
+    if (sc.soundReady && sc.result === "ok" && c.exit == null && !sc.paused && !sc.soundPlayed) {
+      sc.soundPlayed = true;
+      this._chirp(s, entry.chirp(s));
+    }
   }
 
   // End it, wherever it got to, and draw the pet as it is now.
@@ -355,9 +360,11 @@ class HatchPetCardActions extends HatchPetCardMemory {
     }
     s.sceneOwes = owes;
     if (s.sceneFade?.kind === kind && now < s.sceneFade.until) {
+      const { sound } = s.sceneFade;
       s.sceneFade = null;
       if (ok) {
         for (const el of [s.pet, s.prop]) el.animate?.([{ opacity: 0.2 }, { opacity: 1 }], { duration: 350 });
+        if (claimed && sound && !s.scene) this._chirp(s, sound);
       }
     }
     return false;
