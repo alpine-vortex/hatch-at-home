@@ -10,10 +10,13 @@ const path = require("path");
 const WORLDS = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"));
 const TOKENS = new Set(["rainy", "snowy", "sunny", "foggy", "night", "full_moon", "autumn", "winter"]);
 
-test("every world has 10 finds, one of them gift-only", () => {
+test("every world has 10 finds, one of them gift-only, then its birthday crown (gift-only, last)", () => {
   for (const [key, world] of Object.entries(WORLDS)) {
-    assert.strictEqual(world.finds.length, 10, key);
-    assert.strictEqual(world.finds.filter((f) => f.gift_only === true).length, 1, key);
+    assert.strictEqual(world.finds.length, 11, key);
+    assert.strictEqual(world.finds.filter((f) => f.gift_only === true && !f.birthday).length, 1, key);
+    const crowns = world.finds.filter((f) => f.birthday);
+    assert.strictEqual(crowns.length, 1, key);
+    assert.ok(crowns[0].gift_only === true && world.finds.at(-1) === crowns[0], key);
   }
 });
 

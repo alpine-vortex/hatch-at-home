@@ -22,6 +22,7 @@ from .test_init import STORE_KEY, hatched_pet, setup
 WOOD = load_catalog().finds["woodland"]
 ALL_TRUE = dict.fromkeys(FIND_TOKENS, True)
 ONLY = "acorncup"  # woodland's gift-only find
+CROWN = "flowercrown"  # woodland's birthday keepsake (plan 8.4)
 ENTITY = "sensor.pip_life_stage"
 
 
@@ -70,26 +71,76 @@ def test_once_a_year_and_again_the_next() -> None:
     pet = pet_with({"me": {"points": 1}})
     assert present(pet, "11-24", "2026-11-24")
     first = pet.bonds["me"]["gift"]
-    assert first == {"id": ONLY, "world": "woodland"}, (
-        "the gift-only find they don't have first"
-    )
+    assert first == {"id": CROWN, "world": "woodland"}, "the birthday crown first"
     del pet.bonds["me"]["gift"]  # taken
+    pet.bonds["me"]["gifts"] = [CROWN]
     assert not present(pet, "11-24", "2026-11-24"), (
         "once a year: a later tick that day gives nothing"
     )
     assert "gift" not in pet.bonds["me"]
-    pet.bonds["me"]["gifts"] = [ONLY]
     assert present(pet, "11-24", "2027-11-24")
-    gift = pet.bonds["me"]["gift"]
-    assert gift["id"] != ONLY and gift["world"] == "woodland", (
-        "had it: an ordinary find"
+    assert pet.bonds["me"]["gift"] == {"id": ONLY, "world": "woodland"}, (
+        "had the crown: the gift-only find they don't have"
     )
-    assert pet.bonds["me"]["present_year"] == "2027"
+    del pet.bonds["me"]["gift"]
+    pet.bonds["me"]["gifts"] = [CROWN, ONLY]
+    assert present(pet, "11-24", "2028-11-24")
+    gift = pet.bonds["me"]["gift"]
+    assert gift["id"] not in (CROWN, ONLY) and gift["world"] == "woodland", (
+        "had both: an ordinary find"
+    )
+    assert pet.bonds["me"]["present_year"] == "2028"
+
+
+def test_the_crown_takes_a_waiting_gifts_place() -> None:
+    pet = pet_with(
+        {"me": {"points": 1, "gift": {"id": "pinecone", "world": "woodland"}}}
+    )
+    assert present(pet, "11-24", "2026-11-24")
+    assert pet.bonds["me"]["gift"] == {"id": CROWN, "world": "woodland"}, (
+        "the crown, not a second pine cone (that one is dropped: a random pick)"
+    )
+    assert pet.bonds["me"]["present_year"] == "2026"
+
+
+def test_after_the_crown_the_gift_clock_brings_the_next_gift() -> None:
+    """Luna (8.4): the dropped gift isn't queued; the clock brings another."""
+    pet = pet_with(
+        {"me": {"points": 999, "gift": {"id": "pinecone", "world": "woodland"}}}
+    )
+    assert present(pet, "11-24", "2026-11-24")
+    known = {"woodland": {f["id"] for f in WOOD}}
+    taken = model.take_gift(pet, "me", 1000.0, known, random.Random(2))
+    assert taken == {"id": CROWN, "world": "woodland"}
+    assert pet.bonds["me"]["gifts"] == [CROWN]
+    due = pet.bonds["me"]["next_gift_at"]
+    assert model.gift_tick(pet, due, "woodland", WOOD, ALL_TRUE, random.Random(3))
+    nxt = pet.bonds["me"]["gift"]
+    assert nxt["world"] == "woodland" and nxt["id"] != CROWN
+
+
+def test_pick_gift_never_gives_the_crown() -> None:
+    bond: dict[str, Any] = {"points": 9}
+    for seed in range(3000):
+        find = model.pick_gift(bond, WOOD, ALL_TRUE, random.Random(seed))
+        assert find is not None and not find.get("birthday"), seed
+    bond["gifts"] = [ONLY]  # the gift-only branch has nothing left but the crown
+    for seed in range(3000):
+        find = model.pick_gift(bond, WOOD, ALL_TRUE, random.Random(seed))
+        assert find is not None and find["id"] not in (CROWN, ONLY), seed
+
+
+def test_a_crown_must_be_gift_only_to_load() -> None:
+    from custom_components.virtual_pet import species
+
+    crown = {"id": "x", "name": "x", "a": "an x", "weight": 1, "when": None}
+    assert not species.valid_find({**crown, "birthday": True})
+    assert species.valid_find({**crown, "birthday": True, "gift_only": True})
 
 
 def test_a_waiting_gift_is_the_present() -> None:
     waiting = {"id": "pinecone", "world": "woodland"}
-    pet = pet_with({"me": {"points": 1, "gift": dict(waiting)}})
+    pet = pet_with({"me": {"points": 1, "gift": dict(waiting), "gifts": [CROWN]}})
     assert present(pet, "11-24", "2026-11-24")
     assert pet.bonds["me"]["gift"] == waiting, "never a second gift over the first"
     assert pet.bonds["me"]["present_year"] == "2026"
@@ -119,7 +170,7 @@ def test_no_level_or_clock_needed_but_never_a_new_bond_or_an_egg() -> None:
 
 def test_nothing_to_give_keeps_the_year_open() -> None:
     only_had = [f for f in WOOD if f.get("gift_only")]  # all they have: nothing to pick
-    pet = pet_with({"me": {"points": 1, "gifts": [ONLY]}})
+    pet = pet_with({"me": {"points": 1, "gifts": [ONLY, CROWN]}})
     assert not model.birthday_present(
         pet,
         "me",
@@ -182,16 +233,16 @@ async def test_the_tick_sets_the_present_aside_for_its_person_only(
     await subscribe(shared, shared=True)
     await pet.async_refresh()
     await hass.async_block_till_done()
-    assert pet.state.bonds[me]["gift"] == {"id": ONLY, "world": "woodland"}
+    assert pet.state.bonds[me]["gift"] == {"id": CROWN, "world": "woodland"}
     assert pet.state.bonds[me]["present_year"] == "2026"
     assert "gift" not in pet.state.bonds[ada.id], "not their birthday"
     gifts = [e["mine"]["gift"] for e in await pushed(mine) if "mine" in e]
-    assert gifts and gifts[-1] == {"id": ONLY, "world": "woodland"}
+    assert gifts and gifts[-1] == {"id": CROWN, "world": "woodland"}
     for client in (theirs, shared):
-        assert ONLY not in json.dumps(await pushed(client))
+        assert CROWN not in json.dumps(await pushed(client))
     taker = await hass_ws_client(hass)
     reply = await command(taker, "collect", entity_id=ENTITY, gift=True, shared=False)
-    assert reply["result"]["gift"] == {"id": ONLY, "world": "woodland"}
+    assert reply["result"]["gift"] == {"id": CROWN, "world": "woodland"}
     await pet.async_refresh()
     await hass.async_block_till_done()
     assert "gift" not in pet.state.bonds[me], (

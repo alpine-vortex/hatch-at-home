@@ -3616,13 +3616,18 @@ def pick_gift(
     rng: random.Random,
 ) -> dict[str, Any] | None:
     """What the pet sets aside for one person (plan visitors v2 §5, V-E
-    review #9). First the world's gift-only find, 1 in GIFT_ONLY_CHANCE,
+    review #9). First the world's gift-only find (never the birthday
+    keepsake: birthday_present gives that), 1 in GIFT_ONLY_CHANCE,
     only while this person hasn't had it. Otherwise the world's other finds
     by tier and condition (`find_weight`, with the R5 fallback), the rarer
     tiers doubled (below GIFT_COMMON_WEIGHT, x GIFT_RARE_FACTOR), and one this person was already given
     at GIFT_HAD_WEIGHT. The house's collection plays no part (no x0.5)."""
     had = set(bond.get("gifts", ()))
-    only = [f for f in finds if f.get("gift_only") and f["id"] not in had]
+    only = [
+        f
+        for f in finds
+        if f.get("gift_only") and not f.get("birthday") and f["id"] not in had
+    ]
     if only and rng.random() < R.GIFT_ONLY_CHANCE:
         return only[0]
     pool = []
@@ -3694,18 +3699,31 @@ def birthday_present(
     server's local date (birthday_today, so 29 February's is the 28th in
     common years), once a server year (`present_year`). A gift already
     waiting is the present; else the world's gift-only find they don't have
-    yet, else pick_gift. No bond level or gift clock; a bond is read, never
-    created; never an egg. Taken as any gift (take_gift). True if the bond
-    changed (save it)."""
+    yet, else pick_gift. First, though, the world's birthday keepsake
+    (`birthday`, plan 8.4) while they don't have it, even over a gift that
+    waits: that one is dropped, not queued (it was a random pick, and a
+    gift-only find they don't have stays in pick_gift's pool), and the gift
+    clock brings the next one as usual once the crown is taken. No bond level or gift
+    clock; a bond is read, never created; never an egg. Taken as any gift
+    (take_gift). True if the bond changed (save it)."""
     bond = state.bonds.get(user)
     if bond is None or not finds or life_stage(state) == "egg":
         return False
     year = today[:4]
     if bond.get("present_year") == year or not birthday_today(birthday, today):
         return False
-    if "gift" not in bond:
-        had = set(bond.get("gifts", ()))
-        only = [f for f in finds if f.get("gift_only") and f["id"] not in had]
+    had = set(bond.get("gifts", ()))
+    keepsake = next(
+        (f for f in finds if f.get("birthday") and f["id"] not in had), None
+    )
+    if keepsake is not None:
+        bond["gift"] = {"id": keepsake["id"], "world": world}
+    elif "gift" not in bond:
+        only = [
+            f
+            for f in finds
+            if f.get("gift_only") and not f.get("birthday") and f["id"] not in had
+        ]
         find = only[0] if only else pick_gift(bond, finds, flags, rng)
         if find is None:
             return False  # nothing to give yet: a later tick that day tries again (Luna, 8.3)

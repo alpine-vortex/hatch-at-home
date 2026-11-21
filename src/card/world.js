@@ -357,9 +357,10 @@ const FINDS_SHOWN = true;
 const findsShown = () => !!HatchPetCard.findsShown;
 // Gifts (plan visitors v2 §5, §7 V5-V7): said once, on the receiver's own screen, at a
 // first look. V5 names the find (its `name`, so "message in a bottle" is 40 characters);
-// a gift-only find has no name in the line: "made" for the three in GIFT_MADE, "found"
-// for the other three (V6). A baby says BABY.gift (V7). No personality words, no nickname.
-const GIFT_MADE = ["acorncup", "knittedheart", "paperboat"];
+// a gift-only find has no name in the line: "made" for those in GIFT_MADE (three, and each
+// world's birthday crown, birthday plan 8.4), "found" for the other three (V6). A baby says
+// BABY.gift (V7). No personality words, no nickname.
+const GIFT_MADE = ["acorncup", "knittedheart", "paperboat", "flowercrown", "mosscrown", "papercrown", "shellcrown", "lilycrown", "starcrown"];
 const GIFT_LINES = {
   find: (name) => `saved this ${name} for you ♥`,
   made: "made this for you ♥",

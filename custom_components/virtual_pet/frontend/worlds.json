@@ -151,6 +151,15 @@
         "weight": 1,
         "when": null,
         "gift_only": true
+      },
+      {
+        "id": "flowercrown",
+        "name": "flower crown",
+        "a": "a flower crown",
+        "weight": 1,
+        "when": null,
+        "gift_only": true,
+        "birthday": true
       }
     ]
   },
@@ -288,6 +297,15 @@
         "weight": 1,
         "when": null,
         "gift_only": true
+      },
+      {
+        "id": "mosscrown",
+        "name": "moss crown",
+        "a": "a moss crown",
+        "weight": 1,
+        "when": null,
+        "gift_only": true,
+        "birthday": true
       }
     ]
   },
@@ -427,6 +445,15 @@
         "weight": 1,
         "when": null,
         "gift_only": true
+      },
+      {
+        "id": "papercrown",
+        "name": "paper crown",
+        "a": "a paper crown",
+        "weight": 1,
+        "when": null,
+        "gift_only": true,
+        "birthday": true
       }
     ]
   },
@@ -566,6 +593,15 @@
         "weight": 1,
         "when": null,
         "gift_only": true
+      },
+      {
+        "id": "shellcrown",
+        "name": "shell crown",
+        "a": "a shell crown",
+        "weight": 1,
+        "when": null,
+        "gift_only": true,
+        "birthday": true
       }
     ]
   },
@@ -705,6 +741,15 @@
         "weight": 1,
         "when": null,
         "gift_only": true
+      },
+      {
+        "id": "lilycrown",
+        "name": "lily-pad crown",
+        "a": "a lily-pad crown",
+        "weight": 1,
+        "when": null,
+        "gift_only": true,
+        "birthday": true
       }
     ]
   },
@@ -856,6 +901,15 @@
         "weight": 1,
         "when": null,
         "gift_only": true
+      },
+      {
+        "id": "starcrown",
+        "name": "star crown",
+        "a": "a star crown",
+        "weight": 1,
+        "when": null,
+        "gift_only": true,
+        "birthday": true
       }
     ]
   }

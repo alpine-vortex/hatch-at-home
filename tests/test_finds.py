@@ -84,9 +84,14 @@ PLAN = {  # plan §2, with the owner's ⟲ picks (§13b #1)
 def test_each_world_has_the_plans_ten_finds() -> None:
     assert set(FINDS) == set(PLAN) == set(CATALOG.visitors)
     for world, names in PLAN.items():
-        assert [f["name"] for f in FINDS[world]] == names.split(", "), world
-        gift = [f["id"] for f in FINDS[world] if f.get("gift_only")]
-        assert len(gift) == 1 and FINDS[world][-1]["id"] == gift[0]
+        ten = [f for f in FINDS[world] if not f.get("birthday")]
+        assert [f["name"] for f in ten] == names.split(", "), world
+        gift = [f["id"] for f in ten if f.get("gift_only")]
+        assert len(gift) == 1 and ten[-1]["id"] == gift[0]
+        # then the birthday crown (plan 8.4): gift-only, last, only one
+        crown = FINDS[world][-1]
+        assert crown["birthday"] is True and crown["gift_only"] is True
+        assert len(FINDS[world]) == 11
         for f in FINDS[world]:
             assert f["weight"] in (
                 10,
@@ -102,7 +107,7 @@ def test_each_world_has_the_plans_ten_finds() -> None:
 def test_find_ids_are_unique_across_worlds() -> None:
     """Review #10: a basket entry names its world, but nothing may lean on it."""
     ids = [f["id"] for fs in FINDS.values() for f in fs]
-    assert len(ids) == len(set(ids)) == 60
+    assert len(ids) == len(set(ids)) == 66
 
 
 def test_every_when_token_is_a_known_flag() -> None:
@@ -162,7 +167,7 @@ def test_finds_load_from_every_world_ready_or_not(
     monkeypatch.setattr(species.json, "loads", not_ready)
     catalog = species.load_catalog()
     assert catalog.worlds == {}
-    assert {w: len(fs) for w, fs in catalog.finds.items()} == dict.fromkeys(PLAN, 10)
+    assert {w: len(fs) for w, fs in catalog.finds.items()} == dict.fromkeys(PLAN, 11)
 
 
 # --- The flags (home.find_flags) ---------------------------------------------

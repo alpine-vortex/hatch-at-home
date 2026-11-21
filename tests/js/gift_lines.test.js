@@ -34,10 +34,11 @@ function scan(line) {
   return bad;
 }
 
-test("GIFT_MADE names gift-only finds, and made plus found covers all six", () => {
-  assert.strictEqual(giftOnly.length, 6);
+test("GIFT_MADE names gift-only finds, and made plus found covers all twelve", () => {
+  assert.strictEqual(giftOnly.length, 12);
   for (const id of GIFT_MADE) assert.ok(giftOnly.includes(id), `${id} isn't a gift-only find`);
-  assert.deepStrictEqual([...GIFT_MADE].sort(), ["acorncup", "knittedheart", "paperboat"]);
+  const crowns = finds.filter((f) => f.birthday).map((f) => f.id).sort();
+  assert.deepStrictEqual([...GIFT_MADE].sort(), ["acorncup", "knittedheart", "paperboat", ...crowns].sort());
   const found = giftOnly.filter((id) => !GIFT_MADE.includes(id)).sort();
   assert.deepStrictEqual(found, ["pearl", "pressedfern", "telescope"]);
 });

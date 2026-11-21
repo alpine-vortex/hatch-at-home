@@ -329,6 +329,24 @@ def cup() -> Shape:
     return f
 
 
+def crown() -> Shape:
+    """The birthday keepsake (plan 8.4): a band with three points, three dots on it."""
+
+    def f(x: float, y: float) -> int:
+        if abs(x) > 0.7 or y > 0.45 or y < -0.55:
+            return 0
+        if y >= 0.05:
+            dot = any(math.hypot(x - c, y - 0.25) < 0.12 for c in (-0.42, 0.0, 0.42))
+            return 2 if dot else 1
+        # three points over the band, tips at x -0.55, 0, 0.55
+        for c in (-0.55, 0.0, 0.55):
+            if abs(x - c) < 0.22 * (y + 0.55) / 0.6:
+                return 2 if y < -0.42 else 1
+        return 0
+
+    return f
+
+
 # --- The finds ---------------------------------------------------------------
 
 # id -> (shape, body, accent)
@@ -344,6 +362,7 @@ FINDS: dict[str, tuple[Shape, str, str]] = {
     "frostedleaf": (leaf(-0.3, 0.38), "#b9d7e8", "#ffffff"),
     "fourleafclover": (star(4, 0.7, 0.4), "#3e9e3e", "#2b6e2b"),
     "acorncup": (cup(), "#a7743c", "#6b4a26"),
+    "flowercrown": (crown(), "#6fae4a", "#f4c542"),
     # Terrarium
     "tinymushroom": (mushroom(), "#c84a3c", "#f4efe2"),
     "driedflower": (star(6, 0.6, 0.35), "#c7a0b8", "#8a6a33"),
@@ -355,6 +374,7 @@ FINDS: dict[str, tuple[Shape, str, str]] = {
     "pressedmoss": (oval(0.65, 0.45, 0.0, 4), "#5f8f3a", "#3f6a26"),
     "tinyfossil": (spiral(), "#cfc3a6", "#8f8166"),
     "pressedfern": (leaf(-0.5, 0.4), "#4f9a52", "#2f6a33"),
+    "mosscrown": (crown(), "#5f8f3a", "#c7a0b8"),
     # Hearth
     "button": (round_(0.55, 0.2), "#d9534f", "#8a2e2b"),
     "ribbon": (star(2, 0.75, 0.2), "#e86aa0", "#b03a70"),
@@ -366,6 +386,7 @@ FINDS: dict[str, tuple[Shape, str, str]] = {
     "pinesprig": (leaf(-0.8, 0.3), "#2f7a4a", "#1d4f30"),
     "brasskey": (key(), "#d4a83a", "#8a6a20"),
     "knittedheart": (heart(), "#e04a6a", "#a02a4a"),
+    "papercrown": (crown(), "#f4c542", "#e04a6a"),
     # Tidepool
     "greenseaglass": (oval(0.5, 0.35, 0.4), "#7ed0a0", "#c8f0d8"),
     "scallopshell": (shell(), "#f0b090", "#c07a5a"),
@@ -377,6 +398,7 @@ FINDS: dict[str, tuple[Shape, str, str]] = {
     "redseaglass": (crystal(), "#d04a4a", "#ffb0b0"),
     "bottle": (bottle(), "#7ab08a", "#f4efe2"),
     "pearl": (round_(0.4, 0.0), "#f4f0ec", "#d8d0e0"),
+    "shellcrown": (crown(), "#f0b090", "#7ed0a0"),
     # Pond
     "lilyflower": (star(6, 0.7, 0.3), "#f4c0d8", "#f6e27a"),
     "cattailfluff": (dust(), "#e8dcc8", "#c0b090"),
@@ -388,6 +410,7 @@ FINDS: dict[str, tuple[Shape, str, str]] = {
     "frogbit": (round_(0.6, 0.0), "#5ab04a", "#3a7a2a"),
     "koiscale": (shell(), "#f0b030", "#ffe080"),
     "paperboat": (boat(), "#f4efe2", "#c0c8d0"),
+    "lilycrown": (crown(), "#4f9a52", "#f4a8c0"),
     # Night Sky
     "stardust": (dust(), "#f6e27a", "#ffffff"),
     "paperstar": (star(5, 0.7, 0.32), "#f0d060", "#c0a030"),
@@ -399,6 +422,7 @@ FINDS: dict[str, tuple[Shape, str, str]] = {
     "lantern": (lantern(), "#3a3a4a", "#f6c040"),
     "fallenstar": (star(5, 0.8, 0.35), "#ffe060", "#fff8c0"),
     "telescope": (scope(), "#7a5a3a", "#d4a83a"),
+    "starcrown": (crown(), "#3a4a8a", "#f4e27a"),
 }
 
 

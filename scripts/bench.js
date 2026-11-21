@@ -1323,13 +1323,13 @@ const PRESETS = {
       partyDay: { blow: "ask" } });
     out.push({ ...base, name: "birthday/party-candles", group: "birthday", label: "candles blown out (4.1, 8.1)", yourBirthdayIn: 0,
       partyDay: { blow: true } });
-    for (const giftOpen of [false, true]) { // a present (8.3): wrapped with its line, then opened to the find
+    for (const giftOpen of [false, true]) { // a present (8.3, the crown 8.4): wrapped with its line, then opened to the find
       out.push({ ...base, name: `birthday/present-${giftOpen ? "open" : "wrapped"}`, group: "birthday",
         label: `a present, ${giftOpen ? "opened" : "wrapped"} (8.3)`, yourBirthdayIn: 0, partyDay: {},
-        gift: { id: "acorncup", world: "woodland" }, giftOpen });
+        gift: { id: "flowercrown", world: "woodland" }, giftOpen });
     }
     out.push({ ...base, width: 330, name: "birthday/present-wrapped-330", group: "birthday", label: "a present, wrapped, at 330 (8.3)",
-      yourBirthdayIn: 0, partyDay: {}, gift: { id: "acorncup", world: "woodland" } });
+      yourBirthdayIn: 0, partyDay: {}, gift: { id: "flowercrown", world: "woodland" } });
     out.push({ ...base, name: "birthday/after-dream", group: "birthday", label: "the day after: the party dream (8.2)",
       yourBirthdayAfter: true, lookLine: 1 });
     for (const pop of [1, 3]) { // the balloons (plan 7.1): one popped, its puff on show; all three, the bunch gone

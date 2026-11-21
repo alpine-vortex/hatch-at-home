@@ -246,3 +246,14 @@ something ♥", then the find's name). Pytest across month and year ends and Feb
 
 Round 4 shipped as 0.52.3. Luna's review of 8.3 found one thing (the year was spent when no gift
 could be picked); fixed, so a year with nothing to give stays open.
+
+8.4 **A birthday crown** (owner, 2026-11-20, 0.52.4): each world gets one keepsake that only a
+birthday brings, a crown the pet made (`flowercrown`, `mosscrown`, `papercrown`, `shellcrown`,
+`lilycrown`, `starcrown`; `gift_only` and `birthday` in worlds.json, drawn by
+`art/finds/make_finds.py`'s `crown()`). `birthday_present` gives it first while the person
+doesn't have it, even over a gift already waiting (that one is dropped, not queued: it was a random pick, a
+gift-only find they lack stays in `pick_gift`'s pool, and the gift clock brings the next gift as
+usual after the crown is taken; decided so the first birthday present is always new; Luna review). `pick_gift` never gives it; a `birthday` find
+that isn't `gift_only` is skipped on load. Said as "made this for you ♥" (GIFT_MADE). In later
+years the present falls back to 8.3. Each world now has 11 finds; the journal shows the crown
+only once received.

@@ -126,6 +126,8 @@ def valid_find(find: Any) -> bool:
         and not isinstance(find.get("weight"), bool)
         and find["weight"] > 0
         and valid_when(find.get("when"))
+        # a birthday keepsake (plan 8.4) is never rolled: it must be gift-only too
+        and (not find.get("birthday") or find.get("gift_only") is True)
     )
     if not ok:
         _LOGGER.warning("Skipping a find in worlds.json: %s", find)

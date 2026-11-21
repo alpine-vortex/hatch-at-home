@@ -17674,7 +17674,7 @@ async function main() {
   const fw = W[cw];
   const stored = JSON.parse(fs.readFileSync(path.join(process.env.HA_CONFIG, ".storage", `virtual_pet.${basketSeed.entryId}`), "utf8")).data;
   const savedPage = stored.collection?.[cw] || {};
-  const giftOnly = fw.finds.filter((f) => f.gift_only).map((f) => f.id);
+  const giftOnly = fw.finds.filter((f) => f.gift_only && !f.birthday).map((f) => f.id);
   const timed = (f) => Array.isArray(f.when) && f.when.length > 0;
   const nameOf = (id) => (fw.finds.find((f) => f.id === id) || fw.visitors.find((v) => v.id === id))?.name;
   // The server's own page first (no stub yet): the house map, and gifts only when not shared.
