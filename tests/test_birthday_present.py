@@ -243,6 +243,35 @@ async def test_the_tick_sets_the_present_aside_for_its_person_only(
     taker = await hass_ws_client(hass)
     reply = await command(taker, "collect", entity_id=ENTITY, gift=True, shared=False)
     assert reply["result"]["gift"] == {"id": CROWN, "world": "woodland"}
+    # The player may close the card before the wrapping plays.
+    resumed = await hass_ws_client(hass)
+    reveal = (await subscribe(resumed))["mine"]["birthday_reveal"]
+    assert reveal == {"id": CROWN, "world": "woodland", "token": reveal["token"]}
+    saved = hass_storage[STORE_KEY]["data"]
+    assert saved["bonds"][me]["present_reveal"] == reveal
+    assert saved["bonds"][me]["gifts"] == [CROWN]
+    assert (await subscribe(await hass_ws_client(hass, ada_token)))["mine"][
+        "birthday_reveal"
+    ] is None
+    shared_reply = await command(
+        shared, "collect", entity_id=ENTITY, shared=True, present_shown=reveal["token"]
+    )
+    assert shared_reply["error"]["code"] == "shared"
+    wrong_user = await command(
+        theirs, "collect", entity_id=ENTITY, shared=False, present_shown=reveal["token"]
+    )
+    assert not wrong_user["result"]["acknowledged"]
+    acknowledged = await command(
+        resumed,
+        "collect",
+        entity_id=ENTITY,
+        shared=False,
+        present_shown=reveal["token"],
+    )
+    assert acknowledged["result"]["acknowledged"]
+    assert (await subscribe(await hass_ws_client(hass)))["mine"][
+        "birthday_reveal"
+    ] is None
     await pet.async_refresh()
     await hass.async_block_till_done()
     assert "gift" not in pet.state.bonds[me], (

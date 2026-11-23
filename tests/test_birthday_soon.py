@@ -278,6 +278,84 @@ async def soon_pet(
     return me, config.runtime_data
 
 
+async def test_birthday_line_waits_for_visible_ack_and_recovers_a_closed_card(
+    on_the_24th: None,
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    user = hass_admin_user.id
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    pet = (await setup(hass)).runtime_data
+    person = pet.people.person(user)
+    person["birthday"] = "11-24"
+    first = await hass_ws_client(hass)
+    second = await hass_ws_client(hass)
+    entity = "sensor.pip_life_stage"
+    assert (await subscribe(first))["mine"]["birthday_due"]
+
+    visit = await hass.services.async_call(
+        DOMAIN,
+        "visit",
+        {"entity_id": entity, "queued": 3, "birthday_delivery": True},
+        blocking=True,
+        return_response=True,
+        context=Context(user_id=user),
+    )
+    assert visit["birthday_due"] and visit["notes"] == []
+    assert "parties" not in person
+
+    async def ask(client: Any, **fields: Any) -> dict[str, Any]:
+        reply = await command(
+            client, "birthday_line", entity_id=entity, shared=False, **fields
+        )
+        assert reply["success"], reply
+        return reply["result"]
+
+    blocked = await command(first, "birthday_line", entity_id=entity, shared=True)
+    assert blocked["error"]["code"] == "shared"
+    claim = await ask(first)
+    assert claim["note"]["kind"] == "your_birthday"
+    assert claim["valid_for"] == model.R.BIRTHDAY_LINE_LEASE_SECONDS
+    assert "parties" not in person
+    assert (await ask(second))["retry_after"] > 0
+    await settle(hass, freezer, model.R.BIRTHDAY_LINE_LEASE_SECONDS + 1)
+    replacement = await ask(second)
+    assert replacement["token"] != claim["token"]
+    assert not (await ask(first, shown=claim["token"]))["acknowledged"]
+    assert (await ask(second, shown=replacement["token"]))["acknowledged"]
+    assert person["parties"] == ["2026"]
+    assert person["birthday_displayed"] == "2026"
+    assert not (await ask(first))["birthday_due"]
+    assert "parties" in (await pushed(first))[-1]["mine"]
+
+
+async def test_birthday_line_uses_the_new_server_day_during_visit_cooldown(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-11-23 23:59:55+00:00")
+    me, pet = await soon_pet(hass, hass_storage)
+    pet.people.person(me.id)["birthday"] = "11-24"
+    # Keep the pet awake at this synthetic midnight.
+    pet.state.resting = False
+    pet.state.asleep = False
+    reply = await pet.async_visit(me.id, queued=3, birthday_delivery=True)
+    assert reply["counted"] and reply["birthday_due"]
+    yesterday = await pet.async_birthday_line(me.id, None)
+    assert yesterday["note"] == {"kind": "birthday_soon", "days": 1}
+    assert 0 < yesterday["valid_for"] <= 5
+    await settle(hass, freezer, 6)
+    assert not (await pet.async_visit(me.id, birthday_delivery=True))["counted"]
+    assert not (await pet.async_birthday_line(me.id, yesterday["token"]))[
+        "acknowledged"
+    ]
+    today = await pet.async_birthday_line(me.id, None)
+    assert today["note"]["kind"] == "your_birthday"
+    assert pet.state.bonds[me.id]["present_year"] == "2026"
+
+
 async def test_birthday_soon_is_said_once_a_day_for_one_to_five_days(
     hass: HomeAssistant, hass_storage: dict[str, Any], freezer: FrozenDateTimeFactory
 ) -> None:
@@ -407,6 +485,72 @@ async def test_the_push_without_either_names_no_one(
 ) -> None:
     freezer.move_to("2026-10-28 08:00:00+00:00")
     assert await push_text(hass, hass_storage) == ["Pip says: happy birthday! ♥"]
+
+
+async def test_birthday_push_recovers_after_morning_and_retries_only_the_failed_phone(
+    on_the_24th: None,
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_admin_user: Any,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    me = await friend(hass, 0)
+    received: list[str] = []
+
+    async def receive(call: Any) -> None:
+        if "happy birthday" not in call.data["message"]:
+            return
+        received.append(call.service)
+        if call.service == "mobile_app_unsteady" and received.count(call.service) == 1:
+            raise RuntimeError("synthetic service failure")
+
+    for name in ("Steady", "Unsteady"):
+        MockConfigEntry(
+            domain="mobile_app", data={"user_id": me.id, "device_name": name}
+        ).add_to_hass(hass)
+    hass.services.async_register("notify", "mobile_app_steady", receive)
+    hass_storage[STORE_KEY] = hatched_pet(
+        dt_util.utcnow().timestamp(), notify_users=[me.id]
+    )
+    pet = (await setup(hass)).runtime_data
+    person = pet.people.person(me.id)
+    person.update(birthday="11-24", birthday_phone=True)
+
+    async def delivery() -> dict[str, Any]:
+        check = await hass.services.async_call(
+            DOMAIN,
+            "person_check",
+            {"user_id": me.id},
+            blocking=True,
+            return_response=True,
+            context=Context(user_id=hass_admin_user.id),
+        )
+        return check["birthday_delivery"]
+
+    await pet.async_refresh()  # afternoon fallback, without a morning transition
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert received == ["mobile_app_steady"]
+    assert "birthday_sent" not in person
+    retry = await delivery()
+    assert retry["phone"] == "retrying"
+    assert retry["phone_retry_at"] == "2026-11-24T12:05:00+00:00"
+    hass.services.async_register("notify", "mobile_app_unsteady", receive)
+    pet._birthday_morning()  # no retry until the next eligible tick
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(received) == 1
+    await settle(hass, freezer, model.R.BIRTHDAY_PUSH_RETRY_SECONDS + 1)
+    await pet.async_refresh()
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert received == ["mobile_app_steady", "mobile_app_unsteady"]
+    assert "birthday_sent" not in person
+    await settle(hass, freezer, model.R.BIRTHDAY_PUSH_RETRY_SECONDS + 1)
+    await pet.async_refresh()
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert received[-1] == "mobile_app_unsteady" and len(received) == 3
+    assert person["birthday_sent"] == "2026"
+    assert person["birthday_phone_accepted"] == "2026"
+    accepted = await delivery()
+    assert accepted["phone"] == "accepted" and accepted["phone_retry_at"] is None
 
 
 # --- 1.5 the keepsake ----------------------------------------------------------
@@ -677,6 +821,35 @@ async def test_set_person_birthday_notify_pet_and_person_check(
     assert check["birthday_in"] == 2
     assert check["notify_pets"] == [pet.state.name]
     assert check["phones"] == []
+    assert check["birthday_delivery"] == {
+        "year": "2026",
+        "greeting": "scheduled",
+        "phone": "no_phone_route",
+        "phone_retry_at": None,
+        "presents": [
+            {"pet": pet.state.name, "status": "scheduled", "reveal_pending": False}
+        ],
+    }
+    with pytest.raises(Unauthorized):
+        await hass.services.async_call(
+            DOMAIN,
+            "person_check",
+            {"user_id": ada.id},
+            blocking=True,
+            return_response=True,
+            context=Context(user_id=ada.id),
+        )
+    freezer.move_to("2026-12-30 12:00:00+00:00")
+    future = await hass.services.async_call(
+        DOMAIN,
+        "person_check",
+        {"user_id": ada.id},
+        blocking=True,
+        return_response=True,
+        context=Context(user_id=hass_admin_user.id),
+    )
+    assert future["birthday_delivery"]["year"] == "2027"
+    assert future["birthday_delivery"]["greeting"] == "scheduled"
     with pytest.raises(ServiceValidationError):
         await hass.services.async_call(
             DOMAIN,

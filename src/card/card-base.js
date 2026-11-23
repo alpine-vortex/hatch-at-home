@@ -252,6 +252,9 @@ class HatchPetCardBase extends HTMLElement {
     // does a line typing out, and the private channel.
     for (const s of this._slides || []) {
       if (s.game) this._endGame(s, null);
+      s.birthdayRequest = null;
+      this._director?.stop(s, { key: "birthday.paint" });
+      this._director?.stop(s, { key: "birthday.reveal" });
       this._modeExit(s, "teardown"); // a shell mode too (a no-op once the game's end has left it)
       this._sceneEnd(s, { quiet: true }); // a care scene's rAF and its blanket's timers go with the card
       this._drapeStop(s);

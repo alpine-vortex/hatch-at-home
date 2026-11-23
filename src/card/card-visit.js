@@ -162,6 +162,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
 
   _greet(s) {
     if (s.greeted || !this._channelHeard(s) || !this._free(s) || this._sitterBusy(s)) return; // the sitter's walk-out first (6.4)
+    if (s.queue?.some((q) => q.type === "birthday" || (q.opts?.birthday && this._yourPartyOn(s)))) return;
     // An egg doesn't talk (C15'): the greeting waits for the hatch, and its key stays unwritten (F2).
     if (this._state(s, "sensor.life_stage")?.state === "egg") return;
     s.greeted = true;
@@ -225,13 +226,21 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     // channel's first word): it says what's queued.
     if (!id || !s.species || !this._channelHeard(s) || !this._hass.user || sharedScreen() ||
       Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS || this._resumeHeld()) return;
-    s.visitedAt = Date.now();
+    const user = this._hass.user.id;
+    const birthdayDelivery = typeof (s.mine?.birthday_due ?? s.bdayReply?.due) === "boolean";
+    // If the private channel failed, let the birthday request establish which
+    // protocol this server supports before a legacy visit can spend the line.
+    if (s.subscribeFailed && !s.mine && !birthdayDelivery && !s.birthdayLegacy && this._hass.callWS) return;
+    const started = s.visitedAt = Date.now();
     // Only kept lines count: a waiting beat or flavour may yet be dropped.
     const queued = Math.min((s.queue || []).filter((q) => lineClass(q) >= KEPT).length + (s.following ? 1 : 0), 6);
-    this._hass.callService("virtual_pet", "visit", { entity_id: id, queued }, undefined, false, true)
+    const data = { entity_id: id, queued };
+    if (birthdayDelivery) data.birthday_delivery = true;
+    this._hass.callService("virtual_pet", "visit", data, undefined, false, true)
       .then((res) => {
         const reply = res?.response || {};
-        if (s.ids?.["sensor.life_stage"] !== id) return; // the slide shows another pet now
+        if (s.ids?.["sensor.life_stage"] !== id || this._hass.user?.id !== user ||
+          s.visitedAt !== started) return; // the pet or look changed while this was on the wire
         if (reply.counted === false) {
           // Not counted (it was asleep, or too soon): try again in a few minutes,
           // so the morning's lines come soon after it wakes.
@@ -247,11 +256,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
         if (typeof reply.memory_allowed === "boolean") s.memoryAllowed = reply.memory_allowed; // this pet's own option
         // The countdown (birthday plan 1.2), as the channel's mine has it; the server's day count
         // and year only, never a date. Read through _birthdayPrefs (mine first once it has spoken).
-        s.bdayReply = { in: Number.isInteger(reply.birthday_in) ? reply.birthday_in : null,
-          year: typeof reply.birthday_year === "string" ? reply.birthday_year : null,
-          callMe: typeof reply.call_me === "string" ? reply.call_me : null,
-          after: reply.birthday_after === true ? reply.birthday_after_year : null, // the day after (plan 7.4)
-          parties: Array.isArray(reply.parties) ? reply.parties.filter((y) => typeof y === "string") : [] };
+        this._setBirthdayReply(s, reply);
         this._houseTipOff(s, reply.house_birthday_in); // birthday plan 4.4
         if (reply.follow === 1) this._followOk = true; // F1: it takes typed text and follow-ups
         (reply.notes || []).forEach((note) => this._note(s, note, !!reply.made_room));
@@ -262,8 +267,128 @@ class HatchPetCardVisit extends HatchPetCardLooks {
         }
       })
       .catch(() => {
-        // an older integration has no visit: no bond yet, nothing else changes
+        if (s.visitedAt === started) s.visitedAt = Date.now() - VISIT_EVERY_MS + VISIT_ERROR_RETRY_MS;
       });
+  }
+
+  _birthdayCanSpeak(s) {
+    return this.isConnected && this._dirShown(s) && !s.asleep && !s.egg && !s.reloading && !s.empty &&
+      !s.scene && !s.power && !this._owned(s) && !this._sitterBusy(s) &&
+      !s.screen.classList.contains("show-status") && !(s.sayUntil > Date.now()) &&
+      !this._birthdayCareWaiting(s);
+  }
+
+  _birthdayCareWaiting(s) {
+    return s.queue?.some((q) => q.type === "became_sick" || q.type === "call_started");
+  }
+
+  _birthdayShown(s, until) {
+    return s.birthdayShown?.until === until && s.birthdayShown?.user === this._hass.user?.id;
+  }
+
+  _birthdayHoldsSpeech(s) {
+    if (!this._dirShown(s)) return false;
+    const birthday = this._birthdayPrefs(s);
+    if (birthday.stale) return true;
+    return birthday.due && !this._birthdayShown(s, birthday.until) &&
+      (s.birthdayHold?.key !== birthday.until ||
+        Date.now() - (s.birthdayHold?.at ?? 0) < BIRTHDAY_FIRST_LOOK_MS);
+  }
+
+  _birthdayFirst(s) {
+    const id = s.ids?.["sensor.life_stage"];
+    const user = this._hass.user?.id;
+    if (!id || !user || !s.species || sharedScreen() || !this._hass.callWS ||
+      !this._channelHeard(s) || this._resumeHeld()) return false;
+    this._birthdayAcknowledge(s, id, user);
+    const birthday = this._birthdayPrefs(s);
+    const probe = s.subscribeFailed && !s.mine && typeof s.bdayReply?.due !== "boolean" && !s.birthdayLegacy;
+    if (!birthday.due && !birthday.stale && !probe) return false;
+    const key = birthday.until;
+    if (key && this._birthdayShown(s, key)) return false;
+    const now = Date.now();
+    const canSpeak = this._birthdayCanSpeak(s);
+    if (birthday.due && canSpeak && (!s.birthdayHold || s.birthdayHold.key !== key)) {
+      s.birthdayHold = { key, at: now };
+    }
+    const hold = birthday.due && s.birthdayHold?.key === key &&
+      now - (s.birthdayHold?.at ?? 0) < BIRTHDAY_FIRST_LOOK_MS;
+    const pending = s.birthdayRequest;
+    if (pending && now - pending.at < BIRTHDAY_REPLY_MS && pending.key === key) {
+      return hold || now - pending.at < BIRTHDAY_HOLD_MS;
+    }
+    if (!canSpeak && !probe) {
+      return hold || (birthday.due && (this._sitterBusy(s) || !!this._birthdayCareWaiting(s)));
+    }
+    const retry = s.birthdayRetry;
+    if (retry && retry.key === key && now < retry.at) return hold;
+
+    const request = s.birthdayRequest = { at: now, key, mine: s.mine };
+    this._hass.callWS({ type: "virtual_pet/birthday_line", entity_id: id, shared: false })
+      .then((reply) => {
+        if (s.birthdayRequest !== request || s.ids?.["sensor.life_stage"] !== id ||
+          this._hass.user?.id !== user || sharedScreen()) return;
+        const received = Date.now();
+        if (!reply) return;
+        if (reply.now) noteServerTime(reply.now);
+        this._setBirthdayReply(s, reply, request);
+        const current = this._birthdayPrefs(s);
+        s.birthdayRetry = { key: current.until, at: received + Math.max(1000, (reply.retry_after || 0) * 1000) };
+        if (!reply.note || !reply.token || !this._birthdayCanSpeak(s) ||
+          !Number.isFinite(reply.valid_for) || received - now >= reply.valid_for * 1000 ||
+          serverNow() >= reply.birthday_until * 1000) return;
+        if (reply.birthday_in !== current.days || reply.birthday_year !== current.year || !current.due) return;
+        const line = this._birthdayLine(s, reply.note);
+        if (!line) return;
+        this._sayLine(s, line);
+        this._birthdayPainted(s, {
+          id, user, token: reply.token, until: reply.birthday_until,
+          entry: s.sayEntry, expires: now + reply.valid_for * 1000,
+        });
+      })
+      .catch((err) => {
+        if (s.birthdayRequest !== request) return;
+        if (probe && err?.code === "unknown_command") s.birthdayLegacy = true;
+        s.birthdayRetry = { key, at: Date.now() + VISIT_ERROR_RETRY_MS };
+      })
+      .finally(() => { if (s.birthdayRequest === request) s.birthdayRequest = null; });
+    return true;
+  }
+
+  _birthdayPainted(s, view) {
+    // The first callback runs before paint. Confirm on the next frame only
+    // if the whole line had an opportunity to be seen on this same card.
+    this._birthdayAfterPaint(s, "birthday.paint", () => {
+      const { id, user, until, token } = view;
+      if (s.ids?.["sensor.life_stage"] !== id || this._hass.user?.id !== user ||
+        s.sayEntry !== view.entry || Date.now() >= Math.min(view.expires, s.sayUntil || 0) ||
+        this._birthdayPrefs(s).until !== until) return;
+      s.birthdayShown = { until, user };
+      s.birthdayAck = { id, user, token, until };
+      this._birthdayAcknowledge(s, id, user);
+    });
+  }
+
+  _birthdayAfterPaint(s, key, confirm) {
+    const options = { key, hidden: "tab" };
+    this._director.frame(s, () => this._director.frame(s, () => {
+      if (this.isConnected && this._dirShown(s) && !sharedScreen() &&
+        !s.screen.classList.contains("show-status")) confirm();
+    }, options), options);
+  }
+
+  _birthdayAcknowledge(s, id, user) {
+    const ack = s.birthdayAck;
+    if (!ack) return;
+    if (ack.id !== id || ack.user !== user || serverNow() >= ack.until * 1000) {
+      s.birthdayAck = null;
+      return;
+    }
+    if (ack.retryAt > Date.now()) return;
+    ack.retryAt = Date.now() + BIRTHDAY_REPLY_MS;
+    this._hass.callWS({ type: "virtual_pet/birthday_line", entity_id: id, shared: false, shown: ack.token })
+      .then(() => { if (s.birthdayAck === ack) s.birthdayAck = null; })
+      .catch(() => {}); // a dropped acknowledgement can be retried while this card is open
   }
 
   // Something the pet has to tell only the viewer (from the visit).
@@ -294,21 +419,15 @@ class HatchPetCardVisit extends HatchPetCardLooks {
       const away = s.queue.findIndex((q) => q.opts?.away);
       if (away >= 0) s.queue.splice(away, 1);
     }
-    if (note.kind === "birthday_soon") {
-      s.lastBdaySoon = line; // the idle lines say another one next
-      this._queue(s, birthdaySoonLine(line, this._birthdayName(s)), 5000, { personal: true });
-      this._sparkle(s);
-      return;
-    }
-    if (note.kind === "your_birthday") {
-      const name = this._birthdayName(s);
-      const party = this._yourPartyOn(s); // your party day (plan 3.3): the big line, 6 s
-      if (!note.quiet && party) line = `HAPPY BIRTHDAY${name ? `, ${name.toUpperCase()}` : ""}!!! 🎂`;
-      else if (!note.quiet && name) line = `happy birthday, ${name}!! ♥`;
-      (s.queue ??= []).push({ text: line, ms: party ? 6000 : 5000, personal: true, cls: KEPT, perk: true, then: () => {
-        if (!note.quiet) this._chirp(s, "birthday");
-        this._sparkle(s);
-      } });
+    if (note.kind === "birthday_soon" || note.kind === "your_birthday") {
+      const when = this._birthdayPrefs(s);
+      const birthday = this._birthdayLine(s, note, line);
+      birthday.still = () => {
+        if (sharedScreen()) return false;
+        const current = this._birthdayPrefs(s);
+        return when.days === null || (current.days === when.days && current.year === when.year);
+      };
+      (s.queue ??= []).push(birthday);
       return;
     }
     if (note.kind === "up_early") { // said while it sleeps: not queued behind its sleep
@@ -320,6 +439,25 @@ class HatchPetCardVisit extends HatchPetCardLooks {
       this._sparkle(s);
       if (!calm()) this._bondHearts(s);
     }
+  }
+
+  _birthdayLine(s, note, base = NOTES[note.kind]?.(note, s.ids?.device)) {
+    if (!base) return null;
+    const name = this._birthdayName(s);
+    const party = note.kind === "your_birthday" && this._yourPartyOn(s);
+    let text = base;
+    if (note.kind === "birthday_soon") {
+      text = birthdaySoonLine(base, name);
+    } else if (!note.quiet) {
+      if (party) text = `HAPPY BIRTHDAY${name ? `, ${name.toUpperCase()}` : ""}!!! 🎂`;
+      else if (name) text = `happy birthday, ${name}!! ♥`;
+    }
+    return { text, ms: party ? 6000 : 5000, type: "birthday", cls: KEPT, perk: true,
+      opts: { personal: true, immediate: true }, then: () => {
+        if (note.kind === "birthday_soon") s.lastBdaySoon = base;
+        else if (!note.quiet) this._chirp(s, "birthday");
+        this._sparkle(s);
+      } };
   }
 
   // What the pet calls you on a birthday line (birthday plan 1.1): call_me, else its nickname for
@@ -338,11 +476,33 @@ class HatchPetCardVisit extends HatchPetCardLooks {
   // it (plan 7.4: mine's birthday_after with birthday_after_year), else null.
   _birthdayPrefs(s) {
     if (sharedScreen()) return { days: null, year: null, callMe: null, after: null };
-    const m = s.mine ? { in: s.mine.birthday_in, year: s.mine.birthday_year, callMe: s.mine.call_me,
-      after: s.mine.birthday_after === true ? s.mine.birthday_after_year : null } : s.bdayReply || {};
-    const days = Number.isInteger(m.in) && m.in >= 0 && m.in <= 5 && typeof m.year === "string" ? m.in : null;
-    const after = typeof m.after === "string" && /^\d{4}$/.test(m.after) ? m.after : null;
-    return { days, year: days === null ? null : m.year, callMe: typeof m.callMe === "string" ? m.callMe : null, after };
+    const mine = s.mine && this._birthdayData(s.mine);
+    const reply = s.bdayReply;
+    const expired = (until) => Number.isFinite(until) && until * 1000 <= serverNow();
+    const refreshed = s.bdayReplyRequest?.mine === s.mine &&
+      !!s.bdayReplyRequest && !expired(reply?.until);
+    const m = (refreshed || reply?.until > mine?.until ? reply : mine) || reply || {};
+    const stale = expired(m.until);
+    const days = !stale && Number.isInteger(m.in) && m.in >= 0 && m.in <= 5 && typeof m.year === "string" ? m.in : null;
+    const after = !stale && typeof m.after === "string" && /^\d{4}$/.test(m.after) ? m.after : null;
+    return { days, year: days === null ? null : m.year, callMe: typeof m.callMe === "string" ? m.callMe : null,
+      after, due: days !== null && m.due === true, until: m.until, stale };
+  }
+
+  _birthdayData(reply) {
+    return { in: reply.birthday_in, year: reply.birthday_year, callMe: reply.call_me,
+      after: reply.birthday_after === true ? reply.birthday_after_year : null,
+      due: reply.birthday_due, until: reply.birthday_until,
+      parties: Array.isArray(reply.parties) ? reply.parties.filter((y) => typeof y === "string") : [] };
+  }
+
+  _setBirthdayReply(s, reply, request = null) {
+    if (reply && !(s.bdayReply?.until > reply.birthday_until) &&
+      (request || !s.bdayReplyRequest || s.bdayReplyRequest.mine !== s.mine ||
+        reply.birthday_until > s.bdayReply?.until)) {
+      s.bdayReply = this._birthdayData(reply);
+      s.bdayReplyRequest = request;
+    }
   }
 
   // Now and then while the countdown runs (1-5 days): one line from BIRTHDAY_SOON, at most

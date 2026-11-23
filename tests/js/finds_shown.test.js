@@ -17,7 +17,7 @@ test("FINDS_SHOWN ships on, and the static starts from it", () => {
 test("the basket, the gift take, the away note's found bit and the finds grid all ask findsShown()", () => {
   const body = (name) => src.match(new RegExp(`\\n  (?:async )?${name}\\(s[^)]*\\) \\{[\\s\\S]*?\\n  \\}\\n`))[0];
   assert.match(body("_basketCount"), /if \(!findsShown\(\)\) return 0;/);
-  assert.match(body("_giftDue"), /findsShown\(\) &&/);
+  assert.match(body("_giftDue"), /!findsShown\(\)/);
   assert.match(body("_giftTake"), /!findsShown\(\)\) return;/);
   assert.match(body("_renderFinds"), /findsShown\(\) \? `<div class="fgrid">\$\{tiles\.filter\(\(t\) => t\.kind === "find"\)/);
   assert.match(src, /if \(m\.type === "found"\) \{\n\s+if \(findsShown\(\) && found < FOUND_BITS/);

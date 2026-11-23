@@ -562,7 +562,7 @@
     },
     "person_check": {
       "name": "Check a person's birthday setup",
-      "description": "Admin only: reads back a person's birthday, phone switch, call-me name, days to go, the pets that notify them and the phones Home Assistant knows for them.",
+      "description": "Admin only: checks the birthday setup and delivery status, including the card greeting, phone retry and each pet's present.",
       "fields": {
         "user_id": {
           "name": "User ID",

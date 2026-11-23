@@ -1099,6 +1099,11 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   Assistant's history, where admins can see it; that's why it starts off. "forget my birthday" in
   settings (the gear on the status screen; two taps) forgets it and stops asking; "forget my data" forgets
   everything the pets remember about you (see Privacy).
+  If you close the card before a birthday present opens, it can finish the reveal when
+  you return that day. Admins can run `virtual_pet.person_check` in **Developer Tools →
+  Actions** with the person's Home Assistant user ID. Its `birthday_delivery` response
+  shows the greeting status, phone retry time when applicable, and each pet's present
+  status. Phone acceptance means Home Assistant accepted the notification call.
 - **A photo, for best friends.** At bond level 10, once a pet is a teen, it makes
   you a framed photo of itself as it was that day ("I made you something! it's in
   your journal ♥"), once per generation. It's in your journal under "photos", seen

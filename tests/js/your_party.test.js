@@ -34,7 +34,7 @@ test("the guard is ahead of the countdown, visitor, treat and costume branches",
 });
 
 test("the pet's own party yields: one party, one hat, the line says both", () => {
-  assert.match(method("_partyTick"), /if \(this\._yourPartyTick\(s\)\) return;/);
+  assert.match(method("_partyTick"), /if \(this\._yourPartyTick\(s, birthdayFirst\)\) return;/);
   assert.match(method("_yourPartyTick"), /both \? PARTY_BOTH/);
   assert.match(src, /const PARTY_BOTH = "it's your birthday AND mine!!";/);
 });

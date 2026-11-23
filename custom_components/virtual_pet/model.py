@@ -257,6 +257,7 @@ def _bond(bond: dict[str, Any]) -> dict[str, Any]:
         "tucked_at": _num,
         "next_gift_at": _num,
         "present_year": _str,  # birthday plan 8.3: the server's year of the last present
+        "present_revealed": _str,  # the year whose reveal was acknowledged
         "trick_asked": _str,  # F7: "<generation>-<trick month>" of its trick ask
     }
     for key, check in checks.items():
@@ -270,6 +271,15 @@ def _bond(bond: dict[str, Any]) -> dict[str, Any]:
         isinstance(gift, dict) and _str(gift.get("id")) and _str(gift.get("world"))
     ):
         del out["gift"]
+    reveal = out.get("present_reveal")
+    if "present_reveal" in out and not (
+        isinstance(reveal, dict)
+        and _str(reveal.get("id"))
+        and _str(reveal.get("world"))
+        and isinstance(reveal.get("token"), str)
+        and len(reveal["token"]) == 32
+    ):
+        del out["present_reveal"]
     if "gifts" in out:
         if isinstance(out["gifts"], list):
             out["gifts"] = list(dict.fromkeys(g for g in out["gifts"] if _str(g)))
@@ -3729,6 +3739,7 @@ def birthday_present(
             return False  # nothing to give yet: a later tick that day tries again (Luna, 8.3)
         bond["gift"] = {"id": find["id"], "world": world}
     bond["present_year"] = year
+    bond.pop("present_reveal", None)
     return True
 
 

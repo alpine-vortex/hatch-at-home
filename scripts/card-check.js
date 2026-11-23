@@ -26,6 +26,7 @@ const fs = require("fs");
 const path = require("path");
 // Every read of the card below (and the page HA serves) is the join of src/card/.
 const buildCard = require("./build-card.js");
+const birthdayCheck = require("./card-check-birthday.js");
 buildCard.ensureBuilt();
 // The checks below read the card's text (regexes over its source). With HATCH_CARD_MIN=1 the
 // built file is the release form (mangled, respaced), so those reads get the plain join of
@@ -54,7 +55,7 @@ const OUT = path.join(__dirname, "..", "dev", "card-check");
 const results = [];
 
 // The gated sections of main(), in file order.
-const SECTIONS = ["shelf", "shell", "play", "resume", "board", "crate", "shellmode", "moments", "photos", "personality", "types",
+const SECTIONS = ["birthdays", "shelf", "shell", "play", "resume", "board", "crate", "shellmode", "moments", "photos", "personality", "types",
   "egg", "sharedscreen", "memorytags", "memorypage", "forget", "prefs", "channel", "devicefx", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "decor", "winter", "care",
   "editor", "boot", "infrared", "lowbattery", "restart", "gifts", "finds", "collection", "oldcard"];
 // oldcard asserts restart's seeded bond; finds taps the basket restart seeds; collection
@@ -71,7 +72,7 @@ if (argv.includes("--list")) {
 // falls in, so none is skipped. Balanced by CI's seconds per section (2026-11-04:
 // about 230 to 275 s each, plus the prelude). restart and the
 // sections that NEED it all sit in the last run.
-const SHARD_STARTS = ["shelf", "board", "photos", "pat", "infrared"];
+const SHARD_STARTS = ["birthdays", "board", "photos", "pat", "infrared"];
 let ONLY = null;
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === "--shard") {
@@ -1336,6 +1337,9 @@ async function main() {
   // What a section hands to a later one is declared here or in the ungated lines between.
   const slides = await page.locator("hatch-pet-card .slide").count();
   const card = page.locator("hatch-pet-card");
+  if (enter("birthdays")) {
+    await birthdayCheck({ browser, page, base: HA, bootVersion, check });
+  }
   if (enter("shelf")) {
   // 1. The shelf draws its devices.
   check("shelf shows the pets", slides >= 2, `${slides} devices`);

@@ -357,7 +357,9 @@ def dashboard_path(value: str | None) -> str | None:
     return f"/{value}" if value else None
 
 
-def phones(hass: HomeAssistant, user_id: str | None) -> list[str]:
+def phones(
+    hass: HomeAssistant, user_id: str | None, *, registered_only: bool = True
+) -> list[str]:
     """notify services of the mobile app devices this user signed in with.
 
     With no user, every mobile app device in the house.
@@ -367,7 +369,7 @@ def phones(hass: HomeAssistant, user_id: str | None) -> list[str]:
         if user_id is not None and entry.data.get("user_id") != user_id:
             continue
         service = f"mobile_app_{slugify(entry.data.get('device_name', ''))}"
-        if hass.services.has_service("notify", service):
+        if not registered_only or hass.services.has_service("notify", service):
             services.append(service)
     return services
 
@@ -380,7 +382,8 @@ async def send(
     buttons: list[dict[str, str]] | None = None,
     url: str | None = None,
     level: str | None = None,
-) -> None:
+    delivered: set[str] | None = None,
+) -> bool:
     """Send to every phone of every subscribed user (None: every phone in the
     house); a failure only logs. A url is what tapping the notification opens.
     A level: "time-sensitive" (a call: may break through a focus the person
@@ -388,6 +391,8 @@ async def send(
     the phone holds during focus or do not disturb like any other.
 
     The text "clear_notification" removes the tagged notification instead.
+    Return whether all currently linked services accepted the call. A caller
+    retrying delivery can pass the services that have already accepted it.
     """
     data: dict[str, Any] = {"tag": tag, "group": "virtual_pet"}
     if level:
@@ -403,7 +408,11 @@ async def send(
     if user_ids is None:
         services = phones(hass, None)
     else:
-        services = [s for user_id in user_ids for s in phones(hass, user_id)]
+        services = [
+            service
+            for user_id in user_ids
+            for service in phones(hass, user_id, registered_only=delivered is None)
+        ]
 
     async def one(service: str) -> None:
         try:
@@ -413,10 +422,19 @@ async def send(
                 {"message": text, "data": data},
                 blocking=True,
             )
+            accepted.add(service)
         except Exception:  # noqa: BLE001 - a phone being gone must not break the pet
             # The service is named after the phone (often its owner): debug only.
             LOGGER.warning("Couldn't send a pet notification to a phone")
             LOGGER.debug("Couldn't notify %s", service, exc_info=True)
 
+    accepted = delivered if delivered is not None else set()
     # All phones at once: a slow push doesn't hold up the others.
-    await asyncio.gather(*(one(service) for service in services))
+    await asyncio.gather(
+        *(
+            one(service)
+            for service in dict.fromkeys(services)
+            if service not in accepted and hass.services.has_service("notify", service)
+        )
+    )
+    return bool(services) and all(service in accepted for service in services)

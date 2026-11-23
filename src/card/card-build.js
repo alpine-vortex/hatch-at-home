@@ -502,14 +502,17 @@ class HatchPetCardBuild extends HatchPetCardBase {
 
   // Once the pet on show is awake and free, the gag plays; an asleep pet waits
   // (at most POWER_DEFER_MS from the boot). A call or a game cuts it short.
-  _powerTick(s) {
+  _powerTick(s, holdBirthday = false) {
     if (s.power && (s.asleep || s.calling || this._owned(s))) this._powerEnd(s, true);
     if (!s.powerPending || s.power) return;
     if (serverNow() - Date.parse(s.powerPending) >= POWER_DEFER_MS) {
       s.powerPending = null;
       return;
     }
-    if (this._booting || s.asleep || s.calling || this._owned(s) || s.scene || s.linking || !s.species ||
+    const birthdayOnScreen = s.sayUntil > Date.now() &&
+      (s.sayEntry?.type === "birthday" || (s.sayEntry?.opts?.birthday && this._yourPartyOn(s)));
+    if (holdBirthday || birthdayOnScreen || this._booting || s.asleep || s.calling ||
+        this._owned(s) || s.scene || s.linking || !s.species ||
         this._eggMinutes(this._state(s, "sensor.life_stage")) !== null ||
         s.screen.classList.contains("show-status") || !this._visible || document.hidden) return;
     s.powerPending = null;
@@ -913,6 +916,14 @@ class HatchPetCardBuild extends HatchPetCardBase {
   // screen asking again).
   _resetChannel(s) {
     s.mine = null;
+    s.bdayReply = null;
+    s.bdayReplyRequest = null;
+    s.birthdayRequest = null;
+    s.birthdayRetry = null;
+    s.birthdayHold = null;
+    s.birthdayShown = null;
+    s.birthdayAck = null;
+    s.birthdayLegacy = false;
     s.house = null;
     s.subscribed = false;
     s.subscribeFailed = false;

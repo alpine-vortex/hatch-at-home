@@ -17,8 +17,8 @@ function method(name) {
 function card({ shared = false, party = false, user = "u1" } = {}) {
   const store = new Map();
   const localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
-  const run = vm.createContext({ sharedScreen: () => shared, localStorage, Set });
-  const names = ["_birthdayPrefs", "_leftoversYear", "_leftoversKey", "_leftoversDue", "_leftoversFirst"];
+  const run = vm.createContext({ sharedScreen: () => shared, localStorage, Set, serverNow: Date.now });
+  const names = ["_birthdayPrefs", "_birthdayData", "_leftoversYear", "_leftoversKey", "_leftoversDue", "_leftoversFirst"];
   vm.runInContext(`this.m = { ${names.map((n) => method(n).trim()).join(",\n")} };`, run);
   const c = { _hass: { user: user ? { id: user } : null }, _yourPartyOn: () => party, store, ...run.m };
   return c;

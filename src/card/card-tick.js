@@ -44,27 +44,34 @@ class HatchPetCardTick extends HatchPetCardSitter {
       this._patSync(s);
       this._basketSync(s);
       if (s === this._slides[this._index] && !s.reloading && !s.empty) { // a reloading pet greets and asks nothing
-        if (!this._booting) this._greet(s); // the boot screen waits: only the speaking does
-        this._powerTick(s);
+        const birthdayFirst = !this._booting && this._birthdayFirst(s);
+        const birthdayGift = !this._booting && !birthdayFirst && this._birthdayGiftTick(s);
+        const holdBirthday = birthdayFirst || birthdayGift;
+        if (!this._booting && !holdBirthday) this._greet(s);
+        this._powerTick(s, holdBirthday || this._birthdayHoldsSpeech(s));
         this._firstLook(s); // before the visit: it tells the server what's queued
         this._giftReturn(s);
-        this._followEvening(s);
+        if (!holdBirthday) this._followEvening(s);
         this._visit(s);
         if (!this._booting) {
-          this._sayQueued(s);
-          this._wishMention(s);
-          this._socialFull(s);
+          this._sayQueued(s, holdBirthday);
+          if (!holdBirthday) {
+            this._wishMention(s);
+            this._socialFull(s);
+          }
         }
         this._seen(s);
-        this._idle(s);
+        if (!holdBirthday) this._idle(s);
         this._eggWobble(s);
-        this._flairTick(s);
-        this._birthdaySoonTick(s);
-        this._firstMove(s);
-        this._seasonTick(s);
-        this._partyTick(s);
+        if (!holdBirthday) {
+          this._flairTick(s);
+          this._birthdaySoonTick(s);
+          this._firstMove(s);
+        }
+        this._seasonTick(s, holdBirthday);
+        this._partyTick(s, holdBirthday);
         this._linkTick(s);
-        this._visitorTick(s);
+        this._visitorTick(s, holdBirthday);
       }
       if (s === this._slides[this._index]) this._rareGlass(s, Date.now()); // the rare glass mark's gate (slice 6)
       if (!s.sayUntil && s.species && !s.reloading && !s.empty) {
@@ -549,7 +556,7 @@ class HatchPetCardTick extends HatchPetCardSitter {
   // babbled, if this browser wants that). Screen readers get the plain line,
   // once; the sound is hidden from them. With catch: true (lines that name
   // nobody), every third such voiced line ends with its catchphrase.
-  _speak(s, said, ms = 4500, { catch: catchy = false, cls = 0 } = {}) {
+  _speak(s, said, ms = 4500, { catch: catchy = false, cls = 0, immediate = false } = {}) {
     const voice = s.species?.voice;
     const sound = this._soundFor(s, said);
     if (bigOn() && ms <= 10000) ms = Math.round(ms * 1.5); // larger words are read slower (F9); a question keeps its own 60 s
@@ -575,7 +582,7 @@ class HatchPetCardTick extends HatchPetCardSitter {
     }
     let typingMs = 0;
     const status = s.screen.classList.contains("show-status");
-    if (onShow && !isCalm && !status && pace > 0 && this._visible && !document.hidden) {
+    if (!immediate && onShow && !isCalm && !status && pace > 0 && this._visible && !document.hidden) {
       const chars = graphemes(text); // an emoji is never split
       const typed = document.createElement("span");
       const rest = document.createElement("span");
@@ -1055,6 +1062,7 @@ class HatchPetCardTick extends HatchPetCardSitter {
   // A call holds lines below kept, except its own news (C6, which comes with the sick call).
   _mayInterrupt(s, cls, type) {
     if (cls >= MINE) return true;
+    if (type !== "became_sick" && type !== "call_started" && this._birthdayHoldsSpeech(s)) return false;
     if (this._owned(s) || this._questionOn(s) || (s.calling && cls < KEPT && type !== "became_sick")) return false;
     if (s.queue?.some((q) => lineClass(q) >= cls)) return false;
     return !(s.sayUntil > Date.now()) || cls > (s.sayClass || 0);
@@ -1130,7 +1138,7 @@ class HatchPetCardTick extends HatchPetCardSitter {
     q.then?.();
   }
 
-  _sayQueued(s) {
+  _sayQueued(s, urgentOnly = false) {
     const now = Date.now();
     if (!s.queue?.length) return;
     s.queue = s.queue.filter((q) => !(q.dropAt < now)); // flavour that waited too long
@@ -1140,16 +1148,21 @@ class HatchPetCardTick extends HatchPetCardSitter {
     if (s.asleep && s.queue.some((q) => q.ask)) this._clearAsk(s);
     if (!s.queue.length || s.sayUntil > now || this._owned(s) || s.power || s.screen.classList.contains("show-status")) return;
     let ready = s.asleep ? s.queue.filter((q) => lineClass(q) < KEPT) : s.queue;
+    if (urgentOnly) ready = ready.filter((q) => q.type === "became_sick" || q.type === "call_started");
     // A call's own words hold: while it's calling, only a kept line (not a wish) is said (2c).
-    if (s.calling) ready = ready.filter((q) => q.type === "became_sick" || (lineClass(q) >= KEPT && q.type !== "wish"));
+    if (s.calling) ready = ready.filter((q) => q.type === "became_sick" || q.type === "call_started" ||
+      (lineClass(q) >= KEPT && q.type !== "wish"));
     if (!ready.length) return;
     // The highest class first; in a class, the queue's order. A line whose
     // still() says it no longer fits (e.g. 2b's C6 once it's well) is dropped.
     const top = Math.max(...ready.map(lineClass));
-    const next = ready.find((q) => lineClass(q) === top);
+    const birthday = ready.find((q) => q.type === "birthday" || (q.opts?.birthday && this._yourPartyOn(s)));
+    const urgent = (birthday || urgentOnly) &&
+      ready.find((q) => q.type === "became_sick" || q.type === "call_started");
+    const next = urgent || birthday || ready.find((q) => lineClass(q) === top);
     s.queue.splice(s.queue.indexOf(next), 1);
     if (next.still && !next.still()) {
-      this._sayQueued(s);
+      this._sayQueued(s, urgentOnly);
       return;
     }
     this._sayLine(s, next);
@@ -1197,6 +1210,7 @@ class HatchPetCardTick extends HatchPetCardSitter {
     for (const x of slides) {
       x.lookedFirst = x.greeted = false;
       x.visitedAt = x.nextWish = 0;
+      x.birthdayHold = null;
       if (resumed) {
         x.giftAgain = true;
         x.lastMoment = x.lastLogAt = undefined;

@@ -111,7 +111,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
   }
 
   // From _tick, for the slide on show: at most one look every VISIT_CHECK_MS.
-  _visitorTick(s) {
+  _visitorTick(s, birthdayFirst) {
     const now = Date.now();
     if (this._visitShown?.s !== s) this._visitShown = { s, at: now };
     if (s.seasonVisit && !this._visitorLive(s)) this._seasonVisitEnd(s);
@@ -119,6 +119,7 @@ class HatchPetCardVisitors extends HatchPetCardSeason {
       if (!this._visitorLive(s)) this._visitorEnd(s);
       return;
     }
+    if (birthdayFirst) return;
     if (s.lateVisit && this._lateVisitTick(s, now)) return;
     if (this._partyGuestTick(s, now)) return;
     if (now < (s.nextVisitCheck || 0)) return;

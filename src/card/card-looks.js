@@ -413,15 +413,63 @@ class HatchPetCardLooks extends HatchPetCardTick {
   // nothing of it in localStorage. Said at a first look, or when the tab comes back
   // after being hidden at least AWAY_NOTE_AFTER_MS (owner Q1); never while watching.
 
-  _giftDue(s) {
-    return findsShown() && !!s.mine?.gift && !sharedScreen() && !s.gifting;
+  _giftDue(s, birthday = false) {
+    if (!findsShown() || !s.mine?.gift || sharedScreen() || s.gifting) return false;
+    if (birthday) return s.mine.birthday_gift === true;
+    // On a birthday, the coordinator names the present before we take it.
+    return !s.mine.birthday_gift &&
+      !(typeof s.mine.birthday_due === "boolean" && this._yourPartyOn(s));
+  }
+
+  _birthdayGiftTick(s) {
+    if (!this._yourPartyOn(s) || !findsShown()) return false;
+    const birthday = this._birthdayPrefs(s);
+    if (birthday.due && !this._birthdayShown(s, birthday.until)) return false;
+    const reveal = s.mine?.birthday_reveal;
+    if (reveal) {
+      if (this._birthdayPresentInView(s, reveal) || !this._birthdayCanSpeak(s) ||
+        s.queue?.some((q) => q.opts?.presentToken === reveal.token)) return false;
+      this._queueBirthdayPresent(s, reveal);
+      return false;
+    }
+    if (!s.mine?.birthday_gift) return false;
+    const elapsed = Date.now() - (s.birthdayGiftAt || 0);
+    if (s.gifting) return elapsed < BIRTHDAY_HOLD_MS;
+    if (elapsed < BIRTHDAY_REPLY_MS || !this._giftDue(s, true) || !this._birthdayCanSpeak(s)) return false;
+    s.birthdayGiftAt = Date.now();
+    this._giftTake(s, Object.hasOwn(s.mine, "birthday_reveal"));
+    return true;
+  }
+
+  _birthdayPresentInView(s, reveal) {
+    const { token } = reveal;
+    if (s.birthdayPresentAck?.token === token) {
+      const ack = s.birthdayPresentAck;
+      const id = s.ids?.["sensor.life_stage"];
+      if (!id || ack.done || ack.retryAt > Date.now()) return true;
+      ack.retryAt = Date.now() + BIRTHDAY_REPLY_MS;
+      this._hass.callWS({ type: "virtual_pet/collect", entity_id: id, shared: false, present_shown: token })
+        .then(() => { ack.done = true; }).catch(() => {});
+      return true;
+    }
+    const pop = s.giftPop;
+    if (pop?.presentToken !== token) return false;
+    const img = pop.el.firstChild;
+    if (img.complete && img.naturalWidth > 0 && !this._has(s, { key: "birthday.reveal" })) {
+      this._birthdayAfterPaint(s, "birthday.reveal", () => {
+        if (s.giftPop !== pop || s.mine?.birthday_reveal?.token !== token || !this._yourPartyOn(s)) return;
+        s.birthdayPresentAck = { token };
+        this._birthdayPresentInView(s, reveal);
+      });
+    }
+    return true;
   }
 
   // The take: one virtual_pet/collect {gift}, and only a non-empty reply speaks (another
   // screen of the same person may have taken it: {gift: null}). The reply alone decides:
   // the server's push of mine.gift = null to this screen arrives before it. An error (an
   // older server, or `shared`) is no gift.
-  async _giftTake(s) {
+  async _giftTake(s, resumable = false) {
     const entity = s.ids?.["sensor.life_stage"];
     if (!entity || !this._hass || !findsShown()) return;
     s.gifting = true;
@@ -435,27 +483,37 @@ class HatchPetCardLooks extends HatchPetCardTick {
     }
     if (s.giftEpoch !== epoch || s.ids?.["sensor.life_stage"] !== entity) return; // dropped meanwhile
     s.gifting = false;
+    // A resumable present is queued from the stored receipt in the private
+    // channel. The response remains compatible with ordinary gift callers.
+    if (resumable) return;
     const find = gift && typeof gift.world === "string" && findOf(this._worlds, gift.world, gift.id);
     if (!find || sharedScreen()) return; // one this card doesn't know: nothing
     const g = { id: find.id, world: gift.world };
     const still = () => !sharedScreen();
     if (this._yourPartyOn(s)) {
-      // On your own party day any gift is the present (birthday plan 8.3): wrapped with its line,
-      // then opened to the find with the gift's own line and the confetti.
-      this._queue(s, yourPartyLine(PARTY_PRESENT, this._birthdayName(s)), PRESENT_OPEN_MS, {
-        type: "gift", still, then: () => this._giftPop(s, g, true),
-      });
-      this._queue(s, this._giftLine(s, find), GIFT_LINE_MS, {
-        type: "gift", still, then: () => {
-          this._giftPop(s, g);
-          this._confetti(s);
-          this._chirp(s, "win");
-        },
-      });
+      this._queueBirthdayPresent(s, g, find);
       return;
     }
     this._queue(s, this._giftLine(s, find), GIFT_LINE_MS, {
       type: "gift", still, then: () => this._giftPop(s, g),
+    });
+  }
+
+  _queueBirthdayPresent(s, gift, find = findOf(this._worlds, gift.world, gift.id)) {
+    if (!find) return;
+    const { token } = gift;
+    const still = () => !sharedScreen() && (!token || s.mine?.birthday_reveal?.token === token);
+    this._queue(s, yourPartyLine(PARTY_PRESENT, this._birthdayName(s)), PRESENT_OPEN_MS, {
+      type: "gift", birthday: true, presentToken: token, still: () => still() && this._yourPartyOn(s),
+      then: () => this._giftPop(s, gift, true),
+    });
+    this._queue(s, this._giftLine(s, find), GIFT_LINE_MS, {
+      type: "gift", birthday: true, presentToken: token, still, then: () => {
+        this._giftPop(s, gift);
+        if (token && s.giftPop) s.giftPop.presentToken = token;
+        if (this._yourPartyOn(s)) this._confetti(s);
+        this._chirp(s, "win");
+      },
     });
   }
 
@@ -507,6 +565,9 @@ class HatchPetCardLooks extends HatchPetCardTick {
     this._giftPopEnd(s);
     s.giftEpoch = (s.giftEpoch || 0) + 1;
     s.gifting = false;
+    s.birthdayGiftAt = 0;
+    s.birthdayPresentAck = null;
+    this._stop(s, { key: "birthday.reveal" });
     if (s.queue?.length) s.queue = s.queue.filter((q) => q.type !== "gift");
   }
 

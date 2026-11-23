@@ -6,10 +6,11 @@ import asyncio
 from collections import deque
 from collections.abc import Callable
 import copy
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 import random
 from typing import Any
 import unicodedata
+from uuid import uuid4
 
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
@@ -698,6 +699,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._daily_visit(now)
         self._roll_find(now)
         self._gift_tick(now)
+        if dt_util.now().time() >= self.settings.wake_time:
+            self._birthday_morning()
         self._fire(self._daily_wish(now))
         return self.state
 
@@ -1417,46 +1420,95 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._fire(events)
 
     def _gift_tick(self, now: float) -> None:
-        """Each friend's gift clock (plan visitors v2 §5), after the find
-        roll, outside advance; not until the house has been read once (a
-        gift's conditions need the flags). Saved, never fired: a gift is on
-        no bus, sensor, push or debug list. The tick's update then pushes the
-        person's own `mine.gift`."""
+        """Roll ordinary gifts after the first house read. Birthday keepsakes
+        can be set aside earlier. Gifts go only to the person's own channel."""
         state = self.state
-        if state is None or self._find_flags is None:
+        if state is None:
             return
-        changed = model.gift_tick(
+        changed = self._find_flags is not None and model.gift_tick(
             state, now, self.world, self.finds, self._find_flags, self.rng
         )
         # A present on each person's birthday (birthday plan 8.3), the server's date.
         today = dt_util.now().date().isoformat()
-        for user, person in sorted(self.people.data["people"].items()):
-            changed |= model.birthday_present(
-                state,
-                user,
-                person.get("birthday"),
-                today,
-                self.world,
-                self.finds,
-                self._find_flags,
-                self.rng,
-            )
+        for user in sorted(state.bonds):
+            changed |= self._birthday_present(user, today)
         if changed:
             self._save()
 
+    def _birthday_present(self, user: str, today: str) -> bool:
+        assert self.state is not None
+        person = self.people.data["people"].get(user, {})
+        return model.birthday_present(
+            self.state,
+            user,
+            person.get("birthday"),
+            today,
+            self.world,
+            self.finds,
+            self._find_flags or {},
+            self.rng,
+        )
+
     def take_gift(self, user: str) -> dict[str, Any] | None:
-        """The gift's take (virtual_pet/collect {gift: true}): read and clear
-        with no await (two screens: the first gets it, the second None), then
-        only the watchers' `mine` changes, so only this person's screens are
-        sent anything: no advance, no publish, no event (V-E review #2). The
-        caller saves at once."""
+        """Take the gift once. Save its unfinished birthday reveal alongside it."""
         assert self.state is not None
         gift = model.take_gift(
             self.state, user, self._now(), self.known_finds, self.rng
         )
         if gift is not None:
-            self._push_watchers()
+            birthday = self._birthday_prefs(user)
+            bond = self.state.bonds[user]
+            if (
+                birthday.get("birthday_in") == 0
+                and bond.get("present_year") == birthday["birthday_year"]
+                and "present_reveal" not in bond
+                and bond.get("present_revealed") != birthday["birthday_year"]
+            ):
+                bond["present_reveal"] = {**gift, "token": uuid4().hex}
         return gift
+
+    def _present_reveal(
+        self, bond: dict[str, Any] | None, birthday: dict[str, Any]
+    ) -> dict[str, str] | None:
+        if (
+            not bond
+            or birthday.get("birthday_in") != 0
+            or bond.get("present_year") != birthday["birthday_year"]
+            or not (reveal := bond.get("present_reveal"))
+            or reveal["id"] not in self.known_finds.get(reveal["world"], ())
+        ):
+            return None
+        return {key: reveal[key] for key in ("id", "world", "token")}
+
+    async def async_present_shown(self, user: str, token: str) -> bool:
+        """Complete the ceremony, leaving the collected keepsake in the journal."""
+        assert self.state is not None
+        bond = self.state.bonds.get(user)
+        birthday = self._birthday_prefs(user)
+        reveal = self._present_reveal(bond, birthday)
+        if bond is None or reveal is None or reveal["token"] != token:
+            return False
+        bond.pop("present_reveal", None)
+        bond["present_revealed"] = birthday["birthday_year"]
+        await self.async_save_now()
+        self._push_watchers()
+        return True
+
+    def birthday_present_status(
+        self, user: str, year: str, birthday: dict[str, Any]
+    ) -> dict[str, Any]:
+        state = self.state
+        assert state is not None
+        bond = state.bonds.get(user, {})
+        if bond.get("present_year") != year:
+            status = "pending" if birthday.get("birthday_in") == 0 else "scheduled"
+        else:
+            status = "available" if bond.get("gift") else "collected"
+        return {
+            "pet": state.name,
+            "status": status,
+            "reveal_pending": self._present_reveal(bond, birthday) is not None,
+        }
 
     def collect(self) -> list[dict[str, Any]]:
         """The basket tap (virtual_pet/collect): read and clear the known finds
@@ -1791,7 +1843,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             return "cold"
         return None
 
-    async def async_visit(self, user: str, queued: int = 0) -> dict[str, Any]:
+    async def async_visit(
+        self, user: str, queued: int = 0, birthday_delivery: bool = False
+    ) -> dict[str, Any]:
         """Someone opened the card on this pet (the card calls this, at most
         hourly per person, and again when they come home): a visit counts for
         their bond once a day, and may be today's "come say hi" wish. Returns
@@ -1832,6 +1886,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             }
         self._visits[user] = now
         events = self._bond(user, "visit")
+        self._birthday_present(user, self._today(now)[0])
         # Best friends get a photo (once a generation); _notes says so.
         if model.take_photo(self.state, user, self._today(now)[0]):
             self._save()
@@ -1849,7 +1904,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             # At most NOTES_PER_VISIT, and no more than the look has room for
             # (FIRST_LOOK_LINES, minus what the card already queued).
             room = min(R.NOTES_PER_VISIT, max(0, R.LOOK_LINES - queued))
-            found = await self._notes(user, now)
+            if birthday_delivery:
+                found = await self._notes(user, now, birthday_delivery=True)
+            else:
+                found = await self._notes(user, now)
             made_room = bool(found and found[0][3]["kind"] in CELEBRATIONS and not room)
             if made_room:
                 room = 1  # a celebration takes the away note's place on the card
@@ -1866,13 +1924,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     # memory only, never `noted`, so "off" leaves no trace.
                     self.people.mark_memory_said(user, kind, key)
                 else:
-                    self.people.mark(user, kind, key)
                     if kind == "your_birthday":
-                        # The keepsake (plan 1.5): the year, ten kept.
-                        parties = self.people.person(user).setdefault("parties", [])
-                        if key not in parties:
-                            parties.append(key)
-                            del parties[: -P.PARTIES_KEPT]
+                        self._record_birthday_line(user, kind, key)
+                    else:
+                        self.people.mark(user, kind, key)
                     if note.get("told"):
                         # Door 6 (memory plan M1b): the favourite's note, said once a
                         # day as ever, and its one-shot in their memory too.
@@ -1895,28 +1950,107 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             **self._visit_prefs(user),
         }
 
-    def _birthday_prefs(self, user: str) -> dict[str, Any]:
+    def _birthday_candidate(
+        self, user: str, today: date
+    ) -> tuple[str, str, dict[str, Any]] | None:
+        assert self.state is not None
+        person = self.people.data["people"].get(user, {})
+        day = today.isoformat()
+        days = model.birthday_in(person.get("birthday"), day)
+        if days is None:
+            return None
+        if days == 0:
+            kind, key = "your_birthday", str(today.year)
+            quiet = self.state.sick or self.state.happiness < R.BIRTHDAY_QUIET_BELOW
+            note = {"kind": kind, "quiet": quiet}
+        else:
+            kind, key = "birthday_soon", day
+            note = {"kind": kind, "days": days}
+        if person.get("noted", {}).get(kind) == key:
+            return None
+        return kind, key, note
+
+    def _record_birthday_line(self, user: str, kind: str, key: str) -> None:
+        if kind == "your_birthday":
+            parties = self.people.person(user).setdefault("parties", [])
+            if key not in parties:
+                parties.append(key)
+                del parties[: -P.PARTIES_KEPT]
+        self.people.mark(user, kind, key)
+
+    async def async_birthday_line(self, user: str, shown: str | None) -> dict:
+        """One visible card at a time can take the line, until it displays it."""
+        async with self.people.lock(user):
+            local = dt_util.now()
+            today = local.date()
+            candidate = self._birthday_candidate(user, today)
+            claims = self.people.birthday_claims
+            claim = claims.get(user)
+            if shown is not None:
+                if claim is None or claim[0] != shown:
+                    return {"acknowledged": False}
+                _, kind, key, _ = claims.pop(user)
+                if candidate is None or candidate[:2] != (kind, key):
+                    return {"acknowledged": False}
+                if kind == "your_birthday":
+                    self.people.person(user)["birthday_displayed"] = key
+                self._record_birthday_line(user, kind, key)
+                self._push_everywhere()
+                await self.people.async_save_now()
+                return {"acknowledged": True}
+            prefs = {**self._birthday_prefs(user, local), "now": local.isoformat()}
+            if not prefs["birthday_due"] or candidate is None or not self._awake():
+                return prefs
+            kind, key, note = candidate
+            now = local.timestamp()
+            if claim and claim[1:3] == (kind, key) and claim[3] > now:
+                return {**prefs, "retry_after": claim[3] - now}
+            if kind == "your_birthday" and self._birthday_present(
+                user, today.isoformat()
+            ):
+                self._save()
+                self._push_watchers()
+            token = uuid4().hex
+            deadline = min(now + R.BIRTHDAY_LINE_LEASE_SECONDS, prefs["birthday_until"])
+            claims[user] = (token, kind, key, deadline)
+            return {**prefs, "note": note, "token": token, "valid_for": deadline - now}
+
+    def _birthday_prefs(
+        self, user: str, local: datetime | None = None
+    ) -> dict[str, Any]:
         """The countdown's facts for this person only (birthday plan 1.2): days to
         go (0-5, by the server's local date), the year being counted to, the day
         after, what to call them, the years of their parties. Never the date itself."""
         person = self.people.data["people"].get(user, {})
-        out: dict[str, Any] = {}
+        out: dict[str, Any] = {"birthday_due": False}
         if call_me := person.get("call_me"):
             out["call_me"] = call_me
         if parties := person.get("parties"):
             out["parties"] = list(parties)
-        today = dt_util.now().date().isoformat()
+        local = local or dt_util.now()
+        day = local.date()
+        today = day.isoformat()
         days = model.birthday_in(person.get("birthday"), today)
         if days is not None:
             nxt = model.birthday_next(person["birthday"], today)
             assert nxt is not None
             out["birthday_in"] = days
             out["birthday_year"] = str(nxt.year)
+            out["birthday_due"] = (
+                self.state is not None
+                and model.life_stage(self.state) != "egg"
+                and (days == 0 or not self.state.resting)
+                and self._birthday_candidate(user, day) is not None
+            )
         # The day after (plan 7.4): a flag and the birthday's year, for the card's
         # once-only keys; the next midnight's tick takes it away again.
         if after := model.birthday_after(person.get("birthday"), today):
             out["birthday_after"] = True
             out["birthday_after_year"] = after
+        if days is not None or after is not None:
+            out["birthday_until"] = datetime.combine(
+                day + timedelta(days=1), time.min, local.tzinfo
+            ).timestamp()
         return out
 
     def _house_birthday_in(self, user: str) -> int | None:
@@ -1992,7 +2126,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         return zone.get("name")
 
     async def _notes(
-        self, user: str, now: float
+        self, user: str, now: float, birthday_delivery: bool = False
     ) -> list[tuple[str, str, str, dict[str, Any]]]:
         """Private lines for one person, best first: (scope, kind, key, note).
         "pet" lines are this pet's own (said once each by this pet); "person"
@@ -2013,21 +2147,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # (with the friendship month when it's the same number of months),
         # else the friendship month. The rest wait for a later look today.
         celebrations: list[tuple[str, str, str, dict[str, Any]]] = []
-        year = str(local.year)
-        if model.birthday_today(person.get("birthday"), today) and not (
-            self.people.said(user, "your_birthday", year)
-        ):
-            # Unwell or unhappy: a quiet "happy birthday ♥", no tune.
-            quiet = state.sick or state.happiness < R.BIRTHDAY_QUIET_BELOW
-            celebrations.append(
-                (
-                    "person",
-                    "your_birthday",
-                    year,
-                    {"kind": "your_birthday", "quiet": quiet},
-                )
-            )
-        soon = model.birthday_in(person.get("birthday"), today)
+        birthday = None
+        if not birthday_delivery:
+            claim = self.people.birthday_claims.get(user)
+            birthday = self._birthday_candidate(user, local.date())
+            if claim and birthday and claim[1:3] == birthday[:2] and claim[3] > now:
+                birthday = None
+        if birthday and birthday[0] == "your_birthday":
+            celebrations.append(("person", *birthday))
         months = model.friends_for(bond.get("since"), today)
         friends = months and noted.get("friends") != today
         # No birthday while resting: aging is paused (plan §3.3, S4).
@@ -2053,20 +2180,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # but ahead of the look's other notes; when room is short it waits,
         # unmarked, for a later look.
         if (
-            soon is not None
-            and soon >= 1
+            birthday
+            and birthday[0] == "birthday_soon"
             and not state.resting
             and model.life_stage(state) != "egg"
-            and not self.people.said(user, "birthday_soon", today)
         ):
-            out.append(
-                (
-                    "person",
-                    "birthday_soon",
-                    today,
-                    {"kind": "birthday_soon", "days": soon},
-                )
-            )
+            out.append(("person", *birthday))
         gen = str(state.generation)
         if gen in bond.get("photos", {}) and noted.get("photo") != gen:
             out.append(("pet", "photo", gen, {"kind": "photo"}))
@@ -2434,6 +2553,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 person["birthday_skipped"] = True
             elif model.valid_birthday(answer):
                 person["birthday"] = answer
+                self.people.birthday_claims.pop(user, None)
             else:
                 raise ValueError("Not a birthday")
             self.people.save()
@@ -2567,6 +2687,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         async with self.people.lock(user):
             person = self.people.person(user)
             if birthday is not None:
+                if birthday != person.get("birthday"):
+                    self.people.birthday_claims.pop(user, None)
                 person["birthday"] = birthday
                 person.pop("birthday_skipped", None)
             if birthday_phone is not None:
@@ -2590,9 +2712,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     async def async_forget_birthday(self, user: str) -> None:
         """Forget someone's birthday, and don't ask again."""
         person = self.people.person(user)
+        self.people.birthday_claims.pop(user, None)
+        self.people.birthday_pushes.pop(user, None)
         person.pop("birthday", None)
         person.pop("birthday_phone", None)
         person.pop("parties", None)
+        person.pop("birthday_displayed", None)
         person["birthday_skipped"] = True
         self.people.save()
         self._push_everywhere()
@@ -2725,27 +2850,29 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._push_everywhere()
 
     def _birthday_morning(self) -> None:
-        """A friend's birthday: their phone hears it with the first morning of
-        any hatched pet at home that notifies them, from the one they're
-        closest to (or their card's pet, if it's home and hatched), once a
-        year. Their nickname, never their name. Only if they turned "birthday
-        on my phone" on (off by default: the message is in HA's history, which
-        admins can read)."""
+        """Send the opt-in birthday push, including catch-up on the same day."""
         state = self.state
         if state is None or model.life_stage(state) == "egg":
             return
-        local = dt_util.now().date()
-        today, year = local.isoformat(), str(local.year)
+        local = dt_util.now()
+        today, year, now = local.date().isoformat(), str(local.year), local.timestamp()
         for user in state.notify_users:
             person = self.people.data["people"].get(user) or {}
+            birthday = person.get("birthday")
             if not person.get("birthday_phone") or not model.birthday_today(
-                person.get("birthday"), today
+                birthday, today
             ):
                 continue
             if person.get("birthday_sent") == year:
                 continue
-            person["birthday_sent"] = year
-            self.people.save()
+            pending = self.people.birthday_pushes.get(user)
+            delivered: set[str] = set()
+            if pending and pending[0] == today:
+                if pending[1] > now:
+                    continue
+                delivered = pending[2]
+            attempt = (today, float("inf"), delivered)
+            self.people.birthday_pushes[user] = attempt
             closest = self._voice_pet(
                 user,
                 among=lambda p: (
@@ -2753,15 +2880,66 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 ),
             )
             assert closest.state is not None
-            self._send(
-                [user],
-                notify.birthday(
-                    closest.state.name,
-                    person.get("call_me") or closest.bond_for(user)[1],
-                ),
-                f"{DOMAIN}_birthday",
-                level="passive",
+            text = notify.birthday(
+                closest.state.name,
+                person.get("call_me") or closest.bond_for(user)[1],
             )
+            self.config_entry.async_create_background_task(
+                self.hass,
+                self._send_birthday(user, birthday, year, text, attempt),
+                f"{DOMAIN} birthday",
+            )
+
+    async def _send_birthday(
+        self,
+        user: str,
+        birthday: str,
+        year: str,
+        text: str,
+        attempt: tuple[str, float, set[str]],
+    ) -> None:
+        attempts = self.people.birthday_pushes
+        today, _, delivered = attempt
+        try:
+            person = self.people.data["people"].get(user, {})
+            if (
+                attempts.get(user) is not attempt
+                or not person.get("birthday_phone")
+                or person.get("birthday") != birthday
+                or user not in (self.state.notify_users if self.state else ())
+                or dt_util.now().date().isoformat() != today
+            ):
+                return
+            async with asyncio.timeout(30):
+                accepted = await notify.send(
+                    self.hass,
+                    [user],
+                    text,
+                    f"{DOMAIN}_birthday",
+                    url=self.dashboard,
+                    delivered=delivered,
+                )
+            if (
+                accepted
+                and attempts.get(user) is attempt
+                and person is self.people.data["people"].get(user)
+                and person.get("birthday") == birthday
+                and person.get("birthday_phone")
+            ):
+                person["birthday_sent"] = year
+                person["birthday_phone_accepted"] = year
+                self.people.save()
+                attempts.pop(user, None)
+                await self.people.async_save_now()
+        except TimeoutError:
+            LOGGER.warning("Birthday phone notification timed out")
+        finally:
+            if attempts.get(user) is attempt:
+                attempts[user] = (
+                    today,
+                    self._now() + R.BIRTHDAY_PUSH_RETRY_SECONDS,
+                    delivered,
+                )
 
     def _holiday_morning(self) -> None:
         """On a holiday, the pet's first morning moment greets it on the phones
@@ -3047,6 +3225,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         bond = state.bonds.get(user) if state else None
         person = self.people.data["people"].get(user, {})
         wish = self._open_wish()
+        birthday = self._birthday_prefs(user)
+        gift = model.known_gift(bond, self.known_finds)
         return {
             "bond": {
                 "level": model.bond_level(bond["points"]),
@@ -3066,7 +3246,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "birthday_kept": bool(person.get("birthday")),
             # The countdown (plan 1.2): recomputed each tick, so the day's turn
             # reaches an open card through the usual diff.
-            **self._birthday_prefs(user),
+            **birthday,
             # Their card opens on this pet (the favourite, §5.3): only theirs, never
             # anyone else's choice.
             "open_on": self.people.open_on(user) == self.pet_id,
@@ -3081,7 +3261,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 else {}
             ),
             # Their waiting gift, {id, world}, or None (plan visitors v2 §5).
-            "gift": model.known_gift(bond, self.known_finds),
+            "gift": gift,
+            "birthday_gift": bool(
+                gift
+                and bond
+                and birthday.get("birthday_in") == 0
+                and bond.get("present_year") == birthday.get("birthday_year")
+            ),
+            "birthday_reveal": self._present_reveal(bond, birthday),
             # Their favourite of this world's visitors (an id), or None (F4), and of
             # the weather and the season, so the settings sheet can show them and
             # offer "ask me again" (memory plan M0-c). Their own channel only.

@@ -94,8 +94,8 @@ test("entries that are not listed still fire on time after a hidden tab (backlig
 test("the listed sites carry hidden: \"tab\" and the unlisted state-changing ones do not (source guard)", () => {
   const files = ["card-flair", "card-season", "card-moment", "card-visit", "card-tick", "card-visitors"];
   const tabbed = files.reduce((n, f) => n + (read(`src/card/${f}.js`).match(/hidden: "tab"/g) || []).length, 0);
-  assert.strictEqual(tabbed, 12, "flair 1, season 4 (the balloon puff), bubble pop 1, hearts, sparkle, house fx, robot, speck, find ring");
+  assert.strictEqual(tabbed, 13, "flair 1, season 4, bubble pop, hearts, sparkle, house fx, robot, speck, find ring, birthday paint");
   const all = fs.readdirSync(path.join(ROOT, "src/card")).filter((f) => f.endsWith(".js") && f !== "interaction-director.js")
     .reduce((n, f) => n + (read(`src/card/${f}`).match(/hidden: "tab"/g) || []).length, 0);
-  assert.strictEqual(all, 12 + 0, "no other site is on the tab policy");
+  assert.strictEqual(all, 13, "no other site is on the tab policy");
 });

@@ -83,7 +83,7 @@ from .coordinator import (
 )
 from .defaults import default_weather
 from .home import news_text
-from .model import GAMES, valid_birthday
+from .model import GAMES, birthday_next, valid_birthday
 from .people import (
     ANSWERS,
     ASK_AGAIN_KINDS,
@@ -136,6 +136,7 @@ VISIT_SCHEMA = vol.Schema(
         vol.Required(ATTR_ENTITY_ID): cv.entity_id,
         # Lines the card already queued at this look (an older card sends none).
         vol.Optional("queued", default=0): vol.All(vol.Coerce(int), vol.Range(0, 6)),
+        vol.Optional("birthday_delivery", default=False): bool,
     }
 )
 PLAY_GAME_SCHEMA = vol.Schema(
@@ -300,6 +301,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_answer)
     websocket_api.async_register_command(hass, websocket_follow)
     websocket_api.async_register_command(hass, websocket_forget_birthday)
+    websocket_api.async_register_command(hass, websocket_birthday_line)
     websocket_api.async_register_command(hass, websocket_birthday_phone)
     websocket_api.async_register_command(hass, websocket_baby_talk)
     websocket_api.async_register_command(hass, websocket_memory)
@@ -383,18 +385,67 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 translation_domain=DOMAIN, translation_key="no_pet"
             )
         person = pets[0].people.data["people"].get(user_id) or {}
+        local = dt_util.now()
+        birthday = pets[0]._birthday_prefs(user_id, local)
+        upcoming = birthday_next(person.get("birthday"), local.date().isoformat())
+        year = birthday.get("birthday_after_year") or str(
+            upcoming.year if upcoming else local.year
+        )
+        configured = upcoming is not None
+        daily_status = "pending" if birthday.get("birthday_in") == 0 else "scheduled"
+        greeting = daily_status
+        if not configured:
+            greeting = "not_configured"
+        elif person.get("birthday_displayed") == year:
+            greeting = "confirmed"
+        elif person.get("noted", {}).get("your_birthday") == year:
+            greeting = "unconfirmed"
+        notify_pets = [
+            p.state.name
+            for p in pets
+            if p.state is not None and user_id in p.state.notify_users
+        ]
+        phones = notify.phones(hass, user_id)
+        attempt = pets[0].people.birthday_pushes.get(user_id)
+        phone = daily_status
+        retry = None
+        if not configured or not person.get("birthday_phone"):
+            phone = "disabled"
+        elif person.get("birthday_phone_accepted") == year:
+            phone = "accepted"
+        elif person.get("birthday_sent") == year:
+            phone = "unconfirmed"
+        elif not notify_pets:
+            phone = "no_pet_route"
+        elif attempt and attempt[0] == local.date().isoformat():
+            if attempt[1] == float("inf"):
+                phone = "sending"
+            else:
+                phone = "retrying"
+                retry = dt_util.as_local(
+                    dt_util.utc_from_timestamp(attempt[1])
+                ).isoformat()
+        elif not phones:
+            phone = "no_phone_route"
         return {
             "user": user.name,
             "birthday": person.get("birthday"),
             "birthday_phone": bool(person.get("birthday_phone")),
             "call_me": person.get("call_me"),
-            "birthday_in": pets[0]._birthday_prefs(user_id).get("birthday_in"),
-            "notify_pets": [
-                p.state.name
-                for p in pets
-                if p.state is not None and user_id in p.state.notify_users
-            ],
-            "phones": notify.phones(hass, user_id),
+            "birthday_in": birthday.get("birthday_in"),
+            "notify_pets": notify_pets,
+            "phones": phones,
+            "birthday_delivery": {
+                "year": year if configured else None,
+                "greeting": greeting,
+                "phone": phone,
+                "phone_retry_at": retry,
+                "presents": [
+                    p.birthday_present_status(user_id, year, birthday)
+                    for p in pets
+                    if p.state is not None and configured
+                ],
+            },
         }
 
     def pet_of(call: ServiceCall) -> PetCoordinator:
@@ -442,7 +493,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         # The card says who's looking in. What the pet tells them comes back
         # to them alone, in the response.
         if user_id := await signed_in(call):
-            return await pet_of(call).async_visit(user_id, call.data["queued"])
+            return await pet_of(call).async_visit(
+                user_id, call.data["queued"], call.data["birthday_delivery"]
+            )
         return {"notes": []}
 
     async def my_day(call: ServiceCall) -> None:
@@ -766,6 +819,33 @@ async def websocket_forget_birthday(
         return
     await pet.async_forget_birthday(connection.user.id)
     connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/birthday_line",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("shared"): bool,
+        vol.Optional("shown"): vol.All(str, vol.Length(min=32, max=32)),
+    }
+)
+@websocket_api.async_response
+async def websocket_birthday_line(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Reserve or acknowledge the signed-in viewer's line on a personal card."""
+    if msg["shared"] or connection.user.system_generated:
+        connection.send_error(msg["id"], "shared", "A birthday line is personal")
+        return
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None or pet.state is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    result = await pet.async_birthday_line(connection.user.id, msg.get("shown"))
+    connection.send_result(msg["id"], result)
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/forget_me"})
@@ -1339,6 +1419,7 @@ async def websocket_rename(
         # `shared` has no default, so the gift path can't fail open.
         vol.Optional("gift", default=False): bool,
         vol.Optional("shared"): bool,
+        vol.Optional("present_shown"): vol.All(str, vol.Length(min=32, max=32)),
     }
 )
 @websocket_api.async_response
@@ -1356,7 +1437,7 @@ async def websocket_collect(
     screen says `shared: false` outright; absent or true is refused with
     `shared` (a card bug's guard: `shared` is the client's own claim, as on
     subscribe). Without `gift` the basket path is unchanged and `shared`
-    ignored."""
+    ignored. A `present_shown` token completes the caller's private reveal."""
     entity = er.async_get(hass).async_get(msg["entity_id"])
     pet: PetCoordinator | None = (
         hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
@@ -1364,16 +1445,23 @@ async def websocket_collect(
     if pet is None or pet.state is None:
         connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
         return
-    if msg["gift"]:
+    if msg["gift"] or "present_shown" in msg:
         if msg.get("shared") is not False:
             connection.send_error(
                 msg["id"], "shared", "A gift is taken on its person's own screen"
             )
             return
+        if "present_shown" in msg:
+            acknowledged = await pet.async_present_shown(
+                connection.user.id, msg["present_shown"]
+            )
+            connection.send_result(msg["id"], {"acknowledged": acknowledged})
+            return
         gift = pet.take_gift(connection.user.id)
-        connection.send_result(msg["id"], {"gift": gift})
         if gift is not None:
-            await pet.async_save_now()  # never given twice
+            await pet.async_save_now()  # save the gift and unfinished reveal together
+            pet._push_watchers()
+        connection.send_result(msg["id"], {"gift": gift})
         return
     finds = pet.collect()
     connection.send_result(msg["id"], {"finds": finds})

@@ -7,7 +7,7 @@ const { world } = require("./timer_trace");
 const src = require("./card-source");
 
 const spec = (party) => ({
-  methods: ["_giftTake"],
+  methods: ["_giftTake", "_queueBirthdayPresent"],
   consts: ["PARTY_PRESENT", "PRESENT_OPEN_MS", "GIFT_LINE_MS"],
   watch: ["_queue", "_giftPop", "_confetti", "_chirp"],
   returns: { _yourPartyOn: party, _birthdayName: "Bee", _giftLine: "made this for you ♥" },

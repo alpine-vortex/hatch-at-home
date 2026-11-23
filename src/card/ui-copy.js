@@ -327,6 +327,9 @@ const BIRTHDAY_SOON = {
 };
 const BIRTHDAY_SOON_IDLE_MAX = 2; // idle lines a device says for one count, besides the look's note
 const BIRTHDAY_SOON_EVERY_MS = [90000, 150000];
+const BIRTHDAY_REPLY_MS = 5000;
+const BIRTHDAY_HOLD_MS = 2500;
+const BIRTHDAY_FIRST_LOOK_MS = 20000; // includes a dropped card's server reservation
 function birthdaySoonLine(line, name) {
   return name ? line.replace("{n}", () => name) : line.replace(", {n}", "").replace(" {n}", "");
 }
@@ -677,6 +680,7 @@ const CARE_NOUNS = { feed: "a meal", snack: "snacks", clean: "a bath", medicine:
   blanket: "a blanket", fan: "a fan" };
 const VISIT_EVERY_MS = 3600 * 1000; // virtual_pet.visit, as the server counts it
 const VISIT_RETRY_MS = 5 * 60 * 1000; // after a visit that didn't count
+const VISIT_ERROR_RETRY_MS = 5000; // a failed request didn't use the visit slot
 const WISH_MENTION_MS = [600000, 900000]; // between reminders of an open wish
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 // A line as a screen reader should hear it: no hearts, notes, stars or emoji; a

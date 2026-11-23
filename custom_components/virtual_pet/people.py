@@ -212,6 +212,10 @@ class People:
         self._saver = CappedSave(hass, self._store, lambda: self.data)
         self.data: dict[str, Any] = {"people": {}, "weather": {}}
         self._locks: dict[str, asyncio.Lock] = {}
+        # Short, house-wide reservations for a birthday line or phone attempt.
+        # They can be retried after a client closes or Home Assistant restarts.
+        self.birthday_claims: dict[str, tuple[str, str, str, float]] = {}
+        self.birthday_pushes: dict[str, tuple[str, float, set[str]]] = {}
         # Memory only, never in self.data (so never on disk, in a backup or a
         # .corrupt copy, nor kept by an older version): a follow-up's typed text,
         # and a mood ({kind, day}). A restart drops both (fresh-expand F1, E13).
@@ -301,6 +305,8 @@ class People:
         ("forget my birthday") survives: they are not asked again. So does the
         memory ask's (memory plan M1, content-free): their memory goes with the rest."""
         old = self.data["people"].pop(user, None)
+        self.birthday_claims.pop(user, None)
+        self.birthday_pushes.pop(user, None)
         kept = {k: old[k] for k in _FORGET_KEEPS if old and old.get(k)}
         if kept:
             self.data["people"][user] = kept
@@ -763,6 +769,8 @@ _PERSON_KEYS: dict[str, Any] = {
     "birthday_skipped": lambda v: isinstance(v, bool),
     "birthday": lambda v: isinstance(v, str) and model.valid_birthday(v),
     "birthday_sent": lambda v: isinstance(v, str),  # the year, "2026"
+    "birthday_displayed": lambda v: isinstance(v, str),
+    "birthday_phone_accepted": lambda v: isinstance(v, str),
     # What the pet calls them on a birthday line (birthday plan 1.1): 1-16 characters,
     # set by an admin store edit. Stripped on load (_person) before this check.
     "call_me": lambda v: isinstance(v, str) and 1 <= len(v) <= 16,

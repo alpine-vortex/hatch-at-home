@@ -111,6 +111,9 @@ async def test_each_person_hears_only_their_own_bond(
         "baby_talk": False,
         "birthday_phone": False,
         "birthday_kept": False,
+        "birthday_due": False,
+        "birthday_gift": False,
+        "birthday_reveal": None,
         "memory_on": False,  # memory plan M1a: two booleans, nothing kept
         "memory_allowed": True,
         "open_on": False,  # favourite §5.3: their card doesn't open on it

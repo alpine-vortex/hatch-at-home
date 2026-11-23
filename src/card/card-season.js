@@ -58,7 +58,7 @@ class HatchPetCardSeason extends HatchPetCardCrate {
   // Now and then, a costume moment: the season's hat on the pet's head and a
   // seasonal line. On the treat day, the first visit gets "trick or treat!".
   // Bats (geese) cross at night, and by day where the world says so.
-  _seasonTick(s) {
+  _seasonTick(s, birthdayFirst) {
     const season = seasonNow(this._config);
     if (!season || !s.species) return;
     const spot = this._hatSpot(s) || s.species.head?.[s.drawn];
@@ -87,6 +87,7 @@ class HatchPetCardSeason extends HatchPetCardCrate {
     // Your own party (birthday plan 3.4): it beats every season's visitor, treat and costume (the sky
     // and scenery above stay). Ahead of the countdown and the treat on purpose.
     if (this._yourPartyOn(s)) return;
+    if (birthdayFirst) return;
     if (!this._free(s) || s.pet.classList.contains("hop") || s.pet.classList.contains("greethop")) return;
     const today = new Date();
     // The countdown, on the first look of the day.
@@ -146,8 +147,9 @@ class HatchPetCardSeason extends HatchPetCardCrate {
   // the first look of the day on this device (a tablet left on overnight too:
   // the day turning starts it), then the hat now and then. On a holiday's own
   // day that holiday's costume wins: confetti, no party hat.
-  _partyTick(s) {
-    if (this._yourPartyTick(s)) return; // your day: one party, the pet's own birthday too (plan 3.4)
+  _partyTick(s, birthdayFirst) {
+    if (this._yourPartyTick(s, birthdayFirst)) return; // your day: one party, the pet's own birthday too (plan 3.4)
+    if (birthdayFirst) return;
     if (!this._state(s, "sensor.life_stage")?.attributes.birthday) return;
     if (!this._free(s) || s.pet.classList.contains("hop") || s.pet.classList.contains("greethop")) return;
     if (this._hatSpot(s) === null) return; // a pose no hat can sit on: wait for the next
@@ -338,8 +340,9 @@ class HatchPetCardSeason extends HatchPetCardCrate {
   }
 
   // The first look and the idle lines of the party. True while it is on (the caller stops there).
-  _yourPartyTick(s) {
+  _yourPartyTick(s, birthdayFirst) {
     if (!this._yourPartyProps(s)) return false;
+    if (birthdayFirst) return true;
     if (!this._free(s) || s.pet.classList.contains("hop") || s.pet.classList.contains("greethop")) return true;
     if (this._hatSpot(s) === null) return true;
     const now = Date.now();

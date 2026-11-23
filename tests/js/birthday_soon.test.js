@@ -38,7 +38,7 @@ test("the table has every count, at least three lines each, all distinct", () =>
 });
 
 test("an idle line is never the one just said", () => {
-  assert.match(src, /s\.lastBdaySoon = line;[\s\S]*?birthdaySoonLine\(line/);
+  assert.match(method("_birthdayLine"), /birthdaySoonLine\(base, name\)[\s\S]*?s\.lastBdaySoon = base/);
   assert.match(method("_birthdaySoonTick"), /filter\(\(l\) => l !== s\.lastBdaySoon\)/);
 });
 
@@ -61,8 +61,7 @@ test("a count is kept per key up to the cap, and keys are separate", () => {
 test("the note takes the name rule, call_me then nickname then first name, only for birthday lines", () => {
   const name = method("_birthdayName");
   assert.match(name, /callMe[\s\S]*bond\?\.level >= BOND\.nickname[\s\S]*this\._hass\.user\?\.name/);
-  assert.match(src, /your_birthday"\) \{\s*const name = this\._birthdayName\(s\)/);
-  assert.match(src, /note\.kind === "birthday_soon"\) \{[\s\S]*?this\._birthdayName\(s\)/);
+  assert.match(method("_birthdayLine"), /const name = this\._birthdayName\(s\)/);
   // No other line reads call_me.
   const users = [...src.matchAll(/call_me|callMe/g)].length;
   assert.ok(users > 0);
@@ -81,8 +80,8 @@ function card(extra = {}) {
     ...extra,
   };
   const run = vm.createContext({ ...ctx, sharedScreen: () => false, short: (v) => v, BOND: { nickname: 3 }, pick: (l) => l[0],
-    BIRTHDAY_SOON, BIRTHDAY_SOON_EVERY_MS: EVERY, BIRTHDAY_SOON_IDLE_MAX: MAX, birthdaySoonLine, usedUpTo, Date });
-  vm.runInContext(`this.m = { ${["_birthdayPrefs", "_birthdaySoonTick", "_birthdayName"].map((n) => method(n).trim()).join(",\n")} };`, run);
+    BIRTHDAY_SOON, BIRTHDAY_SOON_EVERY_MS: EVERY, BIRTHDAY_SOON_IDLE_MAX: MAX, birthdaySoonLine, usedUpTo, Date, serverNow: Date.now });
+  vm.runInContext(`this.m = { ${["_birthdayPrefs", "_birthdayData", "_birthdaySoonTick", "_birthdayName"].map((n) => method(n).trim()).join(",\n")} };`, run);
   Object.assign(c, run.m);
   return c;
 }
@@ -90,7 +89,8 @@ const slide = (mine, extra = {}) => ({ ids: { device: "dev1" }, mine, nextBdaySo
 
 test("mine's count and year are read, and a shared screen has none", () => {
   const c = card();
-  assert.deepStrictEqual({ ...c._birthdayPrefs(slide({ birthday_in: 3, birthday_year: "2026", call_me: "Bee" })) }, { days: 3, year: "2026", callMe: "Bee", after: null });
+  const { days, year, callMe, after } = c._birthdayPrefs(slide({ birthday_in: 3, birthday_year: "2026", call_me: "Bee" }));
+  assert.deepStrictEqual({ days, year, callMe, after }, { days: 3, year: "2026", callMe: "Bee", after: null });
   assert.strictEqual(c._birthdayPrefs(slide({})).days, null); // mine has spoken: none
   assert.strictEqual(c._birthdayPrefs(slide({ birthday_in: 9, birthday_year: "2026" })).days, null);
   assert.strictEqual(c._birthdayPrefs(slide({ birthday_in: 2 })).days, null); // no year: not trusted
