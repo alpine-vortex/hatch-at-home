@@ -454,7 +454,8 @@ const STYLE = `
      .pet's transform (AGENTS.md). Until the first frame decodes, or if one fails, the plain figure of S2
      stands in (no .art). Every animation and transition here is one-shot and stilled by the
      reduced-motion rule at the top of this sheet. */
-  .sitter { position: absolute; left: -5%; bottom: 4%; height: 58%; aspect-ratio: 1; pointer-events: none;
+  /* Keep the sprite above its chair within the sitter's layer, below the pet and menu. */
+  .sitter { position: absolute; left: -5%; bottom: 4%; height: 58%; aspect-ratio: 1; pointer-events: none; isolation: isolate;
     transition: translate 1.4s linear; }
   .sitter[hidden] { display: none; }
   .sitter .sit-img { display: none; position: relative; z-index: 1; inset: 0; width: 100%; height: 100%; }
