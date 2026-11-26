@@ -5,6 +5,7 @@
 - [ ] Floor decor: left piece sits partly behind the shell edge on terrarium and hearth at 420 px — bench `decor` preset, art S5
 - [ ] Check foods on a phone card at 1/1 odds, and 6a/6b crate rows [owner]
 
+- [ ] Warn before Lay egg that the parent retires, or offer to keep both — 2026-11-26 Pip restored from backup
 - [ ] Let past pets visit — a retired or departed pet pays a visit to the current one [someday]
 
 ### Hatch sound cues
