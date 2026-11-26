@@ -5,6 +5,7 @@ Settings come later as options.
 
 from __future__ import annotations
 
+from itertools import count
 from typing import Any
 
 from homeassistant.config_entries import (
@@ -44,6 +45,7 @@ from .const import (
     CONF_COMFORT_LOW,
     CONF_COOLING,
     CONF_DASHBOARD,
+    CONF_EGG_SEED,
     CONF_FIREPLACE,
     CONF_HEATING,
     CONF_HOUSE_WORDS_PRIVATE,
@@ -101,9 +103,13 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def _free_name(self) -> str:
         """A default name no other pet has, so entity IDs don't get _2 suffixes."""
+        for name in PET_NAMES:
+            if not name_taken(self.hass, name):
+                return name
         return next(
-            (n for n in PET_NAMES if not name_taken(self.hass, n)),
-            DEFAULT_NAME,
+            f"{DEFAULT_NAME} {n}"
+            for n in count(2)
+            if not name_taken(self.hass, f"{DEFAULT_NAME} {n}")
         )
 
     def _household_dashboard(self) -> str | None:
@@ -248,19 +254,8 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
             if name_taken(self.hass, name):
                 errors[CONF_NAME] = "name_taken"
         if user_input is not None and not errors:
-            dashboard = notify.dashboard_path(user_input.get(CONF_DASHBOARD))
-            weather = default_weather(self.hass, from_states=True)
-            return self.async_create_entry(
-                title=name,
-                data={
-                    CONF_NAME: name,
-                    CONF_WORLD: user_input[CONF_WORLD],
-                    CONF_NEW_PET: True,  # welcomed once its first save is made
-                },
-                options={
-                    **({CONF_DASHBOARD: dashboard} if dashboard else {}),
-                    **({CONF_WEATHER: weather} if weather else {}),
-                },
+            return self._create_pet(
+                name, user_input[CONF_WORLD], user_input.get(CONF_DASHBOARD)
             )
         options = await self._world_options()
         if options is None:
@@ -296,6 +291,40 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
                 }
             ),
             errors=errors,
+        )
+
+    async def async_step_separate_egg(
+        self, egg: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Create an egg seeded by the card's lay command."""
+        assert egg is not None
+        await self.async_set_unique_id(egg["unique_id"])
+        self._abort_if_unique_id_configured()
+        return self._create_pet(
+            self._free_name(), egg["world"], self._household_dashboard(), egg["seed"]
+        )
+
+    def _create_pet(
+        self,
+        name: str,
+        world: str,
+        dashboard: str | None,
+        egg_seed: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        dashboard = notify.dashboard_path(dashboard)
+        weather = default_weather(self.hass, from_states=True)
+        return self.async_create_entry(
+            title=name,
+            data={
+                CONF_NAME: name,
+                CONF_WORLD: world,
+                CONF_NEW_PET: True,
+                **({CONF_EGG_SEED: egg_seed} if egg_seed else {}),
+            },
+            options={
+                **({CONF_DASHBOARD: dashboard} if dashboard else {}),
+                **({CONF_WEATHER: weather} if weather else {}),
+            },
         )
 
 

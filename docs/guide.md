@@ -372,9 +372,9 @@ up to four parts, in this order:
   the preview differs from the saved pick) to keep it. The world's own shell is the
   first tile, marked "default"; use it to go back to the world's own. "‹ settings"
   leaves without saving. Each pet has its own shell. The earned shells (glitter, glow, smoke,
-  sunset, constellation and stars) unlock when the pet is a teen: before that their
-  tiles are dimmed with the stage they open at, and tapping one says "I get this one
-  as a teen ♪". On a shared screen the row is read-only: it shows the shell and says
+  sunset, constellation and stars) unlock automatically when that pet reaches teen,
+  after five days of growth. The other finishes are available from the egg. Locked
+  tiles show the stage at which they open. On a shared screen the row is read-only: it shows the shell and says
   "ask a grown-up to change it", with no picker.
 - **The mono screen.** "mono screen" in the sheet's "this screen" part redraws the
   LCD in four greens, like an old handheld. It is per browser, off to begin with,
@@ -1024,11 +1024,13 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   the child also learns it for itself, it goes up a level, so a trait kept in the
   family deepens over the generations. Seasonal traits (sun lover, fireside) carry
   through the seasons this way.
-- **Generations:** a week into adulthood the card offers "lay an egg?" (two taps,
-  so it can't happen by accident), as long as the pet isn't sick. Nothing ends until you choose it, so a favourite
-  pet can stay forever. The adult retires to the journal and a new egg takes its
-  place; it inherits one of the parent's traits and, as always, prefers a creature
-  this device hasn't raised yet.
+- **Generations:** a week into adulthood, a well, active pet offers "lay an egg?".
+  **Retire & replace** sends the adult to the journal and puts the egg in its shell.
+  **Hatch in a separate shell** keeps the adult active and adds an egg as another
+  Home Assistant device. A Home Assistant admin can add the shell. **Cancel** closes
+  the sheet without laying an egg or saving its hatchling pick. Either egg can
+  inherit one of the parent's traits. The new shell appears on cards that show all
+  pets. If the card has a pet list, add the new companion to it in the card editor.
 - **Choosing the next egg:** to pick the creature instead of a surprise, set
   `select.<pet>_next_egg` (on the pet's device page, under Configuration) before the
   egg hatches, for example before laying it. It lists the egg's world, the new one if

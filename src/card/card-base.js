@@ -541,5 +541,9 @@ class HatchPetCardBase extends HTMLElement {
     }
     return deviceIds.map((device) => byDevice[device]);
   }
+
+  _hasPetFilter() {
+    return [].concat(this._config.entities || [], this._config.entity || [], this._config.devices || []).length > 0;
+  }
 }
 

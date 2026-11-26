@@ -416,15 +416,20 @@ const HOUSE_MOMENT_LINES = {
   custom: { hop: ["*hop hop* ♪"], cheer: ["yay! hooray! ♪"], cozy: ["mm, cozy ♪"], dance: ["♪ dance time! ♪"], startle: ["eep! oh! ♪"] },
 };
 // Settings and new-pet setup (docs/plan-2026-11-02-settings-setup.md §2, S2; copy
-// APPROVED 2026-11-02): the lay sheet's static lines. N6, the lay button's aria-label,
-// is built where it is drawn (it names the pet).
+// APPROVED 2026-11-02).
 const SETUP_COPY = {
   laySheetHeading: "a new egg", // N1
   layPrompt: "pick who hatches", // N2
   laySurprise: "surprise me", // N3
-  layConfirm: "lay the egg", // N4
-  layBack: "‹ not yet", // N5
-  layRefused: "this login can't choose, sorry", // C13'
+  layRetire: "retire & replace",
+  layRetireNote: "your companion retires to the journal.",
+  layReplaceNote: "the egg takes its place.",
+  layReplaceShort: "egg takes this shell",
+  laySeparate: "hatch in a separate shell",
+  laySeparateNote: "keep your companion and add a new egg.",
+  laySeparateShort: "keep both",
+  layAdmin: "Home Assistant admin required.",
+  layBack: "cancel",
   layOutside: "set in home assistant", // N25
   eggSurprise: "surprise", // N7
   eggComing: (creature) => `a ${creature.toLowerCase()} is coming`, // C15'
@@ -485,7 +490,6 @@ const STATUS_COPY = {
 const TALK_COPY = {
   blanket: "so cozy now... thank you ♥", // F11
   fan: "ahh, a breeze! thank you ♪", // F11
-  layArmed: "i'll wait for you in the journal ♥", // F12
   today: "today", // F14
 };
 // Games and playtime UX fix 6 (review 6; first mate's decisions 2026-11-02, owner delegated

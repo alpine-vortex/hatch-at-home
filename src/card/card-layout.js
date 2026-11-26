@@ -723,10 +723,8 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     s.request.classList.toggle("show", !!wanted && !asleep);
     if (wanted) {
       s.request.dataset.key = wanted;
-      const confirming = wanted === "lay_egg" && confirmArmed(s, wanted);
-      s.request.textContent = confirming ? "sure? tap again" : REQUEST_LABELS[wanted] || `${wanted}?`;
-      s.request.setAttribute("aria-label", confirming ? CONFIRM_ARIA.lay_egg
-        : REQUEST_ARIA[wanted] || `Give the pet a ${wanted}`);
+      s.request.textContent = REQUEST_LABELS[wanted] || `${wanted}?`;
+      s.request.setAttribute("aria-label", REQUEST_ARIA[wanted] || `Give the pet a ${wanted}`);
     }
 
     const lights = care.lights;

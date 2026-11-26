@@ -72,6 +72,7 @@ from .const import (
     CONF_COMFORT_LOW,
     CONF_COOLING,
     CONF_DASHBOARD,
+    CONF_EGG_SEED,
     CONF_FIREPLACE,
     CONF_HEATING,
     CONF_HOUSE_WORDS_PRIVATE,
@@ -566,13 +567,17 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         except Exception as err:  # noqa: BLE001 - a wrapper Store can't read
             _log_damage("%s's save file couldn't be read", title, err)
         if data is None and self.config_entry.data.get(CONF_NEW_PET):
-            # Only adding the integration makes a save file; laying an egg
-            # reuses this one, so this is a new pet in the house.
+            # A fresh entry, including an egg laid in a separate shell.
             self.state = model.PetState.new(title, now)
+            if seed := self.config_entry.data.get(CONF_EGG_SEED):
+                self.state.egg_choice = seed["species"]
+                if trait := seed["trait"]:
+                    model.inherit_egg_trait(self.state, *trait)
             LOGGER.debug("New egg for %s", self.pet_id)
             await self.store.async_save(self.state.to_dict())  # welcome once only
             self._first_saved()
-            self._welcome()
+            if seed is None:
+                self._welcome()  # the lay sheet itself confirms a separate shell
         elif data is None or data is NOTHING:
             # A pet whose save is gone or unreadable: an egg again, never
             # welcomed as a new pet, and a repair that says where the file went.
@@ -671,6 +676,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if CONF_NEW_PET in self.config_entry.data:
             data = dict(self.config_entry.data)
             data.pop(CONF_NEW_PET)
+            data.pop(CONF_EGG_SEED, None)
             self.hass.config_entries.async_update_entry(self.config_entry, data=data)
 
     async def _async_update_data(self) -> model.PetState:
@@ -4104,11 +4110,23 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._publish()
         return result
 
-    async def async_lay_egg(self) -> None:
+    async def async_lay_egg(
+        self,
+        *,
+        generation: int | None = None,
+        choice: str | None = None,
+        use_choice: bool = False,
+    ) -> bool:
         """Start the next generation: the adult retires, an egg takes its place."""
         assert self.state is not None
         now = self._now()
         self._advance(now)
+        if not model.can_lay_egg(self.state) or (
+            generation is not None and self.state.generation != generation
+        ):
+            return False
+        if use_choice:
+            self.state.egg_choice = choice
         self.state, events = model.lay_egg(self.state, now, self.rng)
         self._fire(events)
         self._save()
@@ -4122,6 +4140,20 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             )
             self.hass.config_entries.async_update_entry(self.config_entry, data=data)
             self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
+        return True
+
+    def prepare_separate_egg(
+        self, generation: int, species: str | None, *, use_choice: bool
+    ) -> dict[str, Any] | None:
+        """Seed a separate shell without moving any of the parent's progress."""
+        assert self.state is not None
+        self._advance(self._now())
+        if self.state.generation != generation or not model.can_lay_egg(self.state):
+            return None
+        return {
+            "species": species if use_choice else self.state.egg_choice,
+            "trait": model.egg_trait(self.state, self.rng),
+        }
 
     async def async_rename(self, name: str) -> None:
         """Name the new generation (the card's rename, only the first day: egg and

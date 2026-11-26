@@ -346,14 +346,18 @@ class HatchPetCardBuild extends HatchPetCardBase {
     // The journal, finds and every-world pages are deeper pages and keep it the same way
     // (UX fix 2, F1): a tap on a tile or a heading is not a tap on the screen.
     s.status.addEventListener("click", (e) => {
-      if ((s.settings || s.journal || s.finds || s.everyWorld || s.memoryPage || s.nameSheet) && !s.laySheet) e.stopPropagation();
+      if (s.settings || s.journal || s.finds || s.everyWorld || s.memoryPage || s.nameSheet || s.laySheet) e.stopPropagation();
     });
     // Escape steps back one page, like the back link (UX fix 2, F4): a sheet or picker to
     // where it came from, every world and finds to the journal, the journal to the status,
-    // and the status closes with focus on its chip. The lay sheet keeps its own way out.
+    // and the status closes with focus on its chip.
     s.status.addEventListener("keydown", (e) => {
-      if (e.key !== "Escape" || s.laySheet) return;
+      if (e.key !== "Escape") return;
       e.preventDefault();
+      if (s.laySheet) {
+        s.status.querySelector(".layback")?.click();
+        return;
+      }
       if (s.nameSheet) { // "keep", whichever control has the focus
         this._nameKeep(s);
         return;
@@ -376,23 +380,10 @@ class HatchPetCardBuild extends HatchPetCardBase {
     s.request.addEventListener("click", () => {
       const key = s.request.dataset.key;
       if (!key) return;
-      // With a choice of two or more creatures, laying goes through the lay sheet (S2).
-      if (key === "lay_egg" && (this._eggOffer(s)?.offered.length || 0) >= 2) {
+      if (key === "lay_egg") {
         this._tapped(s.request, s);
         this._openLay(s);
         return;
-      }
-      if (key === "lay_egg") this._tapped(s.request, s);
-      if (key === "lay_egg") {
-        const armed = confirmArmed(s, key);
-        if (!this._confirmed(s, key, s.request, () => this._redraw(s))) {
-          // The pet itself answers the first tap (F12); the pill keeps "sure? tap again".
-          if (!armed) {
-            this._line(s, MINE, TALK_COPY.layArmed, 4000);
-            this._animate(s, s.pet, "perk", 320);
-          }
-          return;
-        }
       }
       this._press(s, key);
     });
@@ -638,8 +629,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     for (const s of this._slides) if (s.game?.picking) this._hopRowRefresh(s); // another screen settled Hop
 
     if (!devices.length) {
-      const configured = [].concat(
-        this._config.entities || [], this._config.entity || [], this._config.devices || []).length;
+      const configured = this._hasPetFilter();
       // No pets yet: the first world's toy, empty, with an egg's silhouette on its screen (F5).
       const keep = !configured && this._slides.length === 1 && this._slides[0].empty;
       if (!keep) while (this._slides.length) this._dropSlide(this._slides.pop());

@@ -11,6 +11,7 @@ from homeassistant.auth.permissions.const import POLICY_CONTROL
 from homeassistant.components import persistent_notification, websocket_api
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID, Platform
 from homeassistant.core import (
     Event,
@@ -20,6 +21,7 @@ from homeassistant.core import (
     SupportsResponse,
     callback,
 )
+from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import (
     config_validation as cv,
@@ -54,6 +56,7 @@ from .const import (
     CARD_FILENAME,
     CONF_AQI,
     CONF_INDOOR_TEMP,
+    CONF_NEXT_WORLD,
     CONF_RAIN,
     CONF_SOLAR,
     CONF_WEATHER,
@@ -319,6 +322,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_rest_offer)
     websocket_api.async_register_command(hass, websocket_rest)
     websocket_api.async_register_command(hass, websocket_set_shell)
+    websocket_api.async_register_command(hass, websocket_lay_egg)
     websocket_api.async_register_command(hass, websocket_rename)
     websocket_api.async_register_command(hass, websocket_collect)
     websocket_api.async_register_command(hass, websocket_collection)
@@ -1376,6 +1380,112 @@ async def websocket_set_shell(
         connection.send_error(msg["id"], "shell_locked", "Not grown into that yet")
         return
     connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/lay_egg",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("generation"): vol.All(int, vol.Range(min=1)),
+        vol.Optional("species"): vol.Any(None, str),
+        # Present for a separate shell. Retrying the same request finds the same entry.
+        vol.Optional("request_id"): vol.Match(r"^[0-9a-f]{32}$"),
+    }
+)
+@websocket_api.async_response
+async def websocket_lay_egg(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Lay in the current shell or create a separate Home Assistant device."""
+    registry = er.async_get(hass)
+    entity = registry.async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id)
+        if entity and entity.platform == DOMAIN
+        else None
+    )
+    if pet is None or pet.state is None:
+        connection.send_error(msg["id"], "no_pet", "The companion is unavailable")
+        return
+
+    request_id = msg.get("request_id")
+    if request_id:
+        if not connection.user.is_admin:
+            connection.send_error(
+                msg["id"], "admin_required", "Only an admin can add a shell"
+            )
+            return
+    else:
+        button = registry.async_get_entity_id("button", DOMAIN, f"{pet.pet_id}_lay_egg")
+        if not button or not connection.user.permissions.check_entity(
+            button, POLICY_CONTROL
+        ):
+            connection.send_error(msg["id"], "read_only", "This login can't lay an egg")
+            return
+
+    generation = msg["generation"]
+    species = msg.get("species")
+    use_choice = "species" in msg
+    if not request_id:
+        if species is not None and species not in pet.egg_roster:
+            connection.send_error(
+                msg["id"], "bad_species", "Choose a creature from this world"
+            )
+        elif await pet.async_lay_egg(
+            generation=generation, choice=species, use_choice=use_choice
+        ):
+            connection.send_result(msg["id"])
+        else:
+            connection.send_error(
+                msg["id"], "not_now", "The companion can't lay an egg now"
+            )
+        return
+
+    unique_id = f"egg-{pet.pet_id}-{request_id}"
+    entry = hass.config_entries.async_entry_for_domain_unique_id(DOMAIN, unique_id)
+    if entry is None:
+        if species is not None and species not in pet.egg_roster:
+            connection.send_error(
+                msg["id"], "bad_species", "Choose a creature from this world"
+            )
+            return
+        seed = pet.prepare_separate_egg(generation, species, use_choice=use_choice)
+        if seed is None:
+            connection.send_error(
+                msg["id"], "not_now", "The companion can't lay an egg now"
+            )
+            return
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": "separate_egg"},
+            data={
+                "seed": seed,
+                "unique_id": unique_id,
+                "world": pet.config_entry.data.get(CONF_NEXT_WORLD) or pet.world,
+            },
+        )
+        if result["type"] is FlowResultType.CREATE_ENTRY:
+            entry = result["result"]
+        elif result.get("reason") in ("already_configured", "already_in_progress"):
+            entry = hass.config_entries.async_entry_for_domain_unique_id(
+                DOMAIN, unique_id
+            )
+            if entry is None:
+                connection.send_error(
+                    msg["id"], "egg_pending", "The new shell is still being added"
+                )
+                return
+    if entry is None or entry.state is not ConfigEntryState.LOADED:
+        if entry is not None and entry.state is ConfigEntryState.SETUP_IN_PROGRESS:
+            connection.send_error(
+                msg["id"], "egg_pending", "The new shell is still being added"
+            )
+        else:
+            connection.send_error(
+                msg["id"], "egg_setup", "Check the new shell in Home Assistant"
+            )
+        return
+    connection.send_result(msg["id"], {"name": entry.title})
 
 
 @websocket_api.websocket_command(

@@ -65,7 +65,7 @@ stand-in. **not built** = planned, nothing in the code.
 | 30 species, 6 worlds | 5 per world (the roster file lists 6 for Terrarium) | worlds.json `roster`; 30 `species.json` with `ready: true` | none | live |
 | Beetle | on Terrarium's roster with sprites but no species.json, so filtered out | sprites/beetle; species.py `load_catalog` | none | hidden/partial |
 | Egg choice | `select.<pet>_next_egg`: Surprise me or a creature of the egg's world. The lay confirm also offers the creatures this device has raised in that world, plus "surprise me" ("set in home assistant" if the pick was made there); the egg's screen says "a <creature> is coming". | `select.py`; model `lay_egg`; card `_eggOffer`, `SETUP_COPY`; `egg_roster` on the life stage sensor | the lay sheet, or the select | live |
-| Lay an egg / generations | from day 21, well and home: a "lay an egg?" request button, then a lay sheet ("a new egg", "pick who hatches", "lay the egg" / "‹ not yet"). The request waits out of the way while the pet asks. The adult retires to the journal; one trait is inherited. | card `REQUEST_LABELS`, `_confirmed`; model `can_lay_egg` | none | live |
+| Lay an egg / generations | from day 21, a well, active adult offers "lay an egg?". Retire & replace sends the adult to the journal, hatch in a separate shell keeps both, and cancel closes the sheet. The egg can inherit a trait. | card `_renderLaySheet`; `virtual_pet/lay_egg`; model `can_lay_egg` | adding a separate shell requires a Home Assistant admin | live |
 | Traits (16, ★–★★★) | learned from the house, up to 4; inherited ones deepen | model `_learn`, `trait_progress`; rates | depends on mapped entities | live |
 | Trait flair | drawn around the pet (clouds, notes, embers…) about once a minute | card `FLAIR`, `_flair` | reduced motion: still | live |
 | Upbringing | devoted / steady / scrappy, set at adulthood; small stat effect | model `upbringing`, `_score` | none | live |
@@ -83,7 +83,7 @@ stand-in. **not built** = planned, nothing in the code.
 |---|---|---|---|---|
 | Six device shapes | egg, tank, house, porthole, lily pad, moon, each with a backdrop, deco and trim | worlds.json `shell/backdrop/deco/trim`; card `_mould`, `_dress` | none | live |
 | Scene follows the sun and lights | day, night, dim; rain overlay; wind; at night and dim the status sheet and the bubble sink into the dark LCD; the backlight still lifts the sheet. | card `_renderSlide`; home `evaluate` | `sun.sun` | live |
-| Shell picker | settings → "shell": world plastics, specials, prints; preview, then **use** (the world's own is the first tile) | card `_renderPicker`, `_saveShell`; `virtual_pet/set_shell`; model `shell_options` | per pet; read-only on a shared screen | live |
+| Shell picker | settings → "shell": preview, then **use**. Glitter, glow, smoke, sunset, constellation and stars unlock at teen, after five days of growth. | card `_renderPicker`, `_saveShell`; `virtual_pet/set_shell`; model `shell_options` | per pet; read-only on a shared screen | live |
 | "Earned" shells | glitter, glow, smoke, sunset, constellation, stars unlock **at teen by age** (the glow finish lights up in Home Assistant's dark theme, the OS's when HA has none) | model `shell_unlocked`, rates `SHELL_UNLOCKS` | none | live |
 
 ## 5. Games

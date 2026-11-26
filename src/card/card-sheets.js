@@ -43,16 +43,18 @@ class HatchPetCardSheets extends HatchPetCardStatus {
       const name = isOwn ? this._worldName(s).toLowerCase() : finishName(key); // the world's own: its name only (F6)
       const open = key == null || options.has(key);
       const at = open ? null : locked[key];
-      const aria = at ? `${name} shell, opens at ${at}` : `${name} shell`;
+      const unlock = at === "teen" ? "teen · 5 days" : at;
+      const aria = at ? `${name} shell, opens at ${at}${at === "teen" ? ", after 5 days of growth" : ""}` : `${name} shell`;
       return `<button class="tile${id === now ? " now" : ""}${open ? "" : " locked"}" data-finish="${id}" ` +
         `aria-label="${escape(aria)}"><span class="sw" style="background: ${finishSwatch(key ?? own, color)}"></span>` +
-        `<span class="tname">${escape(name)}</span><span class="tsub">${isOwn ? (id === now ? "default · now" : "default") : id === now ? "now" : at ? escape(at) : ""}</span></button>`;
+        `<span class="tname">${escape(name)}</span><span class="tsub">${isOwn ? (id === now ? "default · now" : "default") : id === now ? "now" : unlock ? escape(unlock) : ""}</span></button>`;
     };
     const groups = SHELL_GROUPS.map(([head, keys], i) => `<div class="sec" data-group="${head}">${head}</div><div class="tiles">` +
       `${i === 0 ? tile(null) : ""}${keys.filter((k) => k !== own).map(tile).join("")}</div>`).join("");
     const html = `
       <div class="shead"><button class="sback pback" aria-label="back to settings">‹ settings</button>
         <button class="bell puse" aria-label="${escape(this._useAria(s, this._shellChoice(s)))}" aria-disabled="true">use</button>${SAY_NOTE}</div>
+      ${Object.keys(locked).length ? '<div class="shellnote">locked finishes open when your pet grows. each tile shows the stage it needs.</div>' : ""}
       ${groups}`;
     if (!this._setStatus(s, html)) return;
     this._pickerMarks(s);
@@ -71,7 +73,8 @@ class HatchPetCardSheets extends HatchPetCardStatus {
       e.stopPropagation();
       this._tapped(t);
       if (t.classList.contains("locked")) {
-        this._pickerNote(s, "I get this one as a teen ♪");
+        const at = locked[t.dataset.finish];
+        this._pickerNote(s, at === "teen" ? "opens at teen, after 5 days of growth" : `opens at ${at}`);
         return;
       }
       // The live shell is the preview: no save, no redraw of the view.
@@ -212,74 +215,147 @@ class HatchPetCardSheets extends HatchPetCardStatus {
 
   // Open the lay sheet in the status box (a status already up is redrawn as the sheet).
   _openLay(s) {
+    if (s.laySheet || s.layBusy) return;
     s.confirm = null;
+    s.layDraft = { generation: this._state(s, "sensor.life_stage")?.attributes.generation, opened: Date.now() };
+    s.statusHtml = null;
     s.screen.classList.remove("show-status");
     this._toggleStatus(s, true);
-    s.laySheetAt = Date.now();
     s.status.scrollTop = 0;
     s.status.querySelector(".layback")?.focus({ preventScroll: true });
   }
 
-  // Close it: every exit comes here (or through _toggleStatus, which clears the flag).
   _closeLay(s) {
     if (s.screen.classList.contains("show-status")) this._toggleStatus(s);
     s.laySheet = false;
   }
 
   _renderLaySheet(s) {
+    const draft = s.layDraft;
+    if (!draft) return;
     const offer = this._eggOffer(s);
-    if (!offer || offer.offered.length < 2) { // a world change, an older save: the old two taps
-      this._closeLay(s);
-      return;
-    }
-    const row = (id, label, on) =>
-      `<button class="bell layrow" data-id="${escape(id)}" aria-pressed="${on}">${escape(label)}</button>`;
-    const device = this._hass.devices?.[s.ids?.device];
-    const name = device?.name_by_user || device?.name || "Pet";
+    const admin = this._hass.user?.is_admin === true;
+    const inactive = s.layBusy ? ' aria-disabled="true"' : "";
+    const closeLabel = draft.done ? "done" : s.layBusy ? "close" : SETUP_COPY.layBack;
+    const selected = draft.pick ?? offer?.choice?.id ?? (offer?.outside ? "#outside" : "");
+    const option = (id, label) =>
+      `<option value="${escape(id)}"${id === selected ? " selected" : ""}>${escape(label)}</option>`;
     const html = `
-      <div class="shead"><button class="sback layback">${SETUP_COPY.layBack}</button>
-        <button class="bell laygo" aria-label="${escape(`${SETUP_COPY.layConfirm}: ${name} retires to the journal and a new egg takes its place`)}">${SETUP_COPY.layConfirm}</button></div>
-      <div class="sec">${SETUP_COPY.laySheetHeading}</div>
-      <div class="shellnote">${SETUP_COPY.layPrompt}</div>
-      <div class="laylist">
-        ${row("", SETUP_COPY.laySurprise, !offer.choice && !offer.outside)}
-        ${offer.outside ? `<div class="bell layrow ro" aria-current="true">${SETUP_COPY.layOutside}</div>` : ""}
-        ${offer.offered.map((r) => row(r.id, r.name.toLowerCase(), offer.choice?.id === r.id)).join("")}
+      <div class="shead layhead"><div class="sec">${SETUP_COPY.laySheetHeading}</div>
+        <button class="sback layback">${closeLabel}</button></div>
+      <div class="laymessage" role="status" aria-live="polite"></div>
+      ${draft.done ? "" : `<div class="laylist">
+        <button class="bell laygo"${inactive} aria-labelledby="lay-retire" aria-describedby="lay-retire-note">
+          <span id="lay-retire">${SETUP_COPY.layRetire}</span>
+          <span class="shellnote layfull" id="lay-retire-note">${SETUP_COPY.layRetireNote} ${SETUP_COPY.layReplaceNote}</span>
+          <span class="shellnote layshort" aria-hidden="true">${SETUP_COPY.layReplaceShort}</span></button>
+        <button class="bell layseparate"${admin ? inactive : ' aria-disabled="true"'} aria-labelledby="lay-separate" aria-describedby="lay-separate-note">
+          <span id="lay-separate">${SETUP_COPY.laySeparate}</span>
+          <span class="shellnote${admin ? " layfull" : ""}" id="lay-separate-note">${admin ? SETUP_COPY.laySeparateNote : SETUP_COPY.layAdmin}</span>
+          ${admin ? `<span class="shellnote layshort" aria-hidden="true">${SETUP_COPY.laySeparateShort}</span>` : ""}</button>
       </div>
-      <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
-    if (!this._setStatus(s, html)) return;
-    s.status.querySelectorAll(".sec, .shead, .shellnote, .laylist").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
-    s.status.querySelector(".layback").addEventListener("click", (e) => {
-      e.stopPropagation(); // the screen behind would close the status
-      this._tapped(e.currentTarget);
-      this._closeLay(s); // nothing is laid; the pick stays the next egg's
-    });
-    s.status.querySelectorAll(".layrow[data-id]").forEach((b) => b.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this._tapped(b);
-      this._layPick(s, b.dataset.id);
-    }));
-    s.status.querySelector(".laygo").addEventListener("click", (e) => {
-      e.stopPropagation();
-      // The tap that opened the sheet must not also lay (a fast double tap).
-      if (Date.now() - (s.laySheetAt || 0) < CONFIRM_GAP_MS) return;
-      this._tapped(e.currentTarget, s);
-      this._press(s, "lay_egg");
-      this._closeLay(s);
-    });
+      ${offer?.offered.length ? `<label class="laychoice">${SETUP_COPY.layPrompt}
+        <select class="laypick"${s.layBusy ? " disabled" : ""}>
+          ${offer.outside ? option("#outside", SETUP_COPY.layOutside) : ""}
+          ${option("", SETUP_COPY.laySurprise)}
+          ${offer.offered.map((r) => option(r.id, r.name.toLowerCase())).join("")}
+        </select></label>` : ""}`}`;
+    if (this._setStatus(s, html)) {
+      s.status.querySelector(".layback").addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._tapped(e.currentTarget);
+        this._closeLay(s);
+        if (s.request.classList.contains("show")) s.request.focus({ preventScroll: true });
+      });
+      s.status.querySelector(".laypick")?.addEventListener("change", (e) => {
+        draft.pick = e.currentTarget.value;
+      });
+      for (const [selector, separate] of [[".laygo", false], [".layseparate", true]]) {
+        s.status.querySelector(selector)?.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this._submitLay(s, e.currentTarget, separate);
+        });
+      }
+    }
+    if (draft.message) {
+      const feedback = s.status.querySelector(".laymessage");
+      if (feedback.textContent !== draft.message) feedback.textContent = draft.message;
+    }
   }
 
-  // A row: the select's own option string, at once ("" is the surprise: options[0]).
-  async _layPick(s, id) {
+  async _submitLay(s, button, separate) {
+    const draft = s.layDraft;
+    if (s.layBusy || draft.done || button.getAttribute("aria-disabled") === "true"
+        || Date.now() - draft.opened < CONFIRM_GAP_MS) return;
+    const entity = s.ids?.["sensor.life_stage"];
+    if (!entity) return;
     const offer = this._eggOffer(s);
-    const option = id === "" ? offer?.surprise : offer?.offered.find((r) => r.id === id)?.name;
-    if (!option) return; // it left the offer meanwhile: the next draw shows what is
+    const species = draft.pick ? offer?.offered.find((r) => r.id === draft.pick) : null;
+    if (draft.pick && draft.pick !== "#outside" && !species) {
+      draft.message = "the hatch choices changed. pick again.";
+      draft.pick = undefined;
+      this._renderLaySheet(s);
+      return;
+    }
+    const choice = species ? { species: species.id } : draft.pick === "" ? { species: null } : {};
+    if (separate) draft.requestId ??= Array.from(crypto.getRandomValues(new Uint8Array(16)), (n) => n.toString(16).padStart(2, "0")).join("");
+    this._tapped(button, s);
+    s.layBusy = true;
+    draft.message = separate ? "adding the new shell…" : "laying the egg…";
+    this._renderLaySheet(s);
+    const mark = separate ? null : this._layWatch(s);
+    const isOpen = () => s.laySheet && s.layDraft === draft && s.ids?.["sensor.life_stage"] === entity;
     try {
-      await this._hass.callService("select", "select_option", { entity_id: offer.entity, option });
+      const result = await this._hass.callWS({
+        type: "virtual_pet/lay_egg", entity_id: entity, generation: draft.generation, ...choice,
+        ...(separate ? { request_id: draft.requestId } : {}),
+      });
+      if (!isOpen()) return;
+      if (separate) {
+        draft.done = true;
+        draft.message = `egg added in ${result.name}'s shell. ${this._hasPetFilter()
+          ? "edit this card’s pet list to show it." : "use the shelf arrows to find it."}`;
+      } else {
+        this._closeLay(s);
+      }
     } catch (err) {
-      // A read-only login is refused: the choice stays as it was.
-      const refused = /unauthori|forbidden|permission/i.test(`${err?.code} ${err?.message}`);
-      this._statusMessage(s, refused ? SETUP_COPY.layRefused : SETTINGS_AGAIN.failed);
+      if (mark && s.layAt === mark) this._layDrop(s);
+      if (!isOpen()) return;
+      if (err?.code === "unknown_command" && !separate) {
+        // Older integrations still expose the original retirement button.
+        try {
+          if (s.ids?.["sensor.life_stage"] === entity && this._state(s, "sensor.life_stage")?.attributes.generation === draft.generation) {
+            if ("species" in choice) await this._hass.callService("select", "select_option",
+              { entity_id: offer.entity, option: species?.name || offer.surprise });
+            if (isOpen()) {
+              this._press(s, "lay_egg");
+              this._closeLay(s);
+            }
+          }
+        } catch {
+          draft.message = "the egg wasn’t laid. check your Home Assistant permissions.";
+        }
+      } else {
+        const messages = {
+          admin_required: SETUP_COPY.layAdmin,
+          bad_species: "the hatch choices changed. pick again.",
+          egg_pending: "the new shell is still being added. check again in a moment.",
+          egg_setup: "check the new shell in Home Assistant’s integrations.",
+          not_now: "your companion can’t lay an egg right now.",
+          read_only: "this login can’t lay an egg.",
+          unknown_command: "update the Home Assistant integration to add a separate shell.",
+        };
+        draft.message = messages[err?.code] || "couldn’t confirm the egg. try again.";
+      }
+    } finally {
+      s.layBusy = false;
+      if (isOpen()) {
+        this._renderLaySheet(s);
+        s.status.scrollTop = 0;
+        if (draft.done) {
+          s.status.querySelector(".layback")?.focus({ preventScroll: true });
+        }
+      }
     }
   }
 

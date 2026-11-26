@@ -1589,12 +1589,19 @@ const STYLE = `
     cursor: pointer; }
   .bell[aria-pressed="true"] { background: #2f3a24; color: #e9e2c6; }
   .bell.pending { opacity: .65; }
-  /* The lay sheet (plan S2): the offer as a list; a choice made in HA is dashed, read-only. */
-  .laylist { display: flex; flex-direction: column; gap: 4px; padding-bottom: 6px; }
-  .laygo { margin-left: auto; }
-  .layrow { box-sizing: border-box; width: 100%; text-align: left; }
-  .layrow.ro { display: flex; align-items: center; border-style: dashed; cursor: default;
-    background: #2f3a24; color: #e9e2c6; }
+  .layhead { justify-content: space-between; align-items: center; }
+  .layhead .sec { margin: 0; border: 0; }
+  .laylist { display: flex; flex-direction: column; gap: 4px; }
+  .laylist .bell { display: flex; flex-direction: column; justify-content: center;
+    gap: 2px; text-align: left; width: 100%; }
+  .layshort, .compact .layfull { display: none; }
+  .compact .layshort { display: block; }
+  .compact .laylist { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .compact .laylist .bell { padding: 4px; min-width: 0; overflow-wrap: anywhere; }
+  .laymessage:empty { display: none; }
+  .laychoice { display: flex; flex-direction: column; gap: 4px; }
+  .laypick { font: inherit; min-height: 44px; color: inherit; background: var(--sheet-bg);
+    border: 2px solid currentColor; border-radius: 10px; padding: 3px 6px; }
   /* The name sheet (plan S3): the lay sheet's band (keep at the left, "name it" at the right), the
      field in the sheet's own ink, and the error line under it. 16px in the field so a phone's
      browser doesn't zoom in on it. */
@@ -1661,7 +1668,7 @@ const STYLE = `
   ha-card.bigtext .status .status-feedback, ha-card.bigtext .status .sback, ha-card.bigtext .status .jlink,
   ha-card.bigtext .status .flink, ha-card.bigtext .status .wlink, ha-card.bigtext .status .mlink, ha-card.bigtext .status .jolder,
   ha-card.bigtext .status .fheart { font-size: 15px; }
-  ha-card.bigtext .status .layrow, ha-card.bigtext .status .laygo,
+  ha-card.bigtext .status .laylist .bell,
   ha-card.bigtext .status .namego, ha-card.bigtext .status .namechange, ha-card.bigtext .status .nameerr { font-size: 15px; }
   ha-card.bigtext .status .nameinput { font-size: 18px; }
   ha-card.bigtext .status .sec, ha-card.bigtext .status .ssub, ha-card.bigtext .status .shellnote, ha-card.bigtext .status .jtile,

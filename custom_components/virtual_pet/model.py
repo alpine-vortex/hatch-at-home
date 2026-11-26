@@ -2265,6 +2265,25 @@ def can_lay_egg(state: PetState) -> bool:
     )
 
 
+def inherit_egg_trait(egg: PetState, trait: str, level: int) -> None:
+    """Start an egg with a trait inherited from its parent."""
+    egg.traits = [trait]
+    egg.trait_levels = {trait: level}
+    egg.inherited = {trait: level}
+    egg.inherited_from = trait
+
+
+def egg_trait(state: PetState, rng: random.Random) -> tuple[str, int] | None:
+    """Choose the trait and level the parent's egg inherits."""
+    if not state.traits:
+        return None
+    trait = rng.choice(state.traits)
+    level = trait_level(state, trait)
+    if upbringing(state) == "devoted":
+        level = min(level + 1, R.TRAIT_MAX_LEVEL)
+    return trait, level
+
+
 def lay_egg(
     state: PetState, now: float, rng: random.Random
 ) -> tuple[PetState, list[Event]]:
@@ -2308,23 +2327,15 @@ def lay_egg(
     # Chore treats earned today wait for the hatchling, and count toward today's limit.
     egg.chore_treats = list(state.chore_treats)
     egg.treats_waiting = state.treats_waiting
-    inherited = rng.choice(state.traits) if state.traits else None
-    if inherited:
-        level = trait_level(state, inherited)
-        if upbringing(state) == "devoted":
-            # A devoted parent hands its trait down one level deeper.
-            level = min(level + 1, R.TRAIT_MAX_LEVEL)
-        egg.traits = [inherited]
-        egg.trait_levels = {inherited: level}
-        egg.inherited = {inherited: level}
-        egg.inherited_from = inherited
+    if trait := egg_trait(state, rng):
+        inherit_egg_trait(egg, *trait)
     return egg, [
         {
             "type": "egg_laid",
             "generation": egg.generation,
             "parent_species": state.species,
-            "inherited_trait": inherited,
-            "level": egg.trait_levels.get(inherited) if inherited else None,
+            "inherited_trait": trait[0] if trait else None,
+            "level": trait[1] if trait else None,
         }
     ]
 

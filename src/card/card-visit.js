@@ -604,7 +604,6 @@ class HatchPetCardVisit extends HatchPetCardLooks {
       return;
     }
     s.screen.querySelector(".askday")?.remove();
-    if (s.confirm?.key === "lay_egg") s.confirm = null; // an armed lay can't carry on under a question (F1)
     const box = document.createElement("div");
     box.className = "askday";
     box.setAttribute("role", "group");

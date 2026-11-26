@@ -572,14 +572,14 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, inject
   const lockedKeys = Object.keys(a.locked || {});
   check(`shell: ${who} is below teen, so the show-offs are locked`, lockedKeys.length === 6, JSON.stringify(a.locked));
   check("shell: never hidden: every locked finish has a tile saying the stage that opens it",
-    lockedKeys.every((k) => opened.locked.includes(`${k === "twotone" ? "two-tone" : k} shell, opens at ${a.locked[k]}`)) &&
+    lockedKeys.every((k) => opened.locked.includes(`${k === "twotone" ? "two-tone" : k} shell, opens at ${a.locked[k]}, after 5 days of growth`)) &&
       opened.locked.length === lockedKeys.length, JSON.stringify(opened.locked));
   if (lockedKeys.length) {
     await cur().locator(`.status .tile[data-finish="${lockedKeys[0]}"]`).scrollIntoViewIfNeeded();
     await tap(lockedKeys[0]);
     const l = await look();
     check("shell: a locked tile says when and changes nothing",
-      l.note === "I get this one as a teen ♪" && l.finish === ownClass(a) && l.preview === "none" &&
+      l.note === "opens at teen, after 5 days of growth" && l.finish === ownClass(a) && l.preview === "none" &&
         (await attrOf(a.entity)) === null, brief(l));
     await shot("02e-shell-locked");
   }
@@ -2738,33 +2738,6 @@ async function main() {
     bday.armed === "sure? tap again" && bday.fastDouble.kept && bday.fastDouble.sent === 0, JSON.stringify(bday));
   check("the birthday phone message is off until you turn it on",
     bday.phoneOff === "false" && bday.phoneOn === "true", JSON.stringify(bday));
-  // Laying an egg shares the guard: a fast double tap lays nothing.
-  const egg = await page.locator("hatch-pet-card").evaluate(async (el) => {
-    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-    const s = el._slides[el._index];
-    const pressed = [];
-    const press = el._press;
-    const redraw = el._redraw;
-    el._press = (slide, key) => pressed.push(key);
-    el._redraw = () => {};
-    const was = s.request.dataset.key;
-    s.request.dataset.key = "lay_egg";
-    s.confirm = null;
-    s.request.click();
-    const armed = s.request.textContent;
-    await wait(150);
-    s.request.click();
-    const fast = pressed.length;
-    await wait(700);
-    s.request.click();
-    el._press = press;
-    el._redraw = redraw;
-    s.request.dataset.key = was ?? "";
-    if (!was) delete s.request.dataset.key;
-    return { armed, fast, pressed };
-  });
-  check("laying an egg takes two taps, with a pause between",
-    egg.armed === "sure? tap again" && egg.fast === 0 && egg.pressed.join() === "lay_egg", JSON.stringify(egg));
   // Taps coalesce: a second tap while a call is pending does nothing.
   const taps = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -2799,7 +2772,7 @@ async function main() {
   check("a double tap on feed sends one press, and the button is free again after",
     taps.feeds === 1 && taps.again === 2, JSON.stringify(taps));
   check("lights tapped twice send one service call", taps.lights === 1, JSON.stringify(taps));
-  // The confirm guard: a second tap a second after the first confirms (all three controls).
+  // The confirm guard: a second tap a second after the first confirms both forget controls.
   const slow = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const s = el._slides[el._index];
@@ -2825,22 +2798,6 @@ async function main() {
         if (s.mine) s.mine.birthday_kept = true; // the channel's copy, which the card reads first
         el._renderStatus(s, []);
       }
-      const pressed = [];
-      const press = el._press;
-      const redraw = el._redraw;
-      el._press = (slide, key) => pressed.push(key);
-      el._redraw = () => {};
-      const was = s.request.dataset.key;
-      s.request.dataset.key = "lay_egg";
-      s.confirm = null;
-      s.request.click();
-      await wait(1000);
-      s.request.click();
-      el._press = press;
-      el._redraw = redraw;
-      s.request.dataset.key = was ?? "";
-      if (!was) delete s.request.dataset.key;
-      out.egg = pressed.join();
     } finally {
       el._hass.callWS = realWS;
       s.confirm = null;
@@ -2848,8 +2805,8 @@ async function main() {
     }
     return out;
   });
-  check("on all three guarded controls a second tap a second later confirms",
-    slow.forgetbday && slow.forgetme && slow.egg === "lay_egg", JSON.stringify(slow));
+  check("on both forget controls a second tap a second later confirms",
+    slow.forgetbday && slow.forgetme, JSON.stringify(slow));
   // "Ask me again" for the favourites (memory plan M0-c): a row each in the settings sheet's
   // personal group, only on a personal screen with a bond and a favourite set; two taps, then one
   // virtual_pet/ask_again call with shared: false, and the row goes.
@@ -2913,17 +2870,16 @@ async function main() {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const s = el._slides[el._index];
     const realHass = el._hass;
-    const realPress = el._press;
     const lifeId = s.ids["sensor.life_stage"], selId = s.ids["select.next_egg"], moodId = s.ids["sensor.mood"];
     const life = realHass.states[lifeId], sel = realHass.states[selId], mood = realHass.states[moodId];
     const roster = life.attributes.egg_roster || [];
     const out = { rosterNames: Array.isArray(roster) && roster.length >= 3
       && roster.map((r) => r.name).join("|") === sel.attributes.options.slice(1).join("|") };
-    const calls = [], pressed = [];
+    const calls = [];
     let fail = null;
     const was = s.request.dataset.key;
     // The state this pet would send: stage, its raised creatures, its pick, a waiting world, the requests.
-    const put = ({ stage = "adult", raised, pick = null, nextWorld = null, eggRoster = roster, requests = ["lay_egg"], others = {} }) => {
+    const put = ({ stage = "adult", raised, pick = null, nextWorld = null, eggRoster = roster, requests = ["lay_egg"], others = {}, admin = true }) => {
       const states = { ...realHass.states,
         [lifeId]: { ...life, state: stage, attributes: { ...life.attributes, raised, egg_roster: eggRoster, next_egg: pick, next_world: nextWorld } },
         [moodId]: { ...mood, attributes: { ...mood.attributes, requests } },
@@ -2932,14 +2888,20 @@ async function main() {
         const other = el._slides[i], id = other.ids["sensor.life_stage"];
         states[id] = { ...realHass.states[id], attributes: { ...realHass.states[id].attributes, ...attrs } };
       }
-      el._hass = { ...realHass, states, callService: async (d, svc, data) => {
-        calls.push(`${d}.${svc}:${data.option ?? data.entity_id}`);
+      el._hass = { ...realHass, states, user: { ...realHass.user, is_admin: admin }, callWS: async (msg) => {
+        if (msg.type !== "virtual_pet/lay_egg") return realHass.callWS(msg);
+        calls.push(msg);
         if (fail) throw fail;
+        return msg.request_id ? { name: "Fern" } : null;
       } };
       s.drawnSig = null;
     };
     const ids = (offer) => offer?.offered.map((r) => r.id).join();
-    const rows = () => [...s.status.querySelectorAll(".layrow")].map((b) => b.textContent);
+    const picker = () => s.status.querySelector(".laypick");
+    const pick = (id) => {
+      picker().value = id;
+      picker().dispatchEvent(new Event("change"));
+    };
     const isOpen = () => !!s.laySheet && s.screen.classList.contains("show-status") && !!s.status.querySelector(".laygo");
     // Poll for the condition (bounded) rather than sleep a fixed time: the sheet draws in the click, but a
     // draw already in flight (below) can land on it.
@@ -2965,7 +2927,6 @@ async function main() {
     const settled = async () => { await el._update(); await wait(100); };
     const closed = () => !s.laySheet && !s.screen.classList.contains("show-status");
     const shut = () => { if (s.laySheet) el._closeLay(s); };
-    el._press = (slide, key) => pressed.push(key);
     const a = roster[0], b = roster[1], c = roster[2];
     // HA's pushes held off while the stub is on (as the name sheet below): a real push between two
     // puts closes the sheet (no lay_egg request in the real mood) and the taps open the status instead.
@@ -2974,51 +2935,58 @@ async function main() {
       // The offer: raised creatures of the egg's world, in egg_roster order; another world's id is dropped.
       put({ raised: [c.id, a.id, "not-in-this-roster"] });
       out.offer = ids(el._eggOffer(s)) === `${a.id},${c.id}`;
-      // Two or more offered: the first tap opens the sheet and presses nothing.
-      out.opens = await open() && pressed.length === 0 && s.confirm == null;
-      out.listed = rows().join("|") === ["surprise me", a.name, c.name].map((x) => x.toLowerCase()).join("|")
-        && s.status.querySelector(".layrow[aria-pressed=true]")?.textContent === "surprise me";
-      out.lines = s.status.querySelector(".sec").textContent === "a new egg"
-        && s.status.querySelector(".shellnote").textContent === "pick who hatches"
-        && s.status.querySelector(".laygo").textContent === "lay the egg"
-        && s.status.querySelector(".layback").textContent === "‹ not yet"
-        && /^lay the egg: .+ retires to the journal and a new egg takes its place$/.test(s.status.querySelector(".laygo").getAttribute("aria-label"));
-      // A creature row sends the select's own option string; the surprise row options[0], case and all.
-      s.status.querySelector(`.layrow[data-id="${c.id}"]`).click();
-      await wait(30);
-      s.status.querySelector('.layrow[data-id=""]').click();
-      await wait(30);
-      out.calls = calls.join("|") === `select.select_option:${c.name}|select.select_option:${sel.attributes.options[0]}`
-        && calls[1].endsWith(":Surprise me") === (sel.attributes.options[0] === "Surprise me");
-      // The row marks follow the state, and a pick outside the offer is read-only (N25), never named.
+      out.opens = await open() && calls.length === 0;
+      out.listed = [...picker().options].map((o) => o.textContent).join("|")
+        === ["surprise me", a.name, c.name].map((x) => x.toLowerCase()).join("|");
+      out.lines = s.status.querySelector("#lay-retire").textContent === "retire & replace"
+        && /retires to the journal/.test(s.status.querySelector("#lay-retire-note").textContent)
+        && s.status.querySelector("#lay-separate").textContent === "hatch in a separate shell"
+        && s.status.querySelector(".layback").textContent === "cancel";
       put({ raised: [a.id, c.id], pick: c.name });
       el._renderStatus(s, []);
-      out.marked = s.status.querySelector(".layrow[aria-pressed=true]")?.textContent === c.name.toLowerCase();
+      out.marked = picker().value === c.id;
       put({ raised: [a.id, c.id], pick: b.name });
       el._renderStatus(s, []);
-      out.outside = s.status.querySelector(".layrow.ro")?.textContent === "set in home assistant"
-        && !s.status.textContent.toLowerCase().includes(b.name.toLowerCase())
-        && s.status.querySelector(".layrow[aria-pressed=true]") === null;
-      // A refused select_option (a read-only login): C13', the sheet stays.
-      put({ raised: [a.id, c.id] });
-      fail = { code: "unauthorized", message: "Unauthorized" };
-      el._renderStatus(s, []);
-      s.status.querySelector(`.layrow[data-id="${a.id}"]`).click();
-      await wait(60);
-      out.refused = s.status.querySelector(".status-feedback")?.textContent === "this login can't choose, sorry" && s.laySheet;
-      fail = null;
-      // "‹ not yet" lays nothing and closes; the guard keeps a fast second tap from laying.
+      out.outside = picker().selectedOptions[0].textContent === "set in home assistant"
+        && !s.status.textContent.toLowerCase().includes(b.name.toLowerCase());
+      pick(c.id);
       s.status.querySelector(".layback").click();
-      out.back = closed() && pressed.length === 0;
-      await opened("back");
-      s.status.querySelector(".laygo").click(); // inside the guard window: the tap that opened it
-      out.fast = pressed.length === 0 && s.laySheet;
+      out.back = closed() && calls.length === 0;
+      await opened("retire");
+      s.status.querySelector(".laygo").click();
+      out.fast = calls.length === 0 && s.laySheet;
+      await wait(700);
+      pick(c.id);
+      s.status.querySelector(".laygo").click();
+      out.retires = await until(closed) && calls.length === 1 && calls[0].species === c.id && !calls[0].request_id;
+      el._layDrop(s);
+      await opened("separate");
+      await wait(700);
+      pick("");
+      const separate = s.status.querySelector(".layseparate");
+      separate.click();
+      separate.click();
+      out.separate = await until(() => s.layDraft.done)
+        && calls.length === 2 && calls[1].species === null && /^[0-9a-f]{32}$/.test(calls[1].request_id)
+        && /egg added in Fern's shell/.test(s.status.querySelector(".laymessage").textContent);
+      shut();
+      put({ raised: [a.id, c.id], admin: false });
+      await opened("non-admin");
+      out.adminOnly = s.status.querySelector(".layseparate").getAttribute("aria-disabled") === "true"
+        && /Home Assistant admin/.test(s.status.querySelector("#lay-separate-note").textContent);
+      fail = { code: "read_only" };
       await wait(700);
       s.status.querySelector(".laygo").click();
-      out.lays = pressed.join() === "lay_egg" && closed();
-      pressed.length = 0;
-      // Every other exit: the status chip, the pet leaving (a swipe), the shared-screen switch, a pet that
-      // can no longer lay, a world change that leaves one raised creature, the lay itself (above).
+      out.refused = await until(() => /this login can’t lay/.test(s.status.querySelector(".laymessage")?.textContent))
+        && s.laySheet;
+      shut();
+      fail = null;
+      for (const raised of [[a.id], [], undefined]) {
+        put({ raised });
+        out[`choicesLargeEnough${raised?.length ?? "old"}`] = await open()
+          && !!s.status.querySelector(".layseparate");
+        shut();
+      }
       await opened("chip");
       el._toggleStatus(s);
       out.chip = closed();
@@ -3026,47 +2994,25 @@ async function main() {
       if (n > 1) {
         await opened("swipe");
         el._go((el._index + 1) % n);
-        const gone = closed();
+        out.swipe = closed();
         el._go(el._slides.indexOf(s));
-        out.swipe = gone;
       } else out.swipe = true;
-      await opened("sharedExit");
+      await opened("shared exit");
       localStorage.setItem("hatch-shared-screen", "on");
       el._goShared();
       out.sharedExit = closed();
       await settled();
-      // Shared screens may lay: the sheet opens and lays there too.
       put({ raised: [a.id, c.id] });
       out.sharedOpens = await open();
-      await wait(700);
-      s.status.querySelector(".laygo").click();
-      out.sharedLays = pressed.join() === "lay_egg" && closed();
-      pressed.length = 0;
+      shut();
       localStorage.setItem("hatch-shared-screen", "off");
       el._goPersonal();
       await settled();
       put({ raised: [a.id, c.id] });
-      await opened("cannotLay");
+      await opened("cannot lay");
       put({ raised: [a.id, c.id], requests: [] });
       el._redraw(s);
-      await wait(300); // _update is async
-      out.cannotLay = closed();
-      put({ raised: [a.id, c.id] });
-      await opened("oneLeft");
-      put({ raised: [a.id] });
-      el._redraw(s);
-      await wait(300); // _update is async
-      out.oneLeft = closed();
-      // Fewer than two offered (one, none, or a state without `raised`): the old two taps, no sheet.
-      for (const raised of [[a.id], [], undefined]) {
-        put({ raised });
-        s.request.dataset.key = "lay_egg";
-        s.confirm = null;
-        s.request.click();
-        await wait(30);
-        out[`twoTaps${raised?.length ?? "none"}`] = closed() && s.request.textContent === "sure? tap again" && pressed.length === 0;
-        s.confirm = null;
-      }
+      out.cannotLay = await until(closed);
       // A waiting world change: the offer is that world's, raised by this card's pets there.
       const worlds = el._worlds, own = life.attributes.world;
       const other = Object.keys(worlds).find((k) => k !== own);
@@ -3101,7 +3047,6 @@ async function main() {
       out.coming = el._eggComing(s) === `a ${c.name.toLowerCase()} is coming` && el._eggComing(s) === null;
       localStorage.removeItem(key);
     } finally {
-      el._press = realPress;
       el._hass = realHass;
       release();
       localStorage.setItem("hatch-shared-screen", "off");
@@ -3382,24 +3327,6 @@ async function main() {
   });
   check("UX3 F9: big text makes the bubble 16 px and the chips 15 px, and holds a line 1.5 times as long",
     f9.fontOff === "14px" && f9.fontOn === "16px" && f9.chip === "15px" && f9.big - f9.normal > 2000 && f9.big - f9.normal < 2500, JSON.stringify(f9));
-  // F12: the lay's first tap is answered by the pet itself.
-  const f12 = await card3.evaluate((el) => {
-    const s = el._slides[el._index];
-    const press = el._press;
-    el._press = () => {};
-    s.queue = []; s.sayUntil = 0; s.sayClass = 0; s.confirm = null; s.game = null;
-    s.screen.querySelector(".askday")?.remove();
-    s.request.dataset.key = "lay_egg";
-    s.request.click();
-    const out = { said: s.sayEntry?.text, cls: s.sayClass, armed: s.request.textContent };
-    el._press = press;
-    s.confirm = null;
-    s.request.dataset.key = "";
-    delete s.request.dataset.key;
-    return out;
-  });
-  check("UX3 F12: the lay's \"sure?\" is also said by the pet, once",
-    f12.said === "i'll wait for you in the journal ♥" && f12.cls === 4 && f12.armed === "sure? tap again", JSON.stringify(f12));
   // A close friend coming home: "you're home!!" to them (their own channel's
   // friend_home), and nothing for anyone else's arrival on a personal card.
   await evaluate((me) => localStorage.removeItem(`hatch-welcomed-${me}`), me);

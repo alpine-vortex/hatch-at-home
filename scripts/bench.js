@@ -879,8 +879,8 @@ const PRESETS = {
       out.push({ name: `lay/330/${world}-big`, group: "lay-330", label: `${world}, big text`, width: 330, bigText: true,
         ...lead(world) });
     }
-    out.push({ name: "lay/330/picked", group: "lay-330", label: "one picked", width: 330, scroll: '.layrow[aria-pressed="true"]', ...lead("woodland", { next_egg: "Black-tailed deer" }) });
-    out.push({ name: "lay/330/outside", group: "lay-330", label: "set in HA, not offered", width: 330, scroll: ".layrow.ro",
+    out.push({ name: "lay/330/picked", group: "lay-330", label: "one picked", width: 330, scroll: ".laypick", ...lead("woodland", { next_egg: "Black-tailed deer" }) });
+    out.push({ name: "lay/330/outside", group: "lay-330", label: "set in HA, not offered", width: 330, scroll: ".laypick",
       ...lead("woodland", { next_egg: "Banana slug", raised: ["bird", "squirrel", "deer"] }) });
     out.push({ name: "lay/330/next-world", group: "lay-330", label: "next world: tidepool", width: 330,
       ...lead("woodland", { lay: { egg_world: "tidepool" }, next_world: "Tidepool" }),

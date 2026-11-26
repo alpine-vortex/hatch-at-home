@@ -728,9 +728,9 @@ const WANT_WORDS = { call_hunger: "a meal", call_dirty: "a bath", call_energy: "
   call_happiness: "play", sick: "medicine", blanket: "a blanket", fan: "a fan" };
 const REQUEST_LABELS = { blanket: "blanket?", fan: "fan?", lay_egg: "lay an egg?" };
 const REQUEST_ARIA = {
-  lay_egg: "Lay an egg: the pet retires to the journal and a new egg takes its place",
+  lay_egg: "Lay an egg options",
 };
-// Two taps for anything that can't be undone (lay an egg, forget my birthday,
+// Two taps for anything that can't be undone (forget my birthday,
 // forget my data). The first arms it; the second confirms only within
 // CONFIRM_MS of arming, and only after CONFIRM_GAP_MS since the tap before it,
 // so a fast double (or triple) tap is one tap. Kept on the slide by control: a
@@ -764,7 +764,6 @@ function confirmTap(s, key, now = Date.now()) {
 const confirmArmed = (s, key) => s.confirm?.key === key && Date.now() - s.confirm.at < CONFIRM_MS;
 // Their armed words: the button's text, and its aria-label.
 const CONFIRM_ARIA = {
-  lay_egg: "Sure? Press again to lay an egg",
   forget_birthday: "Sure? Press again to forget my birthday",
   forget_me: "Sure? Press again to forget my data",
   memory_off: "Sure? Press again to forget what the pets remember about you",
