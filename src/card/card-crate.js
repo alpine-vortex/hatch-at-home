@@ -62,6 +62,10 @@ class HatchPetCardCrate extends HatchPetCardBoard {
     this._boardsChoose(s);
   }
 
+  _boardsChoosing(s) {
+    return !!s.game?.picking && s.game.boards === true;
+  }
+
   _hopRowSet(s, row) {
     const changed = super._hopRowSet(s, row);
     row.textContent = CRATE_COPY.row;
@@ -72,14 +76,18 @@ class HatchPetCardCrate extends HatchPetCardBoard {
   _boardsChoose(s) {
     const picking = s.game;
     if (!picking?.picking || picking.crateLoading) return;
+    picking.boards = true;
     const state = s.gameBox.querySelector(".ghop")?.dataset.state || "open";
     const pick = s.gameBox.querySelector(".gpick");
     pick.innerHTML = `<button data-board="hop" aria-label="${HOP_COPY.rowStateAria[state]}">${HOP_COPY.rowState[state]}</button>` +
-      `<button data-board="crate" aria-label="${CRATE_COPY.boardsAria}">${CRATE_COPY.boards}</button>`;
+      `<button data-board="crate" aria-label="${CRATE_COPY.boardsAria}">${CRATE_COPY.boards}</button>` +
+      (s.house?.gameplay?.household_hop_enabled ? '<button data-board="household">Household Hop</button>' : "");
     for (const b of pick.querySelectorAll("[data-board]")) {
+      if (b.dataset.board === "household") this._householdHopEntry?.(s, b);
       b.addEventListener("click", () => {
         this._tapped(b, s);
         if (b.dataset.board === "hop") this._hopOpen(s);
+        else if (b.dataset.board === "household") this._householdHopOpen(s, s.buttons.play);
         else this._crateLevels(s);
       });
     }
@@ -93,6 +101,7 @@ class HatchPetCardCrate extends HatchPetCardBoard {
   _crateLevels(s) {
     const picking = s.game;
     if (!picking?.picking || picking.crateLoading) return;
+    picking.boards = false;
     const pick = s.gameBox.querySelector(".gpick");
     pick.innerHTML = CRATE_LEVELS.map(([key]) =>
       `<button data-crate="${key}" aria-label="${CRATE_COPY.levelAria[key]}">${CRATE_COPY.level[key]}</button>`).join("") +

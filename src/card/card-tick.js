@@ -483,6 +483,7 @@ class HatchPetCardTick extends HatchPetCardSitter {
       : Array.isArray(sig) && sig.length ? ["signature"] : [];
     if (this._promisePractice(s)) return; // the promise's practice, days 1-3 (F3)
     if (this._skyReact(s, isCalm)) return; // its sky is up: a body reaction, once a day (species nature)
+    if (!s.vroom && this._habitatIdle?.(s)) return;
     // While a robot is cleaning (vroom) it is the choice: across the floor, and the pet perks.
     const move = s.vroom && !isCalm && !s.screen.classList.contains("fx-robot")
       ? "robot" : pick(this._idleMoves(s, own.length > 0, isCalm));

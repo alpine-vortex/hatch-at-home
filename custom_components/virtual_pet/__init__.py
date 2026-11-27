@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from homeassistant.auth.permissions.const import POLICY_CONTROL
+from homeassistant.auth.permissions.const import POLICY_CONTROL, POLICY_READ
 from homeassistant.components import persistent_notification, websocket_api
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
@@ -33,7 +33,19 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
-from . import channel, crate_push, notify, rates as R
+from . import (
+    activity_support,
+    channel,
+    crate_push,
+    family_bedtime,
+    habitat,
+    household_hop,
+    notify,
+    outing,
+    pond_channel,
+    rates as R,
+    tasting,
+)
 from .const import (
     ATTR_ACTION,
     ATTR_CATEGORY,
@@ -326,6 +338,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_rename)
     websocket_api.async_register_command(hass, websocket_collect)
     websocket_api.async_register_command(hass, websocket_collection)
+    pond_channel.register(hass)
+    outing.register(hass)
+    habitat.register(hass)
+    family_bedtime.register(hass)
+    household_hop.register(hass)
+    tasting.register(hass)
 
     async def fast_forward(call: ServiceCall) -> ServiceResponse:
         entries: list[PetConfigEntry] = hass.config_entries.async_loaded_entries(DOMAIN)
@@ -1129,10 +1147,7 @@ def websocket_subscribe(
     """The private channel: the signed-in person's own view of a pet (their
     bond, their switches, their moments) and the house's, pushed to this
     connection alone as it changes. A shared screen gets the house's only."""
-    entity = er.async_get(hass).async_get(msg["entity_id"])
-    pet: PetCoordinator | None = (
-        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
-    )
+    pet = activity_support.pet_for(hass, connection, msg["entity_id"])
     if pet is None:  # also mid-reload: the card asks again
         connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
         return
@@ -1140,7 +1155,8 @@ def websocket_subscribe(
 
     @callback
     def send(payload: dict) -> None:
-        connection.send_message(websocket_api.event_message(msg["id"], payload))
+        if connection.user.permissions.check_entity(msg["entity_id"], POLICY_READ):
+            connection.send_message(websocket_api.event_message(msg["id"], payload))
 
     admin = connection.user.is_admin
     token, connection.subscriptions[msg["id"]] = channel.add(

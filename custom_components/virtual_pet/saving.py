@@ -9,7 +9,7 @@ call, and once a change has waited R.SAVE_MAX_DELAY it writes at once.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from homeassistant.core import CoreState, HomeAssistant, callback
@@ -28,10 +28,13 @@ class CappedSave:
         hass: HomeAssistant,
         store: Store[Any],
         data_func: Callable[[], Any],
+        *,
+        flush: Callable[[Callable[[], Any]], Awaitable[None]] | None = None,
     ) -> None:
         self._hass = hass
         self._store = store
         self._data_func = data_func
+        self._flush = flush
         # Loop time of the oldest change not yet written, or None when written.
         self._dirty_since: float | None = None
 
@@ -51,6 +54,9 @@ class CappedSave:
             self._dirty_since = now
         elif now - self._dirty_since >= R.SAVE_MAX_DELAY:
             self._dirty_since = None
-            self._hass.async_create_task(
-                self._store.async_save(self._data_func()), eager_start=True
+            write = (
+                self._flush(self._data_func)
+                if self._flush is not None
+                else self._store.async_save(self._data_func())
             )
+            self._hass.async_create_task(write, eager_start=True)

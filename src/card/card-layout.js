@@ -640,6 +640,7 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     s.vroom = flags.includes("vroom") && !asleep; // a robot is cleaning (H4): idle sends it across
     s.moodState = mood?.state;
     s.calling = calling;
+    s.sick = flags.includes("sick");
     const rainScene = scene === "rain" && !!sp.backgrounds?.rain;
     s.screen.classList.toggle("raining", flags.includes("rainy") && !rainScene);
     s.screen.classList.toggle("watery", world.mess === "murk");

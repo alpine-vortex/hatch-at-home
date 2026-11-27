@@ -1,4 +1,4 @@
-class HatchPetCard extends HatchPetCardLink {
+class HatchPetCard extends HatchPetCardTasting {
   // --- Trait flair ----------------------------------------------------------
 
   _flairTick(s) {

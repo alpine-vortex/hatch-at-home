@@ -128,6 +128,7 @@ async def test_each_person_hears_only_their_own_bond(
     }
     visit = mine["house"].pop("visit")  # today's visit (or none): no person in it
     assert visit is None or set(visit) == {"day", "id", "hours", "from", "until"}
+    assert len(mine["house"].pop("gameplay")["pet_ref"]) == 32
     # No ids; sitter None: somebody's home (plan sitter §5.3).
     assert mine["house"] == {"media": None, "dream": None, "basket": 0, "sitter": None}
     assert mine["moments"] == []
@@ -177,6 +178,7 @@ async def test_a_shared_screen_hears_the_house_only(
                 "basket": 0,
                 "sitter": None,
                 "house_open_on": False,
+                "gameplay": snapshot["house"]["gameplay"],
             }
         }
     ]

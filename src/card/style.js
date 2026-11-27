@@ -1519,7 +1519,7 @@ const STYLE = `
   .hearts .off { opacity: .25; }
   .jolder { display: block; border: none; background: none; padding: 0; min-height: 44px; min-width: 44px;
     font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
-  .jlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 0;
+  .jlink, .furnishlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 0;
     min-height: 44px; min-width: 44px;
     font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
   /* A sheet row (UX fix 1, F5): the label takes the room, the switch sits at the right edge,
@@ -1666,7 +1666,8 @@ const STYLE = `
   ha-card.bigtext .status { font-size: 16px; }
   ha-card.bigtext .status .log, ha-card.bigtext .status .jlist, ha-card.bigtext .status .photos,
   ha-card.bigtext .status .status-feedback, ha-card.bigtext .status .sback, ha-card.bigtext .status .jlink,
-  ha-card.bigtext .status .flink, ha-card.bigtext .status .wlink, ha-card.bigtext .status .mlink, ha-card.bigtext .status .jolder,
+  ha-card.bigtext .status .furnishlink, ha-card.bigtext .status .flink, ha-card.bigtext .status .wlink,
+  ha-card.bigtext .status .mlink, ha-card.bigtext .status .jolder,
   ha-card.bigtext .status .fheart { font-size: 15px; }
   ha-card.bigtext .status .laylist .bell,
   ha-card.bigtext .status .namego, ha-card.bigtext .status .namechange, ha-card.bigtext .status .nameerr { font-size: 15px; }

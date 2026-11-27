@@ -10,7 +10,7 @@
 //     owns,      // owns the screen (default true): the card's _owned(s), section 3.7
 //     busy,      // the director treats the device as busy (default true)
 //     exit,      // { slot: 1-8 | null, escape, status: "end" | "keep",
-//                //   idleMs, idleAt(s), idleHold(s), on: ["asleep" | "egg"] }
+//                //   idleMs, idleAt(s), idleHold(s), on: ["asleep" | "egg" | "calling"] }
 //     announce,  // the lead of the one announcement when the buttons swap
 //     onExit }   // optional (card, s, reason): ends whatever the mode started
 // A slot: { icon, cap, aria, title, act, enabled, on, keys }. `cap`, `aria` and `title` are a string or a
@@ -23,7 +23,7 @@
 const SHELL_SLOTS = 8;
 // The reasons a mode may list in exit.on (the always-on ones, a slide change, another pet on the
 // slide, the card going, a reload, cannot be turned off and are not listed).
-const SHELL_EXIT_ON = Object.freeze(["asleep", "egg"]);
+const SHELL_EXIT_ON = Object.freeze(["asleep", "egg", "calling"]);
 const SHELL_EXIT_STATUS = Object.freeze(["end", "keep"]);
 // One colour for every game (owner decision D5), not the world's accent. A later non-game mode may add
 // its own key.

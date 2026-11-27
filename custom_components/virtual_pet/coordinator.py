@@ -45,13 +45,19 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import TemperatureConverter
 
 from . import (
+    activity_support,
     channel,
     crate_push,
+    family_bedtime,
+    habitat,
     hop,
+    household_hop,
     model,
     notify,
     people as P,
     rates as R,
+    shore_crab,
+    tasting,
     wellbeing,
 )
 from .backup import (
@@ -234,6 +240,33 @@ def _log_damage(message: str, title: str, err: BaseException) -> None:
 class PetStore(Store[dict[str, Any]]):
     """The pet's JSON file, with a hook for future schema migrations."""
 
+    async def async_save_required(self, snapshot: Callable[[], dict[str, Any]]) -> None:
+        """Use HA's normal writer lock and report IO failures to the caller."""
+        async with self._write_lock:
+            if self._read_only:
+                raise OSError("The companion save is read-only")
+            self._manager.async_invalidate(self.key)
+            self._async_cleanup_delay_listener()
+            self._async_cleanup_final_write_listener()
+            # The new snapshot includes everything queued by a delayed write.
+            # A change during this write will schedule its own view afterwards.
+            self._data = None
+            await self._async_write_data(
+                {
+                    "version": self.version,
+                    "minor_version": self.minor_version,
+                    "key": self.key,
+                    "data": snapshot(),
+                }
+            )
+
+    async def async_save_capped(self, snapshot: Callable[[], dict[str, Any]]) -> None:
+        """Resolve a capped ordinary save after earlier gameplay writes finish."""
+        try:
+            await self.async_save_required(snapshot)
+        except Exception as err:
+            LOGGER.error("Could not save %s (%s)", self.key, type(err).__name__)
+
     async def _async_migrate_func(
         self,
         old_major_version: int,
@@ -265,9 +298,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             STORE_VERSION,
             f"{DOMAIN}.{entry.entry_id}",
             minor_version=STORE_MINOR_VERSION,
+            atomic_writes=True,
+            serialize_in_event_loop=True,
         )
         # Late-bound: self.state is replaced on load and recovery.
-        self._saver = CappedSave(hass, self.store, lambda: self._state_dict())
+        self._saver = CappedSave(
+            hass, self.store, self._state_dict, flush=self.store.async_save_capped
+        )
+        self.gameplay_lock = asyncio.Lock()
         # Filled in by async_load from the files in frontend/.
         self.world: str = entry.data.get(CONF_WORLD, DEFAULT_WORLD)
         self.world_name = self.world
@@ -569,12 +607,17 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if data is None and self.config_entry.data.get(CONF_NEW_PET):
             # A fresh entry, including an egg laid in a separate shell.
             self.state = model.PetState.new(title, now)
+            linked_egg = False
             if seed := self.config_entry.data.get(CONF_EGG_SEED):
                 self.state.egg_choice = seed["species"]
                 if trait := seed["trait"]:
                     model.inherit_egg_trait(self.state, *trait)
+                linked_egg = family_bedtime.save_seed(self, seed.get("parent"))
             LOGGER.debug("New egg for %s", self.pet_id)
-            await self.store.async_save(self.state.to_dict())  # welcome once only
+            if linked_egg:
+                await self.async_save_now()  # keep the seed until the link is durable
+            else:
+                await self.store.async_save(self.state.to_dict())  # welcome once only
             self._first_saved()
             if seed is None:
                 self._welcome()  # the lay sheet itself confirms a separate shell
@@ -1257,7 +1300,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if state is not None and state.species:
             model.pick_favourite(state, self.likes.get(state.species, []), self.rng)
 
-    def _fire(self, events: list[model.Event], simulated: bool = False) -> None:
+    def _fire(
+        self,
+        events: list[model.Event],
+        simulated: bool = False,
+        *,
+        tasting: bool = False,
+    ) -> None:
         if rounds := [e for e in events if e["type"] == "sitter_round"]:
             # The sitter's rounds never reach the bus or the moments (plan sitter
             # §5.4): the last one goes to the cards' house.sitter only.
@@ -1333,7 +1382,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._holiday_morning()
             self._birthday_morning()
             self._fire(self._daily_wish(self._now()))
-        self._check_ins(events)
+        self._check_ins(events, tasting=tasting)
 
     # --- Daily check-ins: the wish of the day, and dreams ----------------------
 
@@ -1389,7 +1438,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         In every stage, asleep, away or an egg: it is the server's, not the
         pet's."""
         assert self.state is not None
-        if model.daily_visit(
+        offer_changed = shore_crab.capture_offer(self, now)
+        visit_changed = model.daily_visit(
             self.state,
             now,
             self._today(now)[0],
@@ -1400,7 +1450,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             dt_util.get_default_time_zone(),
             finds=self.finds,
             known=self.known_finds,
-        ):
+        )
+        if visit_changed or offer_changed:
             self._save()
 
     def _roll_find(self, now: float) -> None:
@@ -1559,11 +1610,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             view["gifts"] = [g for g in bond.get("gifts", ()) if g in known_finds]
         return view
 
-    async def async_save_now(self) -> None:
-        """Write the save at once (after a collect: a crash can't bring the
-        basket back)."""
+    async def async_save_now(
+        self, *, snapshot: Callable[[], dict[str, Any]] | None = None
+    ) -> None:
+        """Persist current state or a proposed snapshot before acknowledging."""
         assert self.state is not None
-        await self.store.async_save(self.state.to_dict())
+        await self.store.async_save_required(snapshot or self._state_dict)
 
     def _visit_view(self) -> dict[str, Any] | None:
         """Today's visit for every screen: {day, id, hours, from, until} (epoch
@@ -1616,7 +1668,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         ):
             self._save()
 
-    def _check_ins(self, events: list[model.Event]) -> None:
+    def _check_ins(self, events: list[model.Event], *, tasting: bool = False) -> None:
         """Care, games and moments: they may grant the wish, and are things to
         dream about."""
         state = self.state
@@ -1638,6 +1690,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         for e in events:
             kind = e["type"]
             if kind == "care" and e.get("result") == model.OK and e["action"] in care:
+                if tasting and e["action"] == "snack":
+                    continue  # The tasting wish was saved with the snack; its scene owns the reaction.
                 granted += self._grant(care[e["action"]], by, now)
                 if e["action"] == "snack":
                     own = model.life_stage(state) in self.own_food_stages.get(
@@ -3342,6 +3396,18 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # Always present (None: nobody's away), so a card can tell no visit from
         # an older server that sends none.
         view["sitter"] = self._sitter_view()
+        if self.state is not None:
+            view["gameplay"] = activity_support.view(self)
+            if (offer := shore_crab.view(self)) is not None:
+                view["gameplay"]["shore_crab"] = offer
+            if (furnishing := habitat.view(self)) is not None:
+                view["gameplay"]["habitat"] = furnishing
+            if (bedtime := family_bedtime.view(self)) is not None:
+                view["gameplay"]["family_bedtime"] = bedtime
+            view["gameplay"]["household_hop_enabled"] = True
+            view["gameplay"]["household_hop"] = household_hop.view(self)
+            if (snack := tasting.view(self)) is not None:
+                view["gameplay"]["tasting"] = snack
         return view
 
     def _sitter_view(self) -> dict[str, Any] | None:
@@ -3521,24 +3587,56 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     async def async_action(self, action: str, context: Context | None) -> str:
         """Apply a care action from a button."""
-        assert self.state is not None
-        now = self._now()
-        self._advance(now)
+        if action == "snack":
+            async with self.gameplay_lock:
+                return await self._async_care_action(action, context)
+        return await self._async_care_action(action, context)
+
+    async def _async_care_action(self, action: str, context: Context | None) -> str:
         by = await self._who(context)
         person = await self._person(context)
-        result, events = model.apply_action(
-            self.state, action, now, self.rng, by, self.settings
-        )
-        if result == model.OK:
-            events += self._bond(person, "care")
-        self._actor = person
-        try:
-            self._fire(events)
-        finally:
-            self._actor = None
+        now = self._now()
+        self._advance(now)
+        result, events = self._apply_care_action(action, now, by, person)
+        self._fire_care(events, person)
         self._save()
         self._publish()
         return result
+
+    def _apply_care_action(
+        self,
+        action: str,
+        now: float,
+        by: str | None,
+        person: str | None,
+        *,
+        tasting: bool = False,
+    ) -> tuple[str, list[model.Event]]:
+        """Apply the shared care rules. Include tasting credits before its write."""
+        assert self.state is not None
+        state = self.state
+        result, events = model.apply_action(
+            state, action, now, self.rng, by, self.settings
+        )
+        if result == model.OK:
+            day, hour = self._today(now)
+            if person is not None:
+                events += model.add_bond(state, person, "care", day, self.rng)
+            if tasting:
+                granted = model.grant_wish(state, "snack", now, day, hour, by)
+                events += granted
+                if granted and person is not None:
+                    events += model.add_bond(state, person, "wish", day, self.rng)
+        return result, events
+
+    def _fire_care(
+        self, events: list[model.Event], person: str | None, *, tasting: bool = False
+    ) -> None:
+        self._actor = person
+        try:
+            self._fire(events, tasting=tasting)
+        finally:
+            self._actor = None
 
     async def async_forget_games(self, user: str) -> None:
         """Forget my data: this person's parked dig goes, and a dig in progress
@@ -3560,7 +3658,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             del self.state.dream["user"]
             dropped = True
         if dropped:
-            await self.store.async_save(self.state.to_dict())
+            await self.store.async_save_capped(self._state_dict)
 
     async def async_end_game(
         self, kind: str, context: Context | None = None, shared: bool = False
@@ -4118,6 +4216,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         use_choice: bool = False,
     ) -> bool:
         """Start the next generation: the adult retires, an egg takes its place."""
+        async with self.gameplay_lock:
+            return self._lay_egg(
+                generation=generation, choice=choice, use_choice=use_choice
+            )
+
+    def _lay_egg(
+        self, *, generation: int | None, choice: str | None, use_choice: bool
+    ) -> bool:
         assert self.state is not None
         now = self._now()
         self._advance(now)
@@ -4153,6 +4259,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         return {
             "species": species if use_choice else self.state.egg_choice,
             "trait": model.egg_trait(self.state, self.rng),
+            "parent": family_bedtime.parent_seed(self),
         }
 
     async def async_rename(self, name: str) -> None:
@@ -4206,32 +4313,93 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     ) -> str:
         """Flip the lights-out switch. Someone putting it to bed in the evening
         tucked it in: it says goodnight to them, and thanks them in the morning."""
+        async with self.gameplay_lock:
+            return await self._set_lights_out(on, context)
+
+    async def _set_lights_out(
+        self,
+        on: bool,
+        context: Context | None,
+        *,
+        family_request: str | None = None,
+        can_tuck: Callable[[float], bool] | None = None,
+    ) -> str:
+        """Apply the ordinary lights action while holding the gameplay lock."""
+        person = await self._person(context)
         assert self.state is not None
         now = self._now()
         self._advance(now)
-        events = model.set_lights_out(self.state, on, now, self.settings)
-        hour = self._today(now)[1]
-        evening = hour >= R.TUCK_IN_EVENING_HOUR or hour < 3
-        person = await self._person(context) if on and evening else None
-        if person and any(
+        if can_tuck is not None and not can_tuck(now):
+            return "not_now"
+        state = self.state
+        before = copy.deepcopy(vars(state)) if family_request else None
+        events = model.set_lights_out(state, on, now, self.settings)
+        day, hour = self._today(now)
+        tucked = family_bedtime.evening(hour) and any(
             e["type"] == "fell_asleep" and e.get("how") == "lights" for e in events
-        ):
-            model.bond_of(self.state, person)["tucked_at"] = now
+        )
+        if tucked and person:
+            model.bond_of(state, person)["tucked_at"] = now
             events.append({"type": "tucked_in", "user": person})
-        self._actor = person or await self._person(context)
+        echo = None
+        if tucked and family_request:
+            record = family_bedtime.record(self)
+            assert record is not None
+            record["completed"] = family_request
+            # These ordinary tuck-in effects belong in the same saved state.
+            # _fire's check-in sees the wish is already granted after the write.
+            granted = model.grant_wish(state, "tuck_in", now, day, hour, None)
+            events += granted
+            if person and granted:
+                events += model.add_bond(state, person, "wish", day, self.rng)
+            assert before is not None
+            changed = {
+                key: (value, copy.deepcopy(vars(state)[key]))
+                for key, value in before.items()
+                if value != vars(state)[key]
+            }
+            try:
+                await self.async_save_now()
+            except BaseException:
+                # Care can advance while the write yields. Leave those newer
+                # values alone when rolling back this attempted bedtime.
+                for key, (old, written) in changed.items():
+                    if vars(state)[key] == written:
+                        vars(state)[key] = old
+                self._save()
+                raise
+        elif tucked:
+            echo = family_bedtime.consume_echo(self)
+            if echo:
+                try:
+                    await self.async_save_now()
+                except Exception:
+                    if record := family_bedtime.record(self):
+                        record.pop("echoed", None)
+                    LOGGER.warning("Could not save the bedtime echo", exc_info=True)
+                    echo = None
+        self._actor = person
         try:
             self._fire(events)  # may grant the "tuck me in" wish: theirs
         finally:
             self._actor = None
         self._save()
         self._publish()
+        if echo:
+            self._say_live(
+                {
+                    "type": "family_bedtime_echo",
+                    "id": echo,
+                    "at": dt_util.utc_from_timestamp(now).isoformat(),
+                }
+            )
         return next(
             (
                 e["result"]
                 for e in events
                 if e["type"] == "care" and e["action"] == model.LIGHTS_OUT
             ),
-            model.OK,
+            "not_now" if family_request and not tucked else model.OK,
         )
 
     async def async_fast_forward(self, hours: float) -> dict[str, Any]:
@@ -4271,8 +4439,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     async def async_shutdown(self) -> None:
         """Write the pet to disk now."""
         await super().async_shutdown()
-        if self.state is not None:
-            await self.store.async_save(self.state.to_dict())
+        async with self.gameplay_lock:
+            if self.state is not None:
+                await self.store.async_save_capped(self._state_dict)
         await self.people.async_save_now()
 
 

@@ -56,6 +56,8 @@ const MEMORY_LABELS = {
 // the date follows after a comma. The caller escapes it.
 const MEMORY_LINES = {
   sitter_visit: (m, name) => `The sitter looked after ${(typeof m.name === "string" && m.name) || name || "the pet"}`,
+  outing_pool: (m) => `Spotted a sea star together on a Tidepool outing (gen ${Number(m.generation) || 1})`,
+  outing_ridge: (m) => `Found sea glass together on a Tidepool outing (gen ${Number(m.generation) || 1})`,
 };
 // The journal shows the newest this many memories, and at most this many of them the sitter's.
 const MEMORIES_SHOWN = 6;

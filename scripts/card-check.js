@@ -5271,7 +5271,8 @@ async function main() {
     await cur().locator(".ghop").click();
     await page.waitForTimeout(200);
     const boards = await card.evaluate((el) => [...el._slides[el._index].gameBox.querySelectorAll(".gpick [data-board]")].map((b) => b.dataset.board));
-    check("crate: one row, \"Today's boards\", offers Hop and Crate Push", rowTxt === "Today's boards" && boards.join() === "hop,crate", JSON.stringify([rowTxt, boards]));
+    check("Today's boards offers Hop, Crate Push and Household Hop in one row",
+      rowTxt === "Today's boards" && boards.join() === "hop,crate,household", JSON.stringify([rowTxt, boards]));
     await cur().locator('.gpick [data-board="crate"]').click();
     await page.waitForTimeout(300);
     await shot("crate-b-levels");

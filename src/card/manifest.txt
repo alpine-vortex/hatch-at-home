@@ -32,6 +32,15 @@ card-crate.js
 card-season.js
 card-visitors.js
 card-link.js
+card-activity.js
+card-fetch.js
+card-pond-channel.js
+card-outing.js
+card-shore-crab.js
+card-habitat.js
+card-family-bedtime.js
+card-household-hop.js
+card-tasting.js
 card-flair.js
 editor.js
 boot.js

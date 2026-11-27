@@ -8,7 +8,7 @@ function sharedSheet() {
     try {
       if (typeof CSSStyleSheet === "function" && "adoptedStyleSheets" in Document.prototype) {
         const sheet = new CSSStyleSheet();
-        sheet.replaceSync(STYLE + SCENE_STYLE);
+        sheet.replaceSync(STYLE + SCENE_STYLE + activityStyle());
         cardSheet = sheet;
       }
     } catch (e) { cardSheet = null; }
@@ -25,7 +25,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
     const sheet = sharedSheet();
     if (sheet) root.adoptedStyleSheets = [sheet];
     root.innerHTML = `
-      ${sheet ? "" : `<style>${STYLE}${SCENE_STYLE}</style>`}${MONO_FILTER}
+      ${sheet ? "" : `<style>${STYLE}${SCENE_STYLE}${activityStyle()}</style>`}${MONO_FILTER}
       <ha-card>
         <div class="head">
           <div><div class="title-row"><img class="emblem" alt=""><div class="title"></div></div>

@@ -167,7 +167,7 @@ test("rule: the cue starts from the press, never from a cap class; its callers a
   assert.ok(!/classList|pressed|tapped|pending|failed|querySelector/.test(body), "_rimCue reads no class");
   assert.match(body, /HATCH_DEVICE_FX\.rim\(this\._director, s, action, `rim-\$\{this\._rimSeq\}`, this\._dirEnv\(\)\)/);
   const callers = [...src.matchAll(/this\._rimCue\(s, ([^)]*)\)/g)].map((m) => m[1]);
-  assert.deepStrictEqual(callers.sort(), ['"lights"', "button?.dataset?.action", "button?.dataset?.action"]);
+  assert.deepStrictEqual(callers.sort(), ['"lights"', '"lights"', "button?.dataset?.action", "button?.dataset?.action"]);
   // _press: after the status is closed and the call is known to go out, ahead of the scene's start
   const press = method("_press");
   assert.ok(press.indexOf("this._rimCue(") > press.indexOf("if (!id) return;"));
@@ -181,6 +181,9 @@ test("rule: the cue starts from the press, never from a cap class; its callers a
   const end = method("_sceneEnd");
   assert.match(end, /!quiet && sc\.kind === "lights" && !sc\.wake && sc\.result === "ok" && s\.wasAsleep === true\) this\._rimCue\(s, "lights"\)/);
   assert.ok(!/wasAsleep\s*=[^=]/.test(code(end)), "the cue writes no wasAsleep");
+  const family = read("card-family-bedtime.js");
+  assert.match(family, /reply\?\.result === "ok"\) \{\s+if \(action === "tuck"\) this\._familyBedtimeSettle/);
+  assert.match(method("_familyBedtimeSettle"), /bedtime\.pose = "both";[\s\S]*this\._rimCue\(s, "lights"\)/);
 });
 
 test("rule: the tuck's scene beats are untouched (no rim, no cue in _lightsTuck or _lightsWake)", () => {

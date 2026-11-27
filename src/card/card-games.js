@@ -3,6 +3,11 @@ class HatchPetCardGames extends HatchPetCardCare {
   // The server keeps the game and the score (virtual_pet.play_game); the card
   // only asks, and shows what happened.
 
+  _activityLeavePicker(s) {
+    if (s.game?.picking) this._endGame(s, null);
+    return !this._owned(s);
+  }
+
   _startGame(s, button) {
     this._tapped(button, s);
     // Play while the picker is open closes it (it has no close button; shell modes slice 3, FM 2026-11-04).
@@ -46,6 +51,7 @@ class HatchPetCardGames extends HatchPetCardCare {
     // Built each time: the card's options decide which games are offered.
     s.gameBox.querySelector(".gpick").innerHTML = games.map((g) =>
       `<button data-game="${g.key}">${g.label}</button>`).join("");
+    this._activityPicker(s);
     this._hopRow(s); // the Hop of the Day row, outside .gpick (plan section 5)
     this._gameView(s, "pick");
     // A narrow card has room for one short line beside the close button.
@@ -103,6 +109,7 @@ class HatchPetCardGames extends HatchPetCardCare {
   // wraps into rows (.wrap), so no width from 300 to 420 hides or covers one.
   // True when the games sit clear of the prompt and the close button (F6).
   _fitPicker(s) {
+    s.gameBox.classList.remove("activity-picker-crowded");
     const pick = s.gameBox.querySelector(".gpick");
     if (!pick || pick.hidden) return true;
     const box = s.gameBox.getBoundingClientRect();
@@ -185,6 +192,7 @@ class HatchPetCardGames extends HatchPetCardCare {
       const bub = s.bubble && !s.bubble.hidden && s.bubble.getBoundingClientRect();
       clear = sound() && !(bub?.height && buttons.some((b) => hit(b.getBoundingClientRect(), bub)));
     }
+    s.gameBox.classList.toggle("activity-picker-crowded", !clear && !!pick.querySelector("[data-gameplay]"));
     return clear;
   }
 

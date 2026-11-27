@@ -153,7 +153,8 @@ class HatchPetCardMode extends HatchPetCardActions {
     s.modeLive.textContent = "";
     this._paintCaps(s, s.careHome || this._careRest(s));
     this._modeSwap(s);
-    if (had) [s.modeFrom, ...all].find((b) => b && all.includes(b) && !b.disabled)?.focus({ preventScroll: true });
+    if (had) [s.modeFrom, ...all].find((b) =>
+      b && (all.includes(b) || b.isConnected) && !b.hidden && !b.disabled)?.focus({ preventScroll: true });
     s.modeFrom = null;
     return true;
   }
@@ -178,6 +179,10 @@ class HatchPetCardMode extends HatchPetCardActions {
 
   // Escape (bound on the device): the exit slot's act, when the mode takes Escape. False: not handled.
   _modeEscape(s) {
+    if (s.activity) {
+      this._activityClose(s, "escape");
+      return true;
+    }
     const m = s.mode;
     const slot = m?.exit?.escape && m.exit.slot ? m.slots[m.exit.slot - 1] : null;
     if (!slot) return false;

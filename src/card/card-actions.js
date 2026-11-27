@@ -157,6 +157,7 @@ class HatchPetCardActions extends HatchPetCardMemory {
     if (entry.skippable) {
       sc.stop = (e) => {
         if (s.status?.contains(e.target)) return;
+        if (e.target.closest?.(".habitat-object")) return;
         e.stopImmediatePropagation();
         this._touchChirp(e, s);
         this._sceneEnd(s);

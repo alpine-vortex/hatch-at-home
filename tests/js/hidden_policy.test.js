@@ -95,7 +95,12 @@ test("the listed sites carry hidden: \"tab\" and the unlisted state-changing one
   const files = ["card-flair", "card-season", "card-moment", "card-visit", "card-tick", "card-visitors"];
   const tabbed = files.reduce((n, f) => n + (read(`src/card/${f}.js`).match(/hidden: "tab"/g) || []).length, 0);
   assert.strictEqual(tabbed, 13, "flair 1, season 4, bubble pop, hearts, sparkle, house fx, robot, speck, find ring, birthday paint");
+  assert.match(read("src/card/card-fetch.js"), /key: "fetch.motion", hidden: "tab", undo: finish/);
+  assert.match(read("src/card/card-shore-crab.js"), /\.\.\.SHORE_CRAB_MOTION, hidden: "tab"/);
+  const habitat = read("src/card/card-habitat.js");
+  assert.match(habitat, /\.\.\.HABITAT_NOTE, hidden: "tab", undo: clear/);
+  assert.match(habitat, /\.\.\.HABITAT_USE, hidden: "tab", undo: cleanup/);
   const all = fs.readdirSync(path.join(ROOT, "src/card")).filter((f) => f.endsWith(".js") && f !== "interaction-director.js")
     .reduce((n, f) => n + (read(`src/card/${f}`).match(/hidden: "tab"/g) || []).length, 0);
-  assert.strictEqual(all, 13, "no other site is on the tab policy");
+  assert.strictEqual(all, 17, "fetch, crab and habitat also finish or clear their visual beats on a hidden tab");
 });

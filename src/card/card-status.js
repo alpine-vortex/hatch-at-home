@@ -171,6 +171,8 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       <div class="log">${lines.join("") || "<div>all new here ♪</div>"}</div>
       ${this._memoryLinkHtml(s)}
       <button class="jlink">journal ›</button>
+      ${!s.asleep && !s.calling && !s.sick && s.house?.gameplay?.habitat
+        ? '<button class="furnishlink">Furnish ›</button>' : ""}
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
     // The friends row says what it counts (UX8 F9); the tap is not a tap on the screen behind.
@@ -188,6 +190,10 @@ class HatchPetCardStatus extends HatchPetCardMoment {
     if (head) this._headCrop(s, head, 14, 3);
     this._journalLink(s, true);
     this._memoryLinkWire(s);
+    s.status.querySelector(".furnishlink")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._habitatOpen(s, e.currentTarget);
+    });
     this._gearLink(s);
     s.status.querySelector(".namechange")?.addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status

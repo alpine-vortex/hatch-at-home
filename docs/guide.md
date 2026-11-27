@@ -121,6 +121,27 @@ download, restart. HACS replaces the folder you copied.
   round and bank, however much later. Each person has their own; someone else starts
   fresh. (The `play` button entity is still plain play, for
   automations and voice.)
+- **More ways to play together**
+  - **Tidepool** has **Outing** in Play. Follow the bubbles or the glint, then come
+    home with a different discovery. You can leave a route and resume it on another screen.
+    When the shore crab leaves a calling card, tap it to build a shelter together.
+    The invitation stays through the following Home Assistant day.
+  - **Pond** has **Channel** in Play. Open a gate to float a seed pod in the rain,
+    or guide the pet across exposed stones when it is dry. Each round keeps the
+    layout it started with. Without a weather reading, you get the stepping stones.
+  - **Woodland** has **Furnish** on the status page. Place a hideout, or place an
+    acorn-cap cup once the shell has found an ordinary acorn. Tap a furnishing to
+    see the pet use it. The pet may also use it on its own.
+  - **Hearth corgis** have a ball on the pet screen. Tap it to play fetch, try a
+    straight or banked roll, and call the corgi back for another go. **Make a snack**
+    in Play lets you prepare a biscuit with either of two toppings and see which
+    your corgi likes. Serving it counts as ordinary snack care.
+  - **Household Hop** is under **Today’s boards**. Leave a board partway through
+    and another person can continue it on their own screen. It has its own
+    progress, including after a reload or a change of day.
+  - **Bedtime together** can show up during the first week after an egg you laid
+    in a separate shell hatches. If the parent is still in its shell, invite it
+    over and dim the lamp to tuck the little one in.
 - **Every day** there's something new when you look in:
   - **A wish of the day**, picked when it wakes up, only from what your house can grant: play
     a game together, a snack after lunch, a bubble bath, "good job!", being tucked in

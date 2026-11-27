@@ -2315,6 +2315,12 @@ def lay_egg(
     egg.firsts = dict(state.firsts)  # the household's season, not the pet's
     egg.unknown = dict(getattr(state, "unknown", {}))  # a later version's keys
     egg.unknown.pop("shell_finish", None)  # the old pet's look, not the egg's
+    egg.unknown.pop("outing", None)
+    egg.unknown.pop("shore_crab", None)
+    egg.unknown.pop("habitat", None)
+    egg.unknown.pop("family_bedtime", None)
+    egg.unknown.pop("household_hop", None)
+    egg.unknown.pop("tasting", None)
     egg.memories = list(state.memories)
     # The device's: the day's visit (a new world's egg makes it no visit, as
     # its world no longer matches) and the collection, across generations.
